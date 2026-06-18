@@ -1,0 +1,43 @@
+[workspace]
+resolver = "2"
+members = ["libswap", "pactd", "pact-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/PoC-Consortium/satchel"
+
+[workspace.dependencies]
+libswap = { path = "libswap" }
+
+# Bitcoin stack — versions must stay mutually compatible (all on bitcoin 0.32).
+bitcoin = { version = "0.32", features = ["serde", "rand-std"] }
+miniscript = "12"
+bdk_wallet = "1"
+electrum-client = "0.21"
+bech32 = "0.11"
+bip39 = "2"
+
+# v2 adaptor swaps (pact-htlc-v2): MuSig2 + Schnorr adaptor signatures.
+# NOTE: musig2 pulls secp256k1 0.31, *separate* from bitcoin 0.32's 0.29 —
+# never mix the two types; convert at the boundary by bytes (V2_ADAPTOR_SWAPS.md).
+musig2 = { version = "0.4", features = ["rand"] }
+
+scrypt = { version = "0.11", default-features = false }
+chacha20poly1305 = "0.10"
+
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time", "sync"] }
+axum = "0.7"
+rusqlite = { version = "0.31", features = ["bundled"] }
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+thiserror = "1"
+hex = "0.4"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[profile.release]
+lto = true

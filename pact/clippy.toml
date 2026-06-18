@@ -1,0 +1,5 @@
+# The swap engine has a few functions that legitimately take many parameters
+# (full key sets + amounts + timelocks for both legs of a swap). Raise clippy's
+# arg-count threshold so those don't trip `too_many_arguments` under -D warnings,
+# while still catching genuinely excessive signatures.
+too-many-arguments-threshold = 10

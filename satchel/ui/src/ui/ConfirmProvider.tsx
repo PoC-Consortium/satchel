@@ -1,0 +1,76 @@
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from "@mui/material";
+import { useT } from "../i18n";
+
+// Promise-based confirm dialog — a typed MUI replacement for window.confirm,
+// used for the irreversible/destructive actions (send, take, abort, remove).
+
+export interface ConfirmOpts {
+  title: string;
+  body: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  danger?: boolean;
+  /** Widen the dialog for richer bodies (e.g. the take summary with fees). */
+  wide?: boolean;
+}
+
+type ConfirmFn = (opts: ConfirmOpts) => Promise<boolean>;
+
+const Ctx = createContext<ConfirmFn | null>(null);
+
+export function useConfirm(): ConfirmFn {
+  const c = useContext(Ctx);
+  if (!c) throw new Error("useConfirm outside ConfirmProvider");
+  return c;
+}
+
+export function ConfirmProvider({ children }: { children: ReactNode }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [opts, setOpts] = useState<ConfirmOpts | null>(null);
+  const resolver = useRef<(v: boolean) => void>();
+
+  const confirm = useCallback<ConfirmFn>((o) => {
+    setOpts(o);
+    setOpen(true);
+    return new Promise<boolean>((resolve) => {
+      resolver.current = resolve;
+    });
+  }, []);
+
+  const close = (result: boolean) => {
+    setOpen(false);
+    resolver.current?.(result);
+  };
+
+  return (
+    <Ctx.Provider value={confirm}>
+      {children}
+      <Dialog open={open} onClose={() => close(false)} maxWidth={opts?.wide ? "sm" : "xs"} fullWidth>
+        {opts && (
+          <>
+            <DialogTitle>{opts.title}</DialogTitle>
+            <DialogContent>
+              <DialogContentText component="div" sx={{ whiteSpace: "pre-line" }}>
+                {opts.body}
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+              <Button onClick={() => close(false)} color="inherit">
+                {opts.cancelLabel ?? t("common.cancel")}
+              </Button>
+              <Button
+                onClick={() => close(true)}
+                variant="contained"
+                color={opts.danger ? "error" : "primary"}
+              >
+                {opts.confirmLabel ?? t("common.confirm")}
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
+    </Ctx.Provider>
+  );
+}

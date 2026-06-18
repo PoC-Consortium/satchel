@@ -1,0 +1,105 @@
+# Satchel release pipeline.
+#
+# On a version tag (`vX.Y.Z`), builds the Satchel installer for Windows, Linux
+# and macOS (Intel + Apple Silicon) with the pactd swap engine + pact-cli
+# bundled in as Tauri sidecars, and publishes them as a DRAFT GitHub Release on
+# this repo (PoC-Consortium/satchel). Review the draft, then publish — the
+# in-app update check (check_app_update) reads releases/latest, which ignores
+# drafts, so nothing notifies users until you hit Publish.
+#
+# Bundle scope = the end-user app (Satchel + pactd + pact-cli). The Corkboard
+# server is operator-hosted and released separately.
+#
+# NOT YET WIRED (deferred): macOS code-signing + notarization (the .app/.dmg
+# ship unsigned → Gatekeeper warns) and Windows Authenticode. Add the signing
+# secrets to tauri-action when ready.
+
+name: Release Satchel
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            triple: x86_64-pc-windows-msvc
+          - os: ubuntu-22.04
+            triple: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            triple: aarch64-apple-darwin
+          - os: macos-13
+            triple: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.triple }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            pact
+            satchel
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: satchel/ui/package-lock.json
+
+      # Tauri v2 system deps (Linux only).
+      - name: Linux build deps
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+            libappindicator3-dev patchelf build-essential
+
+      - name: Install UI deps
+        working-directory: satchel/ui
+        run: npm ci
+
+      # The two binaries Satchel ships as sidecars (declared in tauri.conf
+      # externalBin). Built from the pact workspace for the target triple.
+      - name: Build pactd + pact-cli (release)
+        run: cargo build --release --manifest-path pact/Cargo.toml -p pactd -p pact-cli --target ${{ matrix.triple }}
+
+      # Tauri expects externalBin staged as binaries/<name>-<target-triple>(.exe).
+      - name: Stage Tauri sidecars
+        shell: bash
+        run: |
+          mkdir -p satchel/binaries
+          ext=""
+          [[ "${{ matrix.os }}" == windows-* ]] && ext=".exe"
+          src="pact/target/${{ matrix.triple }}/release"
+          cp "$src/pactd$ext"    "satchel/binaries/pactd-${{ matrix.triple }}$ext"
+          cp "$src/pact-cli$ext" "satchel/binaries/pact-cli-${{ matrix.triple }}$ext"
+
+      # tauri-action runs `tauri build` (which runs beforeBuildCommand
+      # `npm run build` in satchel/ui) and uploads the installers to a draft
+      # release for this tag on this repo.
+      - name: Build + publish Satchel
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: satchel
+          tagName: ${{ github.ref_name }}
+          releaseName: "Satchel ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.triple }}

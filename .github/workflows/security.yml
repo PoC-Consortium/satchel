@@ -1,0 +1,50 @@
+# Security audits — dependency advisories for the Rust crates and the UI.
+#
+# Runs weekly and on demand (NOT per-PR): advisories appear independently of our
+# changes, so they shouldn't block merging. continue-on-error keeps the run
+# green while still surfacing findings in the logs. Promote to a per-PR gate in
+# ci.yml once the tree is clean.
+
+name: Security
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Mondays 09:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-audit:
+    name: Cargo audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit pact workspace
+        run: cargo audit --file pact/Cargo.lock
+        continue-on-error: true
+      - name: Audit satchel
+        run: cargo audit --file satchel/Cargo.lock
+        continue-on-error: true
+      - name: Audit corkboard
+        run: cargo audit --file corkboard/Cargo.lock
+        continue-on-error: true
+
+  npm-audit:
+    name: NPM audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: satchel/ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Audit Satchel UI
+        run: npm audit --audit-level=high
+        continue-on-error: true

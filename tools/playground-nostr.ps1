@@ -1,0 +1,198 @@
+<#
+.SYNOPSIS
+  One-shot Satchel NOSTR (relays-only) playground: cleanup -> setup -> run.
+
+.DESCRIPTION
+  Like playground.ps1, but with NO corkboard -- Bob, Carol and the managed
+  Satchel "Alice" trade over a single LOCAL Nostr relay only. This proves offers
+  flow over Nostr alone (the demo's target config, corkboard server dropped); a
+  broken relay shows an empty board rather than a false pass.
+
+    * regtest PoCX + BTC nodes, a local Nostr relay (ephemeral, wiped on
+      teardown), and two headless counterparties posting a two-sided book over
+      the relay with a short (~5 min) offer TTL.
+    * Satchel launched as managed "Alice" with a RELAYS-ONLY satchel.json
+      (nostr_relays set, board_urls empty), factory-new data dir.
+
+.PARAMETER RelayCmd
+  Launch command for the local Nostr relay, with {port}/{dir} substituted.
+  Defaults to the bundled nostr-rs-relay in pact\harness\bin. Examples:
+    -RelayCmd "mini-relay --listen 127.0.0.1:{port}"
+  May also be supplied via the PACT_NOSTR_RELAY_CMD environment variable.
+
+.PARAMETER Down
+  Tear everything down and exit (no setup, no run).
+
+.NOTES
+  SAFETY: teardown is PID/PORT-ONLY (see playground.ps1). We NEVER Stop-Process
+  by name -- the user runs a live MAINNET pocx-bitcoind. None of these ports is
+  the mainnet node.
+#>
+param([string]$RelayCmd, [switch]$Down)
+
+$ErrorActionPreference = "Stop"
+$Repo    = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path   # repo root (script now lives in tools/)
+$AppData = Join-Path $env:APPDATA "org.pocx.satchel"
+$LogDir  = Join-Path $Repo ".playground"
+$PidFile = Join-Path $LogDir "pids.txt"
+
+# Managed pactd (:9737), Bob/Carol pactd (:19737/8) + spares (:19739/40),
+# PoCX/BTC regtest RPC (:19443/:19543), local Nostr relay (:19788),
+# stale corkboard (:19790, in case the other playground left one), Vite (:5173).
+$Ports = 9737, 19737, 19738, 19739, 19740, 19443, 19543, 19788, 19790, 5173
+
+function Kill-Tree([int]$procId) {
+    if ($procId -gt 0) { & cmd /c "taskkill /T /F /PID $procId >nul 2>nul" }
+}
+
+function Stop-Playground {
+    if (Test-Path $PidFile) {
+        foreach ($line in Get-Content $PidFile) {
+            $procId = 0; if ([int]::TryParse($line.Trim(), [ref]$procId)) { Kill-Tree $procId }
+        }
+        Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+    }
+    # Orphan harness orchestrator, matched by SCRIPT PATH (never a generic name):
+    # on its way out its Harness cleanup sends `stop` to :19443/:19543, which
+    # would hit the FRESH nodes we are about to start.
+    Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -and $_.CommandLine -match 'satchel_playground_nostr\.py' } |
+        ForEach-Object { Kill-Tree ([int]$_.ProcessId) }
+    foreach ($port in $Ports) {
+        $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+        foreach ($procId in ($conns.OwningProcess | Sort-Object -Unique)) {
+            Kill-Tree ([int]$procId)
+        }
+    }
+    $deadline = (Get-Date).AddSeconds(20)
+    while ((Get-Date) -lt $deadline) {
+        $busy = $false
+        foreach ($port in $Ports) {
+            if (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) { $busy = $true; break }
+        }
+        if (-not $busy) { break }
+        Start-Sleep -Milliseconds 500
+    }
+}
+
+if ($Down) {
+    Write-Host "[nostr-pg] tearing down (PID + port only) ..."
+    Stop-Playground
+    Write-Host "[nostr-pg] down."
+    exit 0
+}
+
+# Relay: defaults to the bundled nostr-rs-relay (pact\harness\bin), launched with
+# a generated config by the harness. -RelayCmd overrides with a full launch
+# command ({port}/{dir} substituted).
+if ($RelayCmd) { $env:PACT_NOSTR_RELAY_CMD = $RelayCmd }
+$bundledRelay = Join-Path $Repo "pact\harness\bin\nostr-rs-relay.exe"
+if (-not $env:PACT_NOSTR_RELAY_CMD -and -not (Test-Path $bundledRelay)) {
+    Write-Host "[nostr-pg] No relay available: bundled nostr-rs-relay missing at" -ForegroundColor Yellow
+    Write-Host "           $bundledRelay"
+    Write-Host "           Build/copy it, or pass -RelayCmd '<cmd with {port}/{dir}>'."
+    exit 1
+}
+
+# --- cleanup -------------------------------------------------------------
+Write-Host "[nostr-pg] cleaning up any prior run ..."
+Stop-Playground
+
+# --- setup ---------------------------------------------------------------
+# Factory-new Alice + a RELAYS-ONLY satchel.json (board_urls empty so the book
+# can only come from Nostr).
+New-Item -ItemType Directory -Force -Path $AppData | Out-Null
+$pactdState = Join-Path $AppData "pactd"
+if (Test-Path $pactdState) { Remove-Item -Recurse -Force $pactdState }
+
+$pactdPath = (Join-Path $Repo "pact\target\debug\pactd.exe") -replace '\\', '/'
+$satchelJson = @"
+{
+  "pactd_path": "$pactdPath",
+  "network": "regtest",
+  "coins": [
+    {
+      "coin_id": "btcx",
+      "chain_data": "http://pactharness:pactharness@127.0.0.1:19443/wallet/alice_pocx",
+      "funding_wallet": "core-rpc"
+    },
+    {
+      "coin_id": "btc",
+      "chain_data": "http://pactharness:pactharness@127.0.0.1:19543/wallet/alice_btc",
+      "funding_wallet": "core-rpc"
+    }
+  ],
+  "board_urls": [],
+  "nostr_relays": ["ws://127.0.0.1:19788"],
+  "listen": "127.0.0.1:9737",
+  "auto_fund": true,
+  "tick_secs": 2,
+  "ui": { "theme": "system", "language": "en", "nav_open": true }
+}
+"@
+# UTF-8 WITHOUT BOM -- a BOM would break serde_json parsing in pactd.
+[System.IO.File]::WriteAllText(
+    (Join-Path $AppData "satchel.json"), $satchelJson,
+    (New-Object System.Text.UTF8Encoding $false))
+
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+
+$env:POCX_BITCOIND = Join-Path $Repo "pact\harness\bin\pocx-bitcoind.exe"
+$env:BTC_BITCOIND  = Join-Path $Repo "pact\harness\bin\btc-bitcoind.exe"
+# Bots' pactd logs at debug (stderr -> pact-<name>/pactd.log) so we can see the
+# Nostr publish/fetch path while testing.
+if (-not $env:RUST_LOG) { $env:RUST_LOG = "pactd=debug,libswap=debug" }
+
+# --- run -----------------------------------------------------------------
+Write-Host "[nostr-pg] starting regtest stack + local relay + Bob/Carol (building if needed) ..."
+$pg = Start-Process -FilePath "python" -ArgumentList "satchel_playground_nostr.py" `
+    -WorkingDirectory (Join-Path $Repo "pact\harness") `
+    -RedirectStandardOutput (Join-Path $LogDir "nostr-playground.out.log") `
+    -RedirectStandardError  (Join-Path $LogDir "nostr-playground.err.log") `
+    -PassThru -WindowStyle Hidden
+Set-Content -Path $PidFile -Value $pg.Id
+
+$pgOut = Join-Path $LogDir "nostr-playground.out.log"
+$deadline = (Get-Date).AddMinutes(5)
+$up = $false
+while ((Get-Date) -lt $deadline) {
+    if ($pg.HasExited) {
+        throw "nostr playground exited early (code $($pg.ExitCode)). See $LogDir\nostr-playground.err.log"
+    }
+    if ((Test-Path $pgOut) -and (Select-String -Path $pgOut -Pattern "PLAYGROUND IS UP" -Quiet -ErrorAction SilentlyContinue)) {
+        $up = $true; break
+    }
+    Start-Sleep -Seconds 1
+}
+if (-not $up) { throw "nostr playground did not come up within 5 min. See $pgOut" }
+Write-Host "[nostr-pg] stack up; launching Satchel ..."
+
+# Stage the Tauri sidecars (same as playground.ps1 -- cargo tauri dev needs a
+# binary for the host triple to exist).
+$triple = ((rustc -vV) -split "`n" | Where-Object { $_ -like "host:*" }) -replace "host:\s*", ""
+$bin = Join-Path $Repo "satchel\binaries"
+New-Item -ItemType Directory -Force -Path $bin | Out-Null
+Copy-Item (Join-Path $Repo "pact\target\debug\pactd.exe")    (Join-Path $bin "pactd-$triple.exe")    -Force
+Copy-Item (Join-Path $Repo "pact\target\debug\pact-cli.exe") (Join-Path $bin "pact-cli-$triple.exe") -Force
+
+$sat = Start-Process -FilePath "cargo" -ArgumentList "tauri", "dev" `
+    -WorkingDirectory (Join-Path $Repo "satchel") `
+    -RedirectStandardOutput (Join-Path $LogDir "satchel.out.log") `
+    -RedirectStandardError  (Join-Path $LogDir "satchel.err.log") `
+    -PassThru -WindowStyle Hidden
+Add-Content -Path $PidFile -Value $sat.Id
+
+Write-Host ""
+Write-Host "======================================================================"
+Write-Host "  SATCHEL NOSTR (RELAYS-ONLY) PLAYGROUND IS UP"
+Write-Host ""
+Write-Host "  No corkboard - the book flows over one local Nostr relay (:19788)."
+Write-Host "  Default offer TTL; the relay is wiped on teardown (ephemeral)."
+Write-Host ""
+Write-Host "  In the window: wizard -> create merchant; Coins tab shows both"
+Write-Host "  connected; Corkboard -> offers come from Nostr; take either side."
+Write-Host ""
+Write-Host "  Logs:  $LogDir"
+Write-Host "  Stop:  .\playground-nostr.ps1 -Down"
+Write-Host "======================================================================"
+exit 0

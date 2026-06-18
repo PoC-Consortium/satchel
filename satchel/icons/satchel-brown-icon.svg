@@ -1,0 +1,38 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1c2126"/>
+      <stop offset="1" stop-color="#12151a"/>
+    </linearGradient>
+    <linearGradient id="leather" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b07a3d"/>
+      <stop offset="1" stop-color="#8c5828"/>
+    </linearGradient>
+    <linearGradient id="flapL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#855224"/>
+      <stop offset="1" stop-color="#693f1b"/>
+    </linearGradient>
+  </defs>
+
+  <!-- rounded app-icon background -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#bg)"/>
+  <rect x="16.5" y="16.5" width="479" height="479" rx="107.5" fill="none" stroke="#2c343b" stroke-width="3"/>
+
+  <!-- carry strap (arc over the bag) -->
+  <path d="M166 246 C166 112 346 112 346 246"
+        fill="none" stroke="#6d431d" stroke-width="30" stroke-linecap="round"/>
+
+  <!-- bag body -->
+  <path d="M150 232 h212 a26 26 0 0 1 26 26 v92 a40 40 0 0 1 -40 40 H164 a40 40 0 0 1 -40 -40 v-92 a26 26 0 0 1 26 -26 z"
+        fill="url(#leather)"/>
+
+  <!-- front flap -->
+  <path d="M132 224 a24 24 0 0 1 24 -24 h200 a24 24 0 0 1 24 24 v42 a20 20 0 0 1 -20 20 H152 a20 20 0 0 1 -20 -20 z"
+        fill="url(#flapL)"/>
+  <!-- crisp shadow line under the flap -->
+  <path d="M138 286 H374" fill="none" stroke="#532f12" stroke-width="4" opacity="0.6"/>
+
+  <!-- buckle: dark slot + gold pin (brand accent, reads as a keyhole) -->
+  <rect x="228" y="276" width="56" height="46" rx="14" fill="#14171a"/>
+  <rect x="246" y="256" width="20" height="52" rx="10" fill="#e7bd5e"/>
+</svg>

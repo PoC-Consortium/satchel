@@ -1,0 +1,35 @@
+{
+  "name": "satchel-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Satchel's frontend — React + Vite + TypeScript + MUI. Thin client of pactd's JSON-RPC (via the Tauri `pactd_rpc` bridge) and Satchel's list_*/save_* commands. No swap logic here, ever.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@emotion/react": "^11.13.5",
+    "@emotion/styled": "^11.13.5",
+    "@mui/icons-material": "^6.2.0",
+    "@mui/material": "^6.2.0",
+    "@scure/bip39": "^2.2.0",
+    "@tauri-apps/api": "^2.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.39.4",
+    "eslint-plugin-i18next": "^6.1.4",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.61.1",
+    "vite": "^6.0.3"
+  }
+}

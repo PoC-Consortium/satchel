@@ -1,0 +1,19 @@
+[package]
+name = "corkboard"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Corkboard — the PoCX trading noticeboard: signed offers and blind message relay. No matching, no execution, no custody, no fees, no accounts."
+
+[dependencies]
+pact-proto = { path = "../pact-proto" }
+axum = "0.7"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+hex = "0.4"
+tracing = "0.1"
+tracing-subscriber = "0.3"

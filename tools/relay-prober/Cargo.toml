@@ -1,0 +1,18 @@
+[package]
+name = "relay-prober"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Probe candidate Nostr relays for Pact eligibility: NIP-11 policy (no auth/payment/PoW) + a live round-trip of our kinds (31510 offer, 1059 gift-wrap). Standalone dev tool; not part of the pact/satchel build."
+
+# Intentionally NOT a workspace member — keep its (heavy) nostr-sdk dep tree out
+# of the main build + CI gates. Run with: cargo run --manifest-path tools/relay-prober/Cargo.toml -- [wss://… …]
+[workspace]
+
+[dependencies]
+nostr-sdk = "0.44"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

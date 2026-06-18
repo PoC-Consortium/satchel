@@ -1,0 +1,39 @@
+{
+  "_comment": "Deterministic pact-htlc-v2 test vectors (spec v2 §11). Public test seeds; regtest only. Regenerate with: cargo run -p libswap --example gen-vectors-v2",
+  "adaptor": {
+    "point_T": "03039888a47067a65808d52bb33538ea6760468fb3b0eef6b28ed9284c69fad9ad",
+    "secret_t": "6a65b2e6b8947c956d05d6ac886148eb385eac6cd7162278c33b70c0eeed6937"
+  },
+  "alice_mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+  "amounts": {
+    "amount_a": 50000000,
+    "amount_b": 100000
+  },
+  "bob_mnemonic": "legal winner thank year wave sausage worth useful legal winner thank yellow",
+  "derivation": {
+    "alice_refund_a": "31e4533ad334fd002a91c136773ea57618b2e6c71c6382ba331e20a400fb434a",
+    "alice_swap_a": "02dd5fd463e8d2c0bb33d5d114d3549a0359d3523ea26c6212c58d5859c49f3523",
+    "alice_swap_b": "02afe6482b757e61790cff31d017633638d9f7dfa3d5db008ce2a75796ead34223",
+    "bob_refund_b": "9b85d44896f9d21c27c68e0211af3b13f0a06ff36c8fc0791ea0a71159255347",
+    "bob_swap_a": "03ef9ce38f133ab64e06b951667f9d283eabb678ab1b257796b1cccdd0b2d6767f",
+    "bob_swap_b": "033b348cc6ca9a010568c1c1bdd90f3672abd15ccd426c4779000ba45fb74883ff"
+  },
+  "leg_a_pocx_regtest": {
+    "address": "rpocx1pt8r858ssrqjequq9z2lrdeafwun2vwawuw4ytsygzsyjyfx09v2qplxxge",
+    "internal_key": "5c622f6298b05ecf05fa3edee833974ce6c7422e9860bbfc328324fab1320469",
+    "output_key": "59c67a1e10182590700512be36e7a97726a63baee3aa45c08814092224cf2b14",
+    "refund_script": "04803bb16ab1752031e4533ad334fd002a91c136773ea57618b2e6c71c6382ba331e20a400fb434aac"
+  },
+  "leg_b_btc_regtest": {
+    "address": "bcrt1pa9yxgwq9fafn4000p9qzpp225d83xjqz9f5wp6jfg8yjz9aahh3qk36we4",
+    "internal_key": "f24d76af26cb938351ae046a687effac14915b067fd081f29cfa4f436b915930",
+    "output_key": "e9486438054f533abdef094020854aa34f1348022a68e0ea4941c92117bdbde2",
+    "refund_script": "0420e7b06ab175209b85d44896f9d21c27c68e0211af3b13f0a06ff36c8fc0791ea0a71159255347ac"
+  },
+  "protocol": "pact-htlc-v2",
+  "swap_index": 0,
+  "timelocks": {
+    "t1": 1790000000,
+    "t2": 1789978400
+  }
+}

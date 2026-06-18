@@ -1,0 +1,25 @@
+[package]
+name = "pactd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pact daemon: local JSON-RPC over libswap, SQLite persistence, automatic refund scheduling. Bitcoin-Core-shaped (cookie / pact.conf auth)."
+
+[dependencies]
+libswap = { workspace = true }
+pact-nostr = { path = "../../pact-nostr" }
+nostr-sdk = "0.44"
+bitcoin = { workspace = true }
+hex = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+# Build/sign offer envelopes and seal relay blobs in the nostr_service test.
+pact-proto = { path = "../../pact-proto" }

@@ -1,0 +1,17 @@
+[package]
+name = "pact-nostr"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Map Pact wire envelopes <-> Nostr events: public offer adverts (kind 31510) and gift-wrapped relay messages (kind 1059). Pure mapping + crypto, no relay I/O. See docs/NOSTR_TRANSPORT.md."
+
+[dependencies]
+pact-proto = { path = "../pact-proto" }
+nostr = "0.44"
+serde_json = "1"
+anyhow = "1"
+hex = "0.4"
+
+[dev-dependencies]
+# For building/signing Pact envelopes and sealing relay blobs in tests.
+bitcoin = { version = "0.32", features = ["rand-std"] }

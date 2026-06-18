@@ -1,0 +1,41 @@
+# Build output
+target/
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Local state / secrets (also live outside the repo, but be defensive)
+*.sqlite
+*.db
+*.cookie
+.env
+__pycache__/
+pact/harness/bin/
+
+# Logs
+*.log
+satchel/tauri-dev.log
+
+# playground.ps1 runtime logs + pidfile
+.playground/
+
+# Tauri sidecar staging — pactd/pact-cli copied in per-target-triple at build
+# time (by playground.ps1 for dev, by CI for release). Binaries, never committed.
+satchel/binaries/
+
+# The whole demo/ tree is local-only (assembled bundles + launchers/scripts);
+# nothing under it is tracked. The cross-platform orchestrator SOURCE lives in
+# tools/demo-runner (tracked); demo/ is just the packaging output.
+/demo/
+
+# Claude Code local dir — contains git worktrees + session data; never commit
+.claude/
+
+# Local assistant project context — not part of the public codebase
+CLAUDE.md
+
+# Editor / OS cruft
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

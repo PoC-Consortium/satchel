@@ -1,0 +1,15 @@
+[package]
+name = "demo-runner"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Self-contained Satchel demo orchestrator: spins up regtest PoCX+BTC nodes, a local Nostr relay, and two counterparty bots, launches Satchel, and tears it all down when Satchel closes. Cross-platform (one codebase -> native exe per OS). Uses only the sibling bundled binaries; no Python/cargo/Node at runtime."
+
+# Standalone crate (own workspace) so its deps don't touch the main build.
+[workspace]
+
+[dependencies]
+anyhow = "1"
+ureq = { version = "2", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

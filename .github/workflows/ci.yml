@@ -1,0 +1,133 @@
+# Continuous integration — runs on every PR and on pushes to master.
+#
+# The fast gate: rustfmt + clippy + the swap engine's tests, the Satchel app
+# build + its unit tests, and the UI lint + typecheck/build. Security audits
+# live in security.yml (scheduled, non-blocking).
+#
+# NOT here yet (by decision): the regtest e2e (pact/harness/*.py) needs the
+# pocx-bitcoind + bitcoind binaries (not in the repo), so e2e stays a local
+# step (the playground) until those binaries have a CI home.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fmt:
+    name: Format (rustfmt)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: cargo fmt --check (all crates)
+        run: |
+          cargo fmt --manifest-path pact/Cargo.toml --all --check
+          cargo fmt --manifest-path pact-nostr/Cargo.toml --all --check
+          cargo fmt --manifest-path satchel/Cargo.toml --all --check
+          cargo fmt --manifest-path corkboard/Cargo.toml --all --check
+          cargo fmt --manifest-path pact-proto/Cargo.toml --all --check
+
+  engine:
+    name: Engine (clippy + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            pact
+            pact-nostr
+            corkboard
+            pact-proto
+      - name: System deps
+        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libssl-dev
+      - name: Clippy (deny warnings)
+        run: |
+          cargo clippy --manifest-path pact/Cargo.toml --workspace --all-targets -- -D warnings
+          cargo clippy --manifest-path pact-nostr/Cargo.toml --all-targets -- -D warnings
+          cargo clippy --manifest-path corkboard/Cargo.toml --all-targets -- -D warnings
+          cargo clippy --manifest-path pact-proto/Cargo.toml --all-targets -- -D warnings
+      - name: Test pact workspace (libswap + pactd + cli)
+        run: cargo test --manifest-path pact/Cargo.toml --workspace
+      - name: Test pact-nostr
+        run: cargo test --manifest-path pact-nostr/Cargo.toml
+      - name: Test corkboard
+        run: cargo test --manifest-path corkboard/Cargo.toml
+      - name: Test pact-proto
+        run: cargo test --manifest-path pact-proto/Cargo.toml
+
+  app:
+    name: Satchel app (clippy + build + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            pact
+            satchel
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: satchel/ui/package-lock.json
+      - name: Tauri system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+            libappindicator3-dev patchelf build-essential pkg-config libssl-dev
+      # The Satchel crate's generate_context!() validates frontendDist (ui/dist)
+      # and the externalBin sidecars at compile time, so both must exist before
+      # clippy/test can compile.
+      - name: Build UI (ui/dist)
+        working-directory: satchel/ui
+        run: |
+          npm ci
+          npm run build
+      - name: Build + stage sidecars
+        run: |
+          cargo build --manifest-path pact/Cargo.toml -p pactd -p pact-cli
+          mkdir -p satchel/binaries
+          cp pact/target/debug/pactd    satchel/binaries/pactd-x86_64-unknown-linux-gnu
+          cp pact/target/debug/pact-cli satchel/binaries/pact-cli-x86_64-unknown-linux-gnu
+      - name: Clippy (deny warnings)
+        run: cargo clippy --manifest-path satchel/Cargo.toml --all-targets -- -D warnings
+      - name: Test Satchel app
+        run: cargo test --manifest-path satchel/Cargo.toml
+
+  ui:
+    name: UI (lint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: satchel/ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: satchel/ui/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: Lint (eslint — incl. i18next/no-literal-string guard)
+        run: npm run lint
+      - name: Typecheck + build
+        run: npm run build
