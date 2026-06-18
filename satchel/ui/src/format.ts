@@ -239,8 +239,18 @@ export function bookEntry(b: OfferBody, base: string, quote: string): BookEntry 
  *  trimming trailing zeros. Handles both tiny (BTC/PoCX) and large ratios. */
 export function fmtPrice(p: number): string {
   if (!isFinite(p) || p <= 0) return "—";
-  const s = p >= 1000 ? Math.round(p).toLocaleString() : p >= 1 ? p.toFixed(4) : p.toPrecision(5);
-  return s.indexOf(".") >= 0 ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
+  // Locale-aware throughout — the decimal separator AND grouping follow the
+  // locale, so a grouped "1.000"/"100.000" (de-DE) can't be misread as a decimal
+  // sitting next to a "0,001". Precision is tiered: integers for large ratios,
+  // up to 4 fraction digits mid-range, 5 significant figures for tiny (BTC/PoCX)
+  // prices. Intl trims trailing zeros for us.
+  const opts: Intl.NumberFormatOptions =
+    p >= 1000
+      ? { maximumFractionDigits: 0 }
+      : p >= 1
+        ? { maximumFractionDigits: 4 }
+        : { maximumSignificantDigits: 5 };
+  return new Intl.NumberFormat(undefined, opts).format(p);
 }
 
 // ---- denomination (display unit) ----------------------------------------
@@ -269,8 +279,11 @@ export function denomLabel(coinId: string, sym: string, d: Denom): string {
 /** A sats amount as a bare number string in the chosen denomination. */
 export function fmtDenom(sats: number, d: Denom): string {
   const v = sats / DENOM_SATS[d];
-  if (d === "sat") return Math.round(v).toLocaleString();
-  return v.toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
+  // Locale-aware (decimal separator + grouping): sat is a grouped integer, finer
+  // units keep up to 8 fraction digits with trailing zeros trimmed by Intl.
+  return new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: d === "sat" ? 0 : 8,
+  }).format(v);
 }
 
 /** A quote-per-base price (in whole quote coin) re-expressed in denomination d
