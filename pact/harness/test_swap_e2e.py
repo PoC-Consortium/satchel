@@ -27,6 +27,10 @@ PACTD_BIN = os.path.join(PACT_DIR, "target", "debug", "pactd" + EXE)
 CORKBOARD_DIR = os.path.normpath(os.path.join(HERE, "..", "..", "corkboard"))
 CORKBOARD_BIN = os.path.join(CORKBOARD_DIR, "target", "debug", "corkboard" + EXE)
 CORKBOARD_PORT = 19790
+# The shipped coin-templates file (consensus params for file-added coins like
+# ltc). A Party that trades a file coin passes this so its pactd registry knows
+# the coin's genesis + HRP.
+COINS_TOML = os.path.normpath(os.path.join(HERE, "..", "..", "satchel", "coins.toml"))
 
 GIVE_POCX = "50.0"      # Alice gives 50 POCX
 GET_BTC = "0.001"       # ... for 0.001 BTC from Bob
@@ -96,9 +100,15 @@ class Party:
 
     def __init__(self, name, harness, workdir, pocx_wallet, btc_wallet,
                  duplicate_backends=False, board_url=None, auto_fund=False,
-                 tick_secs=0, auto_init=True, coin_confs=None, nostr_relays=None):
+                 tick_secs=0, auto_init=True, coin_confs=None, nostr_relays=None,
+                 extra_coins=None, coins_file=None):
         self.name = name
         self.auto_init = auto_init
+        # Additional coins beyond the built-in btcx/btc legs, as a list of
+        # (coin_id, rpc_url) — e.g. [("ltc", node.rpc_url(wallet="bob_ltc"))].
+        # Requires coins_file so pactd's registry knows the file coin.
+        self.extra_coins = extra_coins or []
+        self.coins_file = coins_file
         # Optional per-coin confirmation-depth overrides: {"btc": 2, ...} →
         # `--coin-confs btc=2` (reorg-safety/finality gate).
         self.coin_confs = coin_confs or {}
@@ -121,10 +131,17 @@ class Party:
         self.cookie = None
 
     def start(self):
+        # Every coin is attached the same generic way (`--coin id=url`); there
+        # are no per-coin aliases. btcx/btc are the built-in legs; extra_coins
+        # carries any file-added coin (ltc), which also needs --coins-file.
         cmd = [PACTD_BIN, "--data-dir", self.data_dir, "--network", "regtest",
-               "--pocx-rpc", self.pocx_url, "--btc-rpc", self.btc_url,
+               "--coin", f"btcx={self.pocx_url}", "--coin", f"btc={self.btc_url}",
                "--listen", f"127.0.0.1:{self.port}",
                "--tick-secs", str(self.tick_secs)]
+        if self.coins_file:
+            cmd += ["--coins-file", self.coins_file]
+        for coin_id, url in self.extra_coins:
+            cmd += ["--coin", f"{coin_id}={url}"]
         for coin_id, n in self.coin_confs.items():
             cmd += ["--coin-confs", f"{coin_id}={n}"]
         if self.auto_init:
@@ -550,7 +567,7 @@ def test_coin_setup(h):
     alice = Party("alice7", h, h.workdir, "alice_pocx", "alice_btc").start()
     try:
         # listcoins: both shipped coins, both configured (the harness launches
-        # pactd with --pocx-rpc/--btc-rpc), both connected to the right chain.
+        # pactd with --coin btcx=.../--coin btc=...), both connected to the right chain.
         info = alice.rpc("listcoins")
         assert info["network"] == "regtest", info
         by_id = {c["id"]: c for c in info["coins"]}

@@ -31,7 +31,7 @@ import time
 sys.stdout.reconfigure(line_buffering=True)
 
 from regtest_harness import Harness
-from test_swap_e2e import build_workspace, Corkboard, Party
+from test_swap_e2e import build_workspace, Corkboard, Party, COINS_TOML
 
 BLOCK_EVERY_SECS = 4
 REPOST_EVERY_SECS = 60
@@ -66,10 +66,25 @@ CAROL_OFFERS = [
     ("btcx:100", "btc:0.00196"),  #         ~51,000
 ]
 
+# A small Litecoin sub-book, so Alice (funded on all three coins) can take an
+# LTC swap in BOTH directions. LTC is a file-added coin (satchel/coins.toml),
+# proving a third Core-compatible chain trades with no recompile. Pinned to v1
+# HTLC — the classic CLTV+P2WSH path every cltv+segwit coin supports.
+#   Bob (gives BTC, wants LTC): funds BTC; Alice takes giving LTC.
+BOB_LTC_OFFERS = [
+    ("btc:0.001", "ltc:2"),       # 1 LTC = 0.0005 BTC
+    ("btc:0.0015", "ltc:3"),
+]
+#   Carol (gives BTCX or LTC): funds the give-leg; Alice takes the other side.
+CAROL_LTC_OFFERS = [
+    ("btcx:50", "ltc:1"),         # give BTCX, want LTC   (Alice gives LTC)
+    ("ltc:2",   "btc:0.001"),     # give LTC,  want BTC   (Alice gives BTC, gets LTC)
+]
+
 
 def main():
     build_workspace()
-    with Harness(keep=False) as h:
+    with Harness(keep=False, with_ltc=True) as h:
         board = Corkboard(h.workdir)
         board.start()
 
@@ -84,18 +99,35 @@ def main():
         h.btc.create_wallet("carol_btc")
         h.pocx.generate(110, "carol_pocx")
         h.btc.generate(110, "alice_btc")
-        print("[satchel-pg] funded carol_pocx + alice_btc "
+
+        # Litecoin leg. alice_ltc + carol_ltc are funded (each gives LTC on some
+        # offer); bob_ltc is a receive-only sweep target. Litecoin coinbase
+        # matures at 100, so 110 deep is spendable.
+        h.ltc.create_wallet("alice_ltc")
+        h.ltc.create_wallet("bob_ltc")
+        h.ltc.create_wallet("carol_ltc")
+        h.ltc.generate(110, "alice_ltc")
+        h.ltc.generate(110, "carol_ltc")
+        print("[satchel-pg] funded carol_pocx + alice_btc + alice_ltc/carol_ltc "
               f"(carol_pocx: {h.pocx.rpc('getbalance', wallet='carol_pocx')} POCX, "
-              f"alice_btc: {h.btc.rpc('getbalance', wallet='alice_btc')} BTC)")
+              f"alice_btc: {h.btc.rpc('getbalance', wallet='alice_btc')} BTC, "
+              f"alice_ltc: {h.ltc.rpc('getbalance', wallet='alice_ltc')} LTC)")
 
+        # Bob/Carol get an LTC leg too (their own wallet on the LTC node) so they
+        # can post and serve LTC offers. A file coin needs --coins-file, passed
+        # via coins_file; the leg itself is a generic extra --coin.
         bob = Party("bob", h, h.workdir, "bob_pocx", "bob_btc",
-                    board_url=board.url, auto_fund=True, tick_secs=5).start()
+                    board_url=board.url, auto_fund=True, tick_secs=5,
+                    coins_file=COINS_TOML,
+                    extra_coins=[("ltc", h.ltc.rpc_url(wallet="bob_ltc"))]).start()
         carol = Party("carol", h, h.workdir, "carol_pocx", "carol_btc",
-                      board_url=board.url, auto_fund=True, tick_secs=5).start()
+                      board_url=board.url, auto_fund=True, tick_secs=5,
+                      coins_file=COINS_TOML,
+                      extra_coins=[("ltc", h.ltc.rpc_url(wallet="carol_ltc"))]).start()
 
-        posted = {"bob": [], "carol": []}
+        posted = {"bob": [], "carol": [], "bob_ltc": [], "carol_ltc": []}
 
-        def topup(party, key, offers):
+        def topup(party, key, offers, pin_proto=None):
             # NON-destructive refresh: never revoke a live offer (that would
             # churn offer IDs and make the taker's click race a revoke — the
             # "offer not on any configured board" failure). Only PRUNE ids that
@@ -109,8 +141,9 @@ def main():
             posted[key][:] = [oid for oid in posted[key] if oid in live]
             deficit = len(offers) - len(posted[key])
             for i, (give, get) in enumerate(offers[:max(0, deficit)]):
-                # Alternate protocols by slot so both v1 and v2 are always live.
-                proto = PROTOCOLS[i % len(PROTOCOLS)]
+                # Alternate protocols by slot so both v1 and v2 are always live,
+                # unless the caller pins one (LTC offers pin v1 HTLC).
+                proto = pin_proto or PROTOCOLS[i % len(PROTOCOLS)]
                 try:
                     r = party.rpc("boardpostoffer", give, get, 4 * 3600, 2 * 3600, proto)
                     posted[key].append(r["offer_id"])
@@ -120,8 +153,13 @@ def main():
         def post_offers():
             topup(bob, "bob", BOB_OFFERS)
             topup(carol, "carol", CAROL_OFFERS)
+            # LTC sub-book, pinned to v1 HTLC.
+            topup(bob, "bob_ltc", BOB_LTC_OFFERS, pin_proto="pact-htlc-v1")
+            topup(carol, "carol_ltc", CAROL_LTC_OFFERS, pin_proto="pact-htlc-v1")
+            ltc_live = len(posted["bob_ltc"]) + len(posted["carol_ltc"])
             print(f"[satchel-pg] {len(posted['bob'])} buy-side (Bob) + "
-                  f"{len(posted['carol'])} sell-side (Carol) offers live")
+                  f"{len(posted['carol'])} sell-side (Carol) + "
+                  f"{ltc_live} LTC offers live")
 
         post_offers()
 
@@ -130,35 +168,39 @@ def main():
 {bar}
   SATCHEL MANAGED PLAYGROUND IS UP   (Ctrl+C to stop)
 
-  Two headless counterparties make a two-sided book:
-    Bob   (:{bob.port}) BUY side — {len(BOB_OFFERS)} give-BTC/get-POCX offers
-    Carol (:{carol.port}) SELL side — {len(CAROL_OFFERS)} give-POCX/get-BTC offers
-  Corkboard {board.url} | POCX node :19443 | BTC node :19543
+  Two headless counterparties make a two-sided book + an LTC sub-book:
+    Bob   (:{bob.port}) BUY side — {len(BOB_OFFERS)} give-BTC/get-POCX + {len(BOB_LTC_OFFERS)} give-BTC/get-LTC
+    Carol (:{carol.port}) SELL side — {len(CAROL_OFFERS)} give-POCX/get-BTC + {len(CAROL_LTC_OFFERS)} LTC offers
+  Corkboard {board.url} | POCX :19443 | BTC :19543 | LTC :19643
   Blocks every {BLOCK_EVERY_SECS}s; both top up taken offers every {REPOST_EVERY_SECS}s (live IDs stable).
 
-  In the Satchel window (managed "Alice", funded on BOTH coins):
+  In the Satchel window (managed "Alice", funded on ALL THREE coins):
     1. Wizard -> Create a merchant (write down the mnemonic; pick
        encrypted or not).
-    2. Coins tab -> BTCX + BTC should show configured + connected.
-    3. Corkboard tab -> two-sided rate-sorted market; take EITHER side:
-       a buy-side offer (you give POCX) or a sell-side one (you give BTC).
+    2. Coins tab -> BTCX + BTC + LTC should show configured + connected.
+    3. Corkboard tab -> two-sided market incl. LTC pairs; take any side:
+       give POCX, give BTC, or trade LTC either way.
     4. Swaps tab -> watch it walk to 'completed' on its own.
 {bar}
 """)
         start_wall = time.time()
         base = max(int(h.pocx.rpc("getblockchaininfo")["time"]),
-                   int(h.btc.rpc("getblockchaininfo")["time"]))
+                   int(h.btc.rpc("getblockchaininfo")["time"]),
+                   int(h.ltc.rpc("getblockchaininfo")["time"]))
         last_post = time.time()
         try:
             while True:
                 time.sleep(BLOCK_EVERY_SECS)
                 tip = max(int(h.pocx.rpc("getblockchaininfo")["time"]),
-                          int(h.btc.rpc("getblockchaininfo")["time"]))
+                          int(h.btc.rpc("getblockchaininfo")["time"]),
+                          int(h.ltc.rpc("getblockchaininfo")["time"]))
                 now = max(tip, base + int(time.time() - start_wall)) + 1
                 h.pocx.set_mocktime(now)
                 h.btc.set_mocktime(now)
+                h.ltc.set_mocktime(now)
                 h.pocx.generate(1, "alice_pocx")
                 h.btc.generate(1, "bob_btc")
+                h.ltc.generate(1, "alice_ltc")
                 if time.time() - last_post > REPOST_EVERY_SECS:
                     post_offers()
                     last_post = time.time()

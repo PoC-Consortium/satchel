@@ -154,8 +154,8 @@ genesis hash, spacing), the BIP32 coin-type, and **capability flags**
 #### Chain-data backends
 
 Each coin's chain data comes from one or more configured backends, supplied
-at launch as `--coin <coin_id>=<url[,url]>` (repeatable; legacy
-`--pocx-rpc`/`--btc-rpc` aliases remain for the harness). A `MultiBackend`
+at launch as `--coin <coin_id>=<url[,url]>` (repeatable — the one generic way
+every coin, built-in or file-added, is attached). A `MultiBackend`
 fans across the URL list; the URL scheme selects the implementation:
 
 - `http://…` → **Core RPC** backend — the user's own pocx node / bitcoind. A

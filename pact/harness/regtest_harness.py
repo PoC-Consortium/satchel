@@ -39,10 +39,15 @@ EXE = ".exe" if platform.system() == "Windows" else ""
 
 POCX_REGTEST_GENESIS = "2a98a52253aeff06093948b00568d380b7634621bc606403127973c9acbbfde0"
 BTC_REGTEST_GENESIS = "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"
+LTC_REGTEST_GENESIS = "530827f38f93b43ed12af0b3ad25a288dc02ed74d6d7857862df51fc56c416f9"
 
 # Non-default ports so a developer's own regtest nodes are not disturbed.
 POCX_RPC_PORT = 19443
 BTC_RPC_PORT = 19543
+# Litecoin RPC port matches the `ltc` regtest connection default in
+# satchel/coins.toml so the same port story holds end to end. Only used when a
+# Harness is built with_ltc (the playground); the e2e suite never starts it.
+LTC_RPC_PORT = 19643
 
 
 def find_pocx_bitcoind():
@@ -72,6 +77,21 @@ def find_btc_bitcoind():
     raise FileNotFoundError(
         "Bitcoin Core binary not found. Copy the installed daemon to "
         "harness/bin/btc-bitcoind" + EXE + " or set BTC_BITCOIND.")
+
+
+def find_litecoind():
+    candidates = [
+        os.environ.get("LITECOIND"),
+        os.path.join(HERE, "bin", "litecoind" + EXE),
+        os.path.join(HERE, "bin", "ltc-bitcoind" + EXE),
+        shutil.which("litecoind"),
+    ]
+    for candidate in candidates:
+        if candidate and os.path.exists(candidate):
+            return candidate
+    raise FileNotFoundError(
+        "Litecoin Core binary not found. Copy the installed daemon to "
+        "harness/bin/litecoind" + EXE + " or set LITECOIND.")
 
 
 class RpcError(Exception):
@@ -192,7 +212,7 @@ class Harness:
       btc node:  wallets bob_btc    (funded), alice_btc  (empty)
     """
 
-    def __init__(self, workdir=None, keep=False):
+    def __init__(self, workdir=None, keep=False, with_ltc=False):
         self.workdir = workdir or tempfile.mkdtemp(prefix="pact-regtest-")
         self.keep = keep
         self.pocx = Node("pocx", find_pocx_bitcoind(),
@@ -201,6 +221,16 @@ class Harness:
         self.btc = Node("btc", find_btc_bitcoind(),
                         os.path.join(self.workdir, "btc"), BTC_RPC_PORT,
                         BTC_REGTEST_GENESIS)
+        # Optional third chain (Litecoin) — a file-added coin, brought up only by
+        # callers that ask for it (the playground). The e2e suite leaves it off
+        # so it never depends on a litecoind binary. Wallets/funding for this
+        # node are the caller's job (mirrors how carol/alice extra wallets are
+        # created in the playground, not here).
+        self.ltc = None
+        if with_ltc:
+            self.ltc = Node("ltc", find_litecoind(),
+                            os.path.join(self.workdir, "ltc"), LTC_RPC_PORT,
+                            LTC_REGTEST_GENESIS)
 
     def __enter__(self):
         print(f"[harness] workdir: {self.workdir}")
@@ -208,12 +238,17 @@ class Harness:
         print(f"[harness] pocx node up (rpc :{self.pocx.rpc_port})")
         self.btc.start()
         print(f"[harness] btc node up (rpc :{self.btc.rpc_port})")
+        if self.ltc:
+            self.ltc.start()
+            print(f"[harness] ltc node up (rpc :{self.ltc.rpc_port})")
 
         # PoCX regtest forging needs mocktime to mine without real delays;
-        # keep both chains on the same mock clock so CLTV tests line up.
+        # keep all chains on the same mock clock so CLTV timelocks line up.
         now = int(time.time())
         self.pocx.set_mocktime(now)
         self.btc.set_mocktime(now)
+        if self.ltc:
+            self.ltc.set_mocktime(now)
 
         for node, funded, empty in ((self.pocx, "alice_pocx", "bob_pocx"),
                                     (self.btc, "bob_btc", "alice_btc")):
@@ -242,6 +277,8 @@ class Harness:
     def __exit__(self, exc_type, exc, tb):
         self.pocx.stop()
         self.btc.stop()
+        if self.ltc:
+            self.ltc.stop()
         if not self.keep and exc_type is None:
             shutil.rmtree(self.workdir, ignore_errors=True)
         else:

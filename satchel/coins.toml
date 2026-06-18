@@ -78,3 +78,32 @@ capabilities = { cltv = true, segwit_v0 = true, taproot = true }
   [coin.regtest]
   consensus  = { header_format = "bitcoin", magic = "fabfb5da", default_p2p_port = 18444, p2pkh_prefix = 111, p2sh_prefix = 196, wif_prefix = 239, bech32_hrp = "bcrt", genesis_hash = "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206" }
   connection = { rpc_host = "127.0.0.1", rpc_port = 19543, auth_method = "cookie", datadir = "~/.bitcoin", cookie_subpath = "regtest/.cookie", wallet = "" }
+
+# ---------------------------------------------------------------------------
+# Litecoin — the first real third coin (not built-in; lives purely as data).
+# A Bitcoin Core fork with SegWit v0 + CLTV (→ classic HTLC swaps) AND Taproot
+# active since 2022 (→ the v2 adaptor path too), so btc<->ltc and btcx<->ltc
+# both resolve. Values from litecoin-project/litecoin src/chainparams.cpp.
+# Litecoin block ids are sha256d of the 80-byte header (Scrypt is PoW only), so
+# header_format = "bitcoin" hashes its genesis correctly.
+[[coin]]
+coin_id = "ltc"
+display_name = "Litecoin"
+symbol = "LTC"
+decimals = 8
+bip32_coin_type = 2          # SLIP-44
+target_spacing_secs = 150    # 2.5 min
+icon = "ltc.svg"
+capabilities = { cltv = true, segwit_v0 = true, taproot = true }
+
+  [coin.mainnet]
+  consensus  = { header_format = "bitcoin", magic = "fbc0b6db", default_p2p_port = 9333, p2pkh_prefix = 48, p2sh_prefix = 5, wif_prefix = 176, bech32_hrp = "ltc", genesis_hash = "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2" }
+  connection = { rpc_host = "127.0.0.1", rpc_port = 9332, auth_method = "cookie", datadir = "~/.litecoin", cookie_subpath = ".cookie", wallet = "" }
+
+  [coin.testnet]
+  consensus  = { header_format = "bitcoin", magic = "fdd2c8f1", default_p2p_port = 19335, p2pkh_prefix = 111, p2sh_prefix = 196, wif_prefix = 239, bech32_hrp = "tltc", genesis_hash = "4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0" }
+  connection = { rpc_host = "127.0.0.1", rpc_port = 19332, auth_method = "cookie", datadir = "~/.litecoin", cookie_subpath = "testnet4/.cookie", wallet = "" }
+
+  [coin.regtest]
+  consensus  = { header_format = "bitcoin", magic = "fabfb5da", default_p2p_port = 19444, p2pkh_prefix = 111, p2sh_prefix = 196, wif_prefix = 239, bech32_hrp = "rltc", genesis_hash = "530827f38f93b43ed12af0b3ad25a288dc02ed74d6d7857862df51fc56c416f9" }
+  connection = { rpc_host = "127.0.0.1", rpc_port = 19643, auth_method = "cookie", datadir = "~/.litecoin", cookie_subpath = "regtest/.cookie", wallet = "" }

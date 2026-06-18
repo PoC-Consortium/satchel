@@ -54,8 +54,9 @@ struct Args {
     /// Per-coin chain-data backend, repeatable: `--coin <coin_id>=<url[,url]>`
     /// (e.g. `--coin btcx=http://user:pass@host:port/wallet/x`). The first URL
     /// is the wallet-qualified Core-RPC primary (funds swaps); the rest may be
-    /// Electrum (`tcp://`/`ssl://`). This is the generalized config Satchel
-    /// passes at launch; `--pocx-rpc`/`--btc-rpc` are legacy aliases.
+    /// Electrum (`tcp://`/`ssl://`). This is the one generic way to attach a
+    /// chain — every coin (built-in or file-added) is wired the same way; pass
+    /// the flag once per coin to run a multi-coin engine.
     #[arg(long = "coin")]
     coins: Vec<String>,
     /// Per-coin confirmation depth (reorg-safety/finality), repeatable:
@@ -65,13 +66,6 @@ struct Args {
     /// network/spacing default. Satchel's Coins setup page passes these.
     #[arg(long = "coin-confs")]
     coin_confs: Vec<String>,
-    /// Legacy alias for `--coin btcx=...`: connects a PoCX node as the `btcx`
-    /// coin (kept for the regtest harness).
-    #[arg(long)]
-    pocx_rpc: Option<String>,
-    /// Legacy alias for `--coin btc=...`.
-    #[arg(long)]
-    btc_rpc: Option<String>,
     /// Listen address for the JSON-RPC endpoint. Loopback only.
     #[arg(long, default_value = "127.0.0.1:9737")]
     listen: std::net::SocketAddr,
@@ -278,16 +272,10 @@ fn parse_coin_arg(spec: &str) -> Result<(String, String)> {
     Ok((id, urls.to_string()))
 }
 
-/// Assemble the per-coin backend map from the generalized `--coin` flags plus
-/// the legacy `--pocx-rpc`/`--btc-rpc` aliases. `--coin` wins on conflict.
+/// Assemble the per-coin backend map from the `--coin` flags — the single,
+/// generic way every coin is attached (no per-coin special cases).
 fn coins_from_args(args: &Args) -> Result<BTreeMap<String, String>> {
     let mut coins = BTreeMap::new();
-    if let Some(url) = &args.pocx_rpc {
-        coins.insert("btcx".to_string(), url.clone());
-    }
-    if let Some(url) = &args.btc_rpc {
-        coins.insert("btc".to_string(), url.clone());
-    }
     for spec in &args.coins {
         let (id, urls) = parse_coin_arg(spec)?;
         coins.insert(id, urls);
@@ -1125,14 +1113,12 @@ mod tests {
         assert!(parse_coin_arg("btcx=").is_err());
     }
 
-    fn args_with(coins: Vec<&str>, pocx: Option<&str>, btc: Option<&str>) -> Args {
+    fn args_with(coins: Vec<&str>) -> Args {
         Args {
             data_dir: PathBuf::from("."),
             coins_file: None,
             coins: coins.into_iter().map(String::from).collect(),
             coin_confs: vec![],
-            pocx_rpc: pocx.map(String::from),
-            btc_rpc: btc.map(String::from),
             listen: "127.0.0.1:9737".parse().unwrap(),
             network: "regtest".into(),
             board_url: None,
@@ -1146,25 +1132,24 @@ mod tests {
     }
 
     #[test]
-    fn coins_map_merges_legacy_and_generic() {
-        // Legacy aliases populate the map...
-        let legacy = coins_from_args(&args_with(
-            vec![],
-            Some("http://btcx:1"),
-            Some("http://btc:1"),
-        ))
+    fn coins_map_is_built_from_generic_coin_flags() {
+        // Every coin is attached the same way, via repeated --coin flags.
+        let coins = coins_from_args(&args_with(vec![
+            "btcx=http://btcx:1",
+            "btc=http://btc:1",
+        ]))
         .unwrap();
-        assert_eq!(legacy.get("btcx").unwrap(), "http://btcx:1");
-        assert_eq!(legacy.get("btc").unwrap(), "http://btc:1");
+        assert_eq!(coins.get("btcx").unwrap(), "http://btcx:1");
+        assert_eq!(coins.get("btc").unwrap(), "http://btc:1");
+        assert_eq!(coins.len(), 2);
 
-        // ...and an explicit --coin wins over the legacy alias for the same id.
-        let merged = coins_from_args(&args_with(
-            vec!["btcx=http://new:9"],
-            Some("http://old:1"),
-            None,
-        ))
+        // A later --coin for the same id wins (last write).
+        let dup = coins_from_args(&args_with(vec![
+            "btcx=http://old:1",
+            "btcx=http://new:9",
+        ]))
         .unwrap();
-        assert_eq!(merged.get("btcx").unwrap(), "http://new:9");
-        assert_eq!(merged.len(), 1);
+        assert_eq!(dup.get("btcx").unwrap(), "http://new:9");
+        assert_eq!(dup.len(), 1);
     }
 }

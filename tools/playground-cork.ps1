@@ -42,8 +42,8 @@ $LogDir  = Join-Path $Repo ".playground"
 $PidFile = Join-Path $LogDir "pids.txt"
 
 # Managed pactd (:9737), Bob/Carol pactd (:19737/8) + adaptor spares (:19739/40),
-# PoCX/BTC regtest RPC (:19443/:19543), Corkboard (:19790), Vite (:5173).
-$Ports = 9737, 19737, 19738, 19739, 19740, 19443, 19543, 19790, 5173
+# PoCX/BTC/LTC regtest RPC (:19443/:19543/:19643), Corkboard (:19790), Vite (:5173).
+$Ports = 9737, 19737, 19738, 19739, 19740, 19443, 19543, 19643, 19790, 5173
 
 # Force-kill a process tree by PID. Routes through `cmd /c ... 2>nul` so the
 # native stderr ("process not found" for an already-dead PID) is swallowed by
@@ -128,6 +128,11 @@ $satchelJson = @"
       "coin_id": "btc",
       "chain_data": "http://pactharness:pactharness@127.0.0.1:19543/wallet/alice_btc",
       "funding_wallet": "core-rpc"
+    },
+    {
+      "coin_id": "ltc",
+      "chain_data": "http://pactharness:pactharness@127.0.0.1:19643/wallet/alice_ltc",
+      "funding_wallet": "core-rpc"
     }
   ],
   "board_urls": ["http://127.0.0.1:19790"],
@@ -143,12 +148,20 @@ $satchelJson = @"
     (Join-Path $AppData "satchel.json"), $satchelJson,
     (New-Object System.Text.UTF8Encoding $false))
 
+# Refresh the coin templates next to satchel.json so BOTH Satchel and its
+# managed pactd resolve the `ltc` consensus params (a stale prior copy would
+# lack ltc and the LTC leg would fail genesis verification). The icon rides
+# along so the Coins/Wallet cards show the Litecoin badge.
+Copy-Item (Join-Path $Repo "satchel\coins.toml") (Join-Path $AppData "coins.toml") -Force
+Copy-Item (Join-Path $Repo "satchel\ltc.svg")    (Join-Path $AppData "ltc.svg")    -Force
+
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 # Pin the regtest node binaries (the harness also auto-resolves harness\bin,
 # but absolute paths work regardless of cwd).
 $env:POCX_BITCOIND = Join-Path $Repo "pact\harness\bin\pocx-bitcoind.exe"
 $env:BTC_BITCOIND  = Join-Path $Repo "pact\harness\bin\btc-bitcoind.exe"
+$env:LITECOIND     = Join-Path $Repo "pact\harness\bin\litecoind.exe"
 
 # --- run -----------------------------------------------------------------
 # Infra + Bob + Carol. build_workspace() inside it builds pactd.exe, so by the

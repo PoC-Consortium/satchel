@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Litecoin badge. Brand blue (#345D9D) disc with a white Ł.
+     Hand-drawn geometric glyph (no font dependency) so it renders crisply
+     at the 26px coin-badge size in any bundle. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <circle cx="256" cy="256" r="256" fill="#345D9D"/>
+  <g fill="#FFFFFF">
+    <!-- L stem + foot -->
+    <path d="M222 132 h62 v168 h92 v48 H222 Z"/>
+    <!-- diagonal slash through the stem -->
+    <path d="M188 276 L312 214 L326 246 L202 308 Z"/>
+  </g>
+</svg>
