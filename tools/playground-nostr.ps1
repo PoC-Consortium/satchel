@@ -48,9 +48,9 @@ $LogDir  = Join-Path $Repo ".playground"
 $PidFile = Join-Path $LogDir "pids.txt"
 
 # Managed pactd (:9737), Bob/Carol pactd (:19737/8) + spares (:19739/40),
-# PoCX/BTC regtest RPC (:19443/:19543), local Nostr relay (:19788),
+# PoCX/BTC/LTC regtest RPC (:19443/:19543/:19643), local Nostr relay (:19788),
 # stale corkboard (:19790, in case the other playground left one), Vite (:5173).
-$Ports = 9737, 19737, 19738, 19739, 19740, 19443, 19543, 19788, 19790, 5173
+$Ports = 9737, 19737, 19738, 19739, 19740, 19443, 19543, 19643, 19788, 19790, 5173
 
 function Kill-Tree([int]$procId) {
     if ($procId -gt 0) { & cmd /c "taskkill /T /F /PID $procId >nul 2>nul" }
@@ -118,11 +118,11 @@ if (Test-Path $pactdState) { Remove-Item -Recurse -Force $pactdState }
 
 $pactdPath = (Join-Path $Repo "pact\target\debug\pactd.exe") -replace '\\', '/'
 # -FirstRun ships NO coins so Satchel's first-run coin-setup (the >=2-live-coins
-# gate) runs and you wire btcx/btc yourself; otherwise both are pre-wired so
-# Alice is ready to trade immediately. (Single-quoted JSON line: the `@` in the
-# RPC URLs must stay literal.)
+# gate) runs and you wire btcx/btc/ltc yourself; otherwise all three are
+# pre-wired so Alice is ready to trade immediately. (Single-quoted JSON line:
+# the `@` in the RPC URLs must stay literal.)
 $coinsJson = if ($FirstRun) { '[]' } else {
-  '[{ "coin_id": "btcx", "chain_data": "http://pactharness:pactharness@127.0.0.1:19443/wallet/alice_pocx", "funding_wallet": "core-rpc" }, { "coin_id": "btc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19543/wallet/alice_btc", "funding_wallet": "core-rpc" }]'
+  '[{ "coin_id": "btcx", "chain_data": "http://pactharness:pactharness@127.0.0.1:19443/wallet/alice_pocx", "funding_wallet": "core-rpc" }, { "coin_id": "btc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19543/wallet/alice_btc", "funding_wallet": "core-rpc" }, { "coin_id": "ltc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19643/wallet/alice_ltc", "funding_wallet": "core-rpc" }]'
 }
 $satchelJson = @"
 {
@@ -141,10 +141,18 @@ $satchelJson = @"
     (Join-Path $AppData "satchel.json"), $satchelJson,
     (New-Object System.Text.UTF8Encoding $false))
 
+# LTC is a file-added coin: ship coins.toml (consensus params) + its icon next
+# to satchel.json so both Satchel and its managed pactd resolve the `ltc`
+# template (and the Coins/Wallet cards show the Litecoin badge). Harmless in
+# -FirstRun too -- it just makes `ltc` available in the setup picker.
+Copy-Item (Join-Path $Repo "satchel\coins.toml") (Join-Path $AppData "coins.toml") -Force
+Copy-Item (Join-Path $Repo "satchel\ltc.svg")    (Join-Path $AppData "ltc.svg")    -Force
+
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 $env:POCX_BITCOIND = Join-Path $Repo "pact\harness\bin\pocx-bitcoind.exe"
 $env:BTC_BITCOIND  = Join-Path $Repo "pact\harness\bin\btc-bitcoind.exe"
+$env:LITECOIND     = Join-Path $Repo "pact\harness\bin\litecoind.exe"
 # Bots' pactd logs at debug (stderr -> pact-<name>/pactd.log) so we can see the
 # Nostr publish/fetch path while testing.
 if (-not $env:RUST_LOG) { $env:RUST_LOG = "pactd=debug,libswap=debug" }
@@ -197,13 +205,15 @@ Write-Host "  Default offer TTL; the relay is wiped on teardown (ephemeral)."
 Write-Host ""
 if ($FirstRun) {
     Write-Host "  FIRST-RUN: no coins pre-wired -> step through onboarding + coin"
-    Write-Host "  setup. Configure BOTH coins against the playground nodes:"
+    Write-Host "  setup. Configure the coins against the playground nodes:"
     Write-Host "    BTCX : 127.0.0.1:19443  user/pass  pactharness / pactharness  wallet alice_pocx"
     Write-Host "    BTC  : 127.0.0.1:19543  user/pass  pactharness / pactharness  wallet alice_btc"
+    Write-Host "    LTC  : 127.0.0.1:19643  user/pass  pactharness / pactharness  wallet alice_ltc"
     Write-Host "    (auth = user/pass, NOT cookie; confirmations blank = regtest default 1)"
 } else {
-    Write-Host "  In the window: wizard -> create merchant; Coins tab shows both"
-    Write-Host "  connected; Corkboard -> offers come from Nostr; take either side."
+    Write-Host "  In the window: wizard -> create merchant; Coins tab shows all"
+    Write-Host "  three connected; Corkboard -> offers come from Nostr; take any"
+    Write-Host "  side (incl. LTC)."
 }
 Write-Host ""
 Write-Host "  CLOSE THE SATCHEL WINDOW to tear the whole stack down."

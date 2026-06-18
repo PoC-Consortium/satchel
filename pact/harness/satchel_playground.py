@@ -82,6 +82,15 @@ CAROL_LTC_OFFERS = [
 ]
 
 
+def chain_time(node):
+    # Tip block time, used to keep mocktime monotonic across all three chains.
+    # litecoind is an older Bitcoin Core fork whose getblockchaininfo has no
+    # "time" field (pocx/btc on Core v30 do) — fall back to "mediantime", which
+    # every version reports.
+    info = node.rpc("getblockchaininfo")
+    return int(info.get("time", info["mediantime"]))
+
+
 def main():
     build_workspace()
     with Harness(keep=False, with_ltc=True) as h:
@@ -184,16 +193,12 @@ def main():
 {bar}
 """)
         start_wall = time.time()
-        base = max(int(h.pocx.rpc("getblockchaininfo")["time"]),
-                   int(h.btc.rpc("getblockchaininfo")["time"]),
-                   int(h.ltc.rpc("getblockchaininfo")["time"]))
+        base = max(chain_time(h.pocx), chain_time(h.btc), chain_time(h.ltc))
         last_post = time.time()
         try:
             while True:
                 time.sleep(BLOCK_EVERY_SECS)
-                tip = max(int(h.pocx.rpc("getblockchaininfo")["time"]),
-                          int(h.btc.rpc("getblockchaininfo")["time"]),
-                          int(h.ltc.rpc("getblockchaininfo")["time"]))
+                tip = max(chain_time(h.pocx), chain_time(h.btc), chain_time(h.ltc))
                 now = max(tip, base + int(time.time() - start_wall)) + 1
                 h.pocx.set_mocktime(now)
                 h.btc.set_mocktime(now)

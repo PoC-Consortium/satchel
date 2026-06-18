@@ -30,7 +30,7 @@ import time
 sys.stdout.reconfigure(line_buffering=True)
 
 from regtest_harness import Harness, HERE, EXE
-from test_swap_e2e import build_workspace, Party
+from test_swap_e2e import build_workspace, Party, COINS_TOML
 
 BLOCK_EVERY_SECS = 4
 REPOST_EVERY_SECS = 30
@@ -58,6 +58,19 @@ CAROL_OFFERS = [
     ("btcx:50",  "btc:0.00098"),
     ("btcx:75",  "btc:0.00156"),
     ("btcx:100", "btc:0.00196"),
+]
+
+# A small Litecoin sub-book so Alice (funded on all three coins) can take an LTC
+# swap in BOTH directions over Nostr — same set as the corkboard playground. LTC
+# is a file-added coin (satchel/coins.toml). Pinned to v1 HTLC (the classic
+# CLTV+P2WSH path every cltv+segwit coin supports).
+BOB_LTC_OFFERS = [
+    ("btc:0.001", "ltc:2"),       # 1 LTC = 0.0005 BTC
+    ("btc:0.0015", "ltc:3"),
+]
+CAROL_LTC_OFFERS = [
+    ("btcx:50", "ltc:1"),         # give BTCX, want LTC   (Alice gives LTC)
+    ("ltc:2",   "btc:0.001"),     # give LTC,  want BTC   (Alice gives BTC, gets LTC)
 ]
 
 
@@ -129,35 +142,60 @@ class NostrRelay:
             self.proc = None
 
 
+def chain_time(node):
+    # Tip block time, used to keep mocktime monotonic across all three chains.
+    # litecoind is an older Bitcoin Core fork whose getblockchaininfo has no
+    # "time" field (pocx/btc on Core v30 do) — fall back to "mediantime", which
+    # every version reports.
+    info = node.rpc("getblockchaininfo")
+    return int(info.get("time", info["mediantime"]))
+
+
 def main():
     build_workspace()
-    with Harness(keep=False) as h:
+    with Harness(keep=False, with_ltc=True) as h:
         relay = NostrRelay(h.workdir)
         relay.start()
 
         # Same extra wallets as the corkboard playground (two-sided book + Alice
-        # funded on BOTH coins). See satchel_playground.py for the rationale.
+        # funded on ALL THREE coins). See satchel_playground.py for the rationale.
         h.pocx.create_wallet("carol_pocx")
         h.btc.create_wallet("carol_btc")
         h.pocx.generate(110, "carol_pocx")
         h.btc.generate(110, "alice_btc")
-        print("[nostr-pg] funded carol_pocx + alice_btc "
+
+        # Litecoin leg. alice_ltc + carol_ltc are funded (each gives LTC on some
+        # offer); bob_ltc is a receive-only sweep target. LTC coinbase matures at
+        # 100, so 110 deep is spendable.
+        h.ltc.create_wallet("alice_ltc")
+        h.ltc.create_wallet("bob_ltc")
+        h.ltc.create_wallet("carol_ltc")
+        h.ltc.generate(110, "alice_ltc")
+        h.ltc.generate(110, "carol_ltc")
+        print("[nostr-pg] funded carol_pocx + alice_btc + alice_ltc/carol_ltc "
               f"(carol_pocx: {h.pocx.rpc('getbalance', wallet='carol_pocx')} POCX, "
-              f"alice_btc: {h.btc.rpc('getbalance', wallet='alice_btc')} BTC)")
+              f"alice_btc: {h.btc.rpc('getbalance', wallet='alice_btc')} BTC, "
+              f"alice_ltc: {h.ltc.rpc('getbalance', wallet='alice_ltc')} LTC)")
 
         # RELAYS-ONLY: nostr_relays set, board_url omitted. Brisk 2s tick — fine
         # against the LOCAL relay (public relays would need a slower tick;
-        # tick_secs is per-config, default 30s).
+        # tick_secs is per-config, default 30s). Bob/Carol get an LTC leg too
+        # (own wallet on the LTC node) so they post/serve LTC offers over the
+        # relay; a file coin needs --coins-file (coins_file) + the extra --coin.
         bob = Party("bob", h, h.workdir, "bob_pocx", "bob_btc",
-                    nostr_relays=relay.ws_url, auto_fund=True, tick_secs=2).start()
+                    nostr_relays=relay.ws_url, auto_fund=True, tick_secs=2,
+                    coins_file=COINS_TOML,
+                    extra_coins=[("ltc", h.ltc.rpc_url(wallet="bob_ltc"))]).start()
         carol = Party("carol", h, h.workdir, "carol_pocx", "carol_btc",
-                      nostr_relays=relay.ws_url, auto_fund=True, tick_secs=2).start()
+                      nostr_relays=relay.ws_url, auto_fund=True, tick_secs=2,
+                      coins_file=COINS_TOML,
+                      extra_coins=[("ltc", h.ltc.rpc_url(wallet="carol_ltc"))]).start()
 
-        posted = {"bob": [], "carol": []}
+        posted = {"bob": [], "carol": [], "bob_ltc": [], "carol_ltc": []}
 
-        def topup(party, key, offers):
+        def topup(party, key, offers, pin_proto=None):
             # Non-destructive refresh (see satchel_playground.py): prune ids that
-            # have lapsed (here, mostly via the short ttl) and refill to target.
+            # have lapsed and refill to target.
             try:
                 live = {o["swap_id"] for o in party.rpc("boardlistoffers")["offers"]}
             except Exception:  # noqa: BLE001
@@ -165,7 +203,7 @@ def main():
             posted[key][:] = [oid for oid in posted[key] if oid in live]
             deficit = len(offers) - len(posted[key])
             for i, (give, get) in enumerate(offers[:max(0, deficit)]):
-                proto = PROTOCOLS[i % len(PROTOCOLS)]
+                proto = pin_proto or PROTOCOLS[i % len(PROTOCOLS)]
                 try:
                     # boardpostoffer: give, get, t1_secs, t2_secs, protocol
                     # (ttl omitted → engine default; local relay is ephemeral).
@@ -177,8 +215,13 @@ def main():
         def post_offers():
             topup(bob, "bob", BOB_OFFERS)
             topup(carol, "carol", CAROL_OFFERS)
+            # LTC sub-book, pinned to v1 HTLC.
+            topup(bob, "bob_ltc", BOB_LTC_OFFERS, pin_proto="pact-htlc-v1")
+            topup(carol, "carol_ltc", CAROL_LTC_OFFERS, pin_proto="pact-htlc-v1")
+            ltc_live = len(posted["bob_ltc"]) + len(posted["carol_ltc"])
             print(f"[nostr-pg] {len(posted['bob'])} buy-side (Bob) + "
-                  f"{len(posted['carol'])} sell-side (Carol) offers live on the relay")
+                  f"{len(posted['carol'])} sell-side (Carol) + "
+                  f"{ltc_live} LTC offers live on the relay")
 
         post_offers()
 
@@ -189,33 +232,34 @@ def main():
 
   No corkboard — Bob, Carol and your Satchel "Alice" trade over ONE local
   Nostr relay only:
-    Bob   (:{bob.port}) BUY side — {len(BOB_OFFERS)} give-BTC/get-POCX offers
-    Carol (:{carol.port}) SELL side — {len(CAROL_OFFERS)} give-POCX/get-BTC offers
-  Relay {relay.ws_url} | POCX node :19443 | BTC node :19543
+    Bob   (:{bob.port}) BUY side — {len(BOB_OFFERS)} give-BTC/get-POCX + {len(BOB_LTC_OFFERS)} give-BTC/get-LTC
+    Carol (:{carol.port}) SELL side — {len(CAROL_OFFERS)} give-POCX/get-BTC + {len(CAROL_LTC_OFFERS)} LTC offers
+  Relay {relay.ws_url} | POCX :19443 | BTC :19543 | LTC :19643
   Offers use the default TTL; taken offers refill every {REPOST_EVERY_SECS}s.
 
-  In the Satchel window (managed "Alice", relays-only, funded on BOTH coins):
+  In the Satchel window (managed "Alice", relays-only, funded on ALL THREE coins):
     1. Wizard -> Create a merchant.
-    2. Coins tab -> BTCX + BTC connected.
-    3. Corkboard tab -> board source is the Nostr relay; take EITHER side.
+    2. Coins tab -> BTCX + BTC + LTC connected.
+    3. Corkboard tab -> board source is the Nostr relay; two-sided market incl.
+       LTC pairs; take any side (give POCX, give BTC, or trade LTC either way).
     4. Swaps tab -> watch it walk to 'completed'.
   Offers may take a few seconds to appear (the relay poll cycle).
 {bar}
 """)
         start_wall = time.time()
-        base = max(int(h.pocx.rpc("getblockchaininfo")["time"]),
-                   int(h.btc.rpc("getblockchaininfo")["time"]))
+        base = max(chain_time(h.pocx), chain_time(h.btc), chain_time(h.ltc))
         last_post = time.time()
         try:
             while True:
                 time.sleep(BLOCK_EVERY_SECS)
-                tip = max(int(h.pocx.rpc("getblockchaininfo")["time"]),
-                          int(h.btc.rpc("getblockchaininfo")["time"]))
+                tip = max(chain_time(h.pocx), chain_time(h.btc), chain_time(h.ltc))
                 now = max(tip, base + int(time.time() - start_wall)) + 1
                 h.pocx.set_mocktime(now)
                 h.btc.set_mocktime(now)
+                h.ltc.set_mocktime(now)
                 h.pocx.generate(1, "alice_pocx")
                 h.btc.generate(1, "bob_btc")
+                h.ltc.generate(1, "alice_ltc")
                 if time.time() - last_post > REPOST_EVERY_SECS:
                     post_offers()
                     last_post = time.time()
