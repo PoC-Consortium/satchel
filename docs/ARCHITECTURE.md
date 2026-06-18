@@ -260,7 +260,7 @@ preimage, and an identity key for signing offers.
 | v2 refund key (chain c, swap i) — single-key CLTV refund tapleaf | `m/7228'/3'/coin(c)'/i'` |
 
 - `coin(c)` is the chain's BIP32 coin-type from the registry (SLIP-44 where
-  it exists: BTC = 0, PoCX = 20559 = `0x504F` "PO"). Per-swap keys mean users
+  it exists: BTC = 0, PoCX = 1347371864 = `0x504F4358` "POCX"). Per-swap keys mean users
   need no foreign-chain *wallet*, only chain data.
 - The identity key is stable across swaps and is **not** the proof-of-funds
   key.

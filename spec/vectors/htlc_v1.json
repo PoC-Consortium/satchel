@@ -5,18 +5,18 @@
   "derivation": {
     "alice_identity_xonly": "17eca6fe2f366841a10c1a65cb2b658e1aad5cfbe3a6c1754cdc51a5e8a58ab5",
     "alice_redeem_pubkey_b": "02afe6482b757e61790cff31d017633638d9f7dfa3d5db008ce2a75796ead34223",
-    "alice_refund_pubkey_a": "02dd5fd463e8d2c0bb33d5d114d3549a0359d3523ea26c6212c58d5859c49f3523",
+    "alice_refund_pubkey_a": "03d483312dbd49f15fd3e2971bc972921e3fe9c097a94a8ee5377dec38ddbd33c0",
     "bob_identity_xonly": "4cc7b3e511d0fcd5d4861251ead3c24b24e2735a9c24204d4e0bf03dacb4762f",
-    "bob_redeem_pubkey_a": "020cccab92278fb93c93700f8bcb3e269a2a0c8465c401450b4764cbb9a44c5add",
+    "bob_redeem_pubkey_a": "03ae67d9199e5bdfe7048a90f2b0c3ddb653ac821d244ab6a8f8b057b88f87a528",
     "bob_refund_pubkey_b": "02d7162de1eb8e76580903a985a2c502d41c639fe4836a5510281f5fb19f0f8317",
     "coin_btc": 0,
-    "coin_pocx": 20559,
+    "coin_pocx": 1347371864,
     "purpose": 7228
   },
   "htlc_a_pocx_regtest": {
-    "address": "rpocx1qqghtmxyr6ladprrjjy3uqy0gdq59k0paaq6uqxw9t33u7xqn2czs35tcen",
-    "script_pubkey": "0020022ebd9883d7fad08c729123c011e868285b3c3de835c019c55c63cf18135605",
-    "witness_script": "6382012088a82078445fd4582c78526f83ecaeee3631ad4cb6dd429b3d0b29b0fa56289ebf59918876a914bd6dcc330545fcfcb9b863a164dc7992d2c00e7e6704803bb16ab17576a914141f9f2d2dd20d5bbb0880962db5926374fc53076888ac"
+    "address": "rpocx1q6zfjcj75dcpjmrw6tnzf7u2hnvssveddhpsatuslhk8k6l0e4nuspqey7g",
+    "script_pubkey": "0020d0932c4bd46e032d8dda5cc49f71579b210665adb861d5f21fbd8f6d7df9acf9",
+    "witness_script": "6382012088a82078445fd4582c78526f83ecaeee3631ad4cb6dd429b3d0b29b0fa56289ebf59918876a914f2efd7aba8a5b939221b2f5756a355be8195451f6704803bb16ab17576a914ced0206bed079b2c6a912606737e0e4c84e4611c6888ac"
   },
   "htlc_b_btc_regtest": {
     "address": "bcrt1qe2syedmcdax68g5k5r52ayhtqp505nywa972wqvjds4mjaypnxnq6t6d2g",

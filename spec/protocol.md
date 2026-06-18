@@ -130,7 +130,7 @@ testnet and regtest; only address encoding differs):
 | Asset | `coin(c)` |
 |---|---|
 | BTC | `0'` |
-| PoCX | `20559'` (`0x504F`, ASCII "PO") |
+| PoCX | `1347371864'` (`0x504F4358`, ASCII "POCX") |
 
 `i` is the party's local, monotonically increasing swap index, starting at
 0. Each party numbers their own swaps; the two parties' indices are

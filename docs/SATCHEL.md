@@ -42,7 +42,7 @@ coin-type; per-network params (magic, address prefixes, bech32 HRP, genesis
 hash); and a `Capabilities` set (`cltv`, `segwit_v0`, `taproot`). The shipped
 `REGISTRY` is exactly two coins, both in-code and trusted:
 
-- **Bitcoin PoCX** (`btcx`, symbol `BTCX`, coin-type 20559) — Taproot ALWAYS_ACTIVE
+- **Bitcoin PoCX** (`btcx`, symbol `BTCX`, coin-type 1347371864 = `0x504F4358` "POCX") — Taproot ALWAYS_ACTIVE
   from genesis, so all three capabilities are true.
 - **Bitcoin** (`btc`) — `cltv`, `segwit_v0`, `taproot` all true.
 

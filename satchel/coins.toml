@@ -39,7 +39,7 @@ coin_id = "btcx"
 display_name = "Bitcoin PoCX"
 symbol = "BTCX"
 decimals = 8
-bip32_coin_type = 20559
+bip32_coin_type = 1347371864  # 0x504F4358 = ASCII "POCX"
 target_spacing_secs = 120
 icon = "btcx.svg"
 capabilities = { cltv = true, segwit_v0 = true, taproot = true }

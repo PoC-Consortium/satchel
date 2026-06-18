@@ -11,18 +11,18 @@
   },
   "bob_mnemonic": "legal winner thank year wave sausage worth useful legal winner thank yellow",
   "derivation": {
-    "alice_refund_a": "31e4533ad334fd002a91c136773ea57618b2e6c71c6382ba331e20a400fb434a",
-    "alice_swap_a": "02dd5fd463e8d2c0bb33d5d114d3549a0359d3523ea26c6212c58d5859c49f3523",
+    "alice_refund_a": "e8b5518e977886ec68fc723ef573531c475caa9f8ca1187fa21e1e3a99103877",
+    "alice_swap_a": "03d483312dbd49f15fd3e2971bc972921e3fe9c097a94a8ee5377dec38ddbd33c0",
     "alice_swap_b": "02afe6482b757e61790cff31d017633638d9f7dfa3d5db008ce2a75796ead34223",
     "bob_refund_b": "9b85d44896f9d21c27c68e0211af3b13f0a06ff36c8fc0791ea0a71159255347",
-    "bob_swap_a": "03ef9ce38f133ab64e06b951667f9d283eabb678ab1b257796b1cccdd0b2d6767f",
+    "bob_swap_a": "02032ac4984b15c53f8beed490cb96d01103e3e7b3df4a877fede50e347466a581",
     "bob_swap_b": "033b348cc6ca9a010568c1c1bdd90f3672abd15ccd426c4779000ba45fb74883ff"
   },
   "leg_a_pocx_regtest": {
-    "address": "rpocx1pt8r858ssrqjequq9z2lrdeafwun2vwawuw4ytsygzsyjyfx09v2qplxxge",
-    "internal_key": "5c622f6298b05ecf05fa3edee833974ce6c7422e9860bbfc328324fab1320469",
-    "output_key": "59c67a1e10182590700512be36e7a97726a63baee3aa45c08814092224cf2b14",
-    "refund_script": "04803bb16ab1752031e4533ad334fd002a91c136773ea57618b2e6c71c6382ba331e20a400fb434aac"
+    "address": "rpocx1phy3swd69r63uge87pvqndvmfktysygnut7hxad0hmupd0wul38psgr7xqz",
+    "internal_key": "f3d666655a961607d756b6fd98d8f552295e457769dbd8798c314994258cfdf3",
+    "output_key": "b9230737451ea3c464fe0b0136b369b2c902227c5fae6eb5f7df02d7bb9f89c3",
+    "refund_script": "04803bb16ab17520e8b5518e977886ec68fc723ef573531c475caa9f8ca1187fa21e1e3a99103877ac"
   },
   "leg_b_btc_regtest": {
     "address": "bcrt1pa9yxgwq9fafn4000p9qzpp225d83xjqz9f5wp6jfg8yjz9aahh3qk36we4",

@@ -21,8 +21,8 @@ pub use pact_proto::crypto::{hash_preimage, swap_id, tagged_hash};
 pub const PURPOSE: u32 = 7228;
 /// Asset constants for `coin(c)` — asset, not network (spec §4.1).
 pub const COIN_BTC: u32 = 0;
-/// `0x504F` = ASCII "PO".
-pub const COIN_POCX: u32 = 20559;
+/// `0x504F4358` = ASCII "POCX" (matches the node's `POCX` assignment marker).
+pub const COIN_POCX: u32 = 0x504F_4358;
 
 const TAG_PREIMAGE: &str = "pact/htlc/preimage/v1";
 /// v2 adaptor secret tag (spec v2 §3.1).
