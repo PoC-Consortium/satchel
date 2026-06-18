@@ -131,6 +131,7 @@ $satchelJson = @"
     }
   ],
   "board_urls": ["http://127.0.0.1:19790"],
+  "nostr_relays": [],
   "listen": "127.0.0.1:9737",
   "auto_fund": true,
   "tick_secs": 5,

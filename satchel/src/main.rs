@@ -182,10 +182,11 @@ struct Config {
     coins: Vec<CoinConn>,
     board_urls: Vec<String>,
     /// Nostr relay URLs for the decentralized transport (docs/NOSTR_TRANSPORT.md).
-    /// Empty by default: the transport is opt-in, so no offer is ever
-    /// broadcast to public relays until the user adds one (the config dialog
-    /// pre-fills [`RECOMMENDED_NOSTR_RELAYS`] for one-click enable).
-    #[serde(default)]
+    /// Prewired to [`RECOMMENDED_NOSTR_RELAYS`] on a fresh install — the
+    /// container-level `#[serde(default)]` fills a satchel.json that omits the
+    /// field from `Config::default`, so it lands on the default relay set. An
+    /// explicit empty list the user saved is respected (transport off); the
+    /// playground writes its own satchel.json, overriding this.
     nostr_relays: Vec<String>,
     listen: String,
     auto_fund: bool,
@@ -201,7 +202,7 @@ impl Default for Config {
             network: "regtest".into(),
             coins: Vec::new(),
             board_urls: Vec::new(),
-            nostr_relays: Vec::new(),
+            nostr_relays: RECOMMENDED_NOSTR_RELAYS.iter().map(|s| s.to_string()).collect(),
             listen: "127.0.0.1:9737".into(),
             auto_fund: false,
             tick_secs: 30,
@@ -513,15 +514,15 @@ fn list_coin_config(state: tauri::State<AppState>) -> serde_json::Value {
         "network": cfg.network,
         "board_urls": cfg.board_urls,
         "nostr_relays": cfg.nostr_relays,
-        "recommended_nostr_relays": RECOMMENDED_NOSTR_RELAYS,
     })
 }
 
-/// A small, editable default relay set the config dialog offers for
-/// one-click enable (docs/NOSTR_TRANSPORT.md). These six were verified by
-/// `tools/relay-prober` to accept AND retain our offer (31510) + gift-wrap
-/// (1059) kinds with no auth/payment/PoW; the user can replace or clear them.
-/// Re-run the prober before a release to confirm they're still healthy.
+/// The default Nostr relay set, prewired into a fresh `Config` (and used to
+/// fill a satchel.json that omits the field) — docs/NOSTR_TRANSPORT.md. These
+/// six were verified by `tools/relay-prober` to accept AND retain our offer
+/// (31510) + gift-wrap (1059) kinds with no auth/payment/PoW; the user can edit
+/// or clear them in Settings. Re-run the prober before a release to confirm
+/// they're still healthy.
 const RECOMMENDED_NOSTR_RELAYS: [&str; 6] = [
     "wss://relay.damus.io",
     "wss://nos.lol",

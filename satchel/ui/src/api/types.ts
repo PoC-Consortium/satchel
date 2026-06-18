@@ -100,10 +100,9 @@ export interface CoinConfig {
   coins: CoinConn[];
   network: string;
   board_urls: string[];
-  /** Nostr relay URLs for the decentralized transport (opt-in; empty = off). */
+  /** Nostr relay URLs for the decentralized transport (prewired by default;
+   *  an explicit empty list = transport off). */
   nostr_relays?: string[];
-  /** Curated relays the config dialog offers for one-click enable. */
-  recommended_nostr_relays?: string[];
 }
 
 /** One relay's connectivity from pactd `boardstatus` (Nostr transport).

@@ -255,10 +255,20 @@ export const en = {
     networkHint:
       "One coherent mode for this client — every coin runs on this network. Chosen when the merchant was created; mainnet is gated.",
     boards: "Corkboards",
+    boardsDesc:
+      "Optional self-hosted HTTP boards. Add any you trust; leave empty to rely on Nostr.",
     boardsNone: "None configured",
-    boardsConfigure: "Configure",
     nostrRelays: "Nostr relays",
-    nostrRelaysOff: "Off — using corkboard only",
+    nostrRelaysDesc:
+      "Relays carry the noticeboard over a decentralized network — no operator can read or match your offers. Prewired with a default set; edit freely.",
+    nostrRelaysOff: "Off — Nostr transport disabled",
+    addUrl: "Add",
+    removeUrl: "Remove",
+    relayInvalid: "Enter a ws:// or wss:// relay URL",
+    boardInvalid: "Enter an http:// or https:// board URL",
+    netSave: "Save & reconnect",
+    netSaving: "Saving & reconnecting…",
+    netSaved: "Saved",
     coins: "Coins & nodes",
     coinsHint: "Connect each coin to your own node. Genesis is checked before anything is saved.",
     about: "About",
@@ -525,18 +535,6 @@ export const en = {
     offersBodyMany:
       "{count} offers of yours are still on the Corkboard. Offers lock nothing, but leaving them up means counterparties can still take them while Satchel is closed — the engine will service the takes.",
     withdrawExit: "Withdraw all & exit",
-  },
-  boards: {
-    configTitle: "Your Corkboard",
-    configIntro:
-      "A Corkboard is a shared bulletin board for offers. Satchel reads and posts here and relays the coordination — it never matches trades or holds funds. Use any Corkboard you trust; comma-separate several for redundancy.",
-    urlLabel: "Board URL(s)",
-    save: "Save & reconnect",
-    nostrHeading: "Nostr relays (optional)",
-    nostrIntro:
-      "Nostr relays run the same noticeboard over a decentralized network instead of a single server — offers and the sealed coordination ride public relays, with no operator able to read or match them. Leave empty to keep the transport off.",
-    nostrLabel: "Nostr relay URL(s)",
-    nostrRecommend: "Use recommended relays",
   },
   unlock: {
     title: "Unlock merchant",
