@@ -18,8 +18,13 @@
   "Private (Taproot)". Logs land in <repo>\.playground\ — check those if
   anything misbehaves.
 
+  The script then BLOCKS on the Satchel window (like the bundled demo runner):
+  close the window and the whole stack tears itself down automatically — no
+  separate cleanup step. -Down is only needed to force-tear a stale/orphaned run.
+
 .PARAMETER Down
-  Tear everything down and exit (no setup, no run).
+  Force-tear a stale run and exit (no setup, no run). Not needed in the normal
+  flow — closing the Satchel window already tears everything down.
 
 .NOTES
   SAFETY: teardown is PID/PORT-ONLY. We kill the process trees we started and,
@@ -203,7 +208,19 @@ Write-Host "  In the window: wizard -> create merchant; Coins tab shows both"
 Write-Host "  connected; Corkboard -> take either side; Swaps tab walks it to"
 Write-Host "  'completed', badged 'Private (Taproot)'."
 Write-Host ""
+Write-Host "  CLOSE THE SATCHEL WINDOW to tear the whole stack down."
 Write-Host "  Logs:  $LogDir"
-Write-Host "  Stop:  .\playground.ps1 -Down"
 Write-Host "======================================================================"
+
+# Block on Satchel like the demo runner does: when the window closes (cargo
+# tauri dev exits with it), tear the whole stack down. The finally{} also fires
+# on Ctrl-C, so there is no separate cleanup step. Teardown stays PID/port-only.
+try {
+    $sat.WaitForExit()
+} finally {
+    Write-Host ""
+    Write-Host "[playground] Satchel closed -- tearing down (PID + port only) ..."
+    Stop-Playground
+    Write-Host "[playground] down."
+}
 exit 0

@@ -16,11 +16,11 @@ pact/harness/bin/
 *.log
 satchel/tauri-dev.log
 
-# playground.ps1 runtime logs + pidfile
+# playground-*.ps1 runtime logs + pidfile
 .playground/
 
 # Tauri sidecar staging — pactd/pact-cli copied in per-target-triple at build
-# time (by playground.ps1 for dev, by CI for release). Binaries, never committed.
+# time (by playground-*.ps1 for dev, by CI for release). Binaries, never committed.
 satchel/binaries/
 
 # The whole demo/ tree is local-only (assembled bundles + launchers/scripts);

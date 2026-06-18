@@ -3,7 +3,7 @@
   One-shot Satchel NOSTR (relays-only) playground: cleanup -> setup -> run.
 
 .DESCRIPTION
-  Like playground.ps1, but with NO corkboard -- Bob, Carol and the managed
+  Like playground-cork.ps1, but with NO corkboard -- Bob, Carol and the managed
   Satchel "Alice" trade over a single LOCAL Nostr relay only. This proves offers
   flow over Nostr alone (the demo's target config, corkboard server dropped); a
   broken relay shows an empty board rather than a false pass.
@@ -14,6 +14,10 @@
     * Satchel launched as managed "Alice" with a RELAYS-ONLY satchel.json
       (nostr_relays set, board_urls empty), factory-new data dir.
 
+  The script then BLOCKS on the Satchel window (like the bundled demo runner):
+  close the window and the whole stack — including the ephemeral relay — tears
+  itself down automatically. -Down is only needed to force-tear a stale run.
+
 .PARAMETER RelayCmd
   Launch command for the local Nostr relay, with {port}/{dir} substituted.
   Defaults to the bundled nostr-rs-relay in pact\harness\bin. Examples:
@@ -21,10 +25,11 @@
   May also be supplied via the PACT_NOSTR_RELAY_CMD environment variable.
 
 .PARAMETER Down
-  Tear everything down and exit (no setup, no run).
+  Force-tear a stale run and exit (no setup, no run). Not needed in the normal
+  flow — closing the Satchel window already tears everything down.
 
 .NOTES
-  SAFETY: teardown is PID/PORT-ONLY (see playground.ps1). We NEVER Stop-Process
+  SAFETY: teardown is PID/PORT-ONLY (see playground-cork.ps1). We NEVER Stop-Process
   by name -- the user runs a live MAINNET pocx-bitcoind. None of these ports is
   the mainnet node.
 #>
@@ -167,7 +172,7 @@ while ((Get-Date) -lt $deadline) {
 if (-not $up) { throw "nostr playground did not come up within 5 min. See $pgOut" }
 Write-Host "[nostr-pg] stack up; launching Satchel ..."
 
-# Stage the Tauri sidecars (same as playground.ps1 -- cargo tauri dev needs a
+# Stage the Tauri sidecars (same as playground-cork.ps1 -- cargo tauri dev needs a
 # binary for the host triple to exist).
 $triple = ((rustc -vV) -split "`n" | Where-Object { $_ -like "host:*" }) -replace "host:\s*", ""
 $bin = Join-Path $Repo "satchel\binaries"
@@ -192,7 +197,20 @@ Write-Host ""
 Write-Host "  In the window: wizard -> create merchant; Coins tab shows both"
 Write-Host "  connected; Corkboard -> offers come from Nostr; take either side."
 Write-Host ""
+Write-Host "  CLOSE THE SATCHEL WINDOW to tear the whole stack down."
 Write-Host "  Logs:  $LogDir"
-Write-Host "  Stop:  .\playground-nostr.ps1 -Down"
 Write-Host "======================================================================"
+
+# Block on Satchel like the demo runner does: when the window closes (cargo
+# tauri dev exits with it), tear the whole stack down -- including the ephemeral
+# relay. The finally{} also fires on Ctrl-C, so there is no separate cleanup
+# step. Teardown stays PID/port-only.
+try {
+    $sat.WaitForExit()
+} finally {
+    Write-Host ""
+    Write-Host "[nostr-pg] Satchel closed -- tearing down (PID + port only) ..."
+    Stop-Playground
+    Write-Host "[nostr-pg] down."
+}
 exit 0
