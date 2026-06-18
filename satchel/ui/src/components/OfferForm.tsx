@@ -40,8 +40,8 @@ import { C } from "../theme";
 // above the 15-min skew tolerance). Longer = safer margin but slower auto-refund
 // if the trade stalls. Long is the default.
 export const TERMS = {
-  short: { t1: 2 * 3600, t2: 1 * 3600 },
-  medium: { t1: 8 * 3600, t2: 4 * 3600 },
+  short: { t1: 6 * 3600, t2: 3 * 3600 },
+  medium: { t1: 12 * 3600, t2: 6 * 3600 },
   long: { t1: 24 * 3600, t2: 12 * 3600 },
 } as const;
 export type Term = keyof typeof TERMS;

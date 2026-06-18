@@ -71,8 +71,8 @@ export const en = {
     termMedium: "Medium",
     termLong: "Long",
     termHint: {
-      short: "Short — funds auto-refund fastest if the trade stalls (~2h / 1h), but the smallest safety margin.",
-      medium: "Medium — balanced refund window (~8h / 4h).",
+      short: "Short — funds auto-refund fastest if the trade stalls (~6h / 3h), but the smallest safety margin.",
+      medium: "Medium — balanced refund window (~12h / 6h).",
       long: "Long (safest) — widest safety margin; auto-refund after ~24h / 12h if the trade stalls.",
     },
     validFor: "Valid for (minutes)",
