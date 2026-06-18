@@ -1,6 +1,6 @@
-# PoCX Trading — Architecture
+# Bitcoin PoCX Trading — Architecture
 
-Trustless P2P trading for PoCX via atomic swaps: a swap engine plus a dumb
+Trustless P2P trading for Bitcoin PoCX via atomic swaps: a swap engine plus a dumb
 noticeboard. No exchange, no custody, no fees, no matching engine.
 
 Companion docs: [TRADING_ROADMAP.md](TRADING_ROADMAP.md) (phases, regulatory
@@ -169,12 +169,12 @@ reconstructed bytes, and refund scheduling is purely clock-driven. A lying
 backend can withhold or delay, never steal. Every backend must pass a genesis
 -hash `verify_chain` check before any funding decision.
 
-PoCX has its own Electrum server,
+Bitcoin PoCX has its own Electrum server,
 [electrs-pocx](https://github.com/PoC-Consortium/electrs-pocx)
 (Blockstream-electrs lineage), which powers the block explorer and serves the
 Electrum RPC protocol alongside an Esplora REST API. This lets pactd use one
 chain-data protocol (Electrum) for both chains, and lets a BTC holder buy
-PoCX with zero pre-existing PoCX infrastructure.
+Bitcoin PoCX with zero pre-existing PoCX infrastructure.
 
 ### Front-ends
 

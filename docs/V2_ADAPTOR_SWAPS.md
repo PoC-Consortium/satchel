@@ -33,7 +33,7 @@ payment** — no swap fingerprint, no shared on-chain hash linking the two legs,
 smaller transactions, no script disclosure. That privacy is the entire point
 of v2; Schnorr's linearity is what makes the adaptor construction clean.
 
-Both PoCX (Taproot ALWAYS_ACTIVE from genesis) and BTC support Taproot, so the
+Both Bitcoin PoCX (Taproot ALWAYS_ACTIVE from genesis) and BTC support Taproot, so the
 launch pair runs v2 natively. A pair where either leg lacks Taproot cannot run
 v2 and falls back to v1 — the capability resolver
 (`registry::protocols_for`) encodes this.
@@ -288,7 +288,7 @@ parent alone is below the mempool minimum. Properties:
 - **Pinning is a non-issue here.** The redeem's output is single-sig to the
   claimer, so no third party can attach a descendant to it — the usual pinning
   vectors need a shared/anyone-can-spend output, which this design lacks.
-- **Availability.** PoCX nodes are **Bitcoin Core v30+**, so TRUC/v3, P2A, and
+- **Availability.** Bitcoin PoCX nodes are **Bitcoin Core v30+**, so TRUC/v3, P2A, and
   `submitpackage` are native on the PoCX leg. The BTC leg uses a recent Core we
   run; the bumper acts unilaterally, so the *counterparty's* node version is
   irrelevant to bumping our own redeem.

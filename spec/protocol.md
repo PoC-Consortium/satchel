@@ -1,4 +1,4 @@
-# Pact Swap Protocol v1 — HTLC atomic swaps PoCX ↔ BTC
+# Pact Swap Protocol v1 — HTLC atomic swaps Bitcoin PoCX ↔ BTC
 
 Status: DRAFT (Phase 1). Protocol version string: `pact-htlc-v1`.
 
@@ -74,7 +74,7 @@ standard transaction format. PoCX satisfies all of these from genesis.
 Parameters below were read from `bitcoin-pocx` `src/kernel/chainparams.cpp`
 (the `ENABLE_POCX` build). Implementations MUST NOT guess these values.
 
-### 3.1 PoCX
+### 3.1 Bitcoin PoCX
 
 | Parameter | mainnet | testnet | regtest |
 |---|---|---|---|
@@ -92,7 +92,7 @@ Parameters below were read from `bitcoin-pocx` `src/kernel/chainparams.cpp`
 > port (18444) as Bitcoin regtest. Test setups running both chains on one
 > host MUST assign explicit, distinct `-port`/`-rpcport` values.
 
-PoCX is proof-of-capacity: block timestamps behave like Bitcoin's for
+Bitcoin PoCX is proof-of-capacity: block timestamps behave like Bitcoin's for
 locktime purposes (BIP113 MTP), but block intervals are 120 s, so
 confirmation counts accumulate ~5× faster than BTC.
 

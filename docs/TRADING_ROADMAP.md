@@ -1,8 +1,17 @@
-# PoCX Trading Roadmap — Trustless P2P Trading
+# Bitcoin PoCX Trading Roadmap — Trustless P2P Trading
 
 This document describes the product strategy and regulatory position for
-trustless peer-to-peer trading on PoCX: a slow, deliberate path to atomic-swap
-trading with a non-custodial arranger that never touches funds.
+trustless peer-to-peer trading on Bitcoin PoCX: a slow, deliberate path to
+atomic-swap trading with a non-custodial arranger that never touches funds.
+
+The infrastructure built here is **not limited to Bitcoin PoCX**. The swap
+engine is coin-agnostic — coins are configured by id and Electrum backend,
+trading pairs are derived from a registry, and any Bitcoin-family UTXO chain
+with the required script support (CLTV/CSV, SegWit, Schnorr/Taproot) drops in
+without code changes. The coordination layer (Corkboard + Nostr) is likewise
+coin-blind: it moves signed offer envelopes and opaque blobs regardless of
+which chains a swap touches. Bitcoin PoCX is the first deployment of this
+tooling, not the boundary of it.
 
 ## Problem
 
@@ -21,12 +30,13 @@ Discord front-end) that never custodies, matches, or executes.
    orders, never executes, never custodies, and charges no fees.
 3. **Slow start.** Small per-trade caps, fixed-size offers, no partial fills,
    community-operated.
-4. The design constraints above are also the EU regulatory strategy (see the
-   MiCA section at the bottom — they are load-bearing, not incidental).
+4. These constraints follow from the trustless architecture; the clean
+   regulatory position is a consequence of that design, not its goal (see the
+   MiCA section at the bottom).
 
 ## Technical foundation
 
-- PoCX is a Bitcoin fork with Taproot `ALWAYS_ACTIVE` from genesis on mainnet
+- Bitcoin PoCX is a Bitcoin fork with Taproot `ALWAYS_ACTIVE` from genesis on mainnet
   (`bitcoin/src/kernel/chainparams.cpp`), with the full script set: CLTV, CSV,
   SegWit, Schnorr.
 - Every modern atomic-swap technique works out of the box: classic HTLC swaps
@@ -81,11 +91,20 @@ better privacy, smaller transactions, no swap script revealed. v2 swaps are
 [V2_ADAPTOR_SWAPS.md](V2_ADAPTOR_SWAPS.md) and
 [`../spec/protocol-v2.md`](../spec/protocol-v2.md).
 
-## Phase 2 — The arranger: order board (Corkboard) + blind relay
+## Phase 2 — The arranger: order boards + blind relay (Corkboard + Nostr)
+
+Coordination rides two interchangeable transports behind one engine boundary —
+the `Noticeboard` trait (`libswap/src/board.rs`): a self-hosted HTTP order
+board (**Corkboard**) and the public **Nostr** relay network. Both carry the
+same signed offer envelopes and the same sealed relay blobs; the swap engine is
+identical regardless of which is used, and an operator can run either, both, or
+neither. Neither transport matches orders, executes, custodies, or charges
+fees.
+
+### Corkboard (self-hosted HTTP board)
 
 Corkboard is a web-based order board with a content-blind store-and-forward
-relay for swap coordination. It never matches orders, never executes, never
-custodies, and charges no fees.
+relay for swap coordination.
 
 - **Signed offers.** Offers are posted as signed envelopes; listings can't be
   faked and are provably tied to a key. The board verifies the envelope
@@ -103,10 +122,34 @@ custodies, and charges no fees.
   custody, and no fees.
 - A reference price may be displayed for information only — never executed
   against.
-- **No matching engine.** Humans pick offers. (Load-bearing for regulation.)
+- **No matching engine.** Humans pick offers — there is nothing to route or
+  execute.
 
-> **TODO:** Nostr relay transport alongside Corkboard (opt-in, engine
-> untouched) — planned, not yet built. See the Nostr transport plan.
+### Nostr transport (decentralized relay network)
+
+A second transport carries the same offers and relay messages over the public
+**Nostr** relay network, alongside Corkboard rather than replacing it
+(`pact-nostr` + `pactd`'s `nostr_service`). It is **opt-in**: with no relays
+configured nothing is published, so a swap never touches a public relay until
+the operator adds one.
+
+- **No board to operate.** Offers and coordination traffic ride commodity Nostr
+  relays run by many independent operators; there is no central server, account,
+  or operator that controls the network. If a dedicated relay is wanted, running
+  one is running stock relay software — it is blind to its payloads.
+- **Identity is the user's key.** A Pact identity *is* a Nostr key (BIP340
+  Schnorr secp256k1); a maker's `npub` equals the `from` of their signed offer.
+  No accounts, no registration.
+- **Same blindness as Corkboard.** Public offers are signed addressable events
+  (kind `31510`, NIP-40 expiry). Private coordination rides NIP-59-style gift
+  wraps signed by an ephemeral key: a relay sees the recipient and ciphertext,
+  never the sender or the contents.
+- **Liveness, not safety.** A relay that withholds or delays events affects
+  liveness only; funds are protected by timelocks regardless — identical to the
+  Corkboard relay.
+
+Wire mapping and design: [NOSTR_TRANSPORT.md](NOSTR_TRANSPORT.md) and
+[`../spec/protocol.md`](../spec/protocol.md) §8.8.
 
 **Known failure modes the design accounts for**
 
@@ -156,38 +199,58 @@ execute. It never touches keys or funds.
 
 ---
 
-## EU regulation (MiCA) — summary, not legal advice
+## EU regulation (MiCA)
 
-MiCA is in full EU-wide application; transition periods are over.
+MiCA is in full EU-wide application. Which, if any, component is a Crypto-Asset
+Service Provider (CASP) follows from what each part of the system technically
+holds and controls — keys, funds, order flow, the user relationship — not from
+how it is labelled. ESMA/EBA apply a **substance-over-form** test, so the
+analysis below is by substance.
 
-- **The coin itself:** no identifiable issuer (fair-launched, Bitcoin-like)
-  → no whitepaper obligation. If a regulated platform lists it, *that
-  platform* drafts the whitepaper.
-- **The platform:** "operation of a trading platform" and "reception and
-  transmission of orders" are licensed CASP activities. Recital 22 exempts
-  services provided "in a fully decentralised manner without any
-  intermediary" — but ESMA/EBA apply a **substance-over-form** test: an
-  identifiable team controlling software, server, and user relationships can
-  be a CASP even if non-custodial and fee-free.
-- **The line that matters:** a *bulletin board* (signed offers, users contact
-  each other) plus open-source swap software anyone can run is the strongest
-  position. A *matching engine* looks like operating a trading platform,
-  regardless of custody or fees. This is exactly why Corkboard is a
-  noticeboard and never a matching engine.
-- **Helps but doesn't immunize:** no fees (weakens "professional basis"),
-  non-custodial (removes the custody service, not the platform question).
-- **AML:** non-custodial / no-fiat is outside the obliged-entity perimeter
-  today; the EU AML Regulation (from 2027) tightens this for CASPs.
+- **The coin.** Bitcoin PoCX has no identifiable issuer (fair-launched, Bitcoin-like),
+  so no whitepaper obligation attaches to it. If a regulated platform later
+  lists it, *that platform* carries the whitepaper duty.
+- **The engine and clients (`libswap`/`pactd`/`pact`, Satchel).** Keys and
+  funds never leave the user's machine; the engine only builds, signs, and
+  broadcasts the user's *own* transactions, and atomicity is enforced by the
+  on-chain timelocks, not by any operator. This is open-source software a user
+  runs against their own keys — no order reception, no execution, no custody,
+  no service relationship. None of the licensed CASP activities are present.
+- **The transport — by construction not a venue.** Both transports are
+  content-blind message buses, not order systems:
+  - *Nostr* is a public, general-purpose relay network. A relay stores and
+    forwards opaque events; it does not parse offers, match, route, or hold
+    keys, and identity is a user-held key rather than an account. There is no
+    intermediary that controls the network or the user relationship — the
+    decentralisation is a real property of the transport (Recital 22's
+    "fully decentralised" case), the same way SMTP or BitTorrent is.
+  - *Corkboard* is a single self-hosted HTTP deployment of the same thing:
+    it verifies offer signatures, stores signed offers, and forwards opaque
+    blobs — and nothing else. It is interchangeable with a Nostr relay and can
+    be replaced entirely by pointing clients at Nostr.
+- **The two licensed activities, applied.** "Operation of a trading platform"
+  requires bringing together multiple third-party orders so they can be
+  *matched* into a contract; "reception and transmission of orders" requires
+  receiving an order and passing it on for execution. Neither component does
+  either: there is no matching engine (humans read a board and contact each
+  other), no order routing, and no execution — the relay never sees an "order"
+  it could transmit, only a signed advert or an opaque blob. Non-custody and
+  zero fees are additional facts (no custody service; no "professional basis"
+  consideration), but the load-bearing point is the absence of matching and
+  execution in the code itself.
+- **AML.** Non-custodial and no-fiat keeps the relays and clients outside the
+  obliged-entity perimeter today; the EU AML Regulation (from 2027) tightens
+  this for entities that *are* CASPs — which these are not.
 
-**Action items**
+**Operating posture**
 
-- Keep the swap tooling as a standalone open-source project; aim for multiple
-  independent operators of the order board (the Bisq structure — software
-  plus community, no operating company — is the precedent).
-- Decide who operates the board: core team vs. community.
-- Obtain a legal opinion from a crypto-focused EU firm **before the order
-  board goes live publicly** — the fully-decentralized exemption is exactly
-  the gray zone where a short memo is worth the money.
+- Keep the swap tooling a standalone open-source project anyone can run, so the
+  software exists independently of any one operator (the Bisq precedent —
+  software plus community, no operating company).
+- Prefer the Nostr transport as the default coordination layer: it has no
+  operator to be, and a self-run relay is commodity infrastructure blind to its
+  payloads. A self-hosted Corkboard is an optional convenience, replaceable by
+  Nostr at any time.
 
 ### Sources
 

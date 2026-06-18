@@ -1,4 +1,4 @@
-# Pact Swap Protocol v2 — Taproot/MuSig2 adaptor swaps PoCX ↔ BTC
+# Pact Swap Protocol v2 — Taproot/MuSig2 adaptor swaps Bitcoin PoCX ↔ BTC
 
 `pact-htlc-v2`. Companion to [`protocol.md`](protocol.md) (v1) — this
 document specifies only what v2 changes. Everything not restated here
@@ -24,8 +24,8 @@ unchanged.
 
 ## 2. Chain requirements
 
-Both chains MUST support Taproot (BIP340 Schnorr + BIP341 + BIP342). PoCX
-has Taproot ALWAYS_ACTIVE from genesis; Bitcoin since block 709 632. A pair
+Both chains MUST support Taproot (BIP340 Schnorr + BIP341 + BIP342). Bitcoin
+PoCX has Taproot ALWAYS_ACTIVE from genesis; Bitcoin since block 709 632. A pair
 where either leg lacks Taproot cannot run v2 (the engine's capability
 resolver, `registry::protocols_for`, already encodes this).
 

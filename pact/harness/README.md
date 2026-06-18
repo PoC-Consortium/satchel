@@ -1,6 +1,6 @@
 # Regtest harness
 
-Launches a PoCX regtest node + a Bitcoin regtest node and drives `pact`
+Launches a Bitcoin PoCX regtest node + a Bitcoin regtest node and drives `pact`
 engines (via `pactd`'s JSON-RPC and the `pact-cli` client) through the
 spec/protocol.md handshake. Python 3.10+, stdlib only.
 

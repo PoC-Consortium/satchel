@@ -101,8 +101,8 @@ connected → take an offer on the Corkboard → watch it complete on Swaps.
 
 pactd already derives BTC keys, watches the BTC chain, and signs BTC
 transactions to do swaps — Satchel adds a balance/receive/send tab on top.
-A user can complete a PoCX↔BTC trade and hold/spend the BTC with no other
-software (AtomicDEX product shape).
+A user can complete a Bitcoin PoCX↔BTC trade and hold/spend the BTC with no
+other software (AtomicDEX product shape).
 
 Guardrails:
 
@@ -111,5 +111,5 @@ Guardrails:
 - Basic P2WPKH/P2TR only; no coin control, no Lightning
 - Chain backend selectable: public Electrum servers (zero-setup default) or
   the user's own bitcoind
-- With PoCX Electrum servers live, Satchel also serves the BTC-only
-  newcomer buying PoCX with zero pre-existing PoCX infrastructure
+- With Bitcoin PoCX Electrum servers live, Satchel also serves the BTC-only
+  newcomer buying Bitcoin PoCX with zero pre-existing PoCX infrastructure

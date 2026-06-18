@@ -23,10 +23,10 @@ References: COMIT `xmr-btc-swap` (Rust), decred `atomicswap` (protocol logic).
   deterministic preimages. Seed + chain scan recovers in-flight swaps.
 - Transit keys only — sweeps proceeds/refunds to the user's core wallet
   immediately. The main stash never leaves core.
-- Chain backends: PoCX node via RPC/ZMQ (or PoCX Electrum); BTC via user's
-  bitcoind or public Electrum servers. One Electrum client implementation,
-  used symmetrically for both chains.
-- One PoCX-specific consideration: network params (magic bytes, address
+- Chain backends: Bitcoin PoCX node via RPC/ZMQ (or its Electrum server); BTC
+  via user's bitcoind or public Electrum servers. One Electrum client
+  implementation, used symmetrically for both chains.
+- One Bitcoin PoCX-specific consideration: network params (magic bytes, address
   prefixes, bech32 HRP) must be defined for `rust-bitcoin` — read them from
   `bitcoin-pocx`'s chainparams, never hardcode guesses.
 
