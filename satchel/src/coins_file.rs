@@ -231,7 +231,10 @@ mod tests {
     #[test]
     fn expands_home_token() {
         let home = dirs::home_dir().unwrap();
-        assert_eq!(expand_datadir("~/.bitcoin"), home.join(".bitcoin").display().to_string());
+        assert_eq!(
+            expand_datadir("~/.bitcoin"),
+            home.join(".bitcoin").display().to_string()
+        );
         assert_eq!(expand_datadir("/abs/path"), "/abs/path");
     }
 }

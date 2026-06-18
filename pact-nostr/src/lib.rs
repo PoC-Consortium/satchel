@@ -238,12 +238,18 @@ mod tests {
         assert!(tags.iter().any(|t| t[0] == "d" && t[1] == offer.swap_id));
         // Rolling relay TTL: now (1_700_000_000) + RELAY_TTL_SECS, capped at the
         // body's final expiry (created 1_700_000_000 + ttl 3600 = 1_700_003_600).
-        let exp = tags.iter().find(|t| t[0] == "expiration").expect("expiration tag");
+        let exp = tags
+            .iter()
+            .find(|t| t[0] == "expiration")
+            .expect("expiration tag");
         assert_eq!(exp[1], (1_700_000_000 + RELAY_TTL_SECS).to_string());
         // And a publish time near the final expiry is capped, not exceeded.
         let late = offer_event(&offer, &keys, 1_700_003_000).unwrap();
         let late_tags: Vec<Vec<String>> = late.tags.iter().map(|t| t.clone().to_vec()).collect();
-        let late_exp = late_tags.iter().find(|t| t[0] == "expiration").expect("expiration tag");
+        let late_exp = late_tags
+            .iter()
+            .find(|t| t[0] == "expiration")
+            .expect("expiration tag");
         assert_eq!(late_exp[1], "1700003600"); // final expiry, not 1_700_003_000+1800
 
         let back = offer_from_event(&event).unwrap();
@@ -256,7 +262,8 @@ mod tests {
     fn tampered_offer_event_is_rejected() {
         let (kp, keys, _) = identity(0x23);
         let offer = signed_offer(&kp);
-        let mut event_json = serde_json::to_value(offer_event(&offer, &keys, 1_700_000_000).unwrap()).unwrap();
+        let mut event_json =
+            serde_json::to_value(offer_event(&offer, &keys, 1_700_000_000).unwrap()).unwrap();
         // Flip a byte in content; the nostr id/sig no longer match.
         event_json["content"] = serde_json::Value::String("garbage".into());
         let tampered: Event = serde_json::from_value(event_json).unwrap();

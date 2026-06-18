@@ -2683,7 +2683,10 @@ impl Engine {
         let n = live.len();
         for o in live {
             if let Err(err) = self.revoke_board_offer(&o.offer_id) {
-                eprintln!("warning: revoke-on-close failed for {}: {err:#}", o.offer_id);
+                eprintln!(
+                    "warning: revoke-on-close failed for {}: {err:#}",
+                    o.offer_id
+                );
             }
         }
         Ok(n)

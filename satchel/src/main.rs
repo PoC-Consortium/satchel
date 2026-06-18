@@ -118,7 +118,12 @@ struct CoinConnInput {
 impl CoinConnInput {
     /// Build a [`CoinConn`] for `coin_id`, composing `chain_data` from the
     /// structured fields (unless a raw `chain_data` was supplied).
-    fn into_conn(self, coin_id: String, network: &str, confirmations: Option<u32>) -> anyhow::Result<CoinConn> {
+    fn into_conn(
+        self,
+        coin_id: String,
+        network: &str,
+        confirmations: Option<u32>,
+    ) -> anyhow::Result<CoinConn> {
         let mut conn = CoinConn {
             coin_id,
             chain_data: String::new(),
@@ -201,7 +206,10 @@ impl Default for Config {
             pactd_path: "pactd".into(),
             coins: Vec::new(),
             board_urls: Vec::new(),
-            nostr_relays: RECOMMENDED_NOSTR_RELAYS.iter().map(|s| s.to_string()).collect(),
+            nostr_relays: RECOMMENDED_NOSTR_RELAYS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             listen: "127.0.0.1:9737".into(),
             auto_fund: false,
             tick_secs: 30,

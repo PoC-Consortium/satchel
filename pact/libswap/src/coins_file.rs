@@ -143,18 +143,37 @@ pub fn parse_and_validate(toml_str: &str) -> Result<Vec<BuiltCoin>> {
         let id = c.coin_id.to_ascii_lowercase();
         ensure!(!id.is_empty(), "coin_id must not be empty");
         ensure!(
-            id.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit()),
+            id.chars()
+                .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit()),
             "coin_id {id:?} must be lowercase ascii letters/digits"
         );
-        ensure!(seen.insert(id.clone()), "duplicate coin_id {id:?} in coins file");
+        ensure!(
+            seen.insert(id.clone()),
+            "duplicate coin_id {id:?} in coins file"
+        );
         let capabilities = Capabilities {
             cltv: c.capabilities.cltv,
             segwit_v0: c.capabilities.segwit_v0,
             taproot: c.capabilities.taproot,
         };
-        let mainnet = build_params(&id, Network::Mainnet, c.mainnet.as_ref(), c.target_spacing_secs)?;
-        let testnet = build_params(&id, Network::Testnet, c.testnet.as_ref(), c.target_spacing_secs)?;
-        let regtest = build_params(&id, Network::Regtest, c.regtest.as_ref(), c.target_spacing_secs)?;
+        let mainnet = build_params(
+            &id,
+            Network::Mainnet,
+            c.mainnet.as_ref(),
+            c.target_spacing_secs,
+        )?;
+        let testnet = build_params(
+            &id,
+            Network::Testnet,
+            c.testnet.as_ref(),
+            c.target_spacing_secs,
+        )?;
+        let regtest = build_params(
+            &id,
+            Network::Regtest,
+            c.regtest.as_ref(),
+            c.target_spacing_secs,
+        )?;
         ensure!(
             mainnet.is_some() || testnet.is_some() || regtest.is_some(),
             "coin {id:?} defines no networks (need at least one of [coin.mainnet|testnet|regtest])"

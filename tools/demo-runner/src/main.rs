@@ -62,7 +62,10 @@ const CAROL_OFFERS: &[(&str, &str)] = &[
 const PROTOCOLS: &[&str] = &["pact-htlc-v1", "pact-htlc-v2"];
 
 fn now_secs() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
 
 fn basic_auth(user: &str, pass: &str) -> String {
@@ -73,11 +76,36 @@ fn basic_auth(user: &str, pass: &str) -> String {
     let b = raw.as_bytes();
     const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     for chunk in b.chunks(3) {
-        let (b0, b1, b2) = (chunk[0] as u32, *chunk.get(1).unwrap_or(&0) as u32, *chunk.get(2).unwrap_or(&0) as u32);
+        let (b0, b1, b2) = (
+            chunk[0] as u32,
+            *chunk.get(1).unwrap_or(&0) as u32,
+            *chunk.get(2).unwrap_or(&0) as u32,
+        );
         let n = (b0 << 16) | (b1 << 8) | b2;
-        let _ = write!(out, "{}{}", T[(n >> 18) as usize & 63] as char, T[(n >> 12) as usize & 63] as char);
-        let _ = write!(out, "{}", if chunk.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
-        let _ = write!(out, "{}", if chunk.len() > 2 { T[n as usize & 63] as char } else { '=' });
+        let _ = write!(
+            out,
+            "{}{}",
+            T[(n >> 18) as usize & 63] as char,
+            T[(n >> 12) as usize & 63] as char
+        );
+        let _ = write!(
+            out,
+            "{}",
+            if chunk.len() > 1 {
+                T[(n >> 6) as usize & 63] as char
+            } else {
+                '='
+            }
+        );
+        let _ = write!(
+            out,
+            "{}",
+            if chunk.len() > 2 {
+                T[n as usize & 63] as char
+            } else {
+                '='
+            }
+        );
     }
     format!("Basic {out}")
 }
@@ -109,7 +137,13 @@ struct Node {
 }
 
 impl Node {
-    fn start(binary: &Path, datadir: &Path, port: u16, name: &'static str, genesis: &str) -> Result<Node> {
+    fn start(
+        binary: &Path,
+        datadir: &Path,
+        port: u16,
+        name: &'static str,
+        genesis: &str,
+    ) -> Result<Node> {
         std::fs::create_dir_all(datadir)?;
         let child = Command::new(binary)
             .arg("-regtest")
@@ -143,7 +177,12 @@ impl Node {
     }
 
     fn wallet_call(&self, wallet: &str, method: &str, params: Value) -> Result<Value> {
-        rpc(&format!("{}/wallet/{wallet}", self.url), &self.auth, method, params)
+        rpc(
+            &format!("{}/wallet/{wallet}", self.url),
+            &self.auth,
+            method,
+            params,
+        )
     }
 
     fn wait_rpc(&self) -> Result<()> {
@@ -185,11 +224,18 @@ impl Node {
     }
 
     fn wallet_url(&self, wallet: &str) -> String {
-        format!("http://{RPC_USER}:{RPC_PASS}@127.0.0.1:{}/wallet/{wallet}", self.port())
+        format!(
+            "http://{RPC_USER}:{RPC_PASS}@127.0.0.1:{}/wallet/{wallet}",
+            self.port()
+        )
     }
 
     fn port(&self) -> u16 {
-        self.url.rsplit(':').next().and_then(|s| s.parse().ok()).unwrap_or(0)
+        self.url
+            .rsplit(':')
+            .next()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0)
     }
 
     fn stop(mut self) {
@@ -209,18 +255,33 @@ struct Bot {
 }
 
 impl Bot {
-    fn start(pactd: &Path, datadir: &Path, port: u16, name: &'static str, pocx_url: &str, btc_url: &str, relay_ws: &str) -> Result<Bot> {
+    fn start(
+        pactd: &Path,
+        datadir: &Path,
+        port: u16,
+        name: &'static str,
+        pocx_url: &str,
+        btc_url: &str,
+        relay_ws: &str,
+    ) -> Result<Bot> {
         std::fs::create_dir_all(datadir)?;
         let child = Command::new(pactd)
-            .arg("--data-dir").arg(datadir)
-            .arg("--network").arg("regtest")
-            .arg("--coin").arg(format!("btcx={pocx_url}"))
-            .arg("--coin").arg(format!("btc={btc_url}"))
-            .arg("--listen").arg(format!("127.0.0.1:{port}"))
-            .arg("--tick-secs").arg("2")
+            .arg("--data-dir")
+            .arg(datadir)
+            .arg("--network")
+            .arg("regtest")
+            .arg("--coin")
+            .arg(format!("btcx={pocx_url}"))
+            .arg("--coin")
+            .arg(format!("btc={btc_url}"))
+            .arg("--listen")
+            .arg(format!("127.0.0.1:{port}"))
+            .arg("--tick-secs")
+            .arg("2")
             .arg("--auto-init")
             .arg("--auto-fund")
-            .arg("--nostr-relay").arg(relay_ws)
+            .arg("--nostr-relay")
+            .arg(relay_ws)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
@@ -229,7 +290,11 @@ impl Bot {
         let health = format!("http://127.0.0.1:{port}/health");
         let deadline = now_secs() + 60;
         while now_secs() < deadline {
-            if ureq::get(&health).timeout(Duration::from_secs(5)).call().is_ok() {
+            if ureq::get(&health)
+                .timeout(Duration::from_secs(5))
+                .call()
+                .is_ok()
+            {
                 break;
             }
             thread::sleep(Duration::from_millis(300));
@@ -244,7 +309,12 @@ impl Bot {
     }
 
     fn post_offer(&self, give: &str, get: &str, proto: &str) -> Result<()> {
-        rpc(&self.url, &self.auth, "boardpostoffer", json!([give, get, 14400, 7200, proto]))?;
+        rpc(
+            &self.url,
+            &self.auth,
+            "boardpostoffer",
+            json!([give, get, 14400, 7200, proto]),
+        )?;
         Ok(())
     }
 
@@ -252,7 +322,11 @@ impl Bot {
         rpc(&self.url, &self.auth, "boardlistoffers", json!([]))
             .ok()
             .and_then(|v| v["offers"].as_array().cloned())
-            .map(|a| a.iter().filter_map(|o| o["swap_id"].as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|o| o["swap_id"].as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -278,7 +352,10 @@ fn main() {
 }
 
 fn run() -> Result<()> {
-    let bin_dir = std::env::current_exe()?.parent().context("exe dir")?.to_path_buf();
+    let bin_dir = std::env::current_exe()?
+        .parent()
+        .context("exe dir")?
+        .to_path_buf();
     let demo_root = bin_dir.parent().context("demo root")?.to_path_buf();
     let satchel_dir = demo_root.join("satchel");
 
@@ -287,7 +364,13 @@ fn run() -> Result<()> {
     let relay_bin = bin_dir.join(format!("nostr-rs-relay{EXE}"));
     let pactd_bin = satchel_dir.join(format!("pactd{EXE}"));
     let satchel_bin = satchel_dir.join(format!("satchel{EXE}"));
-    for (label, p) in [("pocx node", &pocx_bin), ("btc node", &btc_bin), ("relay", &relay_bin), ("pactd", &pactd_bin), ("satchel", &satchel_bin)] {
+    for (label, p) in [
+        ("pocx node", &pocx_bin),
+        ("btc node", &btc_bin),
+        ("relay", &relay_bin),
+        ("pactd", &pactd_bin),
+        ("satchel", &satchel_bin),
+    ] {
         if !p.exists() {
             bail!("missing bundled binary: {label} at {}", p.display());
         }
@@ -298,8 +381,20 @@ fn run() -> Result<()> {
     std::fs::create_dir_all(&work)?;
 
     println!("[demo] starting regtest nodes ...");
-    let pocx = Node::start(&pocx_bin, &work.join("pocx"), POCX_RPC_PORT, "pocx", POCX_GENESIS)?;
-    let btc = Node::start(&btc_bin, &work.join("btc"), BTC_RPC_PORT, "btc", BTC_GENESIS)?;
+    let pocx = Node::start(
+        &pocx_bin,
+        &work.join("pocx"),
+        POCX_RPC_PORT,
+        "pocx",
+        POCX_GENESIS,
+    )?;
+    let btc = Node::start(
+        &btc_bin,
+        &work.join("btc"),
+        BTC_RPC_PORT,
+        "btc",
+        BTC_GENESIS,
+    )?;
     let start_t = now_secs();
     pocx.set_mocktime(start_t)?;
     btc.set_mocktime(start_t)?;
@@ -317,12 +412,32 @@ fn run() -> Result<()> {
     let relay_ws = format!("ws://127.0.0.1:{RELAY_PORT}");
 
     println!("[demo] starting counterparty bots ...");
-    let bob = Bot::start(&pactd_bin, &work.join("pact-bob"), BOB_PORT, "bob", &pocx.wallet_url("bob_pocx"), &btc.wallet_url("bob_btc"), &relay_ws)?;
-    let carol = Bot::start(&pactd_bin, &work.join("pact-carol"), CAROL_PORT, "carol", &pocx.wallet_url("carol_pocx"), &btc.wallet_url("carol_btc"), &relay_ws)?;
+    let bob = Bot::start(
+        &pactd_bin,
+        &work.join("pact-bob"),
+        BOB_PORT,
+        "bob",
+        &pocx.wallet_url("bob_pocx"),
+        &btc.wallet_url("bob_btc"),
+        &relay_ws,
+    )?;
+    let carol = Bot::start(
+        &pactd_bin,
+        &work.join("pact-carol"),
+        CAROL_PORT,
+        "carol",
+        &pocx.wallet_url("carol_pocx"),
+        &btc.wallet_url("carol_btc"),
+        &relay_ws,
+    )?;
 
     post_book(&bob, BOB_OFFERS);
     post_book(&carol, CAROL_OFFERS);
-    println!("[demo] {} + {} offers posted to the relay", bob.live_offer_ids().len(), carol.live_offer_ids().len());
+    println!(
+        "[demo] {} + {} offers posted to the relay",
+        bob.live_offer_ids().len(),
+        carol.live_offer_ids().len()
+    );
 
     println!("[demo] preparing Satchel (Alice) ...");
     write_satchel_config(&pactd_bin, &pocx, &btc, &relay_ws)?;
@@ -405,8 +520,10 @@ fn start_relay(bin: &Path, dir: &Path) -> Result<Child> {
         "[info]\nrelay_url = \"ws://127.0.0.1:{RELAY_PORT}/\"\nname = \"pact-demo\"\n\n[network]\naddress = \"127.0.0.1\"\nport = {RELAY_PORT}\n\n[database]\ndata_directory = \"{db}\"\n"
     )?;
     let child = Command::new(bin)
-        .arg("--config").arg(&cfg)
-        .arg("--db").arg(dir)
+        .arg("--config")
+        .arg(&cfg)
+        .arg("--db")
+        .arg(dir)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()

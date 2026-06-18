@@ -637,7 +637,13 @@ impl Store {
              VALUES (?1, ?2, ?3, ?4, ?5, 'live')
              ON CONFLICT(offer_id) DO UPDATE SET
                  envelope = ?2, created = ?3, valid_for = ?4, last_refresh = ?5, state = 'live'",
-            params![offer_id, envelope, created as i64, valid_for as i64, now as i64],
+            params![
+                offer_id,
+                envelope,
+                created as i64,
+                valid_for as i64,
+                now as i64
+            ],
         )?;
         Ok(())
     }

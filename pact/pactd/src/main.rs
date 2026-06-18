@@ -913,7 +913,9 @@ async fn main() -> Result<()> {
             Ok(dropped) => {
                 tracing::info!(coins_file = %path.display(), "loaded coin templates");
                 for id in dropped {
-                    tracing::warn!("coins.toml entry {id:?} dropped: collides with a built-in coin id");
+                    tracing::warn!(
+                        "coins.toml entry {id:?} dropped: collides with a built-in coin id"
+                    );
                 }
             }
             Err(err) => {
@@ -1134,21 +1136,15 @@ mod tests {
     #[test]
     fn coins_map_is_built_from_generic_coin_flags() {
         // Every coin is attached the same way, via repeated --coin flags.
-        let coins = coins_from_args(&args_with(vec![
-            "btcx=http://btcx:1",
-            "btc=http://btc:1",
-        ]))
-        .unwrap();
+        let coins =
+            coins_from_args(&args_with(vec!["btcx=http://btcx:1", "btc=http://btc:1"])).unwrap();
         assert_eq!(coins.get("btcx").unwrap(), "http://btcx:1");
         assert_eq!(coins.get("btc").unwrap(), "http://btc:1");
         assert_eq!(coins.len(), 2);
 
         // A later --coin for the same id wins (last write).
-        let dup = coins_from_args(&args_with(vec![
-            "btcx=http://old:1",
-            "btcx=http://new:9",
-        ]))
-        .unwrap();
+        let dup =
+            coins_from_args(&args_with(vec!["btcx=http://old:1", "btcx=http://new:9"])).unwrap();
         assert_eq!(dup.get("btcx").unwrap(), "http://new:9");
         assert_eq!(dup.len(), 1);
     }
