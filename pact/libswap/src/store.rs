@@ -166,6 +166,19 @@ pub struct WalletStatus {
     pub locked: bool,
 }
 
+/// A maker's own posted offer (the `my_offers` registry row). `valid_for` is
+/// the maker-set lifetime in seconds (final expiry = `created + valid_for`);
+/// the rolling relay TTL is a separate system constant applied at publish time.
+#[derive(Debug, Clone)]
+pub struct MyOffer {
+    pub offer_id: String,
+    pub envelope: String,
+    pub created: u64,
+    pub valid_for: u64,
+    pub last_refresh: u64,
+    pub state: String,
+}
+
 impl Store {
     /// Create a fresh data dir with a new random seed (encrypted when a
     /// passphrase is given). Fails if a seed already exists — never
@@ -238,6 +251,20 @@ impl Store {
                  envelope TEXT NOT NULL,             -- signed offer envelope JSON
                  created  INTEGER NOT NULL,
                  expires  INTEGER NOT NULL DEFAULT 0 -- 0 = no NIP-40 expiry
+             );
+             -- The maker's OWN posted offers (offer-lifecycle). Drives the refresh
+             -- loop, revoke-on-close, and the My-offers view. The signed envelope is
+             -- kept so a live offer can be re-published (Nostr addressable replace /
+             -- HTTP re-POST) to roll its short relay TTL forward until
+             -- `created + valid_for` (the maker-set FINAL expiry). state advances
+             -- live -> taken | revoked | expired.
+             CREATE TABLE IF NOT EXISTS my_offers (
+                 offer_id     TEXT PRIMARY KEY,      -- = offer envelope swap_id
+                 envelope     TEXT NOT NULL,         -- signed offer envelope JSON
+                 created      INTEGER NOT NULL,      -- body.created (post time)
+                 valid_for    INTEGER NOT NULL,      -- ttl_secs; 0 = legacy/none
+                 last_refresh INTEGER NOT NULL DEFAULT 0,
+                 state        TEXT NOT NULL DEFAULT 'live'
              );",
         )?;
         // SwapRecord fields live inside the `record` JSON blob, not in their
@@ -594,6 +621,86 @@ impl Store {
         rows.map(|r| Ok(r?)).collect()
     }
 
+    // ---- maker's own offers (offer-lifecycle registry) ----
+
+    /// Record (or refresh) an offer we just posted, in `live` state.
+    pub fn my_offer_put(
+        &self,
+        offer_id: &str,
+        envelope: &str,
+        created: u64,
+        valid_for: u64,
+        now: u64,
+    ) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO my_offers (offer_id, envelope, created, valid_for, last_refresh, state)
+             VALUES (?1, ?2, ?3, ?4, ?5, 'live')
+             ON CONFLICT(offer_id) DO UPDATE SET
+                 envelope = ?2, created = ?3, valid_for = ?4, last_refresh = ?5, state = 'live'",
+            params![offer_id, envelope, created as i64, valid_for as i64, now as i64],
+        )?;
+        Ok(())
+    }
+
+    fn row_to_my_offer(row: &rusqlite::Row) -> rusqlite::Result<MyOffer> {
+        Ok(MyOffer {
+            offer_id: row.get(0)?,
+            envelope: row.get(1)?,
+            created: row.get::<_, i64>(2)?.max(0) as u64,
+            valid_for: row.get::<_, i64>(3)?.max(0) as u64,
+            last_refresh: row.get::<_, i64>(4)?.max(0) as u64,
+            state: row.get(5)?,
+        })
+    }
+
+    /// Offers still in `live` state — for the refresh loop and revoke-on-close.
+    pub fn my_offers_live(&self) -> Result<Vec<MyOffer>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT offer_id, envelope, created, valid_for, last_refresh, state
+             FROM my_offers WHERE state = 'live'",
+        )?;
+        let rows = stmt.query_map([], Self::row_to_my_offer)?;
+        rows.map(|r| Ok(r?)).collect()
+    }
+
+    /// Every registered offer (any state) — for the My-offers view.
+    pub fn my_offers_all(&self) -> Result<Vec<MyOffer>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT offer_id, envelope, created, valid_for, last_refresh, state
+             FROM my_offers ORDER BY created DESC",
+        )?;
+        let rows = stmt.query_map([], Self::row_to_my_offer)?;
+        rows.map(|r| Ok(r?)).collect()
+    }
+
+    /// Advance an offer's lifecycle state (`taken` | `revoked` | `expired`).
+    pub fn my_offer_set_state(&self, offer_id: &str, state: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE my_offers SET state = ?2 WHERE offer_id = ?1",
+            params![offer_id, state],
+        )?;
+        Ok(())
+    }
+
+    /// Mark `revoked` only if still `live` — so the C5 auto-revoke that fires when
+    /// a take commits doesn't clobber the `taken` state set at commit time.
+    pub fn my_offer_mark_revoked(&self, offer_id: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE my_offers SET state = 'revoked' WHERE offer_id = ?1 AND state = 'live'",
+            params![offer_id],
+        )?;
+        Ok(())
+    }
+
+    /// Stamp the last successful re-publish of a live offer.
+    pub fn my_offer_touch_refresh(&self, offer_id: &str, now: u64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE my_offers SET last_refresh = ?2 WHERE offer_id = ?1",
+            params![offer_id, now as i64],
+        )?;
+        Ok(())
+    }
+
     /// Remember an offer we've taken, until the maker's init arrives.
     /// `created_at` (unix secs, `engine::local_now`) stamps when we took it,
     /// so the scheduler can prune handshakes the maker never answered (C8).
@@ -899,6 +1006,55 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("libswap-store-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
+    }
+
+    #[test]
+    fn my_offers_registry_lifecycle() {
+        let dir = temp_dir("my-offers");
+        let store = Store::init(&dir, None).unwrap();
+
+        store
+            .my_offer_put("aa", "{\"e\":1}", 1_700_000_000, 1800, 1_700_000_000)
+            .unwrap();
+        store
+            .my_offer_put("bb", "{\"e\":2}", 1_700_000_000, 1800, 1_700_000_000)
+            .unwrap();
+        assert_eq!(store.my_offers_live().unwrap().len(), 2);
+        assert_eq!(store.my_offers_all().unwrap().len(), 2);
+
+        // Refresh stamps last_refresh.
+        store.my_offer_touch_refresh("aa", 1_700_000_600).unwrap();
+        let aa = store
+            .my_offers_all()
+            .unwrap()
+            .into_iter()
+            .find(|o| o.offer_id == "aa")
+            .unwrap();
+        assert_eq!(aa.last_refresh, 1_700_000_600);
+        assert_eq!(aa.valid_for, 1800);
+        assert_eq!(aa.state, "live");
+
+        // `taken` is terminal: the auto-revoke (mark_revoked) must not clobber it.
+        store.my_offer_set_state("aa", "taken").unwrap();
+        store.my_offer_mark_revoked("aa").unwrap(); // no-op: not live
+        let aa = store
+            .my_offers_all()
+            .unwrap()
+            .into_iter()
+            .find(|o| o.offer_id == "aa")
+            .unwrap();
+        assert_eq!(aa.state, "taken");
+
+        // A still-live offer revokes to `revoked`, and leaves the live set.
+        store.my_offer_mark_revoked("bb").unwrap();
+        let bb = store
+            .my_offers_all()
+            .unwrap()
+            .into_iter()
+            .find(|o| o.offer_id == "bb")
+            .unwrap();
+        assert_eq!(bb.state, "revoked");
+        assert_eq!(store.my_offers_live().unwrap().len(), 0);
     }
 
     #[test]

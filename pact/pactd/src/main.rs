@@ -493,6 +493,50 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         "listpendingtakes" => Ok(serde_json::to_value(
             blocking(app, |e| e.list_pending_takes()).await?,
         )?),
+        // The maker's OWN offers (offer-lifecycle): the My-offers view. Each row
+        // carries the signed envelope (so the UI renders it like any offer card),
+        // its lifecycle state, the rolling CURRENT expiry (last_refresh + relay
+        // TTL, capped at final) and the maker-set FINAL expiry (created+valid_for).
+        "listmyoffers" => {
+            let rows = blocking(app, |e| e.store.my_offers_all()).await?;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let out: Vec<serde_json::Value> = rows
+                .into_iter()
+                .map(|o| {
+                    let env: serde_json::Value =
+                        serde_json::from_str(&o.envelope).unwrap_or_else(|_| json!({}));
+                    let final_expiry = if o.created != 0 && o.valid_for != 0 {
+                        o.created + o.valid_for
+                    } else {
+                        0
+                    };
+                    let current_expiry = if o.last_refresh != 0 {
+                        let roll = o.last_refresh + pact_nostr::RELAY_TTL_SECS;
+                        if final_expiry != 0 {
+                            roll.min(final_expiry)
+                        } else {
+                            roll
+                        }
+                    } else {
+                        0
+                    };
+                    json!({
+                        "offer_id": o.offer_id,
+                        "offer": env,
+                        "state": o.state,
+                        "created": o.created,
+                        "valid_for": o.valid_for,
+                        "current_expiry": current_expiry,
+                        "final_expiry": final_expiry,
+                        "now": now,
+                    })
+                })
+                .collect();
+            Ok(json!(out))
+        }
         "getswap" => {
             let id = p.str(0, "swap_id")?;
             Ok(serde_json::to_value(
@@ -973,6 +1017,7 @@ async fn main() -> Result<()> {
                     match blocking(&scheduler, |e| {
                         let mut ev = e.sync_board();
                         ev.extend(e.tick());
+                        ev.extend(e.refresh_offers()?); // roll relay TTLs, retire expired offers
                         Ok(ev)
                     })
                     .await
@@ -1007,6 +1052,23 @@ async fn main() -> Result<()> {
             }
         })
         .await?;
+
+    // Offer-lifecycle revoke-on-close: on a clean shutdown (stop RPC or ctrl_c)
+    // withdraw our still-live offers so the board stops advertising what we can no
+    // longer honor. Best-effort; a crash skips this and the short relay TTL drops
+    // the listings within RELAY_TTL_SECS. In C6 detach mode pactd keeps running
+    // (Satchel sends no stop), so this only fires on a real stop.
+    let has_active = {
+        let reg = app.registry.lock().expect("registry mutex poisoned");
+        reg.active_id().is_some()
+    };
+    if has_active {
+        match blocking(&app, |e| e.revoke_live_offers()).await {
+            Ok(n) if n > 0 => tracing::info!(count = n, "revoke-on-close: withdrew live offers"),
+            Ok(_) => {}
+            Err(err) => tracing::warn!("revoke-on-close failed: {err:#}"),
+        }
+    }
 
     // Cookie is per-run, like bitcoind: remove on clean shutdown.
     let _ = std::fs::remove_file(args.data_dir.join(COOKIE_FILE));

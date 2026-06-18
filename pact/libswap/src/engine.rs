@@ -2552,7 +2552,19 @@ impl Engine {
         for (_, board) in self.boards()? {
             offer_id = Some(board.post_offer(&offer)?);
         }
-        offer_id.context("no boards accepted the offer")
+        let offer_id = offer_id.context("no boards accepted the offer")?;
+        // Register in our own ledger (offer-lifecycle): the scheduler re-publishes
+        // it to roll the relay TTL forward, and graceful shutdown revokes it.
+        // `valid_for` mirrors expired()'s effective lifetime, so
+        // `created + valid_for` is the FINAL expiry (after which we stop refreshing).
+        self.store.my_offer_put(
+            &offer.swap_id,
+            &serde_json::to_string(&offer)?,
+            body.created,
+            ttl_secs.unwrap_or(24 * 3600),
+            local_now(),
+        )?;
+        Ok(offer_id)
     }
 
     /// Withdraw an offer: signed revocation to every board (the listing
@@ -2563,6 +2575,11 @@ impl Engine {
         let revocation = self.signed_envelope("revoke", offer_id, serde_json::json!({}))?;
         self.store
             .meta_set(&format!("offer_revoked:{offer_id}"), "1")?;
+        // Reflect in our own ledger so refresh skips it and the My-offers view
+        // shows it withdrawn — but only from `live`, so the auto-revoke that fires
+        // when a take commits doesn't overwrite the `taken` state. No-op if the
+        // offer predates the registry.
+        self.store.my_offer_mark_revoked(offer_id)?;
         let mut last_err = None;
         for (_, board) in self.boards()? {
             if let Err(err) = board.revoke(&revocation) {
@@ -2575,6 +2592,66 @@ impl Engine {
             }
             None => Ok(()),
         }
+    }
+
+    /// How often a live offer is re-published to roll its relay TTL forward.
+    /// Must stay well under `pact_nostr::RELAY_TTL_SECS` (30 min) so a listing
+    /// never lapses between refreshes while the maker is online.
+    const REFRESH_SECS: u64 = 10 * 60;
+
+    /// Offer-lifecycle maintenance, called every scheduler tick (it self-gates
+    /// per offer via `last_refresh`, so it is cheap):
+    ///  - past the maker-set FINAL expiry (`created + valid_for`) → retire the
+    ///    offer (mark `expired` + de-list everywhere);
+    ///  - otherwise, every `REFRESH_SECS`, re-publish the stored signed offer so
+    ///    the Nostr listing's rolling relay TTL advances (addressable replace by
+    ///    d-tag = swap_id). HTTP corkboards are stateless and keep a listing until
+    ///    revoked, so they need no refresh.
+    pub fn refresh_offers(&self) -> Result<Vec<TickEvent>> {
+        let now = local_now();
+        let mut events = Vec::new();
+        for o in self.store.my_offers_live()? {
+            let final_expiry = o.created.saturating_add(o.valid_for);
+            if o.created != 0 && o.valid_for != 0 && now >= final_expiry {
+                // Mark expired FIRST so the de-list's auto-mark-revoked is a no-op
+                // (it only flips `live`), keeping the terminal state `expired`.
+                self.store.my_offer_set_state(&o.offer_id, "expired")?;
+                if let Err(err) = self.revoke_board_offer(&o.offer_id) {
+                    eprintln!("warning: could not de-list expired offer: {err:#}");
+                }
+                events.push(TickEvent {
+                    swap_id: o.offer_id.clone(),
+                    action: "offer-expired".into(),
+                    detail: "past valid-for".into(),
+                });
+                continue;
+            }
+            if now.saturating_sub(o.last_refresh) >= Self::REFRESH_SECS {
+                let offer: Envelope = serde_json::from_str(&o.envelope)?;
+                for (name, board) in self.boards()? {
+                    if name == "nostr" {
+                        let _ = board.post_offer(&offer); // queues a fresh-TTL replace
+                    }
+                }
+                self.store.my_offer_touch_refresh(&o.offer_id, now)?;
+            }
+        }
+        Ok(events)
+    }
+
+    /// Revoke every still-live offer — called on graceful shutdown (revoke-on-close)
+    /// so a maker who quits cleanly stops advertising offers they can no longer
+    /// honor. A crash skips this; the short relay TTL then drops the listings
+    /// within `pact_nostr::RELAY_TTL_SECS`. Returns how many were withdrawn.
+    pub fn revoke_live_offers(&self) -> Result<usize> {
+        let live = self.store.my_offers_live()?;
+        let n = live.len();
+        for o in live {
+            if let Err(err) = self.revoke_board_offer(&o.offer_id) {
+                eprintln!("warning: revoke-on-close failed for {}: {err:#}", o.offer_id);
+            }
+        }
+        Ok(n)
     }
 
     /// Take an offer from the board: remember it, signal interest to the
@@ -3089,6 +3166,9 @@ impl Engine {
                     (rec.swap_id, init)
                 };
                 self.store.meta_set(&served_key, &swap_id)?;
+                // Mark our own offer taken before the C5 auto-revoke below (which
+                // only flips `live` offers, so this `taken` survives).
+                self.store.my_offer_set_state(&offer.swap_id, "taken")?;
                 // C11: stamp the originating offer_id into the init body and
                 // re-sign, so the taker can match this init to the exact
                 // pending take even when it holds several with us. `offer()`

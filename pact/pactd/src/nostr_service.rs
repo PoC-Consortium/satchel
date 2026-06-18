@@ -214,7 +214,13 @@ fn build_event(kind: &str, recipient: Option<&str>, payload: &str, keys: &Keys) 
     let built: Result<Event> = (|| match kind {
         "offer" => {
             let env = serde_json::from_str(payload).context("parse offer payload")?;
-            pn::offer_event(&env, keys)
+            // Publish time drives the rolling NIP-40 relay TTL; each refresh
+            // re-queues the offer, so this advances the listing's current expiry.
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            pn::offer_event(&env, keys, now)
         }
         "giftwrap" => pn::giftwrap(recipient.context("giftwrap row has no recipient")?, payload),
         "revoke" => {

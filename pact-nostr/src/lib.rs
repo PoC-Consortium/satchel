@@ -35,9 +35,15 @@ pub const OFFER_KIND: u16 = 31510;
 /// content. NIP-59-style structure with a `PACTSEALED1:` payload.
 pub const GIFTWRAP_KIND: u16 = 1059;
 
-/// Fallback TTL when an offer body omits `ttl_secs` (mirrors
-/// `OfferBody::expired`'s 24h default in libswap).
+/// Fallback for an offer body's FINAL lifetime when it omits `ttl_secs`
+/// (mirrors `OfferBody::expired`'s 24h default in libswap).
 const DEFAULT_TTL_SECS: u64 = 24 * 3600;
+
+/// Rolling relay TTL: a published offer event drops from relays this long after
+/// it was published unless the maker re-publishes (refreshes) first. Short, so a
+/// listing reflects a maker who is actually online; the engine refreshes on a
+/// shorter cadence (`Engine::REFRESH_SECS`, 10 min) so a live offer never lapses.
+pub const RELAY_TTL_SECS: u64 = 30 * 60;
 
 /// Build `nostr::Keys` from a 32-byte secp256k1 secret in hex. The
 /// resulting npub equals the Pact identity pubkey, since both are BIP340
@@ -46,10 +52,13 @@ pub fn keys_from_secret_hex(secret_hex: &str) -> Result<Keys> {
     Keys::parse(secret_hex).context("invalid identity secret for nostr keys")
 }
 
-/// Compute a NIP-40 expiration (unix secs) from a signed offer's own body
-/// (`created + ttl_secs`). Returns `None` for legacy offers without a
-/// `created` stamp (so no premature relay drop).
-fn offer_expiration(offer: &Envelope) -> Option<u64> {
+/// NIP-40 expiration (unix secs) for a freshly published offer event: a short
+/// ROLLING relay TTL (`now + RELAY_TTL_SECS`) so the listing drops soon after the
+/// maker stops refreshing — but never later than the offer's own FINAL expiry
+/// (`created + ttl_secs`), past which the engine stops refreshing anyway. `now`
+/// is the publish time. Returns `None` for legacy offers without a `created`
+/// stamp (so no premature relay drop).
+fn offer_expiration(offer: &Envelope, now: u64) -> Option<u64> {
     let created = offer.body.get("created").and_then(|v| v.as_u64())?;
     if created == 0 {
         return None;
@@ -59,7 +68,8 @@ fn offer_expiration(offer: &Envelope) -> Option<u64> {
         .get("ttl_secs")
         .and_then(|v| v.as_u64())
         .unwrap_or(DEFAULT_TTL_SECS);
-    Some(created + ttl)
+    let final_expiry = created + ttl;
+    Some((now + RELAY_TTL_SECS).min(final_expiry))
 }
 
 /// Build a signed Nostr offer event from a signed Pact `offer` envelope.
@@ -67,7 +77,7 @@ fn offer_expiration(offer: &Envelope) -> Option<u64> {
 /// authenticates the terms, the Nostr signature lets relays/clients accept
 /// the event. `keys` MUST be the maker's identity key (matching
 /// `offer.from`).
-pub fn offer_event(offer: &Envelope, keys: &Keys) -> Result<Event> {
+pub fn offer_event(offer: &Envelope, keys: &Keys, now: u64) -> Result<Event> {
     ensure!(offer.msg_type == "offer", "not an offer envelope");
     ensure!(
         offer.from == keys.public_key().to_hex(),
@@ -87,7 +97,7 @@ pub fn offer_event(offer: &Envelope, keys: &Keys) -> Result<Event> {
             builder = builder.tag(Tag::parse([key, v])?);
         }
     }
-    if let Some(exp) = offer_expiration(offer) {
+    if let Some(exp) = offer_expiration(offer, now) {
         builder = builder.tag(Tag::expiration(Timestamp::from(exp)));
     }
     builder.sign_with_keys(keys).context("sign offer event")
@@ -221,12 +231,20 @@ mod tests {
     fn offer_event_roundtrip_and_verifies() {
         let (kp, keys, _) = identity(0x22);
         let offer = signed_offer(&kp);
-        let event = offer_event(&offer, &keys).unwrap();
+        let event = offer_event(&offer, &keys, 1_700_000_000).unwrap();
         assert_eq!(event.kind.as_u16(), OFFER_KIND);
         // d-tag carries the swap_id; expiration tag present.
         let tags: Vec<Vec<String>> = event.tags.iter().map(|t| t.clone().to_vec()).collect();
         assert!(tags.iter().any(|t| t[0] == "d" && t[1] == offer.swap_id));
-        assert!(tags.iter().any(|t| t[0] == "expiration"));
+        // Rolling relay TTL: now (1_700_000_000) + RELAY_TTL_SECS, capped at the
+        // body's final expiry (created 1_700_000_000 + ttl 3600 = 1_700_003_600).
+        let exp = tags.iter().find(|t| t[0] == "expiration").expect("expiration tag");
+        assert_eq!(exp[1], (1_700_000_000 + RELAY_TTL_SECS).to_string());
+        // And a publish time near the final expiry is capped, not exceeded.
+        let late = offer_event(&offer, &keys, 1_700_003_000).unwrap();
+        let late_tags: Vec<Vec<String>> = late.tags.iter().map(|t| t.clone().to_vec()).collect();
+        let late_exp = late_tags.iter().find(|t| t[0] == "expiration").expect("expiration tag");
+        assert_eq!(late_exp[1], "1700003600"); // final expiry, not 1_700_003_000+1800
 
         let back = offer_from_event(&event).unwrap();
         assert_eq!(back, offer);
@@ -238,7 +256,7 @@ mod tests {
     fn tampered_offer_event_is_rejected() {
         let (kp, keys, _) = identity(0x23);
         let offer = signed_offer(&kp);
-        let mut event_json = serde_json::to_value(offer_event(&offer, &keys).unwrap()).unwrap();
+        let mut event_json = serde_json::to_value(offer_event(&offer, &keys, 1_700_000_000).unwrap()).unwrap();
         // Flip a byte in content; the nostr id/sig no longer match.
         event_json["content"] = serde_json::Value::String("garbage".into());
         let tampered: Event = serde_json::from_value(event_json).unwrap();
