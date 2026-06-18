@@ -75,6 +75,10 @@ export const en = {
       medium: "Medium — balanced refund window (~8h / 4h).",
       long: "Long (safest) — widest safety margin; auto-refund after ~24h / 12h if the trade stalls.",
     },
+    validFor: "Valid for (minutes)",
+    validForMins: "{mins} min",
+    validForHint:
+      "How long the offer stays listed. While you're online it's kept fresh automatically; after this it expires. Closing the app withdraws it.",
     note: "Fixed-size offer — nothing's locked until someone takes it. Amounts are on-chain; you pay network fees on top and the Corkboard charges nothing. The timelock is the auto-refund window if a swap stalls.",
     post: "Post offer",
     makeSlip: "Create slip",
@@ -341,6 +345,17 @@ export const en = {
     boardSettings: "Configure in Settings",
     filterAll: "All",
     filterMine: "Mine",
+    mine: {
+      emptyTitle: "You haven't posted any offers",
+      emptyBody: "Offers you post appear here to manage and withdraw. Post one to get started.",
+      expiry: "Live — refreshes automatically; drops in ~{cur} if you go offline · ends in {fin}",
+      state: {
+        live: "Live",
+        taken: "Taken",
+        revoked: "Withdrawn",
+        expired: "Expired",
+      },
+    },
     offered: "{symbol} offered",
     noOffers: "No offers you can take right now",
     noOffersBody:

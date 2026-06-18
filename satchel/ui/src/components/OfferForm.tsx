@@ -68,7 +68,14 @@ export default function OfferForm({
   confirmTitle: string;
   busy: boolean;
   error: string | null;
-  onSubmit: (give: string, want: string, t1: number, t2: number, protocol?: string) => void;
+  onSubmit: (
+    give: string,
+    want: string,
+    t1: number,
+    t2: number,
+    protocol?: string,
+    ttlSecs?: number,
+  ) => void;
 }) {
   const { coins, symOf, network } = useApp();
   const confirm = useConfirm();
@@ -82,6 +89,7 @@ export default function OfferForm({
   const [price, setPrice] = useState(""); // receive-coin per give-coin
   const [proto, setProto] = useState<string | null>(null); // explicit override
   const [term, setTerm] = useState<Term>("long");
+  const [validMin, setValidMin] = useState("60"); // offer lifetime (minutes)
   const [balances, setBalances] = useState<Record<string, string>>({});
 
   // Sensible defaults once coins load: give = first, want = a different one.
@@ -151,6 +159,8 @@ export default function OfferForm({
   async function submit() {
     if (!valid || busy || !effProto) return;
     const { t1, t2 } = TERMS[term];
+    const validForMin = Math.max(1, Math.round(Number(validMin) || 60));
+    const ttlSecs = validForMin * 60;
     const lbl = { fontSize: 12, color: "text.secondary" } as const;
     const val = { textAlign: "right", fontFamily: C.mono, fontSize: 13.5 } as const;
     // Review/confirm step (same shape as the take-offer summary): the trade, the
@@ -187,6 +197,8 @@ export default function OfferForm({
             <Box sx={val}>
               {hours(t2)}h / {hours(t1)}h
             </Box>
+            <Typography sx={lbl}>{t("makeOffer.validFor")}</Typography>
+            <Box sx={val}>{t("makeOffer.validForMins", { mins: validForMin })}</Box>
           </Box>
           <Typography sx={{ fontSize: 12, color: "text.secondary" }}>{t("makeOffer.note")}</Typography>
           <FeePreview giveCoin={give} getCoin={want} />
@@ -197,7 +209,14 @@ export default function OfferForm({
     // Only force a protocol when the user picked the non-preferred one; otherwise
     // let the engine apply its own default.
     const forced = effProto === preferred ? undefined : effProto;
-    onSubmit(`${give}:${canonicalAmount(giveAmt)}`, `${want}:${canonicalAmount(wantAmt)}`, t1, t2, forced);
+    onSubmit(
+      `${give}:${canonicalAmount(giveAmt)}`,
+      `${want}:${canonicalAmount(wantAmt)}`,
+      t1,
+      t2,
+      forced,
+      ttlSecs,
+    );
   }
 
   return (
@@ -293,6 +312,19 @@ export default function OfferForm({
           {t(`makeOffer.termHint.${term}`)}
         </Typography>
       </Box>
+
+      {/* Offer validity (minutes): while you're online the engine keeps the
+          listing alive (refreshing its short relay TTL); after this window it
+          stops and the offer expires. */}
+      <TextField
+        label={t("makeOffer.validFor")}
+        size="small"
+        type="number"
+        value={validMin}
+        onChange={(e) => setValidMin(e.target.value)}
+        inputProps={{ min: 1 }}
+        helperText={t("makeOffer.validForHint")}
+      />
 
       {error && (
         <Typography sx={{ color: "error.main", fontSize: 13, whiteSpace: "pre-wrap" }}>{error}</Typography>

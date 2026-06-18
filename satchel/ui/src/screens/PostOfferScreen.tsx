@@ -20,11 +20,20 @@ export default function PostOfferScreen() {
   const [err, setErr] = useState<string | null>(null);
 
   const submit = useCallback(
-    async (give: string, want: string, t1: number, t2: number, protocol?: string) => {
+    async (
+      give: string,
+      want: string,
+      t1: number,
+      t2: number,
+      protocol?: string,
+      ttlSecs?: number,
+    ) => {
       setBusy(true);
       setErr(null);
       try {
-        const params = protocol ? [give, want, t1, t2, protocol] : [give, want, t1, t2];
+        // protocol (param 4) + ttl_secs (param 5) are both optional; a null at 4
+        // lets us set the ttl without forcing a protocol (opt_str ignores null).
+        const params = [give, want, t1, t2, protocol ?? null, ttlSecs ?? null];
         const r = await rpc<{ offer_id: string }>("boardpostoffer", params);
         log(`posted offer ${r.offer_id} — withdraw any time; nothing is locked`);
         navigate("board");

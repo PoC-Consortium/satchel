@@ -716,8 +716,10 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             let get = parse_coin_amount(&p.str(1, "get")?)?;
             let (t1s, t2s) = (p.u32(2, "t1_secs")?, p.u32(3, "t2_secs")?);
             let proto = p.opt_str(4, "protocol");
+            // Optional slip validity (param 5, seconds); omitted → engine default.
+            let ttl = p.opt_u64(5, "ttl_secs");
             let slip = blocking(app, move |e| {
-                e.make_private_offer(net, give, get, t1s, t2s, None, proto.as_deref())
+                e.make_private_offer(net, give, get, t1s, t2s, ttl, proto.as_deref())
             })
             .await?;
             Ok(json!({ "slip": slip }))

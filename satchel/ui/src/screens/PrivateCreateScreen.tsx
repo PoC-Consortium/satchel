@@ -24,11 +24,18 @@ export default function PrivateCreateScreen() {
   const [copied, setCopied] = useState(false);
 
   const submit = useCallback(
-    async (give: string, want: string, t1: number, t2: number, protocol?: string) => {
+    async (
+      give: string,
+      want: string,
+      t1: number,
+      t2: number,
+      protocol?: string,
+      ttlSecs?: number,
+    ) => {
       setBusy(true);
       setErr(null);
       try {
-        const r = await makePrivateOffer(give, want, t1, t2, protocol);
+        const r = await makePrivateOffer(give, want, t1, t2, protocol, ttlSecs);
         setSlip(r.slip);
         log("created a private offer slip — send it to your friend");
       } catch (e) {

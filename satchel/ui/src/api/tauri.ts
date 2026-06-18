@@ -84,10 +84,13 @@ export const makePrivateOffer = (
   t1Secs: number,
   t2Secs: number,
   protocol?: string,
+  ttlSecs?: number,
 ) =>
   rpc<{ slip: string }>(
     "makeprivateoffer",
-    protocol ? [give, want, t1Secs, t2Secs, protocol] : [give, want, t1Secs, t2Secs],
+    // protocol (param 4) + ttl_secs (param 5) optional; null at 4 sets the ttl
+    // without forcing a protocol (opt_str ignores null).
+    [give, want, t1Secs, t2Secs, protocol ?? null, ttlSecs ?? null],
   );
 
 /** Take an offer from a pasted slip (decode + verify happen in pactd). */
