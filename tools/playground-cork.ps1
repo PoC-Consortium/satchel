@@ -44,6 +44,10 @@ param([switch]$Down, [switch]$FirstRun)
 $ErrorActionPreference = "Stop"
 $Repo    = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path   # repo root (script now lives in tools/)
 $AppData = Join-Path $env:APPDATA "org.pocx.satchel"
+# Satchel nests test networks in a per-network subdir (Bitcoin-Core style); this
+# is a regtest playground, so all its state lives under <config>/regtest and we
+# launch Satchel with SATCHEL_NETWORK=regtest.
+$NetData = Join-Path $AppData "regtest"
 $LogDir  = Join-Path $Repo ".playground"
 $PidFile = Join-Path $LogDir "pids.txt"
 
@@ -115,8 +119,9 @@ Stop-Playground
 # --- setup ---------------------------------------------------------------
 # Factory-new Alice: wipe the managed pactd state (seed/db/relay cursor) and
 # (re)write a known-good satchel.json so the run is reproducible from scratch.
-New-Item -ItemType Directory -Force -Path $AppData | Out-Null
-$pactdState = Join-Path $AppData "pactd"
+# Everything lives under the regtest network subdir ($NetData).
+New-Item -ItemType Directory -Force -Path $NetData | Out-Null
+$pactdState = Join-Path $NetData "pactd"
 if (Test-Path $pactdState) { Remove-Item -Recurse -Force $pactdState }
 
 $pactdPath = (Join-Path $Repo "pact\target\debug\pactd.exe") -replace '\\', '/'
@@ -141,15 +146,15 @@ $satchelJson = @"
 "@
 # UTF-8 WITHOUT BOM — a BOM would break serde_json parsing in pactd.
 [System.IO.File]::WriteAllText(
-    (Join-Path $AppData "satchel.json"), $satchelJson,
+    (Join-Path $NetData "satchel.json"), $satchelJson,
     (New-Object System.Text.UTF8Encoding $false))
 
 # Refresh the coin templates next to satchel.json so BOTH Satchel and its
 # managed pactd resolve the `ltc` consensus params (a stale prior copy would
 # lack ltc and the LTC leg would fail genesis verification). The icon rides
 # along so the Coins/Wallet cards show the Litecoin badge.
-Copy-Item (Join-Path $Repo "satchel\coins.toml") (Join-Path $AppData "coins.toml") -Force
-Copy-Item (Join-Path $Repo "satchel\ltc.svg")    (Join-Path $AppData "ltc.svg")    -Force
+Copy-Item (Join-Path $Repo "satchel\coins.toml") (Join-Path $NetData "coins.toml") -Force
+Copy-Item (Join-Path $Repo "satchel\ltc.svg")    (Join-Path $NetData "ltc.svg")    -Force
 
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
@@ -200,6 +205,9 @@ Copy-Item (Join-Path $Repo "pact\target\debug\pactd.exe")    (Join-Path $bin "pa
 Copy-Item (Join-Path $Repo "pact\target\debug\pact-cli.exe") (Join-Path $bin "pact-cli-$triple.exe") -Force
 
 # Satchel (cargo tauri dev: Vite from source + the Tauri window + managed pactd).
+# SATCHEL_NETWORK selects regtest (nests config under <config>/regtest); forwarding
+# a -regtest flag through `cargo tauri dev` is awkward, so the env var is cleaner.
+$env:SATCHEL_NETWORK = "regtest"
 $sat = Start-Process -FilePath "cargo" -ArgumentList "tauri", "dev" `
     -WorkingDirectory (Join-Path $Repo "satchel") `
     -RedirectStandardOutput (Join-Path $LogDir "satchel.out.log") `

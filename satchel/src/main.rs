@@ -210,7 +210,7 @@ impl Default for Config {
                 .iter()
                 .map(|s| s.to_string())
                 .collect(),
-            listen: "127.0.0.1:9737".into(),
+            listen: default_listen().into(),
             auto_fund: false,
             tick_secs: 30,
             ui: UiPrefs::default(),
@@ -218,17 +218,60 @@ impl Default for Config {
     }
 }
 
-/// The active Bitcoin network for this Satchel install.
+/// The active Bitcoin network for this Satchel install, selected once at
+/// startup, Bitcoin-Core style: **mainnet by default**, with `-testnet` /
+/// `-regtest` launch flags selecting a test network (a `SATCHEL_NETWORK` env
+/// var is also honoured, for dev/playground launches where forwarding a flag
+/// through `cargo tauri dev` is awkward). The network nests the data dir (see
+/// [`network_subdir`]) so all three can run side by side.
 ///
-/// TODO(pre-release): adopt Bitcoin Core's model. Default to **mainnet**, and
-/// accept `-testnet` / `-regtest` GUI launch flags that both select the network
-/// AND nest pactd's data dir into a per-network subdirectory (mainnet at the
-/// root, `testnet3/` and `regtest/` beneath it) — so all three networks can run
-/// side by side, exactly like Core. Until then Satchel is fixed to regtest;
-/// note mainnet is hard-gated in libswap's engine admission policy regardless
-/// of this value, so flipping the default does not enable mainnet on its own.
+/// Note: mainnet swaps are still hard-gated in libswap's engine admission
+/// policy, so defaulting here to mainnet does not by itself enable trading.
 fn active_network() -> &'static str {
-    "regtest"
+    static NET: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
+    NET.get_or_init(|| {
+        let norm = |s: &str| match s.trim().trim_start_matches('-') {
+            "testnet" => Some("testnet"),
+            "regtest" => Some("regtest"),
+            "mainnet" => Some("mainnet"),
+            _ => None,
+        };
+        // A launch flag wins; then the env var; else mainnet.
+        std::env::args()
+            .skip(1)
+            .find_map(|a| norm(&a))
+            .or_else(|| std::env::var("SATCHEL_NETWORK").ok().and_then(|v| norm(&v)))
+            .unwrap_or("mainnet")
+    })
+}
+
+/// Bitcoin-Core-style per-network data subdir: mainnet lives at the root,
+/// test networks nest beneath it, so the three coexist without clobbering.
+fn network_subdir(network: &str) -> Option<&'static str> {
+    match network {
+        "testnet" => Some("testnet3"),
+        "regtest" => Some("regtest"),
+        _ => None, // mainnet → root
+    }
+}
+
+/// The per-network config dir under the app's base config dir (where
+/// satchel.json, the pactd data dir, and the running-pactd hand-off live).
+fn net_config_dir(base: &Path) -> PathBuf {
+    match network_subdir(active_network()) {
+        Some(sub) => base.join(sub),
+        None => base.to_path_buf(),
+    }
+}
+
+/// Default managed-pactd listen address, offset per network (like Core's
+/// 8332/18332/18443) so the three instances don't fight over one port.
+fn default_listen() -> &'static str {
+    match active_network() {
+        "testnet" => "127.0.0.1:9738",
+        "regtest" => "127.0.0.1:9739",
+        _ => "127.0.0.1:9737",
+    }
 }
 
 /// Mutable app state: the config (persisted to satchel.json on every change)
@@ -1097,7 +1140,7 @@ fn main() {
             // (datadir is where we read .cookie; or SATCHEL_PACTD_COOKIE=user:pass)
             if let Ok(url) = std::env::var("SATCHEL_PACTD_URL") {
                 let auth = resolve_external_auth()?;
-                let config_dir = app.path().app_config_dir()?;
+                let config_dir = net_config_dir(&app.path().app_config_dir()?);
                 app.manage(AppState {
                     config: Mutex::new(load_or_create_config(&config_dir)?),
                     config_dir,
@@ -1118,7 +1161,7 @@ fn main() {
             // data dir and owns the merchant registry (C10); node connections
             // are machine-level. pactd boots seedless on a fresh install and
             // the UI's wizard calls createmerchant + createseed/importseed.
-            let config_dir = app.path().app_config_dir()?;
+            let config_dir = net_config_dir(&app.path().app_config_dir()?);
             let config = load_or_create_config(&config_dir)?;
             let listen = config.listen.clone();
             let data_dir = pactd_data_dir(&config_dir);

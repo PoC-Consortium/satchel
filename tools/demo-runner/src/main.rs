@@ -445,6 +445,7 @@ fn run() -> Result<()> {
     println!("[demo] launching Satchel -- CLOSE THE WINDOW to end the demo.");
     let mut satchel = Command::new(&satchel_bin)
         .current_dir(&satchel_dir)
+        .arg("-regtest") // local regtest demo; Satchel defaults to mainnet
         .spawn()
         .context("launch Satchel")?;
 
@@ -565,7 +566,9 @@ fn satchel_config_dir() -> Result<PathBuf> {
 }
 
 fn write_satchel_config(pactd: &Path, pocx: &Node, btc: &Node, relay_ws: &str) -> Result<()> {
-    let dir = satchel_config_dir()?;
+    // Regtest demo: Satchel nests test networks per the Bitcoin-Core layout, so
+    // its state lives under <config>/regtest (matching the `-regtest` launch).
+    let dir = satchel_config_dir()?.join("regtest");
     std::fs::create_dir_all(&dir)?;
     // Factory-new the managed pactd state so the demo is reproducible.
     let _ = std::fs::remove_dir_all(dir.join("pactd"));
