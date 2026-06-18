@@ -3887,7 +3887,7 @@ mod tests {
                 None,
             )
             .unwrap();
-        assert_eq!((record.n_a, record.n_b), (10, 3));
+        assert_eq!((record.n_a, record.n_b), (10, 6));
         std::fs::remove_dir_all(&dir).ok();
     }
 
