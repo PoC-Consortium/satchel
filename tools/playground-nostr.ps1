@@ -127,7 +127,6 @@ $coinsJson = if ($FirstRun) { '[]' } else {
 $satchelJson = @"
 {
   "pactd_path": "$pactdPath",
-  "network": "regtest",
   "coins": $coinsJson,
   "board_urls": [],
   "nostr_relays": ["ws://127.0.0.1:19788"],

@@ -18,13 +18,14 @@
 //!    Satchel-side `merchants[]`/`active_merchant` registry is gone (it was the
 //!    one place Satchel held state it shouldn't, and the two-source-of-truth
 //!    desync bug). Node connections stay machine-level (shared across merchants);
-//!    network is one app-wide setting (one network per install). Satchel NEVER
-//!    persists a passphrase or seed and uses no OS keystore: an encrypted
-//!    merchant is unlocked per session, in memory inside pactd, forgotten on exit.
+//!    the active network is launch-determined (see `active_network`), one per
+//!    install. Satchel NEVER persists a passphrase or seed and uses no OS
+//!    keystore: an encrypted merchant is unlocked per session, in memory inside
+//!    pactd, forgotten on exit.
 //!
 //! Config: `satchel.json` in the app config dir (chain backends, boards,
-//! network, auto_fund, plus per-install UI prefs), created with defaults on
-//! first run. Merchant ownership lives in pactd, not here.
+//! auto_fund, plus per-install UI prefs), created with defaults on first run.
+//! Merchant ownership lives in pactd, not here.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -177,7 +178,6 @@ impl Default for UiPrefs {
 #[serde(default)]
 struct Config {
     pactd_path: String,
-    network: String,
     /// Machine-level per-coin connections (shared across every merchant).
     coins: Vec<CoinConn>,
     board_urls: Vec<String>,
@@ -199,7 +199,6 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             pactd_path: "pactd".into(),
-            network: "regtest".into(),
             coins: Vec::new(),
             board_urls: Vec::new(),
             nostr_relays: RECOMMENDED_NOSTR_RELAYS.iter().map(|s| s.to_string()).collect(),
@@ -209,6 +208,19 @@ impl Default for Config {
             ui: UiPrefs::default(),
         }
     }
+}
+
+/// The active Bitcoin network for this Satchel install.
+///
+/// TODO(pre-release): adopt Bitcoin Core's model. Default to **mainnet**, and
+/// accept `-testnet` / `-regtest` GUI launch flags that both select the network
+/// AND nest pactd's data dir into a per-network subdirectory (mainnet at the
+/// root, `testnet3/` and `regtest/` beneath it) — so all three networks can run
+/// side by side, exactly like Core. Until then Satchel is fixed to regtest;
+/// note mainnet is hard-gated in libswap's engine admission policy regardless
+/// of this value, so flipping the default does not enable mainnet on its own.
+fn active_network() -> &'static str {
+    "regtest"
 }
 
 /// Mutable app state: the config (persisted to satchel.json on every change)
@@ -345,7 +357,7 @@ fn spawn_pactd(config: &Config, data_dir: &Path) -> anyhow::Result<Child> {
         .arg("--listen")
         .arg(&config.listen)
         .arg("--network")
-        .arg(&config.network)
+        .arg(active_network())
         // C10: opt into pactd's owned merchant registry (`merchants/<id>/`).
         // Satchel always wants this; the CLI/harness omit it for the flat layout.
         .arg("--merchants")
@@ -361,7 +373,7 @@ fn spawn_pactd(config: &Config, data_dir: &Path) -> anyhow::Result<Child> {
     for coin in &config.coins {
         // Recompose cookie-auth URLs at launch (re-read the .cookie); fall back
         // to the stored string for raw/legacy entries or if the node is down.
-        let chain_data = compose::effective_chain_data(coin, &config.network);
+        let chain_data = compose::effective_chain_data(coin, active_network());
         if !chain_data.trim().is_empty() {
             cmd.arg("--coin")
                 .arg(format!("{}={}", coin.coin_id, chain_data));
@@ -511,7 +523,7 @@ fn list_coin_config(state: tauri::State<AppState>) -> serde_json::Value {
     let cfg = state.config.lock().unwrap();
     json!({
         "coins": cfg.coins,
-        "network": cfg.network,
+        "network": active_network(),
         "board_urls": cfg.board_urls,
         "nostr_relays": cfg.nostr_relays,
     })
@@ -596,7 +608,7 @@ async fn save_coin(
         {
             let state = app.state::<AppState>();
             let mut cfg = state.config.lock().unwrap();
-            let new = conn.into_conn(coin_id.clone(), &cfg.network, confirmations)?;
+            let new = conn.into_conn(coin_id.clone(), active_network(), confirmations)?;
             match cfg.coins.iter_mut().find(|c| c.coin_id == coin_id) {
                 Some(existing) => *existing = new,
                 None => cfg.coins.push(new),
@@ -616,14 +628,9 @@ async fn save_coin(
 /// so validation hits the exact URL that will be saved — and cookie reading
 /// stays in Rust, keeping secrets out of the webview.
 #[tauri::command]
-fn compose_coin_url(
-    state: tauri::State<AppState>,
-    coin_id: String,
-    conn: CoinConnInput,
-) -> Result<String, String> {
-    let network = state.config.lock().unwrap().network.clone();
+fn compose_coin_url(coin_id: String, conn: CoinConnInput) -> Result<String, String> {
     let conn = conn
-        .into_conn(coin_id, &network, None)
+        .into_conn(coin_id, active_network(), None)
         .map_err(|e| format!("{e:#}"))?;
     Ok(conn.chain_data)
 }
@@ -633,11 +640,8 @@ fn compose_coin_url(
 /// to mark each coin supported/unsupported and configured/live.
 #[tauri::command]
 fn list_coin_templates(state: tauri::State<AppState>) -> serde_json::Value {
-    let (config_dir, network) = {
-        let cfg = state.config.lock().unwrap();
-        (state.config_dir.clone(), cfg.network.clone())
-    };
-    coins_file::templates_json(&config_dir, &network)
+    let config_dir = state.config_dir.clone();
+    coins_file::templates_json(&config_dir, active_network())
 }
 
 /// A coin's icon (from the file next to `coins.toml`) as a `data:` URL, or null
@@ -1310,8 +1314,8 @@ mod tests {
             "active_merchant": "m1"
         }"#;
         let cfg: Config = serde_json::from_str(legacy).unwrap();
-        assert_eq!(cfg.network, "regtest");
-        // Defaults intact; nothing merchant-shaped survived into the struct.
+        // Defaults intact; nothing merchant-shaped (nor the removed `network`)
+        // survived into the struct.
         assert_eq!(cfg.ui.theme, "system");
     }
 
@@ -1374,10 +1378,10 @@ mod tests {
         let cfg: Config = serde_json::from_str(json).unwrap();
         assert_eq!(cfg.coins.len(), 1);
         assert_eq!(cfg.coins[0].funding_wallet, "core-rpc");
-        // Unknown legacy fields (e.g. the old pocx_rpc) are ignored, not fatal.
+        // Unknown legacy fields (the old pocx_rpc, the removed network) are
+        // ignored, not fatal.
         let legacy = r#"{ "pocx_rpc": "http://old:1", "network": "testnet" }"#;
         let cfg: Config = serde_json::from_str(legacy).unwrap();
         assert!(cfg.coins.is_empty());
-        assert_eq!(cfg.network, "testnet");
     }
 }

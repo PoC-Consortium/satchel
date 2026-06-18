@@ -454,7 +454,6 @@ fn write_satchel_config(pactd: &Path, pocx: &Node, btc: &Node, relay_ws: &str) -
     let _ = std::fs::remove_dir_all(dir.join("pactd"));
     let cfg = json!({
         "pactd_path": pactd.display().to_string().replace('\\', "/"),
-        "network": "regtest",
         "coins": [
             { "coin_id": "btcx", "chain_data": pocx.wallet_url("alice_pocx"), "funding_wallet": "core-rpc" },
             { "coin_id": "btc",  "chain_data": btc.wallet_url("alice_btc"),  "funding_wallet": "core-rpc" }

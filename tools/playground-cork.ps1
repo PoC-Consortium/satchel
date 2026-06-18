@@ -117,7 +117,6 @@ $pactdPath = (Join-Path $Repo "pact\target\debug\pactd.exe") -replace '\\', '/'
 $satchelJson = @"
 {
   "pactd_path": "$pactdPath",
-  "network": "regtest",
   "coins": [
     {
       "coin_id": "btcx",
