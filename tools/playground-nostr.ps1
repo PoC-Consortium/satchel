@@ -28,12 +28,18 @@
   Force-tear a stale run and exit (no setup, no run). Not needed in the normal
   flow — closing the Satchel window already tears everything down.
 
+.PARAMETER FirstRun
+  Ship Satchel with NO coins pre-wired, so the first-run onboarding + coin-setup
+  (the >=2-live-coins gate) runs and you configure the coins yourself. The
+  startup banner prints the playground nodes' connection details to enter in the
+  form (user/pass auth, NOT cookie).
+
 .NOTES
   SAFETY: teardown is PID/PORT-ONLY (see playground-cork.ps1). We NEVER Stop-Process
   by name -- the user runs a live MAINNET pocx-bitcoind. None of these ports is
   the mainnet node.
 #>
-param([string]$RelayCmd, [switch]$Down)
+param([string]$RelayCmd, [switch]$Down, [switch]$FirstRun)
 
 $ErrorActionPreference = "Stop"
 $Repo    = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path   # repo root (script now lives in tools/)
@@ -111,22 +117,18 @@ $pactdState = Join-Path $AppData "pactd"
 if (Test-Path $pactdState) { Remove-Item -Recurse -Force $pactdState }
 
 $pactdPath = (Join-Path $Repo "pact\target\debug\pactd.exe") -replace '\\', '/'
+# -FirstRun ships NO coins so Satchel's first-run coin-setup (the >=2-live-coins
+# gate) runs and you wire btcx/btc yourself; otherwise both are pre-wired so
+# Alice is ready to trade immediately. (Single-quoted JSON line: the `@` in the
+# RPC URLs must stay literal.)
+$coinsJson = if ($FirstRun) { '[]' } else {
+  '[{ "coin_id": "btcx", "chain_data": "http://pactharness:pactharness@127.0.0.1:19443/wallet/alice_pocx", "funding_wallet": "core-rpc" }, { "coin_id": "btc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19543/wallet/alice_btc", "funding_wallet": "core-rpc" }]'
+}
 $satchelJson = @"
 {
   "pactd_path": "$pactdPath",
   "network": "regtest",
-  "coins": [
-    {
-      "coin_id": "btcx",
-      "chain_data": "http://pactharness:pactharness@127.0.0.1:19443/wallet/alice_pocx",
-      "funding_wallet": "core-rpc"
-    },
-    {
-      "coin_id": "btc",
-      "chain_data": "http://pactharness:pactharness@127.0.0.1:19543/wallet/alice_btc",
-      "funding_wallet": "core-rpc"
-    }
-  ],
+  "coins": $coinsJson,
   "board_urls": [],
   "nostr_relays": ["ws://127.0.0.1:19788"],
   "listen": "127.0.0.1:9737",
@@ -194,8 +196,16 @@ Write-Host ""
 Write-Host "  No corkboard - the book flows over one local Nostr relay (:19788)."
 Write-Host "  Default offer TTL; the relay is wiped on teardown (ephemeral)."
 Write-Host ""
-Write-Host "  In the window: wizard -> create merchant; Coins tab shows both"
-Write-Host "  connected; Corkboard -> offers come from Nostr; take either side."
+if ($FirstRun) {
+    Write-Host "  FIRST-RUN: no coins pre-wired -> step through onboarding + coin"
+    Write-Host "  setup. Configure BOTH coins against the playground nodes:"
+    Write-Host "    BTCX : 127.0.0.1:19443  user/pass  pactharness / pactharness  wallet alice_pocx"
+    Write-Host "    BTC  : 127.0.0.1:19543  user/pass  pactharness / pactharness  wallet alice_btc"
+    Write-Host "    (auth = user/pass, NOT cookie; confirmations blank = regtest default 1)"
+} else {
+    Write-Host "  In the window: wizard -> create merchant; Coins tab shows both"
+    Write-Host "  connected; Corkboard -> offers come from Nostr; take either side."
+}
 Write-Host ""
 Write-Host "  CLOSE THE SATCHEL WINDOW to tear the whole stack down."
 Write-Host "  Logs:  $LogDir"
