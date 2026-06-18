@@ -256,14 +256,15 @@ fn validate_profile(network: Network, t1: u32, t2: u32, n_a: u32, n_b: u32) -> R
     Ok(())
 }
 
-/// Default confirmation requirement per chain: the 120 s chain gets the
-/// higher count (spec §7.3); regtest uses 1. This is the fallback when the
-/// operator has not set a per-coin depth (see [`Engine::confirmations_for`]).
+/// Default confirmation requirement per chain — the fallback when the operator
+/// hasn't set a per-coin depth (see [`Engine::confirmations_for`]): regtest → 1;
+/// fast chains (<5-min blocks, e.g. BTCX's 2-min spacing) → 10; slower chains
+/// (≥5-min blocks, e.g. Bitcoin's 10-min) → 6, the classic Bitcoin finality rule.
 pub fn default_confirmations(chain: &ChainParams) -> u32 {
     match (chain.network, chain.target_spacing_secs < 300) {
         (Network::Regtest, _) => 1,
         (_, true) => 10,
-        (_, false) => 3,
+        (_, false) => 6,
     }
 }
 
