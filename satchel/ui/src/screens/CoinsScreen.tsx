@@ -3,13 +3,13 @@ import { Alert, Box, Button, Card, CardContent, Chip, Tooltip, Typography } from
 import { useApp } from "../AppContext";
 import { useConfirm } from "../ui/ConfirmProvider";
 import { useT } from "../i18n";
-import { errMsg, listCoinConfig, removeCoin, rpc } from "../api/tauri";
+import { errMsg, getCoinIcon, listCoinConfig, listCoinTemplates, removeCoin, rpc } from "../api/tauri";
 import CoinGlyph from "../components/CoinGlyph";
 import NetworkStamp from "../components/NetworkStamp";
 import CoinSetup from "../dialogs/CoinSetup";
 import { commas, isMainnet } from "../format";
 import { C } from "../theme";
-import type { CoinConn, CoinInfo, Pair } from "../api/types";
+import type { CoinConn, CoinInfo, NetConnDefaults, Pair } from "../api/types";
 
 export default function CoinsScreen() {
   const { network, coins: liveCoins, refreshCoins, setConn, setSymbol, log } = useApp();
@@ -18,6 +18,8 @@ export default function CoinsScreen() {
 
   const [coins, setCoins] = useState<CoinInfo[] | null>(liveCoins.length ? liveCoins : null);
   const [savedConns, setSavedConns] = useState<Record<string, CoinConn>>({});
+  const [templates, setTemplates] = useState<Record<string, NetConnDefaults>>({});
+  const [icons, setIcons] = useState<Record<string, string>>({});
   const [pairs, setPairs] = useState<Pair[]>([]);
   const [notConnected, setNotConnected] = useState(false);
   const [setupCoin, setSetupCoin] = useState<CoinInfo | null>(null);
@@ -57,6 +59,31 @@ export default function CoinsScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Coin templates: connection defaults that pre-fill the setup form, plus icon
+  // data-URLs for any coin without a bundled glyph (file-added coins).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const r = await listCoinTemplates();
+        if (!alive) return;
+        const map: Record<string, NetConnDefaults> = {};
+        r.coins.forEach((c) => (map[c.coin_id] = c.defaults));
+        setTemplates(map);
+        for (const c of r.coins.filter((x) => x.has_icon)) {
+          getCoinIcon(c.coin_id)
+            .then((url) => url && alive && setIcons((m) => ({ ...m, [c.coin_id]: url })))
+            .catch(() => {});
+        }
+      } catch {
+        /* templates optional — coins still render with bare defaults */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   async function remove(coinId: string) {
     const ok = await confirm({
@@ -120,6 +147,7 @@ export default function CoinsScreen() {
               key={c.id}
               c={c}
               saved={savedConns[c.id]}
+              iconUrl={icons[c.id]}
               onSetup={() => setSetupCoin(c)}
               onRemove={() => void remove(c.id)}
             />
@@ -143,12 +171,25 @@ export default function CoinsScreen() {
         <CoinSetup
           coin={setupCoin}
           saved={savedConns[setupCoin.id]}
+          template={templates[setupCoin.id]}
           onClose={() => setSetupCoin(null)}
           onSaved={onSaved}
         />
       )}
     </>
   );
+}
+
+// A credentials-free summary of a saved connection: structured host:port + auth
+// kind when present, else the host:port parsed out of a legacy chain_data URL.
+function connSummary(saved: CoinConn): string {
+  if (saved.rpc_host && saved.rpc_port) {
+    const auth = saved.auth_method === "userpass" ? "user/pass" : "cookie";
+    return `${saved.rpc_host}:${saved.rpc_port} · ${auth}`;
+  }
+  const first = saved.chain_data.split(",")[0] ?? "";
+  const at = first.split("@");
+  return at.length > 1 ? `${first.split("://")[0]}://${at[at.length - 1]}` : first;
 }
 
 function StatusPill({ c }: { c: CoinInfo }) {
@@ -201,11 +242,13 @@ function Cap({ label, on }: { label: string; on?: boolean }) {
 function CoinCard({
   c,
   saved,
+  iconUrl,
   onSetup,
   onRemove,
 }: {
   c: CoinInfo;
   saved: CoinConn | undefined;
+  iconUrl?: string;
   onSetup: () => void;
   onRemove: () => void;
 }) {
@@ -215,7 +258,7 @@ function CoinCard({
     <Card variant="outlined" sx={{ borderColor: c.configured ? "text.disabled" : "divider" }}>
       <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.6 }}>
-          <CoinGlyph coin={c} configured={c.configured} />
+          <CoinGlyph coin={c} configured={c.configured} iconUrl={iconUrl} />
           <Box>
             <Typography sx={{ fontSize: 15, fontWeight: 600 }}>{c.display_name}</Typography>
             <Typography sx={{ color: "text.secondary", fontFamily: C.mono, fontSize: 12 }}>
@@ -233,7 +276,7 @@ function CoinCard({
         </Box>
         {saved && (
           <Typography sx={{ fontSize: 12, color: "text.secondary", fontFamily: C.mono, wordBreak: "break-all" }}>
-            {saved.chain_data.split(",")[0]}
+            {connSummary(saved)}
           </Typography>
         )}
         <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>

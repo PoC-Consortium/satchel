@@ -5,7 +5,15 @@
 // No other backend surface, and no swap logic, ever lives in the UI.
 
 import { invoke } from "@tauri-apps/api/core";
-import type { CoinConfig, Merchant, MerchantList, PrivateOffer, UiPrefs } from "./types";
+import type {
+  CoinConfig,
+  CoinConnInput,
+  CoinTemplateList,
+  Merchant,
+  MerchantList,
+  PrivateOffer,
+  UiPrefs,
+} from "./types";
 
 /** True when running inside the Tauri webview (so `invoke` is wired up). */
 export function inTauri(): boolean {
@@ -53,13 +61,24 @@ export const setUiPrefs = (patch: Partial<UiPrefs>) =>
 
 export const listCoinConfig = () => invoke("list_coin_config") as Promise<CoinConfig>;
 
-export const saveCoin = (
-  coinId: string,
-  chainData: string,
-  fundingWallet: string,
-  confirmations: number | null,
-) =>
-  invoke("save_coin", { coinId, chainData, fundingWallet, confirmations }) as Promise<void>;
+/** Coin templates (connection defaults + icon availability) for the current
+ *  network — the source for the setup picker. */
+export const listCoinTemplates = () =>
+  invoke("list_coin_templates") as Promise<CoinTemplateList>;
+
+/** Save (upsert) a coin's structured connection. Satchel composes the backend
+ *  URL (reading the cookie when auth = cookie) and relaunches pactd. */
+export const saveCoin = (coinId: string, conn: CoinConnInput, confirmations: number | null) =>
+  invoke("save_coin", { coinId, conn, confirmations }) as Promise<void>;
+
+/** Preview the backend URL Satchel would compose+save for a structured
+ *  connection — handed to `validatecoin` so validation hits the exact URL. */
+export const composeCoinUrl = (coinId: string, conn: CoinConnInput) =>
+  invoke("compose_coin_url", { coinId, conn }) as Promise<string>;
+
+/** A coin's icon (from the file next to coins.toml) as a data: URL, or null. */
+export const getCoinIcon = (coinId: string) =>
+  invoke("get_coin_icon", { coinId }) as Promise<string | null>;
 
 export const removeCoin = (coinId: string) => invoke("remove_coin", { coinId }) as Promise<void>;
 

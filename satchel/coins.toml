@@ -1,0 +1,80 @@
+# Satchel coin templates.
+#
+# This one file defines the coins Satchel can trade. It is read by BOTH parts of
+# the app:
+#   * the engine (pactd) reads each coin's `consensus` block — the chain params
+#     it needs to verify genesis, build/parse addresses, and derive keys;
+#   * Satchel reads each coin's `connection` block (RPC host/port/auth/datadir
+#     defaults that pre-fill the setup form) and the `icon`.
+#
+# Add a NEW coin by copying a [[coin]] block, editing the values, and dropping an
+# icon file next to this one. No recompile needed. Restart Satchel to pick it up.
+#
+# A new coin needs surprisingly little. The node must speak the Bitcoin Core
+# JSON-RPC (cookie or rpcuser/rpcpassword); the only consensus values actually
+# used are `genesis_hash` (verified against your node) and `bech32_hrp` (swap
+# addresses). The other consensus fields below — header_format, magic, the
+# legacy prefixes — are OPTIONAL and currently unused at runtime; they're kept
+# for future light/Electrum support (header_format would then need to be
+# "bitcoin" or "pocx", with exotic headers like AuxPoW needing an engine
+# change). So a minimal coin can be just:
+#     [coin.regtest]
+#     consensus  = { genesis_hash = "…", bech32_hrp = "…" }
+#     connection = { rpc_host = "127.0.0.1", rpc_port = …, auth_method = "cookie", datadir = "…" }
+#
+# Notes:
+#   * The two built-in coins (btcx, btc) are also defined in the engine in code
+#     and are authoritative — the engine IGNORES the consensus block here for
+#     them (so this file can never redirect btc/btcx). Their full blocks below
+#     are a worked example for adding your own coin.
+#   * `genesis_hash` is the 32-byte block hash in display (big-endian) order;
+#     `magic` (if given) is 4-byte hex. `datadir` understands ~, %LOCALAPPDATA%,
+#     %APPDATA%. `connection.rpc_port` regtest values match the playground nodes.
+
+schema_version = 1
+
+# ---------------------------------------------------------------------------
+[[coin]]
+coin_id = "btcx"
+display_name = "Bitcoin PoCX"
+symbol = "BTCX"
+decimals = 8
+bip32_coin_type = 20559
+target_spacing_secs = 120
+icon = "btcx.svg"
+capabilities = { cltv = true, segwit_v0 = true, taproot = true }
+
+  [coin.mainnet]
+  consensus  = { header_format = "pocx", magic = "a73c915e", default_p2p_port = 8338, p2pkh_prefix = 85, p2sh_prefix = 90, wif_prefix = 128, bech32_hrp = "pocx", genesis_hash = "6ab422073e327d42a0e5dfaaa26564324ddb225e53c64da89283cd4e3dfb7ac6" }
+  connection = { rpc_host = "127.0.0.1", rpc_port = 8332, auth_method = "cookie", datadir = "~/.bitcoin-pocx", cookie_subpath = ".cookie", wallet = "" }
+
+  [coin.testnet]
+  consensus  = { header_format = "pocx", magic = "6df248b4", default_p2p_port = 18338, p2pkh_prefix = 127, p2sh_prefix = 132, wif_prefix = 239, bech32_hrp = "tpocx", genesis_hash = "181c51a172fe20c203e463f6f203b7d9be388fa0f1282e507192f94d24a57e81" }
+  connection = { rpc_host = "127.0.0.1", rpc_port = 18332, auth_method = "cookie", datadir = "~/.bitcoin-pocx", cookie_subpath = "testnet/.cookie", wallet = "" }
+
+  [coin.regtest]
+  consensus  = { header_format = "pocx", magic = "fabfb5da", default_p2p_port = 18444, p2pkh_prefix = 111, p2sh_prefix = 196, wif_prefix = 239, bech32_hrp = "rpocx", genesis_hash = "2a98a52253aeff06093948b00568d380b7634621bc606403127973c9acbbfde0" }
+  connection = { rpc_host = "127.0.0.1", rpc_port = 19443, auth_method = "cookie", datadir = "~/.bitcoin-pocx", cookie_subpath = "regtest/.cookie", wallet = "" }
+
+# ---------------------------------------------------------------------------
+[[coin]]
+coin_id = "btc"
+display_name = "Bitcoin"
+symbol = "BTC"
+decimals = 8
+bip32_coin_type = 0
+target_spacing_secs = 600
+icon = "btc.svg"
+capabilities = { cltv = true, segwit_v0 = true, taproot = true }
+
+  [coin.mainnet]
+  consensus  = { header_format = "bitcoin", magic = "f9beb4d9", default_p2p_port = 8333, p2pkh_prefix = 0, p2sh_prefix = 5, wif_prefix = 128, bech32_hrp = "bc", genesis_hash = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" }
+  connection = { rpc_host = "127.0.0.1", rpc_port = 8332, auth_method = "cookie", datadir = "~/.bitcoin", cookie_subpath = ".cookie", wallet = "" }
+
+  [coin.testnet]
+  consensus  = { header_format = "bitcoin", magic = "0b110907", default_p2p_port = 18333, p2pkh_prefix = 111, p2sh_prefix = 196, wif_prefix = 239, bech32_hrp = "tb", genesis_hash = "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943" }
+  connection = { rpc_host = "127.0.0.1", rpc_port = 18332, auth_method = "cookie", datadir = "~/.bitcoin", cookie_subpath = "testnet3/.cookie", wallet = "" }
+
+  [coin.regtest]
+  consensus  = { header_format = "bitcoin", magic = "fabfb5da", default_p2p_port = 18444, p2pkh_prefix = 111, p2sh_prefix = 196, wif_prefix = 239, bech32_hrp = "bcrt", genesis_hash = "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206" }
+  connection = { rpc_host = "127.0.0.1", rpc_port = 19543, auth_method = "cookie", datadir = "~/.bitcoin", cookie_subpath = "regtest/.cookie", wallet = "" }

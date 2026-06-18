@@ -23,6 +23,7 @@ pub mod adaptor_engine;
 pub mod adaptor_swap;
 pub mod board;
 pub mod chain;
+pub mod coins_file;
 pub mod engine;
 pub mod htlc;
 pub mod keys;

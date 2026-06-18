@@ -45,6 +45,12 @@ struct Args {
     /// Data directory (seed, SQLite state, .cookie, pact.conf).
     #[arg(long)]
     data_dir: PathBuf,
+    /// Optional coin-templates file (`coins.toml`) that adds coins beyond the
+    /// two built-ins (btcx, btc). Loaded at startup and merged with the
+    /// built-ins (a file coin that collides with a built-in id is dropped).
+    /// Satchel passes the file it ships next to the executables.
+    #[arg(long)]
+    coins_file: Option<PathBuf>,
     /// Per-coin chain-data backend, repeatable: `--coin <coin_id>=<url[,url]>`
     /// (e.g. `--coin btcx=http://user:pass@host:port/wallet/x`). The first URL
     /// is the wallet-qualified Core-RPC primary (funds swaps); the rest may be
@@ -360,9 +366,13 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             // coins are reported too, so the setup UI can offer them.
             let configured = blocking(app, |e| Ok(e.configured_coins())).await?;
             let mut coins = Vec::new();
-            for def in libswap::registry::REGISTRY.iter().copied() {
+            for def in libswap::registry::all().iter().copied() {
+                // Skip coins not defined on the active network (a file coin may
+                // ship e.g. regtest only).
+                let Some(params) = def.params(net) else {
+                    continue;
+                };
                 let is_conf = configured.iter().any(|c| c == def.id);
-                let params = def.params(net);
                 let (status, tip) = if is_conf {
                     let id = def.id.to_string();
                     match blocking(app, move |e| e.probe_coin(net, &id)).await {
@@ -907,6 +917,23 @@ async fn main() -> Result<()> {
     let network = parse_network(&args.network)?;
     let passphrase = std::env::var("PACT_PASSPHRASE").ok();
 
+    // Load extra coins from coins.toml (if any) BEFORE anything touches the
+    // registry — `--coin` arg parsing validates ids against it. A bad file logs
+    // and falls back to the built-ins rather than refusing to boot.
+    if let Some(path) = &args.coins_file {
+        match libswap::registry::init_from_path(path) {
+            Ok(dropped) => {
+                tracing::info!(coins_file = %path.display(), "loaded coin templates");
+                for id in dropped {
+                    tracing::warn!("coins.toml entry {id:?} dropped: collides with a built-in coin id");
+                }
+            }
+            Err(err) => {
+                tracing::error!("coins.toml load failed ({err:#}); using built-in coins only");
+            }
+        }
+    }
+
     if args.auto_init && !args.data_dir.join(libswap::store::SEED_FILE).exists() {
         libswap::store::Store::init(&args.data_dir, passphrase.as_deref())?;
         tracing::info!(data_dir = %args.data_dir.display(), "first run: created seed + state db");
@@ -1101,6 +1128,7 @@ mod tests {
     fn args_with(coins: Vec<&str>, pocx: Option<&str>, btc: Option<&str>) -> Args {
         Args {
             data_dir: PathBuf::from("."),
+            coins_file: None,
             coins: coins.into_iter().map(String::from).collect(),
             coin_confs: vec![],
             pocx_rpc: pocx.map(String::from),

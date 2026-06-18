@@ -37,6 +37,9 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tauri::Manager;
 
+mod coins_file;
+mod compose;
+
 /// One configured coin (Phase C). Machine-level, shared across merchants: a
 /// coin's chain-data backend + funding wallet is a property of this host, not
 /// of a trading identity. `chain_data` is the comma-separated backend URL list
@@ -45,6 +48,11 @@ use tauri::Manager;
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 struct CoinConn {
     coin_id: String,
+    /// The composed backend URL list pactd consumes (the single string passed on
+    /// `--coin`). Derived from the structured fields below at save time, and
+    /// recomposed at launch for cookie auth; kept as the source of truth so a
+    /// legacy entry (structured fields absent) still works, and as the fallback
+    /// if recomposition fails (e.g. the node's cookie isn't readable yet).
     chain_data: String,
     /// Funding wallet kind — only "core-rpc" for now (Ledger/PSBT later).
     #[serde(default = "default_funding")]
@@ -54,6 +62,86 @@ struct CoinConn {
     /// use pactd's network/spacing default. Passed to pactd as `--coin-confs`.
     #[serde(default)]
     confirmations: Option<u32>,
+
+    // ---- structured connection (coin-setup v2) ----------------------------
+    // All optional + `#[serde(default)]` so a pre-v2 satchel.json (only
+    // `chain_data`) still deserializes. When `auth_method` is set, Satchel owns
+    // composition of `chain_data` from these; when it is `None`, `chain_data` is
+    // a raw/legacy string used verbatim.
+    #[serde(default)]
+    rpc_host: Option<String>,
+    #[serde(default)]
+    rpc_port: Option<u16>,
+    /// "cookie" | "userpass".
+    #[serde(default)]
+    auth_method: Option<String>,
+    #[serde(default)]
+    rpc_user: Option<String>,
+    #[serde(default)]
+    rpc_password: Option<String>,
+    /// Node data directory (for cookie discovery). OS tokens already expanded.
+    #[serde(default)]
+    datadir: Option<String>,
+    /// `.cookie` location relative to `datadir` (network-default when absent).
+    #[serde(default)]
+    cookie_subpath: Option<String>,
+    /// Wallet name for the wallet-qualified Core-RPC URL (`/wallet/<name>`).
+    #[serde(default)]
+    wallet: Option<String>,
+    /// Extra read-only backends (e.g. `tcp://host:port` Electrum), appended
+    /// after the primary Core-RPC URL.
+    #[serde(default)]
+    extra_backends: Vec<String>,
+}
+
+/// The structured connection payload the UI sends to `save_coin` /
+/// `compose_coin_url`. Mirrors the [`CoinConn`] connection fields; Satchel turns
+/// it into a `CoinConn` (composing `chain_data`).
+#[derive(serde::Deserialize, Default)]
+#[serde(default)]
+struct CoinConnInput {
+    rpc_host: Option<String>,
+    rpc_port: Option<u16>,
+    auth_method: Option<String>,
+    rpc_user: Option<String>,
+    rpc_password: Option<String>,
+    datadir: Option<String>,
+    cookie_subpath: Option<String>,
+    wallet: Option<String>,
+    extra_backends: Vec<String>,
+    funding_wallet: Option<String>,
+    /// Expert/legacy escape hatch: a raw URL string that overrides composition.
+    chain_data: Option<String>,
+}
+
+impl CoinConnInput {
+    /// Build a [`CoinConn`] for `coin_id`, composing `chain_data` from the
+    /// structured fields (unless a raw `chain_data` was supplied).
+    fn into_conn(self, coin_id: String, network: &str, confirmations: Option<u32>) -> anyhow::Result<CoinConn> {
+        let mut conn = CoinConn {
+            coin_id,
+            chain_data: String::new(),
+            funding_wallet: self.funding_wallet.unwrap_or_else(default_funding),
+            confirmations: confirmations.filter(|n| *n >= 1),
+            rpc_host: self.rpc_host,
+            rpc_port: self.rpc_port,
+            auth_method: self.auth_method,
+            rpc_user: self.rpc_user,
+            rpc_password: self.rpc_password,
+            datadir: self.datadir,
+            cookie_subpath: self.cookie_subpath,
+            wallet: self.wallet,
+            extra_backends: self.extra_backends,
+        };
+        conn.chain_data = match self.chain_data {
+            Some(raw) if !raw.trim().is_empty() => {
+                conn.auth_method = None; // raw entry: don't recompose at launch
+                raw
+            }
+            _ => compose::compose_chain_data(&conn, network)?,
+        };
+        Ok(conn)
+    }
 }
 
 fn default_funding() -> String {
@@ -262,10 +350,20 @@ fn spawn_pactd(config: &Config, data_dir: &Path) -> anyhow::Result<Child> {
         .arg("--merchants")
         .arg("--tick-secs")
         .arg(config.tick_secs.to_string());
+    // Hand pactd the same coin templates Satchel's picker uses, so the engine
+    // knows about any file-added coins. `<config_dir>/pactd` is `data_dir`, so
+    // its parent is the config dir where the file is resolved.
+    if let Some(config_dir) = data_dir.parent() {
+        let coins_file = coins_file::resolve_coins_file(config_dir);
+        cmd.arg("--coins-file").arg(&coins_file);
+    }
     for coin in &config.coins {
-        if !coin.chain_data.trim().is_empty() {
+        // Recompose cookie-auth URLs at launch (re-read the .cookie); fall back
+        // to the stored string for raw/legacy entries or if the node is down.
+        let chain_data = compose::effective_chain_data(coin, &config.network);
+        if !chain_data.trim().is_empty() {
             cmd.arg("--coin")
-                .arg(format!("{}={}", coin.coin_id, coin.chain_data));
+                .arg(format!("{}={}", coin.coin_id, chain_data));
             if let Some(n) = coin.confirmations {
                 cmd.arg("--coin-confs")
                     .arg(format!("{}={}", coin.coin_id, n));
@@ -490,29 +588,17 @@ async fn save_board(app: tauri::AppHandle, urls: String) -> Result<(), String> {
 async fn save_coin(
     app: tauri::AppHandle,
     coin_id: String,
-    chain_data: String,
-    funding_wallet: Option<String>,
+    conn: CoinConnInput,
     confirmations: Option<u32>,
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || -> anyhow::Result<()> {
         {
             let state = app.state::<AppState>();
             let mut cfg = state.config.lock().unwrap();
-            let funding_wallet = funding_wallet.unwrap_or_else(default_funding);
-            // Treat a depth < 1 as "use the default" (clears any override).
-            let confirmations = confirmations.filter(|n| *n >= 1);
+            let new = conn.into_conn(coin_id.clone(), &cfg.network, confirmations)?;
             match cfg.coins.iter_mut().find(|c| c.coin_id == coin_id) {
-                Some(existing) => {
-                    existing.chain_data = chain_data;
-                    existing.funding_wallet = funding_wallet;
-                    existing.confirmations = confirmations;
-                }
-                None => cfg.coins.push(CoinConn {
-                    coin_id,
-                    chain_data,
-                    funding_wallet,
-                    confirmations,
-                }),
+                Some(existing) => *existing = new,
+                None => cfg.coins.push(new),
             }
             save_config(&state.config_dir, &cfg)?;
         }
@@ -522,6 +608,44 @@ async fn save_coin(
     .await
     .map_err(|e| format!("join error: {e}"))?
     .map_err(|e| format!("{e:#}"))
+}
+
+/// Compose (preview) the backend URL string from a structured connection,
+/// without saving. The setup form passes the result to the `validatecoin` RPC
+/// so validation hits the exact URL that will be saved — and cookie reading
+/// stays in Rust, keeping secrets out of the webview.
+#[tauri::command]
+fn compose_coin_url(
+    state: tauri::State<AppState>,
+    coin_id: String,
+    conn: CoinConnInput,
+) -> Result<String, String> {
+    let network = state.config.lock().unwrap().network.clone();
+    let conn = conn
+        .into_conn(coin_id, &network, None)
+        .map_err(|e| format!("{e:#}"))?;
+    Ok(conn.chain_data)
+}
+
+/// The coin templates (connection defaults + icon availability) for the current
+/// network, for the setup picker. Joined with the engine's `listcoins` in the UI
+/// to mark each coin supported/unsupported and configured/live.
+#[tauri::command]
+fn list_coin_templates(state: tauri::State<AppState>) -> serde_json::Value {
+    let (config_dir, network) = {
+        let cfg = state.config.lock().unwrap();
+        (state.config_dir.clone(), cfg.network.clone())
+    };
+    coins_file::templates_json(&config_dir, &network)
+}
+
+/// A coin's icon (from the file next to `coins.toml`) as a `data:` URL, or null
+/// when the coin has no icon / it can't be read (the UI falls back to a bundled
+/// glyph for the built-ins).
+#[tauri::command]
+fn get_coin_icon(state: tauri::State<AppState>, coin_id: String) -> Option<String> {
+    let config_dir = state.config_dir.clone();
+    coins_file::icon_data_url(&config_dir, &coin_id)
 }
 
 /// Remove a coin's connection and relaunch the managed pactd without it.
@@ -943,6 +1067,9 @@ fn main() {
             get_ui_prefs,
             set_ui_prefs,
             list_coin_config,
+            list_coin_templates,
+            compose_coin_url,
+            get_coin_icon,
             save_coin,
             remove_coin,
             save_board,
@@ -1087,31 +1214,62 @@ mod tests {
     #![allow(clippy::field_reassign_with_default)]
     use super::*;
 
+    /// A structured coin connection for tests (userpass auth, no recompose
+    /// needed since `into_conn` composes from these fields).
+    fn test_conn(coin_id: &str, port: u16) -> CoinConn {
+        CoinConnInput {
+            rpc_host: Some("127.0.0.1".into()),
+            rpc_port: Some(port),
+            auth_method: Some("userpass".into()),
+            rpc_user: Some("u".into()),
+            rpc_password: Some("p".into()),
+            wallet: Some(coin_id.into()),
+            ..Default::default()
+        }
+        .into_conn(coin_id.into(), "regtest", None)
+        .unwrap()
+    }
+
     #[test]
     fn coin_config_round_trips_through_satchel_json() {
-        // The per-coin connection config (Phase C) must survive a save/load
-        // cycle unchanged — it is the source of truth Satchel passes to pactd.
+        // The per-coin connection config must survive a save/load cycle
+        // unchanged — it is the source of truth Satchel passes to pactd.
         let mut cfg = Config::default();
-        cfg.coins.push(CoinConn {
-            coin_id: "btcx".into(),
-            chain_data: "http://u:p@127.0.0.1:18443/wallet/pocx,tcp://127.0.0.1:50001".into(),
-            funding_wallet: "core-rpc".into(),
-            confirmations: None,
-        });
-        cfg.coins.push(CoinConn {
-            coin_id: "btc".into(),
-            chain_data: "http://u:p@127.0.0.1:18444/wallet/btc".into(),
-            funding_wallet: "core-rpc".into(),
-            confirmations: None,
-        });
+        cfg.coins.push(test_conn("btcx", 19443));
+        cfg.coins.push(test_conn("btc", 19543));
 
         let json = serde_json::to_string_pretty(&cfg).unwrap();
         let back: Config = serde_json::from_str(&json).unwrap();
         assert_eq!(back.coins.len(), 2);
         assert_eq!(back.coins[0].coin_id, "btcx");
-        assert_eq!(back.coins[0].chain_data, cfg.coins[0].chain_data);
+        // Structured fields + composed chain_data both round-trip.
+        assert_eq!(back.coins[0].auth_method.as_deref(), Some("userpass"));
+        assert_eq!(
+            back.coins[0].chain_data,
+            "http://u:p@127.0.0.1:19443/wallet/btcx"
+        );
         assert_eq!(back.coins[1].coin_id, "btc");
         assert_eq!(back.coins[1].funding_wallet, "core-rpc");
+    }
+
+    #[test]
+    fn legacy_chain_data_only_config_still_loads() {
+        // A pre-v2 satchel.json has only `chain_data` (no structured fields).
+        // It must deserialize cleanly with the new fields defaulting to None,
+        // so an upgrade never bricks an existing install.
+        let json = r#"{
+            "coins": [
+                { "coin_id": "btcx", "chain_data": "http://u:p@127.0.0.1:19443/wallet/pocx" }
+            ]
+        }"#;
+        let cfg: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(cfg.coins.len(), 1);
+        let c = &cfg.coins[0];
+        assert_eq!(c.chain_data, "http://u:p@127.0.0.1:19443/wallet/pocx");
+        assert_eq!(c.funding_wallet, "core-rpc"); // serde default applied
+        assert!(c.auth_method.is_none());
+        // A legacy entry is used verbatim at launch (no recomposition).
+        assert_eq!(compose::effective_chain_data(c, "regtest"), c.chain_data);
     }
 
     #[test]

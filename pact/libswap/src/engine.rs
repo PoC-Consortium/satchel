@@ -307,10 +307,34 @@ impl Engine {
         Ok(backend)
     }
 
+    /// Live reachability gate for both legs of a swap: each coin's node must be
+    /// reachable **and** serve the right chain (genesis check, via
+    /// [`Self::backend`]) right now. Run at the network-facing swap-initiation
+    /// entry points (`post_board_offer`, `take_board_offer`, `take_offer_slip`)
+    /// so advertising or taking a swap with a down node is refused up front with
+    /// a clear message, rather than failing later mid-swap. The pure envelope
+    /// builders (`offer`/`accept`/`make_private_offer`) don't touch a node, so
+    /// they're not gated here — funding still fails loudly if a chain is down.
+    /// Mirrors the per-coin check the UI shows in `listcoins`.
+    fn ensure_chains_live(&self, chains: &[&ChainRef]) -> Result<()> {
+        for c in chains {
+            self.backend(c)
+                .and_then(|bk| bk.tip_height())
+                .with_context(|| {
+                    format!(
+                        "chain {} is unreachable — check that its node is running and \
+                         configured in Satchel before starting a swap",
+                        c.coin_id
+                    )
+                })?;
+        }
+        Ok(())
+    }
+
     /// Coin ids with a configured chain-data backend (display order: the
     /// shipped registry order, then any extras). Drives `listcoins`/`listpairs`.
     pub fn configured_coins(&self) -> Vec<String> {
-        let mut ordered: Vec<String> = registry::REGISTRY
+        let mut ordered: Vec<String> = registry::all()
             .iter()
             .map(|c| c.id.to_string())
             .filter(|id| self.coins.contains_key(id))
@@ -2530,6 +2554,16 @@ impl Engine {
         self.ensure_network_allowed(network)?;
         ensure!(t2_secs < t1_secs, "spec §7.1: T2 must be < T1");
         let proto = resolve_offer_protocol(&give.0, &get.0, network, protocol)?;
+        // Don't advertise a swap we can't service: both legs' nodes must be live.
+        let chain_a = ChainRef {
+            coin_id: give.0.clone(),
+            network,
+        };
+        let chain_b = ChainRef {
+            coin_id: get.0.clone(),
+            network,
+        };
+        self.ensure_chains_live(&[&chain_a, &chain_b])?;
         let body = crate::board::OfferBody {
             protocol: proto,
             network: format!("{network:?}").to_lowercase(),
@@ -2680,6 +2714,25 @@ impl Engine {
         );
         ensure!(!body.expired(local_now()), "offer has expired");
         ensure!(offer.from != self.identity()?, "that is our own offer");
+        // Don't signal a take we can't honor: parse the offer's network, then
+        // require both legs supported AND their nodes live before committing.
+        let network = match body.network.as_str() {
+            "regtest" => Network::Regtest,
+            "testnet" => Network::Testnet,
+            "mainnet" => Network::Mainnet,
+            other => bail!("unsupported network in offer: {other}"),
+        };
+        self.ensure_network_allowed(network)?;
+        let chain_a = ChainRef {
+            coin_id: body.give_asset.clone(),
+            network,
+        };
+        let chain_b = ChainRef {
+            coin_id: body.get_asset.clone(),
+            network,
+        };
+        ensure_pair_supported(&chain_a, &chain_b)?;
+        self.ensure_chains_live(&[&chain_a, &chain_b])?;
         self.store
             .put_pending_take(offer_id, &serde_json::to_string(&offer)?, local_now())?;
         let take = self.signed_envelope(
@@ -2815,6 +2868,7 @@ impl Engine {
             network,
         };
         ensure_pair_supported(&chain_a, &chain_b)?;
+        self.ensure_chains_live(&[&chain_a, &chain_b])?;
 
         self.store.put_pending_take(
             &offer.swap_id,
@@ -3855,6 +3909,51 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("doge"), "{err}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn post_and_take_blocked_when_chain_down() {
+        // The chain-up gate: advertising or taking a swap is refused up front
+        // when a leg's node is unreachable (here, a dead loopback port). Pure
+        // envelope builders (offer/accept/make_private_offer) are NOT gated, so
+        // they still succeed with no live node — that's the altitude split.
+        let dir = std::env::temp_dir().join(format!("libswap-chaindown-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        Store::init(&dir, None).unwrap();
+        let mut coins = BTreeMap::new();
+        // Port 1 refuses immediately — a stand-in for "node is down".
+        coins.insert("btcx".to_string(), "http://127.0.0.1:1".to_string());
+        coins.insert("btc".to_string(), "http://127.0.0.1:1".to_string());
+        let engine = Engine::open(&dir, None, coins).unwrap();
+
+        // Building an offer envelope needs no node — still works.
+        engine
+            .offer(
+                Network::Regtest,
+                ("btcx".into(), 100),
+                ("btc".into(), 100),
+                1_700_000_002,
+                1_700_000_001,
+                None,
+                None,
+            )
+            .expect("offer envelope build needs no live node");
+
+        // Posting to the board hits the gate first.
+        let err = engine
+            .post_board_offer(
+                Network::Regtest,
+                ("btcx".into(), 100),
+                ("btc".into(), 100),
+                10 * 3600,
+                5 * 3600,
+                None,
+                None,
+            )
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("unreachable"), "{err}");
         std::fs::remove_dir_all(&dir).ok();
     }
 

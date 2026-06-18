@@ -32,13 +32,68 @@ export interface UiPrefs {
   nav_open: boolean;
 }
 
-/** One configured coin connection from Satchel's satchel.json. */
+/** One configured coin connection from Satchel's satchel.json. The structured
+ *  fields are absent on a pre-v2 (chain_data-only) config. */
 export interface CoinConn {
   coin_id: string;
   chain_data: string;
   funding_wallet: string;
   /** Confirmation depth override (reorg-safety); null/absent = use the default. */
   confirmations?: number | null;
+  rpc_host?: string | null;
+  rpc_port?: number | null;
+  /** "cookie" | "userpass". */
+  auth_method?: string | null;
+  rpc_user?: string | null;
+  rpc_password?: string | null;
+  datadir?: string | null;
+  cookie_subpath?: string | null;
+  wallet?: string | null;
+  extra_backends?: string[];
+}
+
+/** Per-(coin, network) connection defaults from a coins.toml template,
+ *  returned by the `list_coin_templates` Satchel command. */
+export interface NetConnDefaults {
+  rpc_host: string;
+  rpc_port?: number | null;
+  auth_method: string;
+  datadir: string;
+  cookie_subpath: string;
+  wallet: string;
+}
+
+/** One coin template (connection defaults + presentation) for the picker. */
+export interface CoinTemplate {
+  coin_id: string;
+  display_name: string;
+  symbol: string;
+  decimals: number;
+  has_icon: boolean;
+  defaults: NetConnDefaults;
+}
+
+/** `list_coin_templates` result for the current network. */
+export interface CoinTemplateList {
+  network: string;
+  coins: CoinTemplate[];
+}
+
+/** The structured connection payload sent to `save_coin` / `compose_coin_url`
+ *  (mirrors the Rust `CoinConnInput`). */
+export interface CoinConnInput {
+  rpc_host?: string;
+  rpc_port?: number;
+  auth_method: string;
+  rpc_user?: string;
+  rpc_password?: string;
+  datadir?: string;
+  cookie_subpath?: string;
+  wallet?: string;
+  extra_backends?: string[];
+  funding_wallet?: string;
+  /** Expert/legacy escape hatch: raw URL string overrides composition. */
+  chain_data?: string;
 }
 
 export interface CoinConfig {

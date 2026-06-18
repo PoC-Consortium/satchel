@@ -59,6 +59,7 @@ export const en = {
     balanceLoading: "Balance: …",
     noCoins: "No coins configured",
     sameCoin: "Give and receive must be different coins.",
+    legDown: "One of these coins' nodes is down — start it (or check Settings → Coins) before posting.",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
     protocol: "Swap type",
@@ -317,6 +318,37 @@ export const en = {
     genesisDetail: "tip height {tip} · genesis {hash}…",
     genesisBad: "Rejected — not saving",
     errorShort: "error",
+    // Structured connection form (CoinSetup v2).
+    rpcHostLabel: "RPC host",
+    rpcPortLabel: "RPC port",
+    authMethodLabel: "Authentication",
+    authCookie: "Cookie file",
+    authCookieDesc: "Auto-read the node's .cookie from its data directory (the default, no password stored).",
+    authUserPass: "User / password",
+    authUserPassDesc: "The rpcuser / rpcpassword from your node's config — needed for a remote node.",
+    rpcUserLabel: "RPC username",
+    rpcPasswordLabel: "RPC password",
+    datadirLabel: "Node data directory",
+    cookiePathNote: "The cookie is read from {path} under this directory.",
+    walletLabel: "Wallet name (optional)",
+    walletPlaceholder: "your node's wallet",
+    needPort: "Enter the RPC port first.",
+    validateFirst: "Validate the node before saving.",
+    savingReconnecting: "Saving & reconnecting…",
+    connected: "{coin} connected",
+    // Template picker (a coins.toml coin the engine version doesn't support).
+    unsupportedByEngine: "Unsupported",
+    unsupportedByEngineTip:
+      "This coin is defined in coins.toml but not built into this version of the engine, so it can't be traded.",
+  },
+  coinWizard: {
+    title: "Connect your coins",
+    intro:
+      "Pick at least two coins and point each at your own node. A swap needs two chains, so trading unlocks once two nodes are connected and live. You can add or change coins later in Settings.",
+    progress: "{count} of {min} coins connected",
+    continue: "Continue",
+    live: "Live",
+    nodeDown: "Node down",
   },
   wallets: {
     intro:
@@ -353,6 +385,7 @@ export const en = {
       "{count} more offer(s) for pairs you haven't connected. Set up both coins to trade them:",
     yourOffer: "your offer",
     take: "Take offer",
+    legDown: "One of this pair's nodes is down — start it (or check Settings → Coins) before taking.",
     withdraw: "Withdraw",
     withdrawTip: "Withdraw instantly — an offer never locks funds",
     safetyRefund: "safety refund",

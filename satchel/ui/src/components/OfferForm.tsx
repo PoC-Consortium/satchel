@@ -143,6 +143,11 @@ export default function OfferForm({
 
   const sameCoin = !!give && give === want;
 
+  // Chain-up gate: don't let the user post/create an offer whose own node is
+  // down — the engine refuses it too, this is the friendly up-front block.
+  const coinLive = (id: string) => coins.find((c) => c.id === id)?.status === "ok";
+  const legDown = !sameCoin && ((!!give && !coinLive(give)) || (!!want && !coinLive(want)));
+
   // Which swap protocols this pair+network allows, and the preferred default.
   const giveCaps = useMemo(() => configured.find((c) => c.id === give)?.capabilities, [configured, give]);
   const wantCaps = useMemo(() => configured.find((c) => c.id === want)?.capabilities, [configured, want]);
@@ -154,7 +159,13 @@ export default function OfferForm({
   const protoLabel = (p: string) => (p === PROTOCOL_V2 ? t("coins.protoPrivate") : t("makeOffer.protoStandard"));
 
   const valid =
-    !!give && !!want && !sameCoin && parseAmount(giveAmt) > 0 && parseAmount(wantAmt) > 0 && !!effProto;
+    !!give &&
+    !!want &&
+    !sameCoin &&
+    !legDown &&
+    parseAmount(giveAmt) > 0 &&
+    parseAmount(wantAmt) > 0 &&
+    !!effProto;
 
   async function submit() {
     if (!valid || busy || !effProto) return;
@@ -267,6 +278,10 @@ export default function OfferForm({
 
       {sameCoin && (
         <Typography sx={{ color: "error.main", fontSize: 12 }}>{t("makeOffer.sameCoin")}</Typography>
+      )}
+
+      {!sameCoin && legDown && (
+        <Typography sx={{ color: "error.main", fontSize: 12 }}>{t("makeOffer.legDown")}</Typography>
       )}
 
       {/* Swap type — a dropdown (scales to future protocols); a static line when

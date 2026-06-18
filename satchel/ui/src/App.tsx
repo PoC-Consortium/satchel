@@ -25,6 +25,7 @@ import WalletScreen from "./screens/WalletScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import Wizard from "./dialogs/Wizard";
 import SeedProvision from "./dialogs/SeedProvision";
+import CoinWizard from "./dialogs/CoinWizard";
 import Unlock from "./dialogs/Unlock";
 import MerchantManager from "./dialogs/MerchantManager";
 import ExitGate from "./components/ExitGate";
@@ -64,6 +65,7 @@ export default function App() {
   const showFirstRun = app.phase === "wizard" && modal === null;
   const showSeedGate = app.phase === "seed" && modal === null;
   const showUnlockGate = app.phase === "unlock" && modal === null;
+  const showCoinGate = app.phase === "coins" && modal === null;
 
   function screen() {
     if (app.phase === "no-tauri") return <NoTauri />;
@@ -134,6 +136,7 @@ export default function App() {
             />
           )}
           {showUnlockGate && <Unlock onDone={app.boot} onSwitch={openers.openMerchants} />}
+          {showCoinGate && <CoinWizard onDone={app.boot} />}
 
           {/* User-triggered dialogs. */}
           {modal?.kind === "merchants" && (

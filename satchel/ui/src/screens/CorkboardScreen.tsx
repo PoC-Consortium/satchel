@@ -43,7 +43,11 @@ import type { Offer, Pair } from "../api/types";
 type Leg = (sats: number, coin: string) => string;
 
 export default function CorkboardScreen() {
-  const { identity, swaps, symOf, log, refreshSwaps } = useApp();
+  const { identity, swaps, symOf, log, refreshSwaps, coins } = useApp();
+  // A leg is tradeable only when its coin has a live ("ok") node. Used to gate
+  // the Take button so you can't start a swap against a down chain (the engine
+  // refuses too — this is the friendly up-front block).
+  const coinLive = (id?: string) => !!coins.find((c) => c.id === id && c.status === "ok");
   const { denom, setDenom } = useDenom();
   const confirmTake = useTakeConfirm();
   const navigate = useNavigate();
@@ -450,6 +454,7 @@ export default function CorkboardScreen() {
                         o={o}
                         mine={o.from === myId}
                         state={offerState(o, mySwapIds)}
+                        legDown={!coinLive(o.body.give_asset) || !coinLive(o.body.get_asset)}
                         fmtLeg={fmtLeg}
                         onTake={() => void take(o)}
                         onRevoke={() => void revoke(o)}
@@ -741,6 +746,7 @@ function OfferRow({
   o,
   mine,
   state,
+  legDown,
   fmtLeg,
   onTake,
   onRevoke,
@@ -748,6 +754,8 @@ function OfferRow({
   o: Offer;
   mine: boolean;
   state: OfferState;
+  /** One of the offer's legs has a down/unconfigured node — can't take it. */
+  legDown?: boolean;
   fmtLeg: Leg;
   onTake: () => void;
   onRevoke: () => void;
@@ -757,7 +765,7 @@ function OfferRow({
   const expiry = b.created ? b.created + (b.ttl_secs || 24 * 3600) : 0;
   const f = freshness(b.created || 0, expiry);
   const freshColor = f.cls === "expiring" ? C.bad : C.dim;
-  const takeable = !mine && state === "open";
+  const takeable = !mine && state === "open" && !legDown;
 
   // One list row: who · state · amounts · timing · action.
   return (
@@ -827,6 +835,14 @@ function OfferRow({
           <Button size="small" variant="outlined" color="inherit" onClick={onRevoke}>
             {t("corkboard.withdraw")}
           </Button>
+        </Tooltip>
+      ) : legDown && state === "open" ? (
+        <Tooltip title={t("corkboard.legDown")}>
+          <span>
+            <Button size="small" variant="contained" startIcon={<AddIcon />} disabled>
+              {t("corkboard.take")}
+            </Button>
+          </span>
         </Tooltip>
       ) : (
         <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={onTake} disabled={!takeable}>

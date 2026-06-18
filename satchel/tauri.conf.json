@@ -27,6 +27,7 @@
     "shortDescription": "Trustless P2P atomic swaps",
     "longDescription": "Satchel — desktop wallet for trustless cross-chain atomic swaps (PoCX <-> BTC) over the Corkboard noticeboard. Bundles the pactd swap engine and the pact-cli client.",
     "externalBin": ["binaries/pactd", "binaries/pact-cli"],
+    "resources": ["coins.toml", "btc.svg", "btcx.svg"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

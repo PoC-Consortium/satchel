@@ -3,18 +3,21 @@ import { glyph } from "../format";
 import { COIN_ICON } from "../assets/coins";
 import { C } from "../theme";
 
-// The square coin badge, shared by the Coins + Wallet cards. Shows the real
-// logo asset (COIN_ICON) when one exists for the coin id, otherwise falls back
-// to the generated text glyph (₿ / ◈ / first letter). Gold-bordered when the
-// coin is configured.
+// The square coin badge, shared by the Coins + Wallet cards. Icon resolution:
+// a bundled logo asset (COIN_ICON, for the built-ins) → a `iconUrl` (a data:
+// URL from a coins.toml template's icon file, for added coins) → the generated
+// text glyph (₿ / ◈ / first letter). Gold-bordered when the coin is configured.
 export default function CoinGlyph({
   coin,
   configured,
+  iconUrl,
 }: {
   coin: { id: string; symbol?: string };
   configured?: boolean;
+  /** A data: URL for a coin added via coins.toml (no bundled asset). */
+  iconUrl?: string | null;
 }) {
-  const icon = COIN_ICON[coin.id];
+  const icon = COIN_ICON[coin.id] ?? iconUrl ?? undefined;
   return (
     <Box
       sx={{

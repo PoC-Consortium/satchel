@@ -27,8 +27,20 @@ import type {
 //   seed      — merchant active but its seed isn't provisioned yet
 //   unlock    — encrypted merchant came up locked
 //   disconnected — pactd unreachable / getinfo failed
-//   ready     — connected, seed present + unlocked: the app is usable
-export type Phase = "loading" | "no-tauri" | "wizard" | "seed" | "unlock" | "disconnected" | "ready";
+//   coins     — seed ready, but fewer than 2 coins are configured + live
+//   ready     — connected, seed present + unlocked, ≥2 live coins: app usable
+export type Phase =
+  | "loading"
+  | "no-tauri"
+  | "wizard"
+  | "seed"
+  | "unlock"
+  | "coins"
+  | "disconnected"
+  | "ready";
+
+// A swap needs two chains, so trading is gated on at least two live coins.
+const MIN_LIVE_COINS = 2;
 
 export interface LogLine {
   time: string;
@@ -216,10 +228,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // identity into its own manifest on load/seed-provision — no Satchel-side
     // identity cache to keep in sync anymore (this supersedes C1).
     log(`connected to pactd ${gi.version ?? "?"} (${gi.protocol ?? "?"})`);
+
+    // Coin gate: trading needs ≥2 coins with a live node. A fresh install (or
+    // one whose nodes are all down) lands on the coin-setup step instead of the
+    // trading UI. Probe live so a configured-but-down coin doesn't pass.
+    try {
+      const cl = await rpc<{ coins: CoinInfo[] }>("listcoins");
+      setCoins(cl.coins);
+      cl.coins.forEach((c) => setSymbol(c.id, c.symbol));
+      const live = cl.coins.filter((c) => c.configured && c.status === "ok").length;
+      if (live < MIN_LIVE_COINS) {
+        setPhase("coins");
+        return;
+      }
+    } catch (e) {
+      log("listcoins: " + errMsg(e));
+      setPhase("coins");
+      return;
+    }
+
     setPhase("ready");
     void refreshSwaps();
     void refreshCoins();
-  }, [log, refreshSwaps, refreshCoins, setConn]);
+  }, [log, refreshSwaps, refreshCoins, setConn, setSymbol]);
 
   // Initial boot.
   useEffect(() => {

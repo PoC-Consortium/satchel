@@ -35,6 +35,21 @@ pub enum HeaderFormat {
     Pocx,
 }
 
+impl HeaderFormat {
+    /// Parse the `header_format` token from a coin template (`coins.toml`).
+    /// Only the two layouts the engine knows how to hash are accepted; an
+    /// exotic header (e.g. AuxPoW merged-mining) needs a new variant + code.
+    pub fn from_token(s: &str) -> Result<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "bitcoin" => Ok(Self::Bitcoin),
+            "pocx" => Ok(Self::Pocx),
+            other => {
+                anyhow::bail!("unknown header_format {other:?} (expected \"bitcoin\" or \"pocx\")")
+            }
+        }
+    }
+}
+
 /// Static parameters of one (coin, network) pair.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChainParams {
