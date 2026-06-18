@@ -2461,7 +2461,25 @@ impl Engine {
             Some(s) => format!("board '{s}' not configured"),
             None => "no boards configured".to_string(),
         })?;
-        chosen.1.offers()
+        let offers = chosen.1.offers()?;
+        // Honor our own local revocations. A withdrawn offer can still linger on a
+        // stateless HTTP corkboard, or be re-served by a relay before the NIP-09
+        // deletion propagates — so filter anything we've locally blocked
+        // (`offer_revoked:<swap_id>`, the same marker the take guards check). Without
+        // this, navigating away from and back to the board re-lists an offer the
+        // maker just withdrew.
+        let mut kept = Vec::with_capacity(offers.len());
+        for o in offers {
+            if self
+                .store
+                .meta_get(&format!("offer_revoked:{}", o.swap_id))?
+                .is_some()
+            {
+                continue;
+            }
+            kept.push(o);
+        }
+        Ok(kept)
     }
 
     /// Seal to the recipient identity, then best-effort send to every
