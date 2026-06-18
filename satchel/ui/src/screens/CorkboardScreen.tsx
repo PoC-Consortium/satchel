@@ -42,6 +42,11 @@ import type { Offer, Pair } from "../api/types";
 
 type Leg = (sats: number, coin: string) => string;
 
+// The selected pair persists across navigation in localStorage (a pure view
+// preference, like the denom toggle) — leaving and returning to the Corkboard
+// keeps your pair instead of snapping back to the first one.
+const PAIR_KEY = "satchel.corkboard.pair";
+
 export default function CorkboardScreen() {
   const { identity, swaps, symOf, log, refreshSwaps, coins } = useApp();
   // A leg is tradeable only when its coin has a live ("ok") node. Used to gate
@@ -58,7 +63,13 @@ export default function CorkboardScreen() {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [available, setAvailable] = useState<Set<string>>(new Set());
   const [savedBoards, setSavedBoards] = useState("");
-  const [pairFilter, setPairFilter] = useState<string>(""); // pairKey; "" → first
+  const [pairFilter, setPairFilter] = useState<string>(() => {
+    try {
+      return localStorage.getItem(PAIR_KEY) || "";
+    } catch {
+      return "";
+    }
+  }); // pairKey; "" → first (persisted across navigation)
   const [boardSel, setBoardSel] = useState<string>(""); // selected board URL; "" → first
   const [mineOnly, setMineOnly] = useState(false); // All vs Mine (own offers)
   const [selected, setSelected] = useState<string | null>(null); // "side:priceKey"
@@ -134,9 +145,21 @@ export default function CorkboardScreen() {
         .sort((x, y) => x.label.localeCompare(y.label)),
     [available, symOf],
   );
+  // Default to the first pair when none is chosen, and fall back to it if a
+  // persisted pair is no longer available (capabilities changed).
   useEffect(() => {
-    if (!pairFilter && pairOptions.length) setPairFilter(pairOptions[0].key);
+    if (!pairOptions.length) return;
+    if (!pairOptions.some((p) => p.key === pairFilter)) setPairFilter(pairOptions[0].key);
   }, [pairOptions, pairFilter]);
+  // Persist the chosen pair so it survives leaving/returning to the Corkboard.
+  useEffect(() => {
+    if (!pairFilter) return;
+    try {
+      localStorage.setItem(PAIR_KEY, pairFilter);
+    } catch {
+      /* best-effort persist */
+    }
+  }, [pairFilter]);
   const effectivePair = pairFilter || pairOptions[0]?.key || "";
 
   // Switching market/board/filter clears the open level so the detail pane never

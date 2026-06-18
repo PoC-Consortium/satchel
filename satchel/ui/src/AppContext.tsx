@@ -8,8 +8,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { errMsg, inTauri, listMerchants, rpc } from "./api/tauri";
+import { errMsg, getCoinIcon, inTauri, listMerchants, rpc } from "./api/tauri";
 import { adaptorToSwap, pendingTakeToSwap, v1ToSwap } from "./format";
+import { COIN_ICON } from "./assets/coins";
 import type {
   AdaptorSwapRecord,
   CoinInfo,
@@ -69,6 +70,11 @@ interface AppCtx {
   coins: CoinInfo[];
   refreshCoins: () => Promise<void>;
 
+  /** coin_id → icon data URL (or null when there's none), for file-coins
+   *  without a bundled asset (e.g. ltc). Fetched once per id; the header and
+   *  the screens share it so every surface shows the same icon. */
+  coinIcons: Record<string, string | null>;
+
   /** Nostr relay connectivity (pactd `boardstatus`), for the header indicator.
    *  Empty ⇒ no relays configured (header hides the dot). */
   relays: RelayStatus[];
@@ -106,6 +112,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [network, setNetwork] = useState<string | null>(null);
   const [swaps, setSwaps] = useState<Swap[]>([]);
   const [coins, setCoins] = useState<CoinInfo[]>([]);
+  const [coinIcons, setCoinIcons] = useState<Record<string, string | null>>({});
   const [relays, setRelays] = useState<RelayStatus[]>([]);
   const [symbols, setSymbols] = useState<Record<string, string>>({});
   const [logLines, setLogLines] = useState<LogLine[]>([]);
@@ -130,6 +137,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const symOf = useCallback((id: string) => symbolsRef.current[id] || String(id).toUpperCase(), []);
 
   const ready = phase === "ready";
+
+  // File-coin icons (e.g. ltc): fetch the data URL once per coin id for coins
+  // without a bundled asset, so the header status row and every screen render
+  // the same icon. Built-ins (btc/btcx) use COIN_ICON directly and are skipped.
+  // null is recorded too (coin has no icon) so we never re-fetch a known miss.
+  useEffect(() => {
+    const missing = coins
+      .map((c) => c.id)
+      .filter((id) => !COIN_ICON[id] && coinIcons[id] === undefined);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      missing.map((id) => getCoinIcon(id).catch(() => null).then((url) => [id, url] as const)),
+    ).then((pairs) => {
+      if (cancelled) return;
+      setCoinIcons((prev) => {
+        const next = { ...prev };
+        for (const [id, url] of pairs) next[id] = url;
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [coins, coinIcons]);
 
   // listswaps drives both the Swaps tab and the header's completed count, so it
   // polls globally (not per-tab) while we're connected — as in the old UI.
@@ -300,6 +332,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshSwaps,
     coins,
     refreshCoins,
+    coinIcons,
     relays,
     symbols,
     setSymbol,

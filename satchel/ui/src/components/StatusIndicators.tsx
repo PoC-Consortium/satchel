@@ -97,6 +97,7 @@ function RelayHealth({ relays }: { relays: RelayStatus[] }) {
 
 function CoinHealth({ c }: { c: CoinInfo }) {
   const t = useT();
+  const { coinIcons } = useApp();
   const ok = c.status === "ok";
   const err = !!c.status && c.status !== "ok" && c.status !== "unconfigured";
   const color = ok ? "success.main" : err ? "error.main" : "text.disabled";
@@ -105,10 +106,11 @@ function CoinHealth({ c }: { c: CoinInfo }) {
     : err
       ? t("header.coinError", { name: c.display_name, status: c.status ?? "error" })
       : t("header.coinUnconfigured", { name: c.display_name });
-  // Same logo asset the Coins/Wallet cards use (CoinGlyph), so the header
-  // matches; health is carried by the border colour + dimming. Unknown coins
-  // fall back to the generated text glyph.
-  const icon = COIN_ICON[c.id];
+  // Same logo the Coins/Wallet cards use (CoinGlyph), so the header matches;
+  // health is carried by the border colour + dimming. Built-ins use the bundled
+  // asset; file-coins (e.g. ltc) use the shared fetched data URL; anything still
+  // without an icon falls back to the generated text glyph.
+  const icon = COIN_ICON[c.id] ?? coinIcons[c.id] ?? undefined;
 
   return (
     <Tooltip title={title}>
