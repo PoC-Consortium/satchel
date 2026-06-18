@@ -28,7 +28,7 @@ import {
   bookEntry,
   DENOMS,
   denomLabel,
-  fmtBare,
+  fmtBareLocale,
   fmtDenom,
   fmtPriceDenom,
   freshness,
@@ -41,26 +41,6 @@ import type { BookSide, Denom, OfferState } from "../format";
 import type { Offer, Pair } from "../api/types";
 
 type Leg = (sats: number, coin: string) => string;
-
-// A row from `listmyoffers` — the maker's own offer with its lifecycle state and
-// the two expiry horizons (current = rolling relay TTL; final = maker-set valid-for).
-type MyOfferRow = {
-  offer_id: string;
-  offer: Offer;
-  state: string;
-  current_expiry: number;
-  final_expiry: number;
-  now: number;
-};
-
-// MUI palette color per offer state. A map (object property values) keeps these
-// out of the i18n literal-string lint, unlike a bare ternary of string literals.
-const STATE_COLOR: Record<string, string> = {
-  live: "success.main",
-  taken: "info.main",
-  revoked: "text.disabled",
-  expired: "text.disabled",
-};
 
 export default function CorkboardScreen() {
   const { identity, swaps, symOf, log, refreshSwaps } = useApp();
@@ -81,7 +61,6 @@ export default function CorkboardScreen() {
   // Offers we just took, hidden optimistically so the line vanishes the instant
   // you confirm (before the take RPC + refresh land). Cleared if the take fails.
   const [justTook, setJustTook] = useState<Set<string>>(() => new Set());
-  const [myOffers, setMyOffers] = useState<MyOfferRow[]>([]); // the "Mine" view (listmyoffers)
 
   const myId = identity;
   // Correlate offers to our own swaps → "taken by us" without board-side
@@ -132,23 +111,6 @@ export default function CorkboardScreen() {
     const t2 = setInterval(() => void loadOffers(), 4000);
     return () => clearInterval(t2);
   }, [loadOffers, identity]);
-
-  // The "Mine" view is truth-backed by listmyoffers (lifecycle state + both expiry
-  // horizons) rather than the public listing, so a withdrawn offer stays gone and
-  // the states are accurate. Poll only while the toggle is on.
-  const loadMyOffers = useCallback(async () => {
-    try {
-      setMyOffers(await rpc<MyOfferRow[]>("listmyoffers", []));
-    } catch {
-      /* old pactd without listmyoffers, or none posted yet */
-    }
-  }, []);
-  useEffect(() => {
-    if (!mineOnly) return;
-    void loadMyOffers();
-    const id = setInterval(() => void loadMyOffers(), 4000);
-    return () => clearInterval(id);
-  }, [mineOnly, loadMyOffers, identity]);
 
   // Configured boards (from satchel.json). Default the selector to the first.
   const boards = useMemo(() => savedBoards.split(",").map((s) => s.trim()).filter(Boolean), [savedBoards]);
@@ -214,19 +176,6 @@ export default function CorkboardScreen() {
     void loadOffers();
   }
 
-  // Withdraw from the My-offers list (by id); refresh both views so the line
-  // disappears immediately and stays gone.
-  async function withdraw(offerId: string) {
-    try {
-      await rpc("boardrevoke", [offerId]);
-      log(`offer ${offerId} withdrawn`);
-    } catch (e) {
-      log("withdraw: " + errMsg(e));
-    }
-    void loadMyOffers();
-    void loadOffers();
-  }
-
   if (!loaded) return null;
 
   if (boardErr !== null) {
@@ -277,7 +226,7 @@ export default function CorkboardScreen() {
   // Per-leg formatter: the quote coin follows the denomination toggle; the base
   // coin (already-friendly whole numbers) stays put.
   const fmtLeg: Leg = (sats, coin) =>
-    coin === quote ? `${fmtDenom(sats, denom)} ${quoteUnit}` : `${fmtBare(sats)} ${symOf(coin)}`;
+    coin === quote ? `${fmtDenom(sats, denom)} ${quoteUnit}` : `${fmtBareLocale(sats)} ${symOf(coin)}`;
   // An offer's base-coin amount (the size axis), for sorting offers within a level.
   const baseSizeOf = (o: Offer) => (o.body.give_asset === base ? o.body.give_amount : o.body.get_amount);
 
@@ -384,66 +333,7 @@ export default function CorkboardScreen() {
         )}
       </Box>
 
-      {mineOnly ? (
-        myOffers.length === 0 ? (
-          <EmptyState title={t("corkboard.mine.emptyTitle")}>{t("corkboard.mine.emptyBody")}</EmptyState>
-        ) : (
-          <Stack spacing={1}>
-            {myOffers.map((r) => {
-              const b = r.offer.body;
-              const live = r.state === "live";
-              const curMin = Math.max(0, Math.round((r.current_expiry - r.now) / 60));
-              const finMin = Math.max(0, Math.round((r.final_expiry - r.now) / 60));
-              const finLabel =
-                finMin >= 60 ? `${Math.floor(finMin / 60)}h ${finMin % 60}m` : `${finMin}m`;
-              const stateColor = STATE_COLOR[r.state] || STATE_COLOR.expired;
-              const trade = `${fmtBare(b.give_amount)} ${symOf(b.give_asset)} → ${fmtBare(
-                b.get_amount,
-              )} ${symOf(b.get_asset)}`;
-              return (
-                <Box
-                  key={r.offer_id}
-                  sx={{
-                    border: `1px solid ${C.line}`,
-                    borderRadius: 2,
-                    bgcolor: "background.paper",
-                    p: 1.5,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1.5,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <Box sx={{ flex: 1, minWidth: 200 }}>
-                    <Typography sx={{ fontFamily: C.mono, fontSize: 13.5 }}>{trade}</Typography>
-                    {live && (
-                      <Typography sx={{ fontSize: 11.5, color: "text.secondary", mt: 0.25 }}>
-                        {t("corkboard.mine.expiry", { cur: `${curMin}m`, fin: finLabel })}
-                      </Typography>
-                    )}
-                  </Box>
-                  <Chip
-                    size="small"
-                    variant="outlined"
-                    label={t(`corkboard.mine.state.${r.state}`)}
-                    sx={{ height: 20, fontSize: 11, color: stateColor, borderColor: stateColor }}
-                  />
-                  {live && (
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="inherit"
-                      onClick={() => withdraw(r.offer_id)}
-                    >
-                      {t("corkboard.withdraw")}
-                    </Button>
-                  )}
-                </Box>
-              );
-            })}
-          </Stack>
-        )
-      ) : visible.length === 0 ? (
+      {visible.length === 0 ? (
         <EmptyState title={t("corkboard.noOffers")}>{t("corkboard.noOffersBody")}</EmptyState>
       ) : (
         <>
@@ -539,7 +429,7 @@ export default function CorkboardScreen() {
                   />
                   <Typography sx={{ fontFamily: C.mono, fontSize: 13, fontWeight: 600 }}>
                     {t("corkboard.book.paneHeader", {
-                      size: fmtBare(selLevel.sizeSat),
+                      size: fmtBareLocale(selLevel.sizeSat),
                       base: baseSym,
                       price: fmtPriceDenom(selLevel.price, denom),
                       unit: quoteUnit,
@@ -767,7 +657,7 @@ function LevelRow({
     </Box>
   );
   const size = (
-    <Box sx={{ textAlign: isBid ? "left" : "right", fontVariantNumeric: "tabular-nums" }}>{fmtBare(lvl.sizeSat)}</Box>
+    <Box sx={{ textAlign: isBid ? "left" : "right", fontVariantNumeric: "tabular-nums" }}>{fmtBareLocale(lvl.sizeSat)}</Box>
   );
   const meta = (
     <Box sx={{ display: "flex", alignItems: "center", justifyContent: isBid ? "flex-start" : "flex-end", gap: 0.5, width: 20 }}>
@@ -778,7 +668,7 @@ function LevelRow({
 
   return (
     <Tooltip
-      title={t("corkboard.book.depthTip", { sym: `${fmtBare(lvl.sizeSat)} ${baseSym}`, count: lvl.offers.length })}
+      title={t("corkboard.book.depthTip", { sym: `${fmtBareLocale(lvl.sizeSat)} ${baseSym}`, count: lvl.offers.length })}
       placement={isBid ? "left" : "right"}
     >
       <Box

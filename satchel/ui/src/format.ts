@@ -158,9 +158,12 @@ export function freshness(
   expiry: number,
 ): { cls: "" | "stale" | "expiring"; label: string } {
   const now = Math.floor(Date.now() / 1000);
-  const label = `posted ${ago(created)}`;
+  // Always surface the exact time-to-expiry (e.g. "expires in ~42m"), not a
+  // coarse "<1h" bucket — short-TTL offers live and die in minutes.
+  const exp = expiry ? ` · expires ${until(expiry)}` : "";
+  const label = `posted ${ago(created)}${exp}`;
   if (!created) return { cls: "stale", label };
-  if (expiry && expiry - now <= 3600) return { cls: "expiring", label: `${label} · expires <1h` };
+  if (expiry && expiry - now <= 3600) return { cls: "expiring", label };
   if (now - created > 6 * 3600) return { cls: "stale", label };
   return { cls: "", label };
 }

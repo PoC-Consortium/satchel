@@ -345,17 +345,6 @@ export const en = {
     boardSettings: "Configure in Settings",
     filterAll: "All",
     filterMine: "Mine",
-    mine: {
-      emptyTitle: "You haven't posted any offers",
-      emptyBody: "Offers you post appear here to manage and withdraw. Post one to get started.",
-      expiry: "Live — refreshes automatically; drops in ~{cur} if you go offline · ends in {fin}",
-      state: {
-        live: "Live",
-        taken: "Taken",
-        revoked: "Withdrawn",
-        expired: "Expired",
-      },
-    },
     offered: "{symbol} offered",
     noOffers: "No offers you can take right now",
     noOffersBody:
