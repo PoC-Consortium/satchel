@@ -23,16 +23,16 @@ Three moving parts, with a hard wall between them:
 
 ```
   ┌─────────────────────────────┐         ┌──────────────────────────┐
-  │  Your machine                │         │  Hosted (untrusted)      │
-  │                              │         │                          │
-  │  Satchel (desktop GUI)       │ signed  │  Nostr relays            │
-  │      │ JSON-RPC (loopback)   │ offers  │   (default transport)    │
-  │      ▼                       │   +     │                          │
-  │  pactd (swap engine)─────────┼────────▶│  ...or a Corkboard       │
-  │      │ owns BIP39 seed,      │ sealed  │   instance               │
-  │      │ keys, refunds         │  blobs  │   (self-hostable)        │
-  │      ▼                       │         │                          │
-  │  BTCX node + BTC backend     │         └──────────────────────────┘
+  │  Your machine               │         │  Hosted (untrusted)      │
+  │                             │         │                          │
+  │  Satchel (desktop GUI)      │ signed  │  Nostr relays            │
+  │      │ JSON-RPC (loopback)  │ offers  │   (default transport)    │
+  │      ▼                      │   +     │                          │
+  │  pactd (swap engine)────────┼────────►│  ...or a Corkboard       │
+  │      │ owns BIP39 seed,     │ sealed  │   instance               │
+  │      │ keys, refunds        │  blobs  │   (self-hostable)        │
+  │      ▼                      │         │                          │
+  │  BTCX node + BTC backend    │         └──────────────────────────┘
   └─────────────────────────────┘
 ```
 
@@ -63,15 +63,6 @@ posted on the **corkboard**, settled into your **satchel**. Deliberately no
 | [`satchel/`](satchel/) | **Satchel** | Desktop app (Tauri shell + React/Vite/TypeScript/MUI frontend). Bundles and supervises `pactd`; doubles as a light BTC wallet. Owns the GUI, never the swap logic. |
 | [`tools/`](tools/) | — | Dev tooling (e.g. `relay-prober` for Nostr relay eligibility) and playground scripts. |
 | [`docs/`](docs/) | — | Architecture, roadmap, and per-feature design docs. |
-
-## Hard constraints (apply to every component)
-
-1. **Zero changes to bitcoin-pocx core** — stock node, RPC/ZMQ only.
-2. **Keys never leave the user's machine** — hosted components see signed
-   offers and encrypted blobs only.
-3. **One engine, many faces** — swap logic exists exactly once, in Pact.
-4. **The transport never matches, executes, custodies, or charges** — humans
-   pick offers. This is load-bearing for the regulatory position.
 
 ## Building
 
