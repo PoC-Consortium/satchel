@@ -475,6 +475,27 @@ impl Engine {
 
     /// §9 step 0, initiator: allocate index, derive H, build `init`.
     /// `n_a`/`n_b` default per spec §7.3 when not given.
+    /// Refuse to advertise or take a swap we can't fund: the leg we'll have to
+    /// lock (the maker's `give`, or the taker's `get`) must already be covered
+    /// by the core wallet. Caught up front instead of failing later at fund
+    /// time — and it keeps un-fundable offers off the board. The on-chain fee is
+    /// paid on top from the wallet, so an exact-balance offer can still fail at
+    /// fund time; this catches the common "you don't have it" case.
+    fn ensure_can_fund(&self, network: Network, coin_id: &str, amount: u64) -> Result<()> {
+        // Best-effort: only refuse when we can actually read the balance and it's
+        // short. If it can't be read (coin unconfigured here, node unreachable,
+        // wallet not loaded), don't block — fund() is the hard backstop, and you
+        // couldn't have funded offline anyway. In the common case (node up, which
+        // post/take already require) this is a firm pre-flight check.
+        if let Ok(balance) = self.wallet_balance(network, coin_id) {
+            ensure!(
+                balance >= amount,
+                "insufficient {coin_id} balance to fund this swap: have {balance} sat, need {amount} sat"
+            );
+        }
+        Ok(())
+    }
+
     pub fn offer(
         &self,
         network: Network,
@@ -496,6 +517,8 @@ impl Engine {
             network,
         };
         ensure_pair_supported(&chain_a, &chain_b)?;
+        // We (the initiator) lock the `give` leg — refuse if we can't fund it.
+        self.ensure_can_fund(network, &give.0, give.1)?;
         let n_a = match n_a {
             Some(n) => n,
             None => self.confirmations_for(&chain_a)?,
@@ -2704,6 +2727,9 @@ impl Engine {
             network,
         };
         self.ensure_chains_live(&[&chain_a, &chain_b])?;
+        // We fund the `give` leg when this offer is taken — don't advertise a
+        // swap the core wallet can't cover.
+        self.ensure_can_fund(network, &give.0, give.1)?;
         let body = crate::board::OfferBody {
             protocol: proto,
             network: format!("{network:?}").to_lowercase(),
@@ -2876,6 +2902,8 @@ impl Engine {
         };
         ensure_pair_supported(&chain_a, &chain_b)?;
         self.ensure_chains_live(&[&chain_a, &chain_b])?;
+        // Taking means WE fund the maker's `get` leg — refuse if we can't.
+        self.ensure_can_fund(network, &body.get_asset, body.get_amount)?;
         self.store
             .put_pending_take(offer_id, &serde_json::to_string(&offer)?, local_now())?;
         let take = self.signed_envelope(
@@ -2941,6 +2969,9 @@ impl Engine {
             network,
         };
         ensure_pair_supported(&chain_a, &chain_b)?;
+        // We fund the `give` leg when the slip is taken — don't issue a slip
+        // the core wallet can't cover.
+        self.ensure_can_fund(network, &give.0, give.1)?;
         let proto = resolve_offer_protocol(&give.0, &get.0, network, protocol)?;
 
         let body = crate::board::OfferBody {
@@ -3012,6 +3043,8 @@ impl Engine {
         };
         ensure_pair_supported(&chain_a, &chain_b)?;
         self.ensure_chains_live(&[&chain_a, &chain_b])?;
+        // Taking means WE fund the maker's `get` leg — refuse if we can't.
+        self.ensure_can_fund(network, &body.get_asset, body.get_amount)?;
 
         self.store.put_pending_take(
             &offer.swap_id,

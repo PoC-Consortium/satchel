@@ -567,6 +567,25 @@ def test_chain_watched_funding(h):
         bob.stop()
 
 
+def test_balance_validation(h):
+    """An offer you can't fund is refused up front (not left to fail at fund
+    time / pollute the board with un-fundable offers). The other scenarios
+    already prove a fundable offer is accepted, so this only checks rejection."""
+    alice = Party("alicebal", h, h.workdir, "alice_pocx", "alice_btc").start()
+    try:
+        t2, t1 = regtest_timelocks(h)
+        m_init = msg(h.workdir, "bal_init.json")
+        # alice_pocx holds ~100 POCX; offering to GIVE a million is refused
+        # because the core wallet can't cover the leg we'd have to lock.
+        err = expect_fail(alice, "over-balance offer",
+                          "offer", "--give", "btcx:1000000.0", "--get", "btc:0.001",
+                          "--t1", str(t1), "--t2", str(t2), "--out", m_init)
+        assert "insufficient" in err.lower(), f"expected insufficient-balance error, got: {err}"
+        print("[e2e] balance-validation scenario OK")
+    finally:
+        alice.stop()
+
+
 def test_create_import_then_swap(h):
     """Phase B: neither party is auto-initialized. Alice creates a brand-new
     seed and Bob imports a known mnemonic — both through the seed-lifecycle
@@ -855,7 +874,7 @@ def main():
     failures = 0
     tests = (test_complete_swap, test_refund,
              test_daemon_autopilot_swap, test_daemon_autopilot_refund,
-             test_chain_watched_funding,
+             test_chain_watched_funding, test_balance_validation,
              test_create_import_then_swap, test_coin_setup, test_corkboard_swap,
              test_private_offer_swap)
     with Harness(keep=True) as h:
