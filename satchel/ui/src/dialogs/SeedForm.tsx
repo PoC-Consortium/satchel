@@ -81,6 +81,16 @@ export default function SeedForm({
   const [passphrase, setPassphrase] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // Regtest is a throwaway network — skip the "confirm you wrote it down"
+  // word-verification step there (pure friction when testing). getinfo carries
+  // the launch network even during first-run (AppContext.network isn't set yet
+  // at the wizard); default to NOT skipping if it can't be read.
+  const [skipVerify, setSkipVerify] = useState(false);
+  useEffect(() => {
+    rpc<{ network?: string }>("getinfo")
+      .then((gi) => setSkipVerify(gi.network === "regtest"))
+      .catch(() => {});
+  }, []);
 
   const words = mnemonic.trim() ? mnemonic.trim().split(/\s+/) : [];
   // Import path: words as lowercase chips for the Autocomplete value.
@@ -189,7 +199,7 @@ export default function SeedForm({
           <Button color="inherit" onClick={() => (presetMode ? onBack?.() : setStep("choose"))} sx={{ mr: "auto" }}>
             {t("wizard.back")}
           </Button>
-          <Button variant="contained" disabled={!ack || words.length === 0} onClick={() => setStep("verify")}>
+          <Button variant="contained" disabled={!ack || words.length === 0} onClick={() => setStep(skipVerify ? "passphrase" : "verify")}>
             {t("wizard.continue")}
           </Button>
         </DialogActions>
@@ -344,7 +354,7 @@ export default function SeedForm({
         {err && <ErrLine msg={err} />}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button color="inherit" onClick={() => setStep(mode === "create" ? "verify" : "enter")} sx={{ mr: "auto" }}>
+        <Button color="inherit" onClick={() => setStep(mode === "create" ? (skipVerify ? "reveal" : "verify") : "enter")} sx={{ mr: "auto" }}>
           {t("wizard.back")}
         </Button>
         <Button variant="contained" disabled={busy} onClick={() => void commit()}>
