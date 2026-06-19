@@ -82,6 +82,16 @@ class Corkboard:
                 self.proc.kill()
             self.proc = None
 
+    def reset(self):
+        """Bring the board back up on the same URL/port but backed by a FRESH,
+        empty DB — equivalent to an operator wipe / redeploy, while clients keep
+        their (now ahead-of-fresh-board) relay cursors. We switch to a new file
+        rather than unlink the old one, which Windows may still hold briefly."""
+        self.stop()
+        self._gen = getattr(self, "_gen", 0) + 1
+        self.db = os.path.join(os.path.dirname(self.db), f"corkboard-reset-{self._gen}.sqlite")
+        self.start()
+
 
 _next_port = [PACTD_PORT]
 
@@ -693,6 +703,51 @@ def test_coin_setup(h):
         alice.stop()
 
 
+def _drive_board_swap(h, maker, taker, want_completed):
+    """Post an offer, take it, and drive both daemons until each has at least
+    `want_completed` completed swaps. Used by the board-reset test to run two
+    swaps in a row and confirm the second one (post-reset) lands."""
+    offer_id = maker.rpc(
+        "boardpostoffer", f"btcx:{GIVE_POCX}", f"btc:{GET_BTC}", 4 * 3600, 2 * 3600,
+        "pact-htlc-v1")["offer_id"]
+    taker.rpc("boardtake", offer_id)
+    ca = cb = 0
+    for _ in range(18):
+        for party in (maker, taker):
+            party.rpc("tick")
+            h.pocx.generate(1, "alice_pocx")
+            h.btc.generate(1, "bob_btc")
+        ca = sum(1 for s in maker.rpc("listswaps") if s["state"] == "completed")
+        cb = sum(1 for s in taker.rpc("listswaps") if s["state"] == "completed")
+        if ca >= want_completed and cb >= want_completed:
+            return
+    raise AssertionError(
+        f"board swap #{want_completed} did not complete: maker={ca}, taker={cb}")
+
+
+def test_board_reset_recovery(h):
+    """A board wiped/redeployed under running clients must not strand them: their
+    relay cursors are now ahead of the fresh board's ids, but reset hygiene
+    re-serves from the start. Run a swap (advances cursors), WIPE the board DB,
+    then run a second swap with the same stale-cursor parties — it must complete.
+    (Without the fix the second swap's relay traffic is silently dropped.)"""
+    board = Corkboard(h.workdir)
+    board.start()
+    maker = Party("alicerst", h, h.workdir, "alice_pocx", "alice_btc",
+                  board_url=board.url, auto_fund=True).start()
+    taker = Party("bobrst", h, h.workdir, "bob_pocx", "bob_btc",
+                  board_url=board.url, auto_fund=True).start()
+    try:
+        _drive_board_swap(h, maker, taker, want_completed=1)   # advances relay cursors
+        board.reset()                                          # wipe board under the clients
+        _drive_board_swap(h, maker, taker, want_completed=2)   # stale cursors must self-heal
+        print("[e2e] board-reset recovery scenario OK")
+    finally:
+        maker.stop()
+        taker.stop()
+        board.stop()
+
+
 def test_corkboard_swap(h):
     """Phase 2 end to end: maker posts a signed offer on the Corkboard,
     taker takes it, the whole handshake travels through the blind relay,
@@ -876,7 +931,7 @@ def main():
              test_daemon_autopilot_swap, test_daemon_autopilot_refund,
              test_chain_watched_funding, test_balance_validation,
              test_create_import_then_swap, test_coin_setup, test_corkboard_swap,
-             test_private_offer_swap)
+             test_board_reset_recovery, test_private_offer_swap)
     with Harness(keep=True) as h:
         for test in tests:
             try:

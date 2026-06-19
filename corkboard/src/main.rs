@@ -238,6 +238,18 @@ async fn relay_poll(
     verified(&envelope, "relay_poll")?;
     let since = envelope.body["since_id"].as_i64().unwrap_or(0);
     let db = app.db.lock().expect("db mutex");
+    // Reset hygiene: if the caller's cursor is ahead of everything we still hold
+    // for them, the board was wiped/replaced since they last polled — serve from
+    // the start so a stale cursor can't silently swallow every message on the
+    // fresh board. ids are AUTOINCREMENT (never reused), so cursor > max only
+    // happens on a real DB reset, not on ordinary pruning. The poll is signed,
+    // so this only ever re-serves the caller's own mail.
+    let max_id: i64 = db.query_row(
+        "SELECT IFNULL(MAX(id), 0) FROM relay WHERE recipient = ?1",
+        params![envelope.from],
+        |row| row.get(0),
+    )?;
+    let since = if since > max_id { 0 } else { since };
     let mut stmt = db.prepare(
         "SELECT id, blob FROM relay WHERE recipient = ?1 AND id > ?2 ORDER BY id LIMIT 100",
     )?;
