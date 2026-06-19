@@ -40,6 +40,13 @@ pub trait ChainBackend {
     fn get_txout(&self, outpoint: &OutPoint, expected_spk: &ScriptBuf)
         -> Result<Option<TxOutInfo>>;
 
+    /// Find an unspent output paying `spk` (the locally derivable HTLC
+    /// scriptPubKey) — chain-watched funding detection for when the `funded`
+    /// relay message is absent or hasn't arrived. Returns the outpoint + its
+    /// info, or `None` if nothing pays `spk` yet. Like every backend read this
+    /// is a hint; callers re-verify value/script and apply the confirmation gate.
+    fn find_funding(&self, spk: &ScriptBuf) -> Result<Option<(OutPoint, TxOutInfo)>>;
+
     /// Locate the output of `txid` paying `script_pubkey_hex` (funding-tx
     /// vout discovery; the tx is in our own node's mempool/wallet).
     fn find_vout(&self, txid: &str, script_pubkey_hex: &str) -> Result<u32>;
@@ -161,6 +168,43 @@ impl ChainBackend for CoreRpcBackend {
                 .to_string(),
             confirmations: result["confirmations"].as_u64().unwrap_or(0),
         }))
+    }
+
+    fn find_funding(&self, spk: &ScriptBuf) -> Result<Option<(OutPoint, TxOutInfo)>> {
+        // `scantxoutset` reads the UTXO set (no -txindex, no wallet); a
+        // `raw(<spk>)` descriptor matches the exact HTLC script. It returns
+        // confirmed outputs only — fine, since we gate on confirmations anyway.
+        let desc = format!("raw({})", hex::encode(spk.as_bytes()));
+        let result = self
+            .rpc
+            .call("scantxoutset", &[json!("start"), json!([desc])])?;
+        let tip = result["height"].as_u64().unwrap_or(0);
+        let Some(u) = result["unspents"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .next()
+        else {
+            return Ok(None);
+        };
+        let txid = Txid::from_str(u["txid"].as_str().context("scantxoutset: no txid")?)?;
+        let vout = u["vout"].as_u64().context("scantxoutset: no vout")? as u32;
+        let btc_value = u["amount"].as_f64().context("scantxoutset: no amount")?;
+        let height = u["height"].as_u64().unwrap_or(0);
+        let confirmations = if height > 0 && tip >= height {
+            tip - height + 1
+        } else {
+            0
+        };
+        Ok(Some((
+            OutPoint { txid, vout },
+            TxOutInfo {
+                value_sat: (btc_value * 1e8).round() as u64,
+                script_pubkey_hex: hex::encode(spk.as_bytes()),
+                confirmations,
+            },
+        )))
     }
 
     fn find_vout(&self, txid: &str, script_pubkey_hex: &str) -> Result<u32> {
@@ -436,6 +480,37 @@ impl ChainBackend for ElectrumBackend {
         Ok(None)
     }
 
+    fn find_funding(&self, spk: &ScriptBuf) -> Result<Option<(OutPoint, TxOutInfo)>> {
+        let utxos = self.raw(
+            "blockchain.scripthash.listunspent",
+            vec![electrum_client::Param::String(Self::scripthash(spk))],
+        )?;
+        let (tip_height, _) = self.tip()?;
+        let Some(utxo) = utxos
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .next()
+        else {
+            return Ok(None);
+        };
+        let txid = Txid::from_str(
+            utxo["tx_hash"]
+                .as_str()
+                .context("listunspent: no tx_hash")?,
+        )?;
+        let vout = utxo["tx_pos"].as_u64().context("listunspent: no tx_pos")? as u32;
+        Ok(Some((
+            OutPoint { txid, vout },
+            TxOutInfo {
+                value_sat: utxo["value"].as_u64().context("listunspent: no value")?,
+                script_pubkey_hex: hex::encode(spk.as_bytes()),
+                confirmations: self.confirmations(utxo["height"].as_i64().unwrap_or(0), tip_height),
+            },
+        )))
+    }
+
     fn find_vout(&self, txid: &str, script_pubkey_hex: &str) -> Result<u32> {
         let tx = self.get_raw_tx(txid)?;
         let wanted = hex::decode(script_pubkey_hex)?;
@@ -653,6 +728,24 @@ impl ChainBackend for MultiBackend {
             }
         }
         Ok(agreed)
+    }
+
+    fn find_funding(&self, spk: &ScriptBuf) -> Result<Option<(OutPoint, TxOutInfo)>> {
+        // Discovery only — first backend that sees a paying output wins. The
+        // caller re-verifies the located outpoint via `get_txout` (which demands
+        // backend agreement), so one lying server can't substitute a funding.
+        let mut last_err = None;
+        for backend in &self.backends {
+            match backend.find_funding(spk) {
+                Ok(Some(found)) => return Ok(Some(found)),
+                Ok(None) => {}
+                Err(err) => last_err = Some(err),
+            }
+        }
+        match last_err {
+            Some(err) if self.backends.len() == 1 => Err(err),
+            _ => Ok(None),
+        }
     }
 
     fn find_vout(&self, txid: &str, script_pubkey_hex: &str) -> Result<u32> {

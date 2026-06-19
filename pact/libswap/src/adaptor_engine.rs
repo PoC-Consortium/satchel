@@ -200,6 +200,23 @@ mod tests {
                     confirmations: 1,
                 }))
         }
+        fn find_funding(&self, spk: &ScriptBuf) -> Result<Option<(OutPoint, TxOutInfo)>> {
+            Ok(self
+                .utxos
+                .borrow()
+                .iter()
+                .find(|(_, o)| &o.script_pubkey == spk)
+                .map(|(op, o)| {
+                    (
+                        *op,
+                        TxOutInfo {
+                            value_sat: o.value.to_sat(),
+                            script_pubkey_hex: hex::encode(o.script_pubkey.as_bytes()),
+                            confirmations: 1,
+                        },
+                    )
+                }))
+        }
         fn find_vout(&self, _txid: &str, _spk_hex: &str) -> Result<u32> {
             Ok(0)
         }

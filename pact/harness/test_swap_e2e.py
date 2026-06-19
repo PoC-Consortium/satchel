@@ -282,6 +282,16 @@ def regtest_timelocks(h):
     return now + 2 * 3600, now + 4 * 3600   # (t2, t1)
 
 
+def drive_until(party, cond, tries=20):
+    """Tick `party` repeatedly until cond(events) holds; returns those events.
+    Mining is the caller's job — this only drives the scheduler."""
+    for _ in range(tries):
+        events = party.tick()
+        if cond(events):
+            return events
+    raise AssertionError(f"{party.name}: condition not met after {tries} ticks")
+
+
 def handshake_and_fund(h, alice, bob, prefix):
     """Shared plumbing: offer/accept handshake, fund both legs. Returns
     (swap_id, funded_a_file, funded_b_file)."""
@@ -468,8 +478,12 @@ def test_daemon_autopilot_swap(h):
 
 
 def test_daemon_autopilot_refund(h):
-    """Both parties walk away after funding; the scheduler alone reclaims
-    both legs after the timelocks — the roadmap's refund-UX requirement."""
+    """Both parties go OFFLINE after funding; when their schedulers return after
+    the timelocks, each reclaims its own leg — the roadmap's refund-UX
+    requirement. NOTE: funding is chain-watched, so an *online* initiator would
+    correctly COMPLETE the swap once it sees chain B funded (covered by the
+    autopilot *swap* test). "Walking away" therefore means offline here: we do
+    NOT tick through the completion window, only after the timelocks pass."""
     alice = Party("alice4", h, h.workdir, "alice_pocx", "alice_btc").start()
     bob = Party("bob4", h, h.workdir, "bob_pocx", "bob_btc").start()
     try:
@@ -477,12 +491,8 @@ def test_daemon_autopilot_refund(h):
 
         sid, m_funded_a, m_funded_b = handshake_and_fund(h, alice, bob, "31")
 
-        # Before the timelocks: the scheduler must do nothing (no premature
-        # refunds, no bogus redeems).
-        for p in (alice, bob):
-            events = p.tick()
-            assert events == [], f"scheduler acted early for {p.name}: {events}"
-
+        # Simulate both offline through the completion window: jump past the
+        # timelocks WITHOUT ticking, then let each scheduler reclaim its leg.
         h.advance_time(5 * 3600)
 
         events = bob.tick()
@@ -498,6 +508,60 @@ def test_daemon_autopilot_refund(h):
         assert after["bob_pocx"] <= before["bob_pocx"] + FEE_SLACK
         assert after["alice_btc"] <= before["alice_btc"] + FEE_SLACK
         print("[e2e] daemon-autopilot refund scenario OK")
+    finally:
+        alice.stop()
+        bob.stop()
+
+
+def test_chain_watched_funding(h):
+    """The `funded` relay messages never arrive after the handshake, yet the
+    swap completes — driven entirely by chain-watched funding detection in
+    tick(): each leg is discovered on-chain by its derivable HTLC script. This
+    is the robustness guarantee: no single post-init message is load-bearing."""
+    alice = Party("alicecw", h, h.workdir, "alice_pocx", "alice_btc").start()  # initiator
+    bob = Party("bobcw", h, h.workdir, "bob_pocx", "bob_btc").start()          # participant
+    try:
+        before = balances(h)
+        t2, t1 = regtest_timelocks(h)
+        m_init = msg(h.workdir, "cw_init.json")
+        m_accept = msg(h.workdir, "cw_accept.json")
+        # funded_* envelopes are written but NEVER delivered to the counterparty.
+        m_dump_a = msg(h.workdir, "cw_funded_a.json")
+        m_dump_b = msg(h.workdir, "cw_funded_b.json")
+
+        # Handshake (init/accept) only.
+        alice.cli("offer", "--give", f"btcx:{GIVE_POCX}", "--get", f"btc:{GET_BTC}",
+                  "--t1", str(t1), "--t2", str(t2), "--out", m_init)
+        sid = swap_id_from(m_init)
+        bob.cli("accept", "--in", m_init, "--out", m_accept)
+        alice.cli("recv", "--in", m_accept)
+
+        # Alice funds chain A; her funded_a message is NEVER given to Bob.
+        alice.cli("fund", "--swap", sid, "--out", m_dump_a)
+        h.pocx.generate(1, "alice_pocx")
+
+        # Bob discovers chain A by its script (no message) → FundedA, then funds
+        # chain B; his funded_b message is NEVER given to Alice.
+        drive_until(bob, lambda evs: any(e["action"] == "funded-a" for e in evs))
+        bob.cli("fund", "--swap", sid, "--out", m_dump_b)
+        h.btc.generate(1, "bob_btc")
+
+        # Alice discovers chain B by its script and auto-redeems (revealing s);
+        # she may tick once for funded-b then again for the redeem.
+        drive_until(alice, lambda evs: any(e["action"] == "auto-redeem" for e in evs))
+        h.btc.generate(1, "bob_btc")  # confirm Alice's chain-B redeem (reveal)
+
+        # Bob extracts the preimage from chain B and redeems chain A.
+        drive_until(bob, lambda evs: any(e["action"] == "auto-redeem" for e in evs))
+        h.pocx.generate(1, "alice_pocx")
+
+        # Completed (not refunded): both HTLCs spent and Bob received POCX.
+        assert_htlc_spent(h.pocx, m_dump_a, "chain-A")
+        assert_htlc_spent(h.btc, m_dump_b, "chain-B")
+        after = balances(h)
+        assert after["bob_pocx"] >= before["bob_pocx"] + float(GIVE_POCX) - FEE_SLACK, \
+            f"bob did not receive POCX: {before} -> {after}"
+        print("[e2e] chain-watched funding (no funded messages) scenario OK")
     finally:
         alice.stop()
         bob.stop()
@@ -791,6 +855,7 @@ def main():
     failures = 0
     tests = (test_complete_swap, test_refund,
              test_daemon_autopilot_swap, test_daemon_autopilot_refund,
+             test_chain_watched_funding,
              test_create_import_then_swap, test_coin_setup, test_corkboard_swap,
              test_private_offer_swap)
     with Harness(keep=True) as h:

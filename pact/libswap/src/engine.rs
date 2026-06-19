@@ -1723,52 +1723,55 @@ impl Engine {
                 self.swap_params(&rec)?;
             }
             "funded" => {
+                // The `funded` message is a pointer HINT now, not the sole
+                // authority. We record where the counterparty's HTLC funding is
+                // (so tick() can skip the address scan) and advance synchronously
+                // *iff* the output is already visible, verifies, and is confirmed
+                // — the low-latency happy path. A not-yet-confirmed or missing
+                // funding is NOT an error here, so it no longer exhausts relay
+                // retries and drops the message; tick() (chain-watched) advances
+                // it later, and also rediscovers the funding by its derivable
+                // script if this message is ever lost.
                 let body: FundedBody = serde_json::from_value(envelope.body.clone())
                     .context("malformed funded body")?;
-                let params = self.swap_params(&rec)?;
                 let outpoint = OutPoint {
                     txid: bitcoin::Txid::from_str(&body.txid).context("funded: bad txid")?,
                     vout: body.vout,
                 };
-                // §6.1: the message is a pointer, not a proof — verify the
-                // output against the locally reconstructed script.
+                let params = self.swap_params(&rec)?;
                 let (chain, htlc, amount, min_conf) = match body.chain.as_str() {
                     "a" => (&rec.chain_a, params.htlc_a()?, rec.amount_a, rec.n_a),
                     "b" => (&rec.chain_b, params.htlc_b()?, rec.amount_b, rec.n_b),
                     other => bail!("funded: unknown chain {other:?}"),
                 };
-                let backend = self.backend(chain)?;
-                let htlc_spk = htlc.script_pubkey();
-                let txout = backend
-                    .get_txout(&outpoint, &htlc_spk)?
-                    .context("funded: outpoint not found or already spent")?;
-                let expected_spk = hex::encode(htlc_spk.as_bytes());
-                ensure!(
-                    txout.script_pubkey_hex == expected_spk,
-                    "funded: output script does not match the reconstructed HTLC (spec §5)"
-                );
-                ensure!(
-                    txout.value_sat == amount,
-                    "funded: output value {} != agreed amount {amount} (spec §6.1)",
-                    txout.value_sat
-                );
-                ensure!(
-                    txout.confirmations >= u64::from(min_conf),
-                    "funded: {} confirmations < required {min_conf} (spec §7.3)",
-                    txout.confirmations
-                );
+                // Record the pointer regardless.
                 match body.chain.as_str() {
                     "a" => {
-                        rec.htlc_a_txid = Some(body.txid);
+                        rec.htlc_a_txid = Some(body.txid.clone());
                         rec.htlc_a_vout = Some(body.vout);
-                        rec.state = State::FundedA;
                     }
                     _ => {
-                        rec.htlc_b_txid = Some(body.txid);
+                        rec.htlc_b_txid = Some(body.txid.clone());
                         rec.htlc_b_vout = Some(body.vout);
-                        rec.htlc_b_height =
-                            Some(backend.tip_height()?.saturating_sub(txout.confirmations));
-                        rec.state = State::FundedB;
+                    }
+                }
+                // §6.1: the message is a pointer, not a proof — verify the output
+                // against the locally reconstructed script before advancing.
+                let backend = self.backend(chain)?;
+                let htlc_spk = htlc.script_pubkey();
+                if let Some(txout) = backend.get_txout(&outpoint, &htlc_spk)? {
+                    if txout.script_pubkey_hex == hex::encode(htlc_spk.as_bytes())
+                        && txout.value_sat == amount
+                        && txout.confirmations >= u64::from(min_conf)
+                    {
+                        match body.chain.as_str() {
+                            "a" => rec.state = State::FundedA,
+                            _ => {
+                                rec.htlc_b_height =
+                                    Some(backend.tip_height()?.saturating_sub(txout.confirmations));
+                                rec.state = State::FundedB;
+                            }
+                        }
                     }
                 }
             }
@@ -2103,6 +2106,77 @@ impl Engine {
     /// actions, never messaging: auto-redeem when a redeem is safe and
     /// due, auto-refund once MTP passes T, bookkeeping when our final tx
     /// confirms. Errors on one swap never block the others.
+    /// Find and verify the HTLC funding for leg `leg` ("a"/"b"): try the
+    /// recorded pointer (from the `funded` message) first, else discover it by
+    /// the locally reconstructed HTLC scriptPubKey (the chain-watched fallback,
+    /// so a lost `funded` message can't stall the swap). Returns (outpoint,
+    /// confirmations) for an output whose script AND value match the agreed
+    /// HTLC, or None if none is visible yet. The value+script match makes a
+    /// wrong pointer or a stray same-address payment harmless.
+    fn locate_funding(&self, rec: &SwapRecord, leg: &str) -> Result<Option<(OutPoint, u64)>> {
+        let params = self.swap_params(rec)?;
+        let (chain, htlc, amount, txid, vout) = match leg {
+            "a" => (
+                &rec.chain_a,
+                params.htlc_a()?,
+                rec.amount_a,
+                rec.htlc_a_txid.as_deref(),
+                rec.htlc_a_vout,
+            ),
+            _ => (
+                &rec.chain_b,
+                params.htlc_b()?,
+                rec.amount_b,
+                rec.htlc_b_txid.as_deref(),
+                rec.htlc_b_vout,
+            ),
+        };
+        let spk = htlc.script_pubkey();
+        let expected_spk = hex::encode(spk.as_bytes());
+        let backend = self.backend(chain)?;
+
+        // 1) Message pointer (fast path).
+        if let (Some(txid), Some(vout)) = (txid, vout) {
+            let op = OutPoint {
+                txid: bitcoin::Txid::from_str(txid)?,
+                vout,
+            };
+            if let Some(info) = backend.get_txout(&op, &spk)? {
+                if info.script_pubkey_hex == expected_spk && info.value_sat == amount {
+                    return Ok(Some((op, info.confirmations)));
+                }
+            }
+            // Pointer missing/spent/mismatched → fall through to a chain scan.
+        }
+        // 2) Chain-watched discovery by the derivable HTLC script. Re-read via
+        //    get_txout (MultiBackend demands cross-backend agreement there)
+        //    before trusting a discovered output.
+        if let Some((op, _)) = backend.find_funding(&spk)? {
+            if let Some(info) = backend.get_txout(&op, &spk)? {
+                if info.script_pubkey_hex == expected_spk && info.value_sat == amount {
+                    return Ok(Some((op, info.confirmations)));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// Timelock-relative safety deadline for the participant waiting on the
+    /// chain-A funding (spec §7.3/§7.4): give up if it has not confirmed within
+    /// ~25% of the window to our own chain-B refund (T2). Waiting longer would
+    /// compress the rest of the swap (fund B, let the initiator redeem B before
+    /// T2) into an unsafe window. Nothing is locked on our side at `accepted`,
+    /// so the resulting abort costs nothing. A pre-C8 record (created_at == 0)
+    /// defers to the flat PRE_FUNDING_TIMEOUT_SECS backstop instead.
+    fn funding_wait_expired(&self, rec: &SwapRecord) -> bool {
+        if rec.created_at == 0 {
+            return false;
+        }
+        let window = u64::from(rec.t2).saturating_sub(rec.created_at);
+        let deadline = rec.created_at + window / 4;
+        local_now() >= deadline
+    }
+
     pub fn tick(&self) -> Vec<TickEvent> {
         let records = match self.store.list() {
             Ok(records) => records,
@@ -2218,8 +2292,33 @@ impl Engine {
                 }
                 self.try_refund_due(rec, "a")
             }
-            // Alice funded chain A but chain B never (verifiably) appeared.
-            (Role::Initiator, State::FundedA) => self.try_refund_due(rec, "a"),
+            // Alice funded chain A; while chain B can still be redeemed safely
+            // (before T2) watch chain B for Bob's funding — the `funded` message
+            // is only a hint now — and advance to FundedB once it is
+            // n_b-confirmed, so the FundedB arm above completes it. Once that
+            // window has closed (or chain B never appeared) fall back to the T1
+            // refund of chain A rather than chase a redeem we can't finish.
+            (Role::Initiator, State::FundedA) => {
+                let backend_b = self.backend(&rec.chain_b)?;
+                if backend_b.tip_median_time()? < u64::from(rec.t2) {
+                    if let Some((outpoint, confs)) = self.locate_funding(rec, "b")? {
+                        if confs >= u64::from(rec.n_b) {
+                            let mut updated = rec.clone();
+                            updated.htlc_b_txid = Some(outpoint.txid.to_string());
+                            updated.htlc_b_vout = Some(outpoint.vout);
+                            updated.htlc_b_height =
+                                Some(backend_b.tip_height()?.saturating_sub(confs));
+                            updated.state = State::FundedB;
+                            self.store.put(&updated)?;
+                            return event(
+                                "funded-b",
+                                "chain-B HTLC confirmed (chain-watched)".into(),
+                            );
+                        }
+                    }
+                }
+                self.try_refund_due(rec, "a")
+            }
             // Alice's redeem broadcast: mark completed once it confirms;
             // fee-bump while it does not (§7.4: the reveal must not linger
             // in a mempool as T2 approaches).
@@ -2291,6 +2390,46 @@ impl Engine {
                     return Ok(None);
                 }
                 self.try_refund_due(rec, "b")
+            }
+            // Bob waiting on Alice's chain-A funding. The `funded` message is a
+            // hint; we detect (or rediscover) the chain-A HTLC by its derivable
+            // script and advance once it is n_a-confirmed, then fund chain B
+            // (fund() re-verifies chain A as a reorg guard before committing).
+            // If it has not confirmed by the timelock-relative safety deadline,
+            // abort cleanly — nothing is locked on our side at `accepted`.
+            (Role::Participant, State::Accepted) => {
+                if let Some((outpoint, confs)) = self.locate_funding(rec, "a")? {
+                    if confs >= u64::from(rec.n_a) {
+                        let mut updated = rec.clone();
+                        updated.htlc_a_txid = Some(outpoint.txid.to_string());
+                        updated.htlc_a_vout = Some(outpoint.vout);
+                        updated.state = State::FundedA;
+                        self.store.put(&updated)?;
+                        if self.auto_fund {
+                            let (funded, env) = self.fund(&updated.swap_id)?;
+                            if let Some(cp) = funded.counterparty_identity.clone() {
+                                // Best-effort: the initiator also chain-watches.
+                                let _ = self.relay_send_all(&cp, &env);
+                            }
+                            return event("auto-fund", "chain-A confirmed; funded chain B".into());
+                        }
+                        return event(
+                            "funded-a",
+                            "chain-A HTLC confirmed; ready to fund chain B".into(),
+                        );
+                    }
+                }
+                if self.funding_wait_expired(rec) {
+                    self.abort(
+                        &rec.swap_id,
+                        "chain-A funding not confirmed before the safety deadline",
+                    )?;
+                    return event(
+                        "abort-timeout",
+                        "chain-A funding not confirmed in time; aborted (nothing locked)".into(),
+                    );
+                }
+                Ok(None)
             }
             // C8: a swap stalled in a PRE-FUNDING state (`created`/`accepted`)
             // past the timeout is auto-aborted. Nothing is locked on-chain
