@@ -345,7 +345,20 @@ impl Store {
             Some(pass) => encrypt_seed(phrase, pass)?,
             None => format!("{phrase}\n"),
         };
-        std::fs::write(&seed_path, contents)?;
+        // L5: write atomically (temp file + fsync + rename) — a plain
+        // truncating write can leave a corrupt/partial seed on a crash, and
+        // there is no backup copy. The rename is atomic on the same dir, so the
+        // seed file is only ever observed fully written or not at all.
+        let tmp_path = seed_path.with_extension("seed.tmp");
+        {
+            use std::io::Write;
+            let mut f = std::fs::File::create(&tmp_path)
+                .with_context(|| format!("creating {}", tmp_path.display()))?;
+            f.write_all(contents.as_bytes())?;
+            f.sync_all()?; // flush to disk before the rename
+        }
+        std::fs::rename(&tmp_path, &seed_path)
+            .with_context(|| format!("installing seed at {}", seed_path.display()))?;
         self.passphrase = pass.map(str::to_string);
         Ok(())
     }
