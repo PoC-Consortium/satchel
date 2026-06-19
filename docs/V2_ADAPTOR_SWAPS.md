@@ -263,6 +263,16 @@ types differ in what is possible, and `adaptor_keep_moving` reflects that:
   dropped mempool entry. This matches the reference adaptor-swap engine
   (COMIT `xmr-btc-swap`), which likewise pre-signs at a fixed fee, never RBFs a
   cooperative spend, and leans on generous timelocks.
+  - **Interim mitigation (M2, shipped).** The redeem feerate is no longer a
+    hardcoded 2 sat/vB: the initiator fixes `redeem_feerate_a`/`redeem_feerate_b`
+    in the signed `init` from her live estimators (6-block estimate ×3,
+    over-provisioned because it is unbumpable), per chain; the participant
+    bounds-checks them (≤ 500 sat/vB) and stores the same values, so both build
+    byte-identical redeem txs. Regtest keeps the legacy 2 sat/vB. This removes
+    the "guaranteed-stuck below the mempool floor" failure mode but does **not**
+    make the redeem bumpable after signing — if the fee market spikes between
+    `init` and the redeem it can still underpay. The designs below are the full
+    fix and remain the reason v2 stays mainnet-gated.
 
 ### Making the cooperative redeem bumpable (design suggestion)
 
