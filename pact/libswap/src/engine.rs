@@ -2054,22 +2054,11 @@ impl Engine {
         let txid = backend.wallet_send(&address, amount)?;
         let vout = backend.find_vout(&txid, &hex::encode(htlc.script_pubkey().as_bytes()))?;
 
-        // §6.3: sign the refund NOW and persist it with the record, so a
-        // scheduler can reclaim funds after T with no keys re-derived and
-        // no human present.
-        let outpoint = OutPoint {
-            txid: bitcoin::Txid::from_str(&txid)?,
-            vout,
-        };
-        let seed = self.store.seed()?;
-        let key = seed.swap_secret_key(coin_of(&chain)?, rec.swap_index)?;
-        let destination = backend
-            .params()
-            .parse_address(&backend.wallet_new_address()?)?;
-        let fee = spend_fee_sat(backend.fee_rate_sat_per_vb()?, REFUND_TX_VSIZE);
-        let refund_tx = build_refund_tx(&htlc, outpoint, amount, destination, fee, &key)?;
-        rec.refund_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&refund_tx));
-
+        // L2: persist the funding pointer IMMEDIATELY after the broadcast,
+        // before the refund-building RPCs below. A crash between `wallet_send`
+        // and this write would otherwise leave the funding on-chain with no
+        // local record (recoverable only by a chain re-scan / seed rebuild);
+        // persisting first shrinks that window to this single `put`.
         match leg {
             "a" => {
                 rec.htlc_a_txid = Some(txid.clone());
@@ -2083,6 +2072,24 @@ impl Engine {
                 rec.state = State::FundedB;
             }
         }
+        self.store.put(&rec)?;
+
+        // §6.3: sign the refund NOW and persist it too, so a scheduler can
+        // reclaim funds after T with no keys re-derived and no human present.
+        // A separate write: if it fails, the pointer above is already durable
+        // (refund() rebuilds the refund from the seed as a fallback).
+        let outpoint = OutPoint {
+            txid: bitcoin::Txid::from_str(&txid)?,
+            vout,
+        };
+        let seed = self.store.seed()?;
+        let key = seed.swap_secret_key(coin_of(&chain)?, rec.swap_index)?;
+        let destination = backend
+            .params()
+            .parse_address(&backend.wallet_new_address()?)?;
+        let fee = spend_fee_sat(backend.fee_rate_sat_per_vb()?, REFUND_TX_VSIZE);
+        let refund_tx = build_refund_tx(&htlc, outpoint, amount, destination, fee, &key)?;
+        rec.refund_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&refund_tx));
         self.store.put(&rec)?;
 
         let body = FundedBody {
