@@ -1443,6 +1443,20 @@ impl Engine {
                 rec.state = AdaptorState::RedeemedB;
             }
             Role::Participant => {
+                // §7.4: Bob MUST redeem leg A before `T1 − 1h` (margin 0 on
+                // regtest) — past that his redeem races Alice's T1 refund, and
+                // the v2 cooperative redeem is unbumpable, so racing is futile.
+                // Mirrors the v1 participant guard in `redeem`.
+                let net = rec.chain_a.network;
+                let (_, _, redeem_a_margin) = action_margins(net);
+                let mtp_a = self.backend(&rec.chain_a)?.tip_median_time()?;
+                let now = deadline_clock(net, local_now(), mtp_a);
+                ensure!(
+                    action_safe(now, redeem_a_margin, rec.t1),
+                    "now {now} is within {}h of T1 {} — redeem would race Alice's refund (spec §7.4)",
+                    redeem_a_margin / 3600,
+                    rec.t1
+                );
                 let p = self.adaptor_params(&rec)?;
                 let leg_b = p.leg_b(&secp)?;
                 let outpoint_b = OutPoint {
@@ -1689,20 +1703,29 @@ impl Engine {
             Role::Participant => {
                 // Claim leg A as soon as Alice's leg-B redeem reveals t. No
                 // depth gate: once t is on chain it is valid even if that spend
-                // later reorgs, so racing to redeem A is always correct.
+                // later reorgs, so racing to redeem A is always correct — but
+                // only while inside Bob's §7.4 redeem deadline (T1 − 1h, margin
+                // 0 on regtest); past it the redeem races Alice's refund and
+                // (being unbumpable) cannot win, so leave it (leg B is gone).
                 if rec.state == Signed && both_funded {
-                    let op_b = outpoint(&rec.funding_b_txid, rec.funding_b_vout)?;
-                    let spk_b = p.leg_b(&secp)?.script_pubkey(&secp)?;
-                    if self
-                        .backend(&rec.chain_b)?
-                        .find_spend_witness(&op_b, &spk_b, 0)?
-                        .is_some()
-                    {
-                        let r = self.adaptor_redeem(&rec.swap_id)?;
-                        return ev(
-                            "adaptor-redeem-a",
-                            format!("extracted t; state {:?}", r.state),
-                        );
+                    let net = rec.chain_a.network;
+                    let (_, _, redeem_a_margin) = action_margins(net);
+                    let now =
+                        deadline_clock(net, local_now(), self.backend(&rec.chain_a)?.tip_median_time()?);
+                    if action_safe(now, redeem_a_margin, rec.t1) {
+                        let op_b = outpoint(&rec.funding_b_txid, rec.funding_b_vout)?;
+                        let spk_b = p.leg_b(&secp)?.script_pubkey(&secp)?;
+                        if self
+                            .backend(&rec.chain_b)?
+                            .find_spend_witness(&op_b, &spk_b, 0)?
+                            .is_some()
+                        {
+                            let r = self.adaptor_redeem(&rec.swap_id)?;
+                            return ev(
+                                "adaptor-redeem-a",
+                                format!("extracted t; state {:?}", r.state),
+                            );
+                        }
                     }
                 }
                 // Else reclaim leg B after T2 if still unspent (only while Signed,
@@ -4246,6 +4269,25 @@ mod tests {
         // Regtest margin 0 collapses to the old "now < deadline" rule.
         assert!(action_safe(u64::from(t2) - 1, 0, t2));
         assert!(!action_safe(u64::from(t2), 0, t2));
+    }
+
+    #[test]
+    fn redeem_a_guard_uses_t1_margin_like_v1() {
+        // M3: the v2 participant's leg-A claim is gated on the §7.4 redeem-A
+        // margin (the 3rd slot, 1h on mainnet/testnet, 0 on regtest) against T1
+        // — the same predicate the v1 participant `redeem` uses, so v1 and v2
+        // stop racing Alice's refund at the same point.
+        let t1: u32 = 1_780_000_000;
+        let (_, _, redeem_a_margin) = action_margins(Network::Mainnet);
+        assert_eq!(redeem_a_margin, 3600);
+        // More than 1h before T1: safe to claim leg A.
+        assert!(action_safe(u64::from(t1) - 2 * 3600, redeem_a_margin, t1));
+        // Inside the final hour: refused (would race the T1 refund).
+        assert!(!action_safe(u64::from(t1) - 1800, redeem_a_margin, t1));
+        // Regtest margin 0: claim allowed up to T1 (e2e completes well before).
+        let (_, _, rt_margin) = action_margins(Network::Regtest);
+        assert!(action_safe(u64::from(t1) - 1, rt_margin, t1));
+        assert!(!action_safe(u64::from(t1), rt_margin, t1));
     }
 
     #[test]
