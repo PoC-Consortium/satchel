@@ -77,7 +77,9 @@ Engine status (proven by the regtest e2e suite):
   unencrypted. `unlock` decrypts an encrypted seed for the session.
 - **Network policy**: regtest free; `--network testnet` allowed (spec §7.3
   timelock/confirmation minimums enforced — an unencrypted testnet seed is
-  warned, not refused); mainnet refused pending external review.
+  warned, not refused); mainnet open for v1 (HTLC) swaps while the protocol +
+  implementation are under audit — v2 adaptor swaps stay gated off mainnet
+  until their audit completes.
 
 - **Electrum backend**: `tcp://host:port` / `ssl://host:port` URLs in the
   comma-separated backend lists select the Electrum protocol — works

@@ -400,10 +400,12 @@ impl Engine {
         backend.tip_height()
     }
 
-    /// Network admission policy: regtest is free; testnet permits a
-    /// plaintext seed but warns (encryption is the user's choice, as in
-    /// Bitcoin Core); mainnet stays closed until the protocol and
-    /// implementation have had external review.
+    /// Network admission policy: regtest is free; testnet and mainnet permit a
+    /// plaintext seed but warn (encryption is the user's choice, as in Bitcoin
+    /// Core). Mainnet was closed pending external review and is now open for v1
+    /// (HTLC) swaps while the protocol + implementation are under audit; v2
+    /// adaptor swaps stay separately gated off mainnet (registry::adaptor_allowed
+    /// / ADAPTOR_MAINNET_ENABLED) until their audit completes.
     fn ensure_network_allowed(&self, network: Network) -> Result<()> {
         match network {
             Network::Regtest => Ok(()),
@@ -424,7 +426,21 @@ impl Engine {
                 Ok(())
             }
             Network::Mainnet => {
-                anyhow::bail!("mainnet is disabled pending external review (see pact/README.md)")
+                // Was refused pending external review; the protocol + implementation
+                // are now under audit, so mainnet (v1 HTLC) is enabled. An
+                // unencrypted hot seed is far riskier here than on testnet —
+                // warn loudly, but permit it (Bitcoin-Core-style: your funds,
+                // your responsibility). NOTE: v2 adaptor swaps remain separately
+                // gated off mainnet via registry::ADAPTOR_MAINNET_ENABLED until
+                // their audit completes.
+                if !self.store.seed_is_encrypted()? {
+                    eprintln!(
+                        "warning: running MAINNET with an UNENCRYPTED seed — anyone with \
+                         file/host access gets your transit keys + identity, and these are \
+                         REAL FUNDS. Encrypting the seed is strongly recommended."
+                    );
+                }
+                Ok(())
             }
         }
     }
@@ -4042,13 +4058,25 @@ mod tests {
     }
 
     #[test]
-    fn mainnet_is_refused() {
+    fn mainnet_allowed_after_audit_gate_lifted() {
+        // Mainnet was refused pending external review; with the protocol + impl
+        // under audit the gate is lifted, so a valid-profile v1 offer now
+        // succeeds entirely offline (like testnet/regtest).
         let (engine, dir) = engine_with("mainnet", Some("pw"));
         let now = local_now() as u32;
-        let err = offer_on(&engine, Network::Mainnet, now + 10 * 3600, now + 5 * 3600)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("mainnet is disabled"), "{err}");
+        let (record, _) = engine
+            .offer(
+                Network::Mainnet,
+                ("btcx".into(), 100),
+                ("btc".into(), 100),
+                now + 10 * 3600,
+                now + 5 * 3600,
+                None,
+                None,
+            )
+            .expect("mainnet v1 offer is now permitted (audit gate lifted)");
+        assert_eq!(record.chain_a.network, Network::Mainnet);
+        assert_eq!((record.n_a, record.n_b), (10, 6));
         std::fs::remove_dir_all(&dir).ok();
     }
 
