@@ -61,7 +61,7 @@ Engine status (proven by the regtest e2e suite):
   **refused on mainnet** until the adaptor security audit
   (`ADAPTOR_MAINNET_ENABLED`); v1 is the default everywhere else.
 - Coins and merchants are config/registry-driven: a shipped string-id coin
-  registry (`pocx`, `btc`, each with declared capabilities) plus a capability
+  registry (`btcx`, `btc`, each with declared capabilities) plus a capability
   pair resolver — no hardcoded asset enum. pactd owns merchants
   (bitcoin-core-wallet-shaped: one data dir per merchant); chain backends
   come from repeatable `--coin <id>=<url[,url]>` launch flags.

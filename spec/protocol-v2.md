@@ -108,7 +108,9 @@ order or the aggregate key differs.
   normal send creating the P2TR output of §4. Estimated like v1 §6.1.
 - **Cooperative redeem** (key-path): 1-in/1-out, spends the funding output
   by the **MuSig2 aggregate Schnorr signature**, sweeping to the claimer's
-  address. nSequence signals RBF; nLockTime 0. The aggregate signature is
+  **fresh core-wallet sweep address** (the `*_sweep_*` address exchanged in
+  `init` / `accept`, §7; empty falls back to a deterministic key-derived
+  address). nSequence signals RBF; nLockTime 0. The aggregate signature is
   produced as an *adaptor* signature under `T` (§6) and only becomes valid
   once adapted by `t`.
 - **Refund** (script-path): 1-in/1-out, spends via the §4 tapleaf with the
@@ -155,10 +157,13 @@ pattern), so both redeems can be pre-signed. Message sequence:
 
 1. **`init`** (A→B): `{protocol, swap_id, coin_a, coin_b, amount_a,
    amount_b, t1, t2, alice_swap_pubkey_a, alice_swap_pubkey_b,
-   alice_refund_pubkey_a, adaptor_point T}`.
+   alice_refund_pubkey_a, adaptor_point T, alice_sweep_b}`, where
+   `alice_sweep_b` is Alice's fresh core-wallet address on chain B (where she
+   redeems leg B). Empty selects the deterministic key-derived fallback.
 2. **`accept`** (B→A): Bob's `{bob_swap_pubkey_a, bob_swap_pubkey_b,
-   bob_refund_pubkey_b}` — enough for both parties to derive both P2TR
-   addresses.
+   bob_refund_pubkey_b, bob_sweep_a}` — enough for both parties to derive both
+   P2TR addresses; `bob_sweep_a` is Bob's fresh core-wallet address on chain A
+   (where he redeems leg A), same empty-fallback rule.
 3. **`funding_ready`** (each→other): the funder announces its funding
    **txid + vout** (built, not yet broadcast) so the redeem txs are
    determined.

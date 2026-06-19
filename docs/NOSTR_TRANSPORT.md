@@ -3,9 +3,12 @@
 A second decentralized transport for Pact offers and relay messages, carried
 over **Nostr** relays **alongside** the HTTP Corkboard rather than replacing
 it. An operator configures HTTP boards and/or Nostr relays; offers and relay
-traffic merge across all of them. The transport is **opt-in**: with no relays
-configured nothing is published, so a swap never touches a public relay until
-the operator adds one.
+traffic merge across all of them. At the **pactd/engine level the transport is
+opt-in**: with no relays configured nothing is published, so a swap never
+touches a public relay until the operator adds one. Satchel, however, **prewires
+the six recommended relays on a fresh install** (see *Configuration and
+Satchel*), so the default desktop experience ships with Nostr on; clearing the
+list in Settings turns it back off.
 
 This is a transport binding only — it carries the same signed envelopes and the
 same `PACTSEALED1` sealed blobs the Corkboard already moves. The swap engine
@@ -170,10 +173,12 @@ to the Corkboard relay.
 
 - **pactd**: `--nostr-relay <wss,…>` parallel to `--board-url`; the value flows
   into `EngineConfig.nostr_relays` and `build_engine` (`merchants.rs`).
-- **Satchel**: `Config.nostr_relays: Vec<String>` (empty by default — opt-in),
-  passed as `--nostr-relay` in launch wiring; `save_nostr_relays` mirrors
-  `save_board`. A small curated `RECOMMENDED_NOSTR_RELAYS` (3 public relays) is
-  offered for one-click enable but never set automatically.
+- **Satchel**: `Config.nostr_relays: Vec<String>`, passed as `--nostr-relay` in
+  launch wiring; `save_nostr_relays` mirrors `save_board`. On a fresh install the
+  config is **prewired to `RECOMMENDED_NOSTR_RELAYS`** — six prober-verified
+  public relays (`relay.damus.io`, `nos.lol`, `relay.primal.net`, `nostr.mom`,
+  `nostr-pub.wellorder.net`, `offchain.pub`) — so Nostr is on by default. The
+  user can clear the list in Settings to turn the transport off.
 - **UI**: `BoardConfig` manages both the Corkboard URL(s) and the relay
   `wss://` list in one dialog ("Use recommended relays" pre-fills the curated
   set); the Settings screen shows the configured relays or "Off — using
@@ -208,10 +213,15 @@ change.
   taker's `NostrBoard` buffers surface them — covering everything **except** the
   websocket hop.
 
-  > **TODO:** a live-relay end-to-end test — spin a throwaway `nostr-rs-relay`
-  > alongside the regtest harness and run a full board-driven swap over Nostr
-  > only, then a mixed HTTP+Nostr run. This is the one path the in-process test
-  > does not exercise (the actual relay publish/fetch round-trip).
+- **Live-relay end-to-end test — green.** `test_nostr_relay_swap`
+  (`pact/harness/test_swap_e2e.py`) spins a throwaway bundled `nostr-rs-relay`
+  alongside the regtest harness and runs a full board-driven swap over Nostr
+  only, exercising the actual relay publish/fetch round-trip the in-process test
+  skips.
+
+  > **TODO:** a mixed HTTP-Corkboard + Nostr end-to-end run (offers fanned across
+  > both transports within one swap) is still unbuilt — only the Nostr-only path
+  > is covered today.
 
 ## Future / out of scope
 

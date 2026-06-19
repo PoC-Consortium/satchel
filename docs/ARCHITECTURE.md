@@ -116,12 +116,12 @@ error objects (code + message). Auth mirrors bitcoind exactly:
 | Group | Methods |
 |---|---|
 | Node | `getinfo` (name, version, protocol, network, identity, seed/lock status, configured coins), `stop` |
-| Seed / wallet lifecycle | `walletstatus`, `createseed`, `importseed`, `unlock` |
+| Seed / wallet lifecycle | `walletstatus`, `generateseed`, `createseed`, `importseed`, `unlock` |
 | Merchants (pactd-owned) | `createmerchant`, `listmerchants`, `loadmerchant`, `unloadmerchant`, `getmerchantinfo` |
 | Coins / pairs | `listcoins`, `listpairs`, `validatecoin` |
 | Swaps (v1 HTLC) | `listswaps`, `getswap`, `offer`, `acceptoffer`, `recv`, `fund`, `redeem`, `refund`, `abort`, `tick` |
-| Swaps (v2 adaptor) | `listadaptorswaps` |
-| Corkboard | `boardlistoffers`, `boardpostoffer`, `boardtake`, `boardrevoke` |
+| Swaps (v2 adaptor) | `listadaptorswaps`, `adaptorinit`, `adaptoraccept`, `adaptorrecv`, `adaptorfundingready`, `adaptornonces`, `adaptorsign`, `adaptorassemble`, `adaptorfund`, `adaptorredeem`, `adaptorrefund` |
+| Corkboard | `boardlistoffers`, `boardpostoffer`, `boardtake`, `boardrevoke`, `boardstatus`, `listmyoffers`, `listpendingtakes` |
 | Private offers | `makeprivateoffer`, `takeoffer`, `listprivateoffers`, `cancelprivateoffer` |
 | Fees | `estimateswapfees` (platform fee is always 0) |
 | Wallet | `getbalance <chain>`, `getnewaddress <chain>`, `sendtoaddress <chain> <address> <amount>` |
@@ -198,12 +198,17 @@ HTML. Merchant ownership (one merchant = one identity = one data dir) lives
 in **pactd**, the Bitcoin-Core-wallet analog; Satchel launches a single pactd
 and selects the active merchant over RPC.
 
-**Satchel doubles as a light BTC wallet.** pactd already derives BTC keys,
-watches the BTC chain, and signs BTC transactions for swaps, so a
-balance/receive/send tab is a thin layer on top. Guardrails: a spending
-wallet, not a vault (the UI nudges users to sweep sizable balances to cold
-storage); basic P2WPKH/P2TR only — no coin control, no Lightning. Chain
-backend is the user's choice (own node or public Electrum servers).
+**Satchel shows read-only per-coin balances.** pactd already derives keys,
+watches each chain, and signs swap transactions, so a balance view is a thin
+read-only layer on top (one card per configured coin, with a hot-seed
+sweep nudge). Send/receive are deliberately **not** in the node-backed Satchel:
+the balance *is* the node's own core wallet, so spending would duplicate the
+node's wallet UI, and swap txs already appear on the Swaps page. A full
+send/receive/activity wallet is built only with the **nodeless** build (wallet
+via `bdk` + Electrum), where Satchel itself becomes the wallet. Chain backend
+is the user's choice (own node or public Electrum servers). The underlying
+`getbalance` / `getnewaddress` / `sendtoaddress` RPCs exist on pactd for the
+CLI and future use; the node-backed UI consumes only `getbalance`.
 
 > **TODO:** an Electrum plugin (`pact-electrum/`, Python — Electrum's plugin
 > API is Python) that talks to the local pactd API, giving Electrum-PoCX

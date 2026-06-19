@@ -163,13 +163,15 @@ secret are never shown.
 
 ## Wallets
 
-`WalletScreen.tsx` shows one card per configured coin (`listcoins` filtered to
-configured) with its glyph, display name, symbol, balance, a **Receive** button
-(fresh address via `getnewaddress`), and a **Send** form (`sendtoaddress`, behind
-a confirm dialog; amounts are entered in the locale decimal separator and
-normalised for the wire). A banner reinforces the **hot-seed** framing: this is a
-spending wallet for in-flight swaps, so users are nudged to sweep sizeable
-balances to their own cold/core wallet.
+`WalletScreen.tsx` is **read-only**: one card per configured coin (`listcoins`
+filtered to configured) with its glyph, display name, symbol, and balance
+(`getbalance`). There is deliberately **no Send and no Receive** here — the
+balance *is* the node's own core wallet, so spending would duplicate the node's
+wallet UI and swap txs already surface on the Swaps page. A banner reinforces
+the **hot-seed** framing, nudging users to sweep sizeable balances to their own
+cold/core wallet. A full send/receive/activity wallet (via `getnewaddress` /
+`sendtoaddress`) lands only with the **nodeless** build, where Satchel carries
+its own `bdk` + Electrum wallet rather than fronting a node.
 
 ## Settings
 
@@ -201,7 +203,7 @@ protocols (HTLC and "Private"/adaptor). The screen states the active network and
 validates each coin's genesis against it, rejecting a mismatch.
 
 `CoinGlyph` renders the real per-coin logo asset (`src/assets/coins/`, keyed by
-coin id: `btc.svg` = the canonical orange Bitcoin mark; `pocx.svg` = the
+coin id: `btc.svg` = the canonical orange Bitcoin mark; `btcx.svg` = the
 official Bitcoin PoCX coin mark) and falls back to the generated text glyph
 (₿ / ◈ / first letter of the symbol) for any coin id without a bundled asset —
 so future coins still render until their logo ships. The header's per-coin

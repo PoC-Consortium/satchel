@@ -149,7 +149,10 @@ nav: Corkboard / Swaps / Wallets / Settings) covers:
   actions; v2 (Taproot adaptor) swaps surface here too.
 - **Coins** — coin setup that validates against the node (genesis check) before
   saving, with a per-coin connection-status glyph.
-- **Wallets** — per-configured-coin balance / receive / send.
+- **Wallets** — per-configured-coin **read-only** balances (one card per coin
+  with a hot-seed sweep nudge). Send/receive are deliberately out of the
+  node-backed app — the balance is the node's own core wallet — and arrive
+  only with the nodeless (bdk + Electrum) build.
 
 The detailed screen catalog and first-run polish requirements are in
 [SATCHEL_UI.md](SATCHEL_UI.md).

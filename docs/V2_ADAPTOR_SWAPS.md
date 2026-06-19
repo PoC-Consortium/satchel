@@ -297,9 +297,11 @@ parent alone is below the mempool minimum. Properties:
   underpriced redeem reaching a miner is not 100% guaranteed unless peered with
   package-relay-capable nodes/pools (or submitted directly). On the PoCX leg
   (v30, smaller network, rarely congested) this is not a concern.
-- Pairs naturally with the **fresh-sweep-address** follow-up: the redeem should
-  sweep to a claimer-controlled (ideally fresh) address so the CPFP child
-  attaches cleanly and doesn't link to a static placeholder key.
+- Pairs naturally with the **fresh-sweep-address** work (now shipped, commit
+  e4f9a08): the cooperative redeem sweeps to a fresh claimer-controlled
+  core-wallet address (exchanged as `alice_sweep_b` / `bob_sweep_a` in
+  `init` / `accept`, spec-v2 §5/§7), so the CPFP child attaches cleanly and the
+  redeem doesn't link to a static placeholder key.
 
 **2. Pre-signed fee ladder — fallback.** During the single signing round,
 pre-sign N adaptor signatures over N redeem variants at escalating fixed fees;

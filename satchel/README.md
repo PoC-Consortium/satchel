@@ -22,8 +22,8 @@ Screens (left Drawer nav, grouped): a **Public** group — **Corkboard**
 (offers filtered to your supported pairs, take/withdraw) and **Post offer**
 (post a public listing); a **Private** group for off-market bilateral slips
 — **Create**, **Take**, and **Slips** (review/cancel); then **Swaps** (live
-swap table + narration + scheduler tick) and **Wallets** (per-coin
-balance/receive/send). **Settings** sits in the footer and holds the
+swap table + narration + scheduler tick) and **Wallets** (read-only per-coin
+balances). **Settings** sits in the footer and holds the
 **Coins** tab (per-coin node setup with genesis validation + derived pairs)
 alongside appearance, network, and board config. The first-run wizard +
 merchant manager handle seed create/import (mnemonic shown once), the
@@ -97,19 +97,22 @@ connected → take an offer on the Corkboard → watch it complete on Swaps.
   (`cargo build` produces a plain executable).
 - `ui/node_modules` and `ui/dist` are git-ignored build artifacts.
 
-## Doubles as a light BTC wallet
+## Read-only balances (full wallet is nodeless-build work)
 
-pactd already derives BTC keys, watches the BTC chain, and signs BTC
-transactions to do swaps — Satchel adds a balance/receive/send tab on top.
-A user can complete a Bitcoin PoCX↔BTC trade and hold/spend the BTC with no
-other software (AtomicDEX product shape).
+pactd already derives keys, watches each chain, and signs swap transactions, so
+the Wallets screen is a thin **read-only** balance view — one card per
+configured coin, with a hot-seed sweep nudge. There is deliberately **no send
+or receive** in the node-backed app: the balance *is* the node's own core
+wallet, so spending would duplicate the node's wallet UI, and swap txs already
+appear on the Swaps page.
 
-Guardrails:
+A full send/receive/activity wallet is built only with the **nodeless** build,
+where Satchel carries its own `bdk` + Electrum wallet instead of fronting a
+node — there Satchel *is* the wallet, and serves the BTC-only newcomer buying
+Bitcoin PoCX with zero pre-existing PoCX infrastructure. Notes for then:
 
 - Spending wallet, not a vault — keys are on the hot Pact seed; nudge users
   to sweep sizable balances to cold storage
 - Basic P2WPKH/P2TR only; no coin control, no Lightning
 - Chain backend selectable: public Electrum servers (zero-setup default) or
   the user's own bitcoind
-- With Bitcoin PoCX Electrum servers live, Satchel also serves the BTC-only
-  newcomer buying Bitcoin PoCX with zero pre-existing PoCX infrastructure

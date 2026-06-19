@@ -13,9 +13,10 @@ can cheat and no third party ever holds your coins. The first supported pair is
 - Design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Protocol spec: [spec/](spec/)
 
-> **Status:** alpha / regtest + testnet. Mainnet swaps are refused pending an
-> external security audit. v1 (hash-locked HTLC) is the default; v2
-> (Taproot/MuSig2 adaptor) runs on regtest/testnet, mainnet-gated.
+> **Status:** alpha. v1 (hash-locked HTLC) is the default and now runs on
+> mainnet — the gate was lifted while the protocol and implementation are under
+> external audit. v2 (Taproot/MuSig2 adaptor) runs on regtest/testnet but stays
+> mainnet-gated until its own audit completes.
 
 ## How it works
 
@@ -45,7 +46,8 @@ Three moving parts, with a hard wall between them:
    **Corkboard** (a self-hostable noticeboard for communities that want their
    own).
 3. **Satchel** (the desktop app) is the face — it renders the engine's RPC,
-   manages seeds, and doubles as a light BTC wallet.
+   manages seeds, and shows read-only per-coin balances (a full send/receive
+   wallet arrives with the nodeless build).
 
 Naming theme: the village market square. A **pact** is the trustless deal,
 posted on the **corkboard**, settled into your **satchel**. Deliberately no
@@ -60,7 +62,7 @@ posted on the **corkboard**, settled into your **satchel**. Deliberately no
 | [`pact-nostr/`](pact-nostr/) | — | Maps Pact envelopes ↔ Nostr events (public offer adverts kind `31510`, gift-wrapped relay messages kind `1059`). Pure mapping + crypto, no relay I/O. |
 | [`pact/`](pact/) | **Pact** | The swap engine (Rust workspace): `libswap` (HTLC/adaptor logic + state machine), `pactd` (local JSON-RPC daemon, SQLite, auto-refund + RBF fee-bump scheduler), `pact-cli` (thin RPC client). |
 | [`corkboard/`](corkboard/) | **Corkboard** | Self-hostable order board: a single axum + SQLite/Postgres binary that stores signed offers and blind-relays encrypted blobs. The alternative transport to Nostr (Bisq-style, many operators). |
-| [`satchel/`](satchel/) | **Satchel** | Desktop app (Tauri shell + React/Vite/TypeScript/MUI frontend). Bundles and supervises `pactd`; doubles as a light BTC wallet. Owns the GUI, never the swap logic. |
+| [`satchel/`](satchel/) | **Satchel** | Desktop app (Tauri shell + React/Vite/TypeScript/MUI frontend). Bundles and supervises `pactd`; shows read-only per-coin balances. Owns the GUI, never the swap logic. |
 | [`tools/`](tools/) | — | Dev tooling (e.g. `relay-prober` for Nostr relay eligibility) and playground scripts. |
 | [`docs/`](docs/) | — | Architecture, roadmap, and per-feature design docs. |
 
@@ -89,7 +91,7 @@ python harness/test_adaptor_swap.py  # v2 adaptor-swap end to end
 Run the daemon and drive it with the CLI:
 
 ```sh
-cargo run -p pactd -- --coin pocx=<rpc-url> --coin btc=<rpc-or-electrum-url>
+cargo run -p pactd -- --coin btcx=<rpc-url> --coin btc=<rpc-or-electrum-url>
 cargo run -p pact-cli -- getinfo
 ```
 

@@ -87,6 +87,12 @@ engine config untouched.
 `getbalance { chain }` → `{ balance_sat }`. `getnewaddress { chain }` →
 `{ address }`. `sendtoaddress { chain, address, amount }` → `{ txid }`.
 
+The node-backed Satchel UI consumes **only `getbalance`** — the Wallets screen
+is read-only (the balance is the node's own core wallet, so send/receive would
+duplicate the node's wallet). `getnewaddress` / `sendtoaddress` remain on the
+pactd surface for the CLI and for the future nodeless (bdk + Electrum) wallet,
+which is where Satchel grows a real send/receive UI.
+
 ## Swaps
 
 `listswaps` → an array of swap records; `getswap { swap_id }` → one. The record
