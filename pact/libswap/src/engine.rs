@@ -329,6 +329,40 @@ fn validate_offer_offsets(network: Network, t1_secs: u32, t2_secs: u32) -> Resul
     Ok(())
 }
 
+/// Legacy fixed cooperative-redeem feerate (sat/vB) — the value v2 shipped
+/// before M2, and the fallback for any record/message that predates the
+/// negotiated feerate (a stored 0).
+pub(crate) const LEGACY_REDEEM_FEERATE: u64 = 2;
+
+/// Over-provisioning multiplier on the live estimate when the initiator fixes
+/// the cooperative-redeem feerate at init (M2). The redeem fee is committed
+/// into the adaptor signature and cannot be RBF'd, so it must still confirm if
+/// the fee market drifts up between init and the actual redeem (potentially
+/// hours later). A fresh interactive round (v3 bumpable redeem) is the real
+/// fix; until then we pad. See V2_ADAPTOR_SWAPS.md "fee-bump".
+pub(crate) const ADAPTOR_REDEEM_FEERATE_MULT: u64 = 3;
+
+/// Upper bound on a negotiated redeem feerate (sat/vB). Caps the initiator's
+/// over-provisioning AND lets the participant reject an init that sets an
+/// absurd rate to grief the counterparty (whose redeem fee would eat its
+/// output). Matches the estimator's own clamp.
+pub(crate) const MAX_REDEEM_FEERATE: u64 = 500;
+
+/// Fallback redeem feerate for non-regtest when the initiator has no live
+/// estimator to ask — conservative, but not catastrophically low.
+const ADAPTOR_REDEEM_FEERATE_FALLBACK: u64 = 20;
+
+/// The effective per-leg feerate to build a cooperative redeem tx: the
+/// negotiated value, or the legacy 2 sat/vB for a pre-M2 record (stored 0).
+/// Pure so the fallback is unit-testable without a node.
+pub(crate) fn effective_redeem_feerate(stored: u64) -> u64 {
+    if stored == 0 {
+        LEGACY_REDEEM_FEERATE
+    } else {
+        stored
+    }
+}
+
 /// Default confirmation requirement per chain — the fallback when the operator
 /// hasn't set a per-coin depth (see [`Engine::confirmations_for`]): regtest → 1;
 /// fast chains (<5-min blocks, e.g. BTCX's 2-min spacing) → 10; slower chains
@@ -430,6 +464,25 @@ impl Engine {
             return Ok((*n).max(1));
         }
         Ok(default_confirmations(chain_params(chain)?))
+    }
+
+    /// The cooperative-redeem feerate (sat/vB) the initiator fixes at init for
+    /// `chain` (M2). Regtest keeps the legacy low fee so the deterministic e2e
+    /// is unchanged; elsewhere it is the live 6-block estimate over-provisioned
+    /// by [`ADAPTOR_REDEEM_FEERATE_MULT`] (the redeem is unbumpable), clamped to
+    /// [`MAX_REDEEM_FEERATE`], with a conservative fallback when no backend is
+    /// reachable. Only the initiator calls this; the participant adopts the
+    /// value from the signed init, so the two parties never diverge.
+    fn adaptor_redeem_feerate(&self, chain: &ChainRef) -> u64 {
+        if chain.network == Network::Regtest {
+            return LEGACY_REDEEM_FEERATE;
+        }
+        match self.backend(chain).and_then(|b| b.fee_rate_sat_per_vb()) {
+            Ok(rate) => {
+                (rate * ADAPTOR_REDEEM_FEERATE_MULT).clamp(LEGACY_REDEEM_FEERATE, MAX_REDEEM_FEERATE)
+            }
+            Err(_) => ADAPTOR_REDEEM_FEERATE_FALLBACK,
+        }
     }
 
     /// The effective confirmation depth per *configured* coin, for `listcoins`
@@ -813,6 +866,11 @@ impl Engine {
             .backend(&chain_b)
             .and_then(|b| b.wallet_new_address())
             .unwrap_or_default();
+        // M2: fix the unbumpable cooperative-redeem feerates now, from live
+        // estimators (over-provisioned), and carry them in the signed init so
+        // both parties build byte-identical redeem txs.
+        let redeem_feerate_a = self.adaptor_redeem_feerate(&chain_a);
+        let redeem_feerate_b = self.adaptor_redeem_feerate(&chain_b);
         let body = crate::messages::InitV2Body {
             protocol: crate::adaptor_swap::PROTOCOL_V2.into(),
             chain_a: chain_a.clone(),
@@ -828,6 +886,8 @@ impl Engine {
                 .to_string(),
             adaptor_point: adaptor_point.to_string(),
             alice_sweep_b: alice_sweep_b.clone(),
+            redeem_feerate_a,
+            redeem_feerate_b,
             offer_id: None,
         };
         let id = crate::keys::swap_id_v2(&adaptor_point);
@@ -858,6 +918,8 @@ impl Engine {
             bob_refund_b: None,
             sweep_a: None,
             sweep_b: (!alice_sweep_b.is_empty()).then(|| alice_sweep_b.clone()),
+            redeem_feerate_a,
+            redeem_feerate_b,
             counterparty_identity: None,
             funding_a_txid: None,
             funding_a_vout: None,
@@ -911,6 +973,15 @@ impl Engine {
         ensure!(
             body.amount_a > 0 && body.amount_b > 0,
             "amounts must be positive"
+        );
+        // M2: reject an init that sets an absurd redeem feerate — the redeem fee
+        // is committed and eats the claimer's own output, so a malicious maker
+        // could grief us. Bounds-check (don't clamp: both parties must use the
+        // exact same value or the MuSig2 sighashes won't match).
+        ensure!(
+            body.redeem_feerate_a <= MAX_REDEEM_FEERATE
+                && body.redeem_feerate_b <= MAX_REDEEM_FEERATE,
+            "init sets a redeem feerate above {MAX_REDEEM_FEERATE} sat/vB — refusing (spec v2 §5)"
         );
         ensure!(
             init.swap_id
@@ -973,6 +1044,8 @@ impl Engine {
             bob_refund_b: Some(body_out.bob_refund_b.clone()),
             sweep_a: (!bob_sweep_a.is_empty()).then(|| bob_sweep_a.clone()),
             sweep_b: (!alice_sweep_b.is_empty()).then(|| alice_sweep_b.clone()),
+            redeem_feerate_a: body.redeem_feerate_a,
+            redeem_feerate_b: body.redeem_feerate_b,
             counterparty_identity: Some(init.from.clone()),
             funding_a_txid: None,
             funding_a_vout: None,
@@ -1034,7 +1107,16 @@ impl Engine {
         leg_tag: &str,
     ) -> Result<(bitcoin::Transaction, [u8; 32])> {
         let p = self.adaptor_params(rec)?;
-        let fee = spend_fee_sat(2, crate::taproot::KEYPATH_REDEEM_VSIZE);
+        // M2: the cooperative redeem fee is the per-chain feerate negotiated at
+        // init (legacy 2 sat/vB for pre-M2 records), NOT a hardcoded constant —
+        // see effective_redeem_feerate / adaptor_redeem_feerate. Both parties
+        // read the same stored value so the tx (and its sighash) is identical.
+        let feerate = effective_redeem_feerate(if leg_tag == "redeem_b" {
+            rec.redeem_feerate_b
+        } else {
+            rec.redeem_feerate_a
+        });
+        let fee = spend_fee_sat(feerate, crate::taproot::KEYPATH_REDEEM_VSIZE);
         let (leg, chain, amount, claimer, txid, vout, sweep) = if leg_tag == "redeem_b" {
             (
                 p.leg_b(secp)?,
@@ -4314,6 +4396,45 @@ mod tests {
         let (_, _, rt_margin) = action_margins(Network::Regtest);
         assert!(action_safe(u64::from(t1) - 1, rt_margin, t1));
         assert!(!action_safe(u64::from(t1), rt_margin, t1));
+    }
+
+    #[test]
+    fn effective_redeem_feerate_falls_back_to_legacy() {
+        // M2: a pre-M2 record (stored 0) builds the redeem at the legacy
+        // 2 sat/vB it always used, so old swaps reconstruct byte-identically;
+        // a negotiated value is used verbatim (both parties stored the same).
+        assert_eq!(effective_redeem_feerate(0), LEGACY_REDEEM_FEERATE);
+        assert_eq!(effective_redeem_feerate(2), 2);
+        assert_eq!(effective_redeem_feerate(37), 37);
+        assert_eq!(effective_redeem_feerate(MAX_REDEEM_FEERATE), MAX_REDEEM_FEERATE);
+    }
+
+    #[test]
+    fn init_v2_redeem_feerate_serde_back_compat() {
+        use crate::messages::InitV2Body;
+        // A pre-M2 init (no redeem_feerate fields) deserializes to 0, which
+        // effective_redeem_feerate maps to the legacy 2 — so an old maker and a
+        // new taker still build the identical redeem tx.
+        let legacy = serde_json::json!({
+            "protocol": "pact-htlc-v2",
+            "chain_a": { "asset": "btcx", "network": "regtest" },
+            "chain_b": { "asset": "btc", "network": "regtest" },
+            "amount_a": 1u64, "amount_b": 2u64, "t1": 1_780_050_000u32, "t2": 1_780_020_000u32,
+            "alice_swap_a": "x", "alice_swap_b": "y", "alice_refund_a": "z",
+            "adaptor_point": "p"
+        });
+        let body: InitV2Body = serde_json::from_value(legacy).unwrap();
+        assert_eq!(body.redeem_feerate_a, 0);
+        assert_eq!(body.redeem_feerate_b, 0);
+        assert_eq!(effective_redeem_feerate(body.redeem_feerate_a), LEGACY_REDEEM_FEERATE);
+        // A new init round-trips the negotiated rates.
+        let mut new = body;
+        new.redeem_feerate_a = 30;
+        new.redeem_feerate_b = 45;
+        let round: InitV2Body =
+            serde_json::from_str(&serde_json::to_string(&new).unwrap()).unwrap();
+        assert_eq!(round.redeem_feerate_a, 30);
+        assert_eq!(round.redeem_feerate_b, 45);
     }
 
     #[test]

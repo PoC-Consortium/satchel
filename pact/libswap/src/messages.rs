@@ -100,6 +100,17 @@ pub struct InitV2Body {
     /// destination (e.g. no node to ask for an address).
     #[serde(default)]
     pub alice_sweep_b: String,
+    /// Cooperative-redeem feerates (sat/vB) the initiator picked from her live
+    /// estimators at init, one per chain (A = the leg Bob redeems, B = the leg
+    /// Alice redeems). Both parties build the redeem txs at exactly these rates
+    /// so the MuSig2 sighashes match; the fee is committed into the adaptor
+    /// signature and cannot be bumped, so the initiator over-provisions (M2).
+    /// `#[serde(default)]` → the pre-M2 wire format deserializes to 0, which the
+    /// engine treats as the legacy 2 sat/vB.
+    #[serde(default)]
+    pub redeem_feerate_a: u64,
+    #[serde(default)]
+    pub redeem_feerate_b: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub offer_id: Option<String>,
 }
