@@ -103,7 +103,7 @@ class RpcError(Exception):
 class Node:
     """One regtest node (PoCX or BTC) plus JSON-RPC access."""
 
-    def __init__(self, name, binary, datadir, rpc_port, expected_genesis):
+    def __init__(self, name, binary, datadir, rpc_port, expected_genesis, extra_args=None):
         self.name = name
         self.binary = binary
         self.datadir = datadir
@@ -111,6 +111,8 @@ class Node:
         self.expected_genesis = expected_genesis
         self.rpc_user = "pactharness"
         self.rpc_pass = "pactharness"
+        # Per-node launch flags (e.g. the LTC node disables MWEB — see Harness).
+        self.extra_args = extra_args or []
         self.proc = None
 
     def start(self):
@@ -126,7 +128,7 @@ class Node:
             f"-rpcpassword={self.rpc_pass}",
             "-fallbackfee=0.0001",
             "-debug=rpc",
-        ]
+        ] + self.extra_args
         self.proc = subprocess.Popen(
             args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self._wait_for_rpc()
@@ -228,9 +230,17 @@ class Harness:
         # created in the playground, not here).
         self.ltc = None
         if with_ltc:
+            # Disable MWEB on the regtest LTC node. Litecoin Core 0.21.5's MWEB
+            # locks in at regtest height ~432; once active, CreateNewBlock builds
+            # an MWEB/HogEx integration tx that fails TestBlockValidity with
+            # bad-txns-vin-empty whenever the mempool is non-empty — so HTLC
+            # funding txs never confirm and every LTC swap stalls at "accepted".
+            # A far-future vbparams start keeps MWEB DEFINED (never active), so
+            # block assembly stays normal. (Pact swaps don't use MWEB.)
             self.ltc = Node("ltc", find_litecoind(),
                             os.path.join(self.workdir, "ltc"), LTC_RPC_PORT,
-                            LTC_REGTEST_GENESIS)
+                            LTC_REGTEST_GENESIS,
+                            extra_args=["-vbparams=mweb:9999999999:9999999999"])
 
     def __enter__(self):
         print(f"[harness] workdir: {self.workdir}")
