@@ -256,6 +256,79 @@ fn validate_profile(network: Network, t1: u32, t2: u32, n_a: u32, n_b: u32) -> R
     Ok(())
 }
 
+/// Spec §7.4 action-deadline margins — the lead-time before a timelock by
+/// which a party must have *acted*, so the action confirms before the
+/// counterparty's window opens. Returned as `(fund, reveal, redeem_a)`:
+/// - `fund`: Bob must broadcast his chain-B funding no later than `T2 − 3h`.
+/// - `reveal`: Alice must broadcast her chain-B redeem (revealing `s`) no
+///   later than `T2 − 2h`; a redeem lingering past `T2` reveals `s` while Bob
+///   can already refund chain B, letting him take *both* legs.
+/// - `redeem_a`: Bob must broadcast his chain-A redeem before `T1 − 1h`.
+///
+/// These are the normative flat numbers from the spec (calibrated for the
+/// mainnet/testnet profile, accounting for BIP113 MTP lag + ~2h adversarial
+/// skew, §7.2). Regtest is exempt (§7.5): the e2e suite drives swaps to
+/// completion in seconds, so all margins are zero and behaviour is unchanged.
+pub(crate) fn action_margins(network: Network) -> (u64, u64, u64) {
+    if network == Network::Regtest {
+        (0, 0, 0)
+    } else {
+        (3 * 3600, 2 * 3600, 3600)
+    }
+}
+
+/// The conservative "now" for a §7.4 action-deadline gate against a timelock
+/// on one chain: the later of our NTP-synced wall clock and that chain's MTP.
+/// MTP *lags* wall-clock (§7.2), so for a "stop acting in time" deadline,
+/// trusting MTP alone is unsafe (it would let us act too late); taking the max
+/// means neither a lagging chain nor a slow local clock can push us past the
+/// deadline. Mirrors `coordination_now`'s philosophy, applied per-leg.
+///
+/// On regtest we keep the historical pure-MTP behaviour: the e2e chains start
+/// with an MTP at the 2011 genesis time, and the suite relies on that lag, so
+/// folding in the (2026) wall clock there would spuriously trip the gates.
+pub(crate) fn deadline_clock(network: Network, local: u64, chain_mtp: u64) -> u64 {
+    if network == Network::Regtest {
+        chain_mtp
+    } else {
+        local.max(chain_mtp)
+    }
+}
+
+/// Is an action whose lead margin is `margin` still safe to broadcast at
+/// conservative time `clock`, given absolute deadline `deadline`? True iff
+/// `clock + margin < deadline`. Pure (no clock/backend) so the §7.4 timing
+/// logic is unit-testable without a node.
+pub(crate) fn action_safe(clock: u64, margin: u64, deadline: u32) -> bool {
+    clock + margin < u64::from(deadline)
+}
+
+/// Spec §7.3/§7.4 sanity for an offer's *relative* timelock offsets (seconds
+/// from the future take time), enforced when advertising/creating an offer so
+/// we never publish a swap that the taker's accept-time `validate_profile`
+/// would reject — or one that leaves no room for the §7.4 action margins.
+/// Regtest is exempt (§7.5). The UI's Short/Medium/Long presets all satisfy
+/// this; this guards the CLI and any future caller.
+fn validate_offer_offsets(network: Network, t1_secs: u32, t2_secs: u32) -> Result<()> {
+    ensure!(t2_secs < t1_secs, "spec §7.1: T2 must be < T1");
+    if network == Network::Regtest {
+        return Ok(());
+    }
+    let (fund_margin, _, _) = action_margins(network);
+    ensure!(
+        u64::from(t2_secs) >= fund_margin,
+        "T2 must be ≥ {}h out so Bob can fund before the §7.4 deadline (got {}h)",
+        fund_margin / 3600,
+        t2_secs / 3600
+    );
+    ensure!(
+        t1_secs - t2_secs >= 4 * 3600,
+        "spec §7.3: T1 − T2 must be ≥ 4h (got {}h)",
+        (t1_secs - t2_secs) / 3600
+    );
+    Ok(())
+}
+
 /// Default confirmation requirement per chain — the fallback when the operator
 /// hasn't set a per-coin depth (see [`Engine::confirmations_for`]): regtest → 1;
 /// fast chains (<5-min blocks, e.g. BTCX's 2-min spacing) → 10; slower chains
@@ -1331,6 +1404,25 @@ impl Engine {
         let seed = self.store.seed()?;
         match rec.role {
             Role::Initiator => {
+                // §7.4 reveal deadline (v2 inherits v1 §7.4): on the FIRST
+                // reveal, refuse to broadcast the adapted leg-B redeem — which
+                // exposes `t` — within 2h of T2 (margin 0 on regtest). Past it,
+                // Bob could refund leg B and still extract `t` to take leg A.
+                // A re-broadcast from RedeemedB (t already public) is exempt: we
+                // MUST keep fee-bumping it to confirmation.
+                if rec.state == AdaptorState::Signed {
+                    let net = rec.chain_b.network;
+                    let (_, reveal_margin, _) = action_margins(net);
+                    let mtp = self.backend(&rec.chain_b)?.tip_median_time()?;
+                    let now = deadline_clock(net, local_now(), mtp);
+                    ensure!(
+                        action_safe(now, reveal_margin, rec.t2),
+                        "REFUSING to reveal t: now {now} is within {}h of T2 {} — \
+                         wait for the T1 refund of leg A instead (spec §7.4)",
+                        reveal_margin / 3600,
+                        rec.t2
+                    );
+                }
                 let t = crate::musig::seckey_to_scalar(&seed.adaptor_secret(rec.swap_index)?)?;
                 let sig = crate::adaptor_engine::adaptor_sig_from_hex(
                     rec.adaptor_sig_b
@@ -1558,7 +1650,10 @@ impl Engine {
                 // reorg away.
                 if rec.state == Signed && both_funded {
                     let backend_b = self.backend(&rec.chain_b)?;
-                    if backend_b.tip_median_time()? < u64::from(rec.t2) {
+                    let net = rec.chain_b.network;
+                    let (_, reveal_margin, _) = action_margins(net);
+                    let now = deadline_clock(net, local_now(), backend_b.tip_median_time()?);
+                    if action_safe(now, reveal_margin, rec.t2) {
                         let op_b = outpoint(&rec.funding_b_txid, rec.funding_b_vout)?;
                         let spk_b = p.leg_b(&secp)?.script_pubkey(&secp)?;
                         match backend_b.get_txout(&op_b, &spk_b)? {
@@ -1898,12 +1993,17 @@ impl Engine {
         };
         let backend = self.backend(&chain)?;
         if rec.role == Role::Participant {
-            // §7.4: funding late only shrinks Alice's window and wastes
-            // fees; regtest profile margin is zero.
+            // §7.4: Bob MUST NOT fund after `T2 − 3h` (margin 0 on regtest).
+            // Funding later shrinks Alice's redeem window to nothing and just
+            // wastes fees — she would abort and both would refund.
+            let net = rec.chain_b.network;
+            let (fund_margin, _, _) = action_margins(net);
             let mtp = self.backend(&rec.chain_b)?.tip_median_time()?;
+            let now = deadline_clock(net, local_now(), mtp);
             ensure!(
-                mtp < u64::from(rec.t2),
-                "too late to fund: chain-B MTP {mtp} already past T2 {}",
+                action_safe(now, fund_margin, rec.t2),
+                "too late to fund: now {now} is within {}h of T2 {} (spec §7.4 fund deadline)",
+                fund_margin / 3600,
                 rec.t2
             );
             // Reorg guard: re-verify the chain-A HTLC at the moment we
@@ -1992,13 +2092,20 @@ impl Engine {
                 };
                 let backend = self.backend(&rec.chain_b)?;
 
-                // §7.4 reveal deadline (regtest margin 0): never put s in a
-                // mempool when Bob's refund could already confirm.
+                // §7.4 reveal deadline: Alice MUST NOT broadcast her redeem
+                // after `T2 − 2h` (margin 0 on regtest). A redeem that lingers
+                // in the mempool past T2 reveals s while Bob can already refund
+                // chain B — he could then take *both* legs. Past the deadline we
+                // refuse and fall back to the T1 refund of our own leg.
+                let net = rec.chain_b.network;
+                let (_, reveal_margin, _) = action_margins(net);
                 let mtp = backend.tip_median_time()?;
+                let now = deadline_clock(net, local_now(), mtp);
                 ensure!(
-                    mtp < u64::from(rec.t2),
-                    "REFUSING to redeem: chain-B MTP {mtp} has reached T2 {} — \
+                    action_safe(now, reveal_margin, rec.t2),
+                    "REFUSING to redeem: now {now} is within {}h of T2 {} — \
                      revealing s now risks losing both legs; wait for the T1 refund (spec §7.4)",
+                    reveal_margin / 3600,
                     rec.t2
                 );
                 let htlc = params.htlc_b()?;
@@ -2068,11 +2175,17 @@ impl Engine {
                     )?,
                     vout: rec.htlc_a_vout.context("no chain-A HTLC vout")?,
                 };
+                // §7.4: Bob MUST redeem chain A before `T1 − 1h` (margin 0 on
+                // regtest) — past that, his redeem could race Alice's T1 refund.
+                let net = rec.chain_a.network;
+                let (_, _, redeem_a_margin) = action_margins(net);
                 let backend_a = self.backend(&rec.chain_a)?;
                 let mtp = backend_a.tip_median_time()?;
+                let now = deadline_clock(net, local_now(), mtp);
                 ensure!(
-                    mtp < u64::from(rec.t1),
-                    "chain-A MTP {mtp} has reached T1 {} — redeem would race Alice's refund (spec §7.4)",
+                    action_safe(now, redeem_a_margin, rec.t1),
+                    "now {now} is within {}h of T1 {} — redeem would race Alice's refund (spec §7.4)",
+                    redeem_a_margin / 3600,
                     rec.t1
                 );
 
@@ -2342,7 +2455,12 @@ impl Engine {
                     vout: rec.htlc_b_vout.context("no HTLC B vout")?,
                 };
                 let htlc_b_spk = self.swap_params(rec)?.htlc_b()?.script_pubkey();
-                if backend_b.tip_median_time()? < u64::from(rec.t2) {
+                // Only auto-redeem (reveal s) while we are still inside the §7.4
+                // reveal deadline (T2 − 2h); past it, fall through to the refund.
+                let net = rec.chain_b.network;
+                let (_, reveal_margin, _) = action_margins(net);
+                let now = deadline_clock(net, local_now(), backend_b.tip_median_time()?);
+                if action_safe(now, reveal_margin, rec.t2) {
                     match backend_b.get_txout(&outpoint_b, &htlc_b_spk)? {
                         Some(txout) if txout.confirmations >= u64::from(rec.n_b) => {
                             let updated = self.redeem(&rec.swap_id)?;
@@ -2371,7 +2489,13 @@ impl Engine {
             // refund of chain A rather than chase a redeem we can't finish.
             (Role::Initiator, State::FundedA) => {
                 let backend_b = self.backend(&rec.chain_b)?;
-                if backend_b.tip_median_time()? < u64::from(rec.t2) {
+                // No point advancing to FundedB once we could no longer reveal s
+                // safely (§7.4 reveal deadline T2 − 2h): fall back to the T1
+                // refund of chain A rather than chase a redeem we can't finish.
+                let net = rec.chain_b.network;
+                let (_, reveal_margin, _) = action_margins(net);
+                let now = deadline_clock(net, local_now(), backend_b.tip_median_time()?);
+                if action_safe(now, reveal_margin, rec.t2) {
                     if let Some((outpoint, confs)) = self.locate_funding(rec, "b")? {
                         if confs >= u64::from(rec.n_b) {
                             let mut updated = rec.clone();
@@ -2450,7 +2574,13 @@ impl Engine {
                 if let Some(witness) = spend {
                     if extract_preimage(&witness, &params.hash_h).is_some() {
                         let backend_a = self.backend(&rec.chain_a)?;
-                        if backend_a.tip_median_time()? < u64::from(rec.t1) {
+                        // §7.4: claim chain A only while inside Bob's redeem
+                        // deadline (T1 − 1h); past it a redeem races Alice's
+                        // refund, so leave it (our chain-B leg is already gone).
+                        let net = rec.chain_a.network;
+                        let (_, _, redeem_a_margin) = action_margins(net);
+                        let now = deadline_clock(net, local_now(), backend_a.tip_median_time()?);
+                        if action_safe(now, redeem_a_margin, rec.t1) {
                             let updated = self.redeem(&rec.swap_id)?;
                             return event("auto-redeem", updated.final_txid.unwrap_or_default());
                         }
@@ -2764,7 +2894,7 @@ impl Engine {
         protocol: Option<&str>,
     ) -> Result<String> {
         self.ensure_network_allowed(network)?;
-        ensure!(t2_secs < t1_secs, "spec §7.1: T2 must be < T1");
+        validate_offer_offsets(network, t1_secs, t2_secs)?;
         let proto = resolve_offer_protocol(&give.0, &get.0, network, protocol)?;
         // Don't advertise a swap we can't service: both legs' nodes must be live.
         let chain_a = ChainRef {
@@ -3006,7 +3136,7 @@ impl Engine {
     ) -> Result<String> {
         self.ensure_network_allowed(network)?;
         ensure!(give.0 != get.0, "give and get must be different coins");
-        ensure!(t2_secs < t1_secs, "spec §7.1: T2 must be < T1");
+        validate_offer_offsets(network, t1_secs, t2_secs)?;
         // Reject unknown coins / unsupported pairs up front, exactly as a board
         // offer would be (so a slip never advertises a pair the engine can't run).
         let chain_a = ChainRef {
@@ -4080,6 +4210,63 @@ mod tests {
         assert_eq!(record.chain_a.network, Network::Mainnet);
         assert_eq!((record.n_a, record.n_b), (10, 6));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn action_margins_zero_on_regtest_spec_values_otherwise() {
+        // Regtest is exempt (§7.5) so the e2e suite drives swaps in seconds.
+        assert_eq!(action_margins(Network::Regtest), (0, 0, 0));
+        // Mainnet/testnet carry the normative §7.4 lead-times: 3h fund,
+        // 2h reveal, 1h redeem-A.
+        assert_eq!(action_margins(Network::Mainnet), (3 * 3600, 2 * 3600, 3600));
+        assert_eq!(action_margins(Network::Testnet), (3 * 3600, 2 * 3600, 3600));
+    }
+
+    #[test]
+    fn deadline_clock_is_conservative_off_regtest() {
+        // Regtest keeps the historical pure-MTP behaviour (the chain MTP starts
+        // at the 2011 genesis time and the suite relies on that lag).
+        assert_eq!(deadline_clock(Network::Regtest, 5_000, 1_000), 1_000);
+        // Elsewhere we take the LATER of wall clock and chain MTP, so neither a
+        // lagging chain nor a slow local clock pushes us past a deadline.
+        assert_eq!(deadline_clock(Network::Mainnet, 5_000, 1_000), 5_000);
+        assert_eq!(deadline_clock(Network::Mainnet, 1_000, 5_000), 5_000);
+    }
+
+    #[test]
+    fn action_safe_enforces_margin_before_deadline() {
+        let t2: u32 = 1_780_000_000;
+        let reveal = 2 * 3600;
+        // Comfortably before T2 − 2h: safe to reveal.
+        assert!(action_safe(u64::from(t2) - 3 * 3600, reveal, t2));
+        // Exactly at the deadline (now + margin == T2): NOT safe (strict <).
+        assert!(!action_safe(u64::from(t2) - reveal, reveal, t2));
+        // Inside the 2h window: refused.
+        assert!(!action_safe(u64::from(t2) - 3600, reveal, t2));
+        // Regtest margin 0 collapses to the old "now < deadline" rule.
+        assert!(action_safe(u64::from(t2) - 1, 0, t2));
+        assert!(!action_safe(u64::from(t2), 0, t2));
+    }
+
+    #[test]
+    fn offer_offsets_reject_tight_lift_clears_presets() {
+        // The old 3h/6h "short": gap 3h < 4h AND T2 == fund margin — rejected.
+        assert!(validate_offer_offsets(Network::Mainnet, 6 * 3600, 3 * 3600).is_err());
+        // A 4h-gap but too-near T2 (2h) is refused on the fund margin.
+        assert!(validate_offer_offsets(Network::Mainnet, 6 * 3600, 2 * 3600).is_err());
+        // Regtest is exempt — the e2e suite uses tiny offsets.
+        assert!(validate_offer_offsets(Network::Regtest, 6 * 3600, 3 * 3600).is_ok());
+        // Every shipped UI preset (post-lift) clears the gate on mainnet — keep
+        // in sync with satchel/ui/src/components/OfferForm.tsx `TERMS`
+        // (short 12/6, medium 24/12, long 36/18 hours).
+        for (t1, t2) in [
+            (12 * 3600, 6 * 3600),
+            (24 * 3600, 12 * 3600),
+            (36 * 3600, 18 * 3600),
+        ] {
+            validate_offer_offsets(Network::Mainnet, t1, t2)
+                .unwrap_or_else(|e| panic!("preset {t1}/{t2} must be valid: {e}"));
+        }
     }
 
     #[test]

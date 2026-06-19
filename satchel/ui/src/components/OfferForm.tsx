@@ -36,13 +36,17 @@ import FeePreview from "./FeePreview";
 import { C } from "../theme";
 
 // Timelock presets — raw T1/T2 hours are too low-level (and dangerous) to ask a
-// user for, so we offer Short/Medium/Long with safe 2:1 gaps (T1 = 2×T2, well
-// above the 15-min skew tolerance). Longer = safer margin but slower auto-refund
-// if the trade stalls. Long is the default.
+// user for, so we offer Short/Medium/Long with safe 2:1 gaps (T1 = 2×T2). Every
+// preset clears the engine's spec §7.4 action margins: Bob must fund before
+// T2−3h and Alice must reveal before T2−2h, so T2 needs real headroom. The old
+// 3h/6h "short" (gap 3h) violated both the §7.4 fund margin and the 4h structural
+// gap (T1−T2 ≥ 4h) and was rejected at take time — lifted here. T2 ≥ 6h now leaves
+// a comfortable funding+reveal window; gaps (≥ 6h) sit well above the 4h minimum.
+// Longer = safer margin but slower auto-refund if a trade stalls. Medium default.
 export const TERMS = {
-  short: { t1: 6 * 3600, t2: 3 * 3600 },
-  medium: { t1: 12 * 3600, t2: 6 * 3600 },
-  long: { t1: 24 * 3600, t2: 12 * 3600 },
+  short: { t1: 12 * 3600, t2: 6 * 3600 },
+  medium: { t1: 24 * 3600, t2: 12 * 3600 },
+  long: { t1: 36 * 3600, t2: 18 * 3600 },
 } as const;
 export type Term = keyof typeof TERMS;
 
@@ -88,7 +92,7 @@ export default function OfferForm({
   const [wantAmt, setWantAmt] = useState("");
   const [price, setPrice] = useState(""); // receive-coin per give-coin
   const [proto, setProto] = useState<string | null>(null); // explicit override
-  const [term, setTerm] = useState<Term>("long");
+  const [term, setTerm] = useState<Term>("medium");
   const [validMin, setValidMin] = useState("60"); // offer lifetime (minutes)
   const [balances, setBalances] = useState<Record<string, string>>({});
 
