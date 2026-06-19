@@ -121,6 +121,15 @@ pub struct AdaptorSwapRecord {
     pub bob_swap_a: Option<String>,
     pub bob_swap_b: Option<String>,
     pub bob_refund_b: Option<String>,
+    /// Fresh core-wallet sweep addresses for the cooperative redeems,
+    /// communicated in init/accept so both parties build the identical redeem tx
+    /// and the proceeds land in a spendable core wallet (not a swap-key addr).
+    /// `sweep_a` = where leg A is redeemed (Bob's addr); `sweep_b` = leg B
+    /// (Alice's addr). `None`/absent → the deterministic swap-key fallback.
+    #[serde(default)]
+    pub sweep_a: Option<String>,
+    #[serde(default)]
+    pub sweep_b: Option<String>,
     pub counterparty_identity: Option<String>,
     // Funding outpoints (built before broadcast, spec v2 §7).
     pub funding_a_txid: Option<String>,

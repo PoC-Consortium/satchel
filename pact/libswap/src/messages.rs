@@ -93,6 +93,13 @@ pub struct InitV2Body {
     pub alice_refund_a: String,
     /// Adaptor point `T = t·G`, compressed hex.
     pub adaptor_point: String,
+    /// Alice's fresh core-wallet sweep address on chain B (where she redeems
+    /// leg B). Communicated so both parties build the identical cooperative
+    /// redeem tx AND the proceeds land in a spendable core wallet rather than a
+    /// swap-key address. Empty = fall back to the deterministic swap-key
+    /// destination (e.g. no node to ask for an address).
+    #[serde(default)]
+    pub alice_sweep_b: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub offer_id: Option<String>,
 }
@@ -103,6 +110,10 @@ pub struct AcceptV2Body {
     pub bob_swap_a: String,
     pub bob_swap_b: String,
     pub bob_refund_b: String,
+    /// Bob's fresh core-wallet sweep address on chain A (where he redeems leg
+    /// A). See [`InitV2Body::alice_sweep_b`]. Empty = deterministic fallback.
+    #[serde(default)]
+    pub bob_sweep_a: String,
 }
 
 /// `funding_ready` (each → other): the funding output, built but not yet

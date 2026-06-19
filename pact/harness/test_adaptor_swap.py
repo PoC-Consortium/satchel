@@ -14,10 +14,12 @@ Success = both Taproot funding outputs are cooperatively spent (key-path).
 Run:  python test_adaptor_swap.py
 Env:  POCX_BITCOIND / BTC_BITCOIND   (node binaries, see regtest_harness.py)
 
-NOTE: v2 sweeps each redeem to the claimer's swap key as P2TR (a deterministic
-placeholder so both parties build the identical redeem tx). Success is checked
-by the funding outputs being spent, not by core-wallet balances; communicating
-a fresh core-wallet sweep address is a follow-up (V2_ADAPTOR_SWAPS.md).
+NOTE: each redeem sweeps to a fresh CORE-WALLET address communicated in the
+signed init/accept (alice_sweep_b / bob_sweep_a), so both parties co-sign the
+identical redeem tx AND the proceeds land in a spendable wallet (not a swap-key
+address the node can't spend). Success is checked by the funding outputs being
+spent AND the claimers' core-wallet balances rising. If no node can mint an
+address the protocol falls back to the deterministic swap-key destination.
 """
 
 import sys
@@ -42,6 +44,11 @@ def test_adaptor_swap(h):
         alice.setup_seed()
         bob.setup_seed()
         t2, t1 = regtest_timelocks(h)
+
+        # Claim-wallet balances before the swap: the redeems must land in these
+        # spendable core wallets (fresh sweep addrs), not at a swap-key address.
+        alice_btc_before = float(h.btc.rpc("getbalance", wallet="alice_btc"))
+        bob_pocx_before = float(h.pocx.rpc("getbalance", wallet="bob_pocx"))
 
         # init / accept — both sides can now rebuild identical Taproot legs.
         init = _env(alice.rpc("adaptorinit", GIVE_POCX, GET_BTC, t1, t2))
@@ -89,6 +96,17 @@ def test_adaptor_swap(h):
         assert h.btc.rpc("gettxout", b_txid, b_vout) is None, "leg B (BTC) not redeemed"
         assert h.pocx.rpc("gettxout", a_txid, a_vout) is None, "leg A (PoCX) not redeemed"
         print("[e2e] adaptor swap OK: both legs cooperatively key-path-redeemed")
+
+        # The redeemed coins must land in the claimers' spendable CORE wallets
+        # (the fresh sweep addresses communicated in init/accept) — this is the
+        # whole point of fresh-sweep-address and would fail with a swap-key dest.
+        alice_btc_after = float(h.btc.rpc("getbalance", wallet="alice_btc"))
+        bob_pocx_after = float(h.pocx.rpc("getbalance", wallet="bob_pocx"))
+        assert alice_btc_after > alice_btc_before, \
+            f"Alice's leg-B redeem missed her core wallet: {alice_btc_before} -> {alice_btc_after}"
+        assert bob_pocx_after > bob_pocx_before, \
+            f"Bob's leg-A redeem missed his core wallet: {bob_pocx_before} -> {bob_pocx_after}"
+        print("[e2e] redeems landed in spendable core wallets (fresh sweep addrs)")
     finally:
         alice.stop()
         bob.stop()

@@ -716,6 +716,14 @@ impl Engine {
         let seed = self.store.seed()?;
         let index = self.store.next_swap_index()?;
         let adaptor_point = seed.adaptor_point(index)?;
+        // Fresh core-wallet sweep address for the leg Alice will redeem (B),
+        // communicated so both parties co-sign the identical redeem tx and the
+        // proceeds land in a spendable core wallet. Best-effort: empty (→ the
+        // deterministic swap-key fallback) if there's no node to ask.
+        let alice_sweep_b = self
+            .backend(&chain_b)
+            .and_then(|b| b.wallet_new_address())
+            .unwrap_or_default();
         let body = crate::messages::InitV2Body {
             protocol: crate::adaptor_swap::PROTOCOL_V2.into(),
             chain_a: chain_a.clone(),
@@ -730,6 +738,7 @@ impl Engine {
                 .refund_xonly_pubkey(coin_of(&chain_a)?, index)?
                 .to_string(),
             adaptor_point: adaptor_point.to_string(),
+            alice_sweep_b: alice_sweep_b.clone(),
             offer_id: None,
         };
         let id = crate::keys::swap_id_v2(&adaptor_point);
@@ -758,6 +767,8 @@ impl Engine {
             bob_swap_a: None,
             bob_swap_b: None,
             bob_refund_b: None,
+            sweep_a: None,
+            sweep_b: (!alice_sweep_b.is_empty()).then(|| alice_sweep_b.clone()),
             counterparty_identity: None,
             funding_a_txid: None,
             funding_a_vout: None,
@@ -823,6 +834,15 @@ impl Engine {
             .parse::<bitcoin::XOnlyPublicKey>()
             .context("alice refund A")?;
 
+        // Carry Alice's leg-B sweep address through, and mint our own (Bob's)
+        // fresh sweep address for the leg we redeem (A). Best-effort: empty →
+        // the deterministic swap-key fallback.
+        let alice_sweep_b = body.alice_sweep_b.clone();
+        let bob_sweep_a = self
+            .backend(&body.chain_a)
+            .and_then(|b| b.wallet_new_address())
+            .unwrap_or_default();
+
         let seed = self.store.seed()?;
         let index = self.store.next_swap_index()?;
         let body_out = crate::messages::AcceptV2Body {
@@ -835,6 +855,7 @@ impl Engine {
             bob_refund_b: seed
                 .refund_xonly_pubkey(coin_of(&body.chain_b)?, index)?
                 .to_string(),
+            bob_sweep_a: bob_sweep_a.clone(),
         };
         let (n_a, n_b) = (
             self.confirmations_for(&body.chain_a)?,
@@ -861,6 +882,8 @@ impl Engine {
             bob_swap_a: Some(body_out.bob_swap_a.clone()),
             bob_swap_b: Some(body_out.bob_swap_b.clone()),
             bob_refund_b: Some(body_out.bob_refund_b.clone()),
+            sweep_a: (!bob_sweep_a.is_empty()).then(|| bob_sweep_a.clone()),
+            sweep_b: (!alice_sweep_b.is_empty()).then(|| alice_sweep_b.clone()),
             counterparty_identity: Some(init.from.clone()),
             funding_a_txid: None,
             funding_a_vout: None,
@@ -923,7 +946,7 @@ impl Engine {
     ) -> Result<(bitcoin::Transaction, [u8; 32])> {
         let p = self.adaptor_params(rec)?;
         let fee = spend_fee_sat(2, crate::taproot::KEYPATH_REDEEM_VSIZE);
-        let (leg, chain, amount, claimer, txid, vout) = if leg_tag == "redeem_b" {
+        let (leg, chain, amount, claimer, txid, vout, sweep) = if leg_tag == "redeem_b" {
             (
                 p.leg_b(secp)?,
                 &rec.chain_b,
@@ -931,6 +954,7 @@ impl Engine {
                 p.alice_swap_b,
                 rec.funding_b_txid.as_deref(),
                 rec.funding_b_vout,
+                rec.sweep_b.as_deref(),
             )
         } else {
             (
@@ -940,13 +964,20 @@ impl Engine {
                 p.bob_swap_a,
                 rec.funding_a_txid.as_deref(),
                 rec.funding_a_vout,
+                rec.sweep_a.as_deref(),
             )
         };
         let outpoint = OutPoint {
             txid: bitcoin::Txid::from_str(txid.context("no funding txid for leg yet")?)?,
             vout: vout.context("no funding vout for leg yet")?,
         };
-        let dest = adaptor_redeem_dest(chain, &claimer)?;
+        // Sweep to the communicated fresh core-wallet address when present;
+        // otherwise the deterministic swap-key destination. Both parties agree
+        // on which, since the address travels in the signed init/accept.
+        let dest = match sweep {
+            Some(addr) if !addr.is_empty() => chain_params(chain)?.parse_address(addr)?,
+            _ => adaptor_redeem_dest(chain, &claimer)?,
+        };
         crate::taproot::build_keypath_redeem(secp, &leg, outpoint, amount, dest, fee)
     }
 
@@ -1213,6 +1244,7 @@ impl Engine {
                 rec.bob_swap_a = Some(b.bob_swap_a);
                 rec.bob_swap_b = Some(b.bob_swap_b);
                 rec.bob_refund_b = Some(b.bob_refund_b);
+                rec.sweep_a = (!b.bob_sweep_a.is_empty()).then_some(b.bob_sweep_a);
                 rec.state = AdaptorState::Accepted;
             }
             "funding_ready" => {
