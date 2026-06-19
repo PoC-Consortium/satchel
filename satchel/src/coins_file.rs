@@ -147,10 +147,12 @@ fn join_tail(base: &Path, tail: &str) -> String {
 }
 
 /// The default cookie sub-path for a network when a template omits it
-/// (bitcoind layout). Templates normally set this explicitly.
+/// (bitcoind layout). Templates normally set this explicitly — the Bitcoin
+/// (`btc`) template carries "testnet3/.cookie", so this fallback follows the
+/// Bitcoin PoCX convention ("testnet") a PoCX-family file-coin expects.
 pub fn default_cookie_subpath(network: &str) -> &'static str {
     match network {
-        "testnet" => "testnet3/.cookie",
+        "testnet" => "testnet/.cookie",
         "regtest" => "regtest/.cookie",
         _ => ".cookie",
     }

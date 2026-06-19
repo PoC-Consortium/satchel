@@ -249,7 +249,9 @@ fn active_network() -> &'static str {
 /// test networks nest beneath it, so the three coexist without clobbering.
 fn network_subdir(network: &str) -> Option<&'static str> {
     match network {
-        "testnet" => Some("testnet3"),
+        // Bitcoin PoCX's testnet datadir is "testnet" (Bitcoin's is "testnet3");
+        // Satchel is the PoCX app, so it follows the PoCX convention.
+        "testnet" => Some("testnet"),
         "regtest" => Some("regtest"),
         _ => None, // mainnet → root
     }
