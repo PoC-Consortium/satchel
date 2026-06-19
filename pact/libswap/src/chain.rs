@@ -698,6 +698,25 @@ impl MultiBackend {
     fn primary(&self) -> &dyn ChainBackend {
         self.backends[0].as_ref()
     }
+
+    /// The *least*-advanced MTP across backends — the conservative clock for
+    /// deciding our own CLTV refund is spendable. The trait [`tip_median_time`]
+    /// takes the max (refuse deadline-sensitive actions earliest, the safe
+    /// direction for "stop acting in time"); for refund *readiness* the safe
+    /// direction is the opposite: only believe a refund is final once even the
+    /// laggiest backend's MTP has reached the locktime, so the broadcast can't
+    /// hit `non-final` on the node that will actually mine it. Single-backend
+    /// setups collapse to the same value.
+    ///
+    /// [`tip_median_time`]: ChainBackend::tip_median_time
+    pub fn tip_median_time_min(&self) -> Result<u64> {
+        let mut min: Option<u64> = None;
+        for backend in &self.backends {
+            let mtp = backend.tip_median_time()?;
+            min = Some(min.map_or(mtp, |m: u64| m.min(mtp)));
+        }
+        min.context("no backends")
+    }
 }
 
 impl ChainBackend for MultiBackend {

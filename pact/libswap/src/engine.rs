@@ -1531,7 +1531,8 @@ impl Engine {
             vout: vout_o.context("no funding vout")?,
         };
         let backend = self.backend(&chain)?;
-        let mtp = backend.tip_median_time()?;
+        // Least-advanced backend MTP for refund readiness (M6) — see refund().
+        let mtp = backend.tip_median_time_min()?;
         ensure!(
             mtp >= u64::from(leg.locktime),
             "too early to refund: MTP {mtp} < T {}",
@@ -1688,7 +1689,7 @@ impl Engine {
                 // the counterparty's to claim — v1 parity (it does not reclaim
                 // after redeeming either).
                 if rec.state == Signed && rec.funding_a_txid.is_some() {
-                    let mtp_a = self.backend(&rec.chain_a)?.tip_median_time()?;
+                    let mtp_a = self.backend(&rec.chain_a)?.tip_median_time_min()?; // M6 refund readiness
                     if mtp_a >= u64::from(rec.t1) {
                         let op = outpoint(&rec.funding_a_txid, rec.funding_a_vout)?;
                         let spk = p.leg_a(&secp)?.script_pubkey(&secp)?;
@@ -1731,7 +1732,7 @@ impl Engine {
                 // Else reclaim leg B after T2 if still unspent (only while Signed,
                 // i.e. before we've claimed leg A).
                 if rec.state == Signed && rec.funding_b_txid.is_some() {
-                    let mtp_b = self.backend(&rec.chain_b)?.tip_median_time()?;
+                    let mtp_b = self.backend(&rec.chain_b)?.tip_median_time_min()?; // M6 refund readiness
                     if mtp_b >= u64::from(rec.t2) {
                         let op_b = outpoint(&rec.funding_b_txid, rec.funding_b_vout)?;
                         let spk_b = p.leg_b(&secp)?.script_pubkey(&secp)?;
@@ -2272,17 +2273,34 @@ impl Engine {
         };
 
         let backend = self.backend(&chain)?;
-        let mtp = backend.tip_median_time()?;
+        // Refund readiness uses the *least*-advanced backend MTP (M6): only
+        // broadcast once every backend — including the node that will mine —
+        // will accept the locktime, avoiding a `non-final` rejection.
+        let mtp = backend.tip_median_time_min()?;
         ensure!(
             mtp >= u64::from(locktime),
             "refund not yet valid: chain MTP {mtp} < T {locktime} (BIP113 lag is normal — retry later)"
         );
+        let htlc_spk = htlc.script_pubkey();
         ensure!(
-            backend
-                .get_txout(&outpoint, &htlc.script_pubkey())?
-                .is_some(),
+            backend.get_txout(&outpoint, &htlc_spk)?.is_some(),
             "HTLC already spent — check whether the counterparty redeemed (status/recv)"
         );
+        // M7: never broadcast a refund that would race a counterparty redeem we
+        // can already see. `get_txout` above (gettxout include_mempool, and
+        // MultiBackend treats any "spent" view as spent) is the primary guard;
+        // this scans the mempool + tip explicitly as a cross-backend backstop
+        // (e.g. an Electrum view whose listunspent lags a mempool spend). If a
+        // spend is visible, the swap is resolving on its own — leave it.
+        if backend
+            .find_spend_witness(&outpoint, &htlc_spk, backend.tip_height()?)?
+            .is_some()
+        {
+            bail!(
+                "HTLC already has a spend in the mempool (counterparty redeem?) — \
+                 not broadcasting a competing refund (status/recv)"
+            );
+        }
 
         // Prefer the refund signed at funding time (§6.3); rebuilding from
         // seed + record is the recovery fallback for pre-§6.3 records.
@@ -2689,7 +2707,8 @@ impl Engine {
             return Ok(None);
         };
         let backend = self.backend(chain)?;
-        if backend.tip_median_time()? < u64::from(locktime) {
+        // Conservative (min) MTP for refund readiness (M6) — matches refund().
+        if backend.tip_median_time_min()? < u64::from(locktime) {
             return Ok(None);
         }
         let params = self.swap_params(rec)?;
