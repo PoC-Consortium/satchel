@@ -9,7 +9,7 @@
 //!
 //! Two coins (POCX, BTC) ship in-code and trusted as the always-present
 //! built-ins. A `coins.toml` next to the executables can add **more** coins
-//! purely as data (see [`coins_file`](crate::coins_file)): pactd calls
+//! purely as data (see [`coins_file`]): pactd calls
 //! [`init_from_path`] at startup, which leaks the parsed defs into `'static`
 //! and merges them with the built-ins. A file coin whose id collides with a
 //! built-in is rejected, so the file can never redirect `btc`/`btcx`.

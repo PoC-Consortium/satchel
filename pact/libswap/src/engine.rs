@@ -378,7 +378,7 @@ impl Engine {
     }
 
     /// Live connection probe for a *configured* coin: verifies the backend
-    /// serves the right chain (genesis check, via [`Self::backend`]) and
+    /// serves the right chain (genesis check, via `backend`) and
     /// returns its tip height. Errors describe what is wrong with the node.
     pub fn probe_coin(&self, network: Network, coin_id: &str) -> Result<u64> {
         self.backend(&ChainRef {
@@ -703,9 +703,9 @@ impl Engine {
     /// v2 (pact-htlc-v2) initiator: build the adaptor-swap `init` (spec v2 §7).
     /// Reserves the swap index (so the v2 keys + adaptor secret are claimed)
     /// and returns the signed `InitV2` envelope. Mainnet is refused by the
-    /// gate; regtest/testnet run. Full stateful lifecycle (funding, redeem,
-    /// scheduler) is the remaining daemon integration — the crypto/tx flow is
-    /// proven in `adaptor_engine`.
+    /// gate (`registry::ADAPTOR_MAINNET_ENABLED`); regtest/testnet run. The full
+    /// stateful lifecycle (funding, redeem, scheduler) is driven here on top of
+    /// the crypto/tx flow in `adaptor_engine`.
     pub fn adaptor_init(
         &self,
         network: Network,
@@ -2683,7 +2683,8 @@ impl Engine {
     /// `sel` if it matches (an HTTP corkboard URL, or `"nostr"`), else the first
     /// configured. Distinct from the post/take fan-out (which hits every board)
     /// — the UI browses a single board at a time. Works for the HTTP corkboard
-    /// and the Nostr board alike, since both implement [`Noticeboard`]. (This is
+    /// and the Nostr board alike, since both implement
+    /// [`Noticeboard`](crate::board::Noticeboard). (This is
     /// what `boardlistoffers` calls; the old HTTP-only selector errored under a
     /// relays-only config.)
     pub fn list_board_offers(&self, sel: Option<&str>) -> Result<Vec<crate::messages::Envelope>> {

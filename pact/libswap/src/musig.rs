@@ -17,11 +17,14 @@
 //!    universes must never mix; we cross the boundary by bytes only
 //!    (33-byte compressed pubkey / 32-byte x-only / 32-byte scalar).
 //!
-//! NOT wired into the engine: [`crate::registry::select_protocol`] still
-//! never returns `Adaptor` (the mainnet gate / `ADAPTOR_BUILT` flip happens
-//! at M6). Nonce seeds here are fixed for test determinism; production nonces
-//! are fresh-random and use-once-persisted (M3, see the doc's nonce-safety
-//! design).
+//! These primitives are now wired into the engine: [`ADAPTOR_BUILT`] is `true`
+//! and [`crate::registry::select_protocol`] returns `Adaptor` for taproot pairs
+//! (mainnet still gated on [`crate::registry::ADAPTOR_MAINNET_ENABLED`] until
+//! the v2 audit signs off). The nonce seeds in *this module's tests* are fixed
+//! for determinism; the production driver in [`crate::adaptor_engine`] uses
+//! fresh-random, use-once-persisted nonces.
+//!
+//! [`ADAPTOR_BUILT`]: crate::registry::ADAPTOR_BUILT
 
 use anyhow::{anyhow, Result};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
