@@ -14,6 +14,8 @@ Env:  POCX_BITCOIND / BTC_BITCOIND     (node binaries, see regtest_harness.py)
 
 import json
 import os
+import shlex
+import socket
 import subprocess
 import sys
 import time
@@ -27,6 +29,7 @@ PACTD_BIN = os.path.join(PACT_DIR, "target", "debug", "pactd" + EXE)
 CORKBOARD_DIR = os.path.normpath(os.path.join(HERE, "..", "..", "corkboard"))
 CORKBOARD_BIN = os.path.join(CORKBOARD_DIR, "target", "debug", "corkboard" + EXE)
 CORKBOARD_PORT = 19790
+NOSTR_RELAY_PORT = 19791
 # The shipped coin-templates file (consensus params for file-added coins like
 # ltc). A Party that trades a file coin passes this so its pactd registry knows
 # the coin's genesis + HRP.
@@ -91,6 +94,66 @@ class Corkboard:
         self._gen = getattr(self, "_gen", 0) + 1
         self.db = os.path.join(os.path.dirname(self.db), f"corkboard-reset-{self._gen}.sqlite")
         self.start()
+
+
+class NostrRelay:
+    """A local Nostr relay (bundled nostr-rs-relay) for the relays-only swap
+    test. Ephemeral: config + db live under the temp workspace. Override the
+    binary with PACT_NOSTR_RELAY_BIN or the whole command with
+    PACT_NOSTR_RELAY_CMD ({port}/{dir} substituted)."""
+
+    def __init__(self, workdir, port=NOSTR_RELAY_PORT):
+        self.port = port
+        self.host = "127.0.0.1"
+        self.ws_url = f"ws://{self.host}:{port}"
+        self.dir = os.path.join(workdir, "nostr-relay")
+        os.makedirs(self.dir, exist_ok=True)
+        self.proc = None
+
+    def _build_cmd(self):
+        tmpl = os.environ.get("PACT_NOSTR_RELAY_CMD")
+        if tmpl:
+            return shlex.split(
+                tmpl.replace("{port}", str(self.port)).replace("{dir}", self.dir))
+        relay_bin = os.environ.get("PACT_NOSTR_RELAY_BIN") or \
+            os.path.join(HERE, "bin", "nostr-rs-relay" + EXE)
+        if not os.path.exists(relay_bin):
+            raise RuntimeError(
+                f"nostr-rs-relay not found at {relay_bin}. Set PACT_NOSTR_RELAY_BIN "
+                "or PACT_NOSTR_RELAY_CMD.")
+        cfg = os.path.join(self.dir, "config.toml")
+        db = self.dir.replace(os.sep, "/")
+        with open(cfg, "w", encoding="utf-8") as fh:
+            fh.write(
+                f'[info]\nrelay_url = "{self.ws_url}/"\nname = "pact-e2e"\n\n'
+                f'[network]\naddress = "{self.host}"\nport = {self.port}\n\n'
+                f'[database]\ndata_directory = "{db}"\n')
+        return [relay_bin, "--config", cfg, "--db", self.dir]
+
+    def start(self):
+        cmd = self._build_cmd()
+        self.proc = subprocess.Popen(
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        deadline = time.time() + 30
+        while time.time() < deadline:
+            if self.proc.poll() is not None:
+                raise RuntimeError(f"nostr relay exited early: {self.proc.returncode}")
+            try:
+                with socket.create_connection((self.host, self.port), timeout=2):
+                    print(f"[e2e] nostr relay up on :{self.port} ({self.ws_url})")
+                    return self
+            except OSError:
+                time.sleep(0.2)
+        raise TimeoutError("nostr relay did not come up")
+
+    def stop(self):
+        if self.proc:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+            self.proc = None
 
 
 _next_port = [PACTD_PORT]
@@ -748,6 +811,56 @@ def test_board_reset_recovery(h):
         board.stop()
 
 
+def test_nostr_relay_swap(h):
+    """Phase 2 over a LIVE Nostr relay: maker + taker share one local relay (no
+    HTTP board) and complete a full board-driven swap through it — exercising
+    the real relay publish/fetch round-trip the in-process nostr test can't
+    cover. Offers + mail propagate asynchronously via pactd's relay service, so
+    we poll for propagation and give the round-trips a beat between passes."""
+    relay = NostrRelay(h.workdir)
+    relay.start()
+    maker = Party("alicenos", h, h.workdir, "alice_pocx", "alice_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True).start()
+    taker = Party("bobnos", h, h.workdir, "bob_pocx", "bob_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True).start()
+    try:
+        offer_id = maker.rpc(
+            "boardpostoffer", f"btcx:{GIVE_POCX}", f"btc:{GET_BTC}", 4 * 3600, 2 * 3600,
+            "pact-htlc-v1")["offer_id"]
+        # Each tick runs a full relay round-trip (publish our outbox + fetch),
+        # awaited inside the RPC — so tick the maker (publishes the offer) and the
+        # taker (fetches it) until the offer shows up in the taker's board.
+        seen = False
+        for _ in range(20):
+            maker.rpc("tick")
+            taker.rpc("tick")
+            if any(o["swap_id"] == offer_id for o in taker.rpc("boardlistoffers")["offers"]):
+                seen = True
+                break
+        assert seen, "offer never propagated over the nostr relay to the taker"
+        taker.rpc("boardtake", offer_id)
+
+        # Drive both daemons; each tick = a relay round-trip + the engine pass,
+        # so the gift-wrapped take/init/funded mail flows over the live relay.
+        ca = cb = 0
+        for _ in range(30):
+            for party in (maker, taker):
+                party.rpc("tick")
+                h.pocx.generate(1, "alice_pocx")
+                h.btc.generate(1, "bob_btc")
+            ca = sum(1 for s in maker.rpc("listswaps") if s["state"] == "completed")
+            cb = sum(1 for s in taker.rpc("listswaps") if s["state"] == "completed")
+            if ca and cb:
+                print("[e2e] nostr-relay swap scenario OK (live relay round-trip)")
+                break
+        else:
+            raise AssertionError(f"nostr swap did not complete: maker={ca}, taker={cb}")
+    finally:
+        maker.stop()
+        taker.stop()
+        relay.stop()
+
+
 def test_corkboard_swap(h):
     """Phase 2 end to end: maker posts a signed offer on the Corkboard,
     taker takes it, the whole handshake travels through the blind relay,
@@ -931,7 +1044,7 @@ def main():
              test_daemon_autopilot_swap, test_daemon_autopilot_refund,
              test_chain_watched_funding, test_balance_validation,
              test_create_import_then_swap, test_coin_setup, test_corkboard_swap,
-             test_board_reset_recovery, test_private_offer_swap)
+             test_board_reset_recovery, test_nostr_relay_swap, test_private_offer_swap)
     with Harness(keep=True) as h:
         for test in tests:
             try:

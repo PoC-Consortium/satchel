@@ -648,6 +648,11 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             Ok(json!({ "record": serde_json::to_value(&record)? }))
         }
         "tick" => {
+            // Mirror the scheduler: move Nostr mail/offers into the local
+            // buffers (and publish our outbox) BEFORE the engine pass, so a
+            // take/init that just arrived is dispatched by sync_board this tick.
+            // Best-effort + a no-op when the Nostr transport isn't configured.
+            kick_nostr(app).await;
             let events = blocking(app, |e| {
                 let mut ev = e.sync_board();
                 ev.extend(e.tick());
