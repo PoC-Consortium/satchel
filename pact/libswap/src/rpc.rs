@@ -50,11 +50,48 @@ impl RpcClient {
         })
     }
 
+    /// Extra attempts to establish the TCP connection before giving up. A
+    /// deadline-critical refund/redeem broadcast must not die because the node
+    /// was momentarily refusing connections (restarting, briefly overloaded) —
+    /// M5. Only the **connect** phase is retried: once the request has been
+    /// written we never resend it, because methods like `sendtoaddress` (HTLC
+    /// funding) are NOT idempotent — a lost response after the node already
+    /// acted must not trigger a second send. A connect failure means the node
+    /// never saw the request, so retrying it is always safe.
+    const CONNECT_RETRIES: u32 = 3;
+    const RETRY_BACKOFF: Duration = Duration::from_millis(250);
+
     pub fn call(&self, method: &str, params: &[Value]) -> Result<Value> {
         let body = json!({
             "jsonrpc": "2.0", "id": "libswap", "method": method, "params": params,
         })
         .to_string();
+
+        let mut attempt = 0;
+        let stream = loop {
+            match TcpStream::connect((self.host.as_str(), self.port)) {
+                Ok(s) => break s,
+                Err(e) => {
+                    attempt += 1;
+                    if attempt > Self::CONNECT_RETRIES {
+                        return Err(anyhow::Error::new(e).context(format!(
+                            "connecting to RPC at {}:{} (after {} attempts)",
+                            self.host,
+                            self.port,
+                            Self::CONNECT_RETRIES + 1
+                        )));
+                    }
+                    std::thread::sleep(Self::RETRY_BACKOFF);
+                }
+            }
+        };
+        self.exchange(stream, method, &body)
+    }
+
+    /// Send the request on an established `stream` and parse the reply. NOT
+    /// retried (see [`Self::call`]): the request has already been written, so
+    /// a non-idempotent method may have taken effect on the node.
+    fn exchange(&self, mut stream: TcpStream, method: &str, body: &str) -> Result<Value> {
         let request = format!(
             "POST {} HTTP/1.1\r\nHost: {}:{}\r\nAuthorization: Basic {}\r\n\
              Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
@@ -66,8 +103,6 @@ impl RpcClient {
             body
         );
 
-        let mut stream = TcpStream::connect((self.host.as_str(), self.port))
-            .with_context(|| format!("connecting to RPC at {}:{}", self.host, self.port))?;
         stream.set_read_timeout(Some(Duration::from_secs(120)))?;
         stream.set_write_timeout(Some(Duration::from_secs(120)))?;
         stream.write_all(request.as_bytes())?;
