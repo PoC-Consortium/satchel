@@ -60,17 +60,26 @@ CAROL_OFFERS = [
     ("btcx:100", "btc:0.00196"),
 ]
 
-# A small Litecoin sub-book so Alice (funded on all three coins) can take an LTC
-# swap in BOTH directions over Nostr — same set as the corkboard playground. LTC
-# is a file-added coin (satchel/coins.toml). Pinned to v1 HTLC (the classic
-# CLTV+P2WSH path every cltv+segwit coin supports).
+# Litecoin sub-book — a two-sided spread on BOTH LTC pairs (BTC<->LTC and
+# BTCX<->LTC), so those boards aren't near-empty next to BTCX<->BTC. Mirrors the
+# BUY/SELL split: Bob BUYS ltc (gives BTC or BTCX; funds bob_btc / bob_pocx),
+# Carol SELLS ltc (gives LTC; funds carol_ltc). LTC is a file-added coin
+# (satchel/coins.toml); pinned to v1 HTLC (the classic CLTV+P2WSH path).
 BOB_LTC_OFFERS = [
-    ("btc:0.001", "ltc:2"),       # 1 LTC = 0.0005 BTC
+    ("btc:0.0005", "ltc:1"),      # buy LTC with BTC: 1 LTC = 0.0005 BTC
+    ("btc:0.001",  "ltc:2"),
     ("btc:0.0015", "ltc:3"),
+    ("btcx:25", "ltc:1"),         # buy LTC with BTCX: 1 LTC = 25 BTCX
+    ("btcx:50", "ltc:2"),
+    ("btcx:75", "ltc:3"),
 ]
 CAROL_LTC_OFFERS = [
-    ("btcx:50", "ltc:1"),         # give BTCX, want LTC   (Alice gives LTC)
-    ("ltc:2",   "btc:0.001"),     # give LTC,  want BTC   (Alice gives BTC, gets LTC)
+    ("ltc:1", "btc:0.00052"),     # sell LTC for BTC (asks a touch above Bob's bid)
+    ("ltc:2", "btc:0.00104"),
+    ("ltc:3", "btc:0.00156"),
+    ("ltc:1", "btcx:26"),         # sell LTC for BTCX
+    ("ltc:2", "btcx:52"),
+    ("ltc:3", "btcx:78"),
 ]
 
 
@@ -159,9 +168,12 @@ def main():
 
         # Same extra wallets as the corkboard playground (two-sided book + Alice
         # funded on ALL THREE coins). See satchel_playground.py for the rationale.
+        # bob_pocx is funded too (the harness leaves it empty) so Bob can GIVE
+        # BTCX on the BTCX<->LTC board.
         h.pocx.create_wallet("carol_pocx")
         h.btc.create_wallet("carol_btc")
         h.pocx.generate(110, "carol_pocx")
+        h.pocx.generate(110, "bob_pocx")
         h.btc.generate(110, "alice_btc")
 
         # Litecoin leg. alice_ltc + carol_ltc are funded (each gives LTC on some
@@ -247,21 +259,35 @@ def main():
 {bar}
 """)
         start_wall = time.time()
-        base = max(chain_time(h.pocx), chain_time(h.btc), chain_time(h.ltc))
+        legs = ((h.pocx, "alice_pocx"), (h.btc, "bob_btc"), (h.ltc, "alice_ltc"))
+        base = max(chain_time(n) for n, _ in legs)
         last_post = time.time()
+        # Per-tick mining is BEST-EFFORT: a transient node error (e.g. a momentary
+        # `bad-txns-vin-empty` on CreateNewBlock) must NOT crash the driver — that
+        # would unwind the Harness and tear every node down, leaving Satchel on a
+        # dead stack (the spurious coin-setup gate). Each chain advances on its
+        # own; failures are logged and skipped, and the next tick retries.
         try:
             while True:
                 time.sleep(BLOCK_EVERY_SECS)
-                tip = max(chain_time(h.pocx), chain_time(h.btc), chain_time(h.ltc))
+                tip = base
+                for node, _ in legs:
+                    try:
+                        tip = max(tip, chain_time(node))
+                    except Exception:  # noqa: BLE001
+                        pass
                 now = max(tip, base + int(time.time() - start_wall)) + 1
-                h.pocx.set_mocktime(now)
-                h.btc.set_mocktime(now)
-                h.ltc.set_mocktime(now)
-                h.pocx.generate(1, "alice_pocx")
-                h.btc.generate(1, "bob_btc")
-                h.ltc.generate(1, "alice_ltc")
+                for node, wallet in legs:
+                    try:
+                        node.set_mocktime(now)
+                        node.generate(1, wallet)
+                    except Exception as e:  # noqa: BLE001
+                        print(f"[nostr-pg] mine skipped ({wallet}): {e}")
                 if time.time() - last_post > REPOST_EVERY_SECS:
-                    post_offers()
+                    try:
+                        post_offers()
+                    except Exception as e:  # noqa: BLE001
+                        print(f"[nostr-pg] post_offers skipped: {e}")
                     last_post = time.time()
         except KeyboardInterrupt:
             print("\n[nostr-pg] shutting down ...")
