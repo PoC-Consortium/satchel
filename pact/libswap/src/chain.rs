@@ -14,7 +14,23 @@ use serde_json::{json, Value};
 use std::str::FromStr;
 
 use crate::params::ChainParams;
-use crate::rpc::RpcClient;
+use crate::rpc::{RpcClient, RpcError};
+
+/// Is this broadcast error really "the tx is already in the chain / mempool"?
+/// Re-broadcasting an already-confirmed tx (a refund/redeem the scheduler keeps
+/// nudging, or a funding the maker re-sends) must be a no-op success, not an
+/// error that loops forever. Core returns code -27 (outputs already in utxo
+/// set / transaction already in block chain); other versions/backends phrase
+/// it as an "already in ..." / "already known" message, so we also match text.
+fn is_already_broadcast(err: &anyhow::Error) -> bool {
+    if let Some(rpc) = err.downcast_ref::<RpcError>() {
+        if rpc.code == -27 {
+            return true;
+        }
+    }
+    let msg = format!("{err:#}").to_ascii_lowercase();
+    msg.contains("already in") || msg.contains("already known")
+}
 
 /// What `gettxout` tells us about an unspent output.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,10 +151,14 @@ impl ChainBackend for CoreRpcBackend {
 
     fn broadcast(&self, tx: &Transaction) -> Result<Txid> {
         let hex = bitcoin::consensus::encode::serialize_hex(tx);
-        let txid = self.rpc.call("sendrawtransaction", &[json!(hex)])?;
-        Ok(Txid::from_str(
-            txid.as_str().context("sendrawtransaction: non-string")?,
-        )?)
+        match self.rpc.call("sendrawtransaction", &[json!(hex)]) {
+            Ok(txid) => Ok(Txid::from_str(
+                txid.as_str().context("sendrawtransaction: non-string")?,
+            )?),
+            // Already mined / in the mempool: the tx is on its way, not an error.
+            Err(e) if is_already_broadcast(&e) => Ok(tx.compute_txid()),
+            Err(e) => Err(e),
+        }
     }
 
     fn get_txout(
@@ -443,13 +463,17 @@ impl ChainBackend for ElectrumBackend {
 
     fn broadcast(&self, tx: &Transaction) -> Result<Txid> {
         let hex_tx = bitcoin::consensus::encode::serialize_hex(tx);
-        let txid = self.raw(
+        match self.raw(
             "blockchain.transaction.broadcast",
             vec![electrum_client::Param::String(hex_tx)],
-        )?;
-        Ok(Txid::from_str(
-            txid.as_str().context("broadcast: non-string")?,
-        )?)
+        ) {
+            Ok(txid) => Ok(Txid::from_str(
+                txid.as_str().context("broadcast: non-string")?,
+            )?),
+            // Already mined / in the mempool: a no-op success, not an error.
+            Err(e) if is_already_broadcast(&e) => Ok(tx.compute_txid()),
+            Err(e) => Err(e),
+        }
     }
 
     fn get_txout(
