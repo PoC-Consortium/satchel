@@ -3414,6 +3414,7 @@ impl Engine {
                 let network = match body.network.as_str() {
                     "regtest" => Network::Regtest,
                     "testnet" => Network::Testnet,
+                    "mainnet" => Network::Mainnet,
                     other => bail!("unsupported network in offer: {other}"),
                 };
                 // Coin ids come straight from the (signed) offer body; the
