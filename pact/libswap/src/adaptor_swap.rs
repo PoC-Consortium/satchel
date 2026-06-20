@@ -212,7 +212,7 @@ mod tests {
 
     /// The tweaked aggregate (what the MuSig2 session signs for) must equal
     /// rust-bitcoin's computed Taproot output key — the x-only parity risk
-    /// flagged in V2_ADAPTOR_SWAPS.md, pinned by a test.
+    /// flagged in spec/protocol-v2.md, pinned by a test.
     #[test]
     fn musig_tweak_matches_bitcoin_output_key() {
         let secp = Secp256k1::new();

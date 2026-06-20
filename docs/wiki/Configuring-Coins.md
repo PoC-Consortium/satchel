@@ -1,0 +1,48 @@
+# Configuring Coins
+
+A *coin* in Pact is a chain the engine can swap on. Two coins are built in — **btcx** (Bitcoin-PoCX) and **btc** (Bitcoin) — and more can be added without recompiling. To trade you connect each coin to a node, and tradeable *pairs* are derived automatically from which coins are live and what they support.
+
+For the full details see both handbooks: **Pact** <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact> and **Satchel** <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-satchel>.
+
+## Built-ins and `coins.toml`
+
+The engine ships with `btcx` and `btc` compiled in. Additional coins are declared in a **`coins.toml`** file that sits next to the executable — add a `[[coin]]` block plus an icon and the coin appears, no recompile. The bundled file ships three: **btcx**, **btc**, and **ltc** (Litecoin, the first added third coin). A file-coin whose id collides with a built-in is dropped.
+
+`coins.toml` is read by both pactd (consensus parameters) and Satchel (connection defaults + icon). Satchel resolves `<exe>/coins.toml` first, then a user-editable copy under the config dir, falling back to a baked-in default if parsing fails.
+
+## Connecting a coin
+
+### pactd flag form
+
+Point each coin at a node backend with `--coin`:
+
+```sh
+pactd --coin btcx=http://__cookie__:<hex>@127.0.0.1:19443/wallet/alice \
+      --coin btc=http://__cookie__:<hex>@127.0.0.1:19543/wallet/alice
+```
+
+The first URL is the wallet-qualified Core-RPC primary (this funds swaps); extra comma-separated URLs may be Electrum (`tcp://`/`ssl://`). The coin id must exist in the registry; the last `--coin` for a given id wins.
+
+### Satchel coin-setup form
+
+In Satchel, **Settings → Coins** gives each coin a structured RPC form: **RPC host/port**, **Cookie file** (auto-reads `.cookie`) or **User/password** auth, an optional **wallet name**, and a **Confirmations before final** field. The flow is **validate-genesis-then-save**: clicking **Validate node** runs `validatecoin` (a genesis-hash check) and **Save** stays disabled until it passes — nothing is persisted until the genesis matches. Editing a validated form invalidates it again.
+
+## Confirmation depth
+
+Each coin has a confirmation depth for reorg finality (`N≥1`), which gates auto-redeem and swap completion. Set it per-coin with `--coin-confs <id>=<N>` (or the Satchel **Confirmations before final** field). Left blank, a default heuristic applies:
+
+| Network / chain | Default confirmations |
+|---|---|
+| regtest | 1 |
+| fast chain | 10 |
+| slow chain | 6 |
+
+## Capabilities and pairs
+
+`listcoins` reports each coin's **capabilities** — **CLTV**, **SegWit v0**, and **Taproot**. Pairs are **derived, not curated**: `listpairs` walks live coins and reports which protocols a pair supports (v1 HTLC needs CLTV+SegWit; v2 adaptor needs Taproot). A pair only shows as ready when both coins are configured and live. The first supported pair is **BTCX ↔ BTC**.
+
+> **Note** — in Satchel, the **first-run ≥2-live-coins gate** means you must have at least two coins with status `ok` before you can reach the trading screens. See [Satchel User Guide](Satchel-User-Guide).
+
+## See also
+
+- [Running pactd](Running-pactd) · [JSON-RPC API](JSON-RPC-API) · [Satchel User Guide](Satchel-User-Guide)

@@ -148,7 +148,7 @@ pub struct AdaptorSwapRecord {
     /// Full hex of our last-broadcast spend on each leg, kept while it is
     /// unconfirmed so the scheduler can rebroadcast, RBF-bump (the single-key
     /// refund), or CPFP-bump (the cooperative redeem, whose own fee is locked
-    /// into the pre-signed adaptor signature — v2+). See V2_ADAPTOR_SWAPS.md.
+    /// into the pre-signed adaptor signature — v2+). See spec/protocol-v2.md.
     pub final_tx_a_hex: Option<String>,
     pub final_tx_b_hex: Option<String>,
 }
@@ -216,7 +216,7 @@ impl Store {
              -- (swap, leg) signing session; state advances monotonically
              -- none(absent) -> committed -> revealed -> consumed. The secret
              -- nonce is written BEFORE its public nonce is released, and never
-             -- regenerated; on resume we reload this row. See V2_ADAPTOR_SWAPS.md
+             -- regenerated; on resume we reload this row. See spec/protocol-v2.md
              -- nonce-safety design.
              CREATE TABLE IF NOT EXISTS nonce_sessions (
                  swap_id     TEXT NOT NULL,
@@ -231,7 +231,7 @@ impl Store {
                  swap_id TEXT PRIMARY KEY,
                  record  TEXT NOT NULL
              );
-             -- Nostr transport (docs/NOSTR_TRANSPORT.md): the async relay
+             -- Nostr transport (spec/protocol.md §8.8): the async relay
              -- service buffers all I/O through these local tables so the
              -- sync engine only ever touches SQLite. `nostr_inbox.id` is a
              -- local autoincrement, which lets NostrBoard mimic the HTTP
@@ -512,7 +512,7 @@ impl Store {
         self.meta_set("relay_cursor", &cursor.to_string())
     }
 
-    // ---- Nostr transport buffers (docs/NOSTR_TRANSPORT.md) ----
+    // ---- Nostr transport buffers (spec/protocol.md §8.8) ----
     // NostrBoard (sync) and the relay service (async) communicate only
     // through these; neither calls the other directly.
 

@@ -98,7 +98,7 @@ export const dumpSwap = (swapId: string) =>
     swapId,
   ]);
 
-// ---- Private (off-market) offers — PRIVATE_OFFERS.md -----------------------
+// ---- Private (off-market) offers — the Pact handbook (private offers) ------
 // Thin wrappers over pactd RPCs. A private offer is built/signed/stored locally
 // and handed to a friend as a `slip` string over their own chat; nothing is
 // posted to a board. The friend's `takeOffer(slip)` routes into the same swap

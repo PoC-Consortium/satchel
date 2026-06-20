@@ -116,7 +116,7 @@ struct Args {
     board_url: Option<String>,
     /// Nostr relay URL(s), comma-separated `wss://…`. When set, a
     /// decentralized Nostr transport runs alongside any --board-url
-    /// (docs/NOSTR_TRANSPORT.md). Empty/absent disables it.
+    /// (spec/protocol.md §8.8). Empty/absent disables it.
     #[arg(long)]
     nostr_relay: Option<String>,
     /// Auto-fund our HTLC leg in board-driven swaps (griefing trade-off).
@@ -789,7 +789,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             blocking(app, move |e| e.revoke_board_offer(&offer_id)).await?;
             Ok(json!({ "revoked": true }))
         }
-        // ---- private (off-market) offers — PRIVATE_OFFERS.md. The maker's
+        // ---- private (off-market) offers — the Pact handbook (private offers). The maker's
         // offer is built/signed/stored locally but NEVER posted to a board;
         // it travels to a friend as a slip string over their own chat. Mirrors
         // boardpostoffer/boardtake/boardrevoke; no board is touched.

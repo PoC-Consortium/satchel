@@ -9,14 +9,13 @@ Swap directly with a counterparty: the chain enforces the deal, so neither side
 can cheat and no third party ever holds your coins. The first supported pair is
 **BTCX ↔ BTC**; more coins follow.
 
+- Handbooks: [docs/handbook-pact/](docs/handbook-pact/) (developers & integrators) and [docs/handbook-satchel/](docs/handbook-satchel/) (users)
 - Plan: [docs/TRADING_ROADMAP.md](docs/TRADING_ROADMAP.md)
-- Design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Protocol spec: [spec/](spec/)
 
-> **Status:** alpha. v1 (hash-locked HTLC) is the default and now runs on
-> mainnet — the gate was lifted while the protocol and implementation are under
-> external audit. v2 (Taproot/MuSig2 adaptor) runs on regtest/testnet but stays
-> mainnet-gated until its own audit completes.
+> **Status:** live. Both swap protocols — v1 (hash-locked HTLC) and v2
+> (Taproot/MuSig2 adaptor) — are reviewed, audited, and running on mainnet. v1
+> is the default; v2 is selected automatically for Taproot-only pairs.
 
 ## How it works
 

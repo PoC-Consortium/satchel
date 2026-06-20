@@ -186,7 +186,7 @@ struct Config {
     /// Machine-level per-coin connections (shared across every merchant).
     coins: Vec<CoinConn>,
     board_urls: Vec<String>,
-    /// Nostr relay URLs for the decentralized transport (docs/NOSTR_TRANSPORT.md).
+    /// Nostr relay URLs for the decentralized transport (spec/protocol.md §8.8).
     /// Prewired to [`RECOMMENDED_NOSTR_RELAYS`] on a fresh install — the
     /// container-level `#[serde(default)]` fills a satchel.json that omits the
     /// field from `Config::default`, so it lands on the default relay set. An
@@ -587,7 +587,7 @@ fn list_coin_config(state: tauri::State<AppState>) -> serde_json::Value {
 }
 
 /// The default Nostr relay set, prewired into a fresh `Config` (and used to
-/// fill a satchel.json that omits the field) — docs/NOSTR_TRANSPORT.md. These
+/// fill a satchel.json that omits the field) — spec/protocol.md §8.8. These
 /// six were verified by `tools/relay-prober` to accept AND retain our offer
 /// (31510) + gift-wrap (1059) kinds with no auth/payment/PoW; the user can edit
 /// or clear them in Settings. Re-run the prober before a release to confirm

@@ -21,7 +21,7 @@ bip39 = "2"
 
 # v2 adaptor swaps (pact-htlc-v2): MuSig2 + Schnorr adaptor signatures.
 # NOTE: musig2 pulls secp256k1 0.31, *separate* from bitcoin 0.32's 0.29 —
-# never mix the two types; convert at the boundary by bytes (V2_ADAPTOR_SWAPS.md).
+# never mix the two types; convert at the boundary by bytes (spec/protocol-v2.md).
 musig2 = { version = "0.4", features = ["rand"] }
 
 scrypt = { version = "0.11", default-features = false }

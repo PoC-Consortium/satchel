@@ -1,4 +1,4 @@
-//! Private-offer slips — the off-market artifact (PRIVATE_OFFERS.md §3).
+//! Private-offer slips — the off-market artifact (spec/protocol.md §10).
 //!
 //! A *slip* is a private offer serialized for an out-of-band channel (chat):
 //! the exact same signed `offer` envelope that would otherwise go to the

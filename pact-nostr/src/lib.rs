@@ -2,7 +2,7 @@
 //!
 //! This crate is pure mapping + crypto: no relay connections, no async,
 //! no engine. It is the wire-format half of the Nostr transport described
-//! in `docs/NOSTR_TRANSPORT.md`; the relay pool and buffering live in the
+//! in `spec/protocol.md §8.8`; the relay pool and buffering live in the
 //! background service (`pactd/src/nostr_service.rs`), and the
 //! [`Noticeboard`] facade lives in `libswap`.
 //!
@@ -28,7 +28,7 @@ use pact_proto::envelope::Envelope;
 
 /// Addressable offer advert (NIP-33), one per `(maker pubkey, swap_id)`.
 /// Custom kind keeps non-spendable swap offers out of generic Nostr
-/// marketplace clients (docs/NOSTR_TRANSPORT.md).
+/// marketplace clients (spec/protocol.md §8.8).
 pub const OFFER_KIND: u16 = 31510;
 
 /// Gift-wrapped relay message: ephemeral author, `#p` recipient, sealed

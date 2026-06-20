@@ -87,7 +87,7 @@ pub struct EngineConfig {
     pub coin_confirmations: BTreeMap<String, u32>,
     pub board_url: Option<String>,
     /// Nostr relay URLs (comma-separated), shared across merchants like the
-    /// board. Drives the Nostr transport (docs/NOSTR_TRANSPORT.md).
+    /// board. Drives the Nostr transport (spec/protocol.md §8.8).
     pub nostr_relays: Option<String>,
     pub auto_fund: bool,
     /// Passphrase to try when *opening* a merchant's store (env-supplied). New

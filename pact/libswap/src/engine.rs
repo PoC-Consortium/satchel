@@ -54,7 +54,7 @@ pub struct Engine {
     /// Nostr relay URLs (comma-separated `wss://…`). When set, a
     /// `NostrBoard` joins the board fan-out alongside any HTTP corkboard;
     /// the async relay-pool service uses the URLs, the engine only touches
-    /// the local `nostr_*` buffers (docs/NOSTR_TRANSPORT.md).
+    /// the local `nostr_*` buffers (spec/protocol.md §8.8).
     pub nostr_relays: Option<String>,
     /// Fund our HTLC leg automatically during board-driven swaps. OFF by
     /// default: funding commits real money, and an auto-funding maker can
@@ -187,8 +187,8 @@ fn ensure_pair_supported(chain_a: &ChainRef, chain_b: &ChainRef) -> Result<()> {
     }
 }
 
-/// Ensure a pair can run a v2 adaptor swap: both legs Taproot-capable, and
-/// the mainnet gate satisfied (spec v2; V2_ADAPTOR_SWAPS.md mainnet gate).
+/// Ensure a pair can run a v2 adaptor swap: both legs Taproot-capable
+/// (spec v2; see spec/protocol-v2.md).
 fn ensure_adaptor_supported(chain_a: &ChainRef, chain_b: &ChainRef) -> Result<()> {
     let caps_a = registry::get(&chain_a.coin_id)
         .with_context(|| format!("unknown coin {:?}", chain_a.coin_id))?
@@ -339,7 +339,7 @@ pub(crate) const REGTEST_REDEEM_FEERATE: u64 = 2;
 /// into the adaptor signature and cannot be RBF'd, so it must still confirm if
 /// the fee market drifts up between init and the actual redeem (potentially
 /// hours later). A fresh interactive round (v3 bumpable redeem) is the real
-/// fix; until then we pad. See V2_ADAPTOR_SWAPS.md "fee-bump".
+/// fix; until then we pad. See spec/protocol-v2.md.
 pub(crate) const ADAPTOR_REDEEM_FEERATE_MULT: u64 = 3;
 
 /// Upper bound on a negotiated redeem feerate (sat/vB). Caps the initiator's
@@ -361,7 +361,7 @@ pub(crate) const CPFP_CHILD_VSIZE: u64 = 150;
 /// to `target` sat/vB, or `None` when the parent already pays at least `target`
 /// on its own (nothing to bump). `parent_fee` is the redeem's committed fee;
 /// the package spans both vsizes. The committed redeem fee can't be RBF'd, so a
-/// child is the only lever — see V2_ADAPTOR_SWAPS.md. Pure, so the CPFP fee
+/// child is the only lever — see spec/protocol-v2.md. Pure, so the CPFP fee
 /// policy is unit-testable without a node.
 pub(crate) fn cpfp_child_fee(
     parent_fee: u64,
@@ -1858,7 +1858,7 @@ impl Engine {
     ///   pre-signed adaptor signature), so it is re-anchored in the mempool and
     ///   **CPFP-bumped** with a self-funded child spending its own sweep output
     ///   ([`Self::adaptor_cpfp_bump`], v2+). Unilateral, byte-identical redeem,
-    ///   no protocol change; see V2_ADAPTOR_SWAPS.md.
+    ///   no protocol change; see spec/protocol-v2.md.
     fn adaptor_keep_moving(
         &self,
         rec: &AdaptorSwapRecord,
@@ -3330,7 +3330,7 @@ impl Engine {
     }
 
     // -----------------------------------------------------------------
-    // Private (off-market) offers — PRIVATE_OFFERS.md. A private offer is
+    // Private (off-market) offers — the Pact handbook (private offers). A private offer is
     // the SAME signed `offer` envelope a board offer is, built and stored
     // locally, but NEVER posted to a board. It is handed to a friend as a
     // "slip" (pact_proto::slip) over their own chat. The friend's
