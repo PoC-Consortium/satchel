@@ -450,6 +450,8 @@ export const en = {
     refund: "refund",
     dump: "dump logs",
     dumpHint: "Copy a secret-free diagnostics bundle (state + log lines) for this swap, to paste to the developers.",
+    dumpCopied: "Diagnostics copied — paste to the developers.",
+    dumpFailed: "Could not copy the diagnostics bundle.",
     fundingRequired: "Funding action required — {n} swap(s) need you to fund.",
     refundAt: "refund {when}",
     // Confirm dialogs for acting on a live swap (ActiveSwaps).
