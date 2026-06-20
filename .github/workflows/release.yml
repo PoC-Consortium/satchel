@@ -36,7 +36,11 @@ jobs:
             triple: x86_64-unknown-linux-gnu
           - os: macos-latest
             triple: aarch64-apple-darwin
-          - os: macos-13
+          # macos-13 (Intel) was retired Dec 2025 — its jobs never get a runner
+          # and stall until cancelled. macos-15-intel is GitHub's last x86_64
+          # image (available until ~Aug 2027). Migrate to universal-apple-darwin
+          # before then.
+          - os: macos-15-intel
             triple: x86_64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
