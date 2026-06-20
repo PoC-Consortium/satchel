@@ -119,6 +119,23 @@ fn load_doc(config_dir: &Path) -> CoinFileDoc {
 /// Anything else is left literal.
 pub fn expand_datadir(raw: &str) -> String {
     let raw = raw.trim();
+    // %NODEDIR%/<Name> → the Bitcoin-Core-family default data dir for a node
+    // named <Name>, resolved per OS (this is where the node writes its .cookie):
+    //   Windows → %LOCALAPPDATA%\<Name>   (modern Core + bitcoin-pocx)
+    //   macOS   → ~/Library/Application Support/<Name>
+    //   Linux   → ~/.<name lowercased>
+    // Windows + macOS are both dirs::data_local_dir(); only Linux is the dotfile.
+    // Mirrors phoenix-pocx's getDefaultDataDirectory.
+    if let Some(rest) = raw.strip_prefix("%NODEDIR%") {
+        let name = rest.trim().trim_start_matches(['/', '\\']);
+        if cfg!(target_os = "linux") {
+            if let Some(home) = dirs::home_dir() {
+                return join_tail(&home, &format!(".{}", name.to_lowercase()));
+            }
+        } else if let Some(base) = dirs::data_local_dir() {
+            return join_tail(&base, name);
+        }
+    }
     if let Some(rest) = raw.strip_prefix("~") {
         if let Some(home) = dirs::home_dir() {
             return join_tail(&home, rest);
@@ -238,5 +255,19 @@ mod tests {
             home.join(".bitcoin").display().to_string()
         );
         assert_eq!(expand_datadir("/abs/path"), "/abs/path");
+    }
+
+    #[test]
+    fn nodedir_token_resolves_per_os() {
+        // %NODEDIR%/<Name> → the node's default data dir for this OS: the
+        // dotted-lowercase home dir on Linux, the platform data-local dir
+        // (%LOCALAPPDATA% / ~/Library/Application Support) elsewhere.
+        let got = expand_datadir("%NODEDIR%/Bitcoin-PoCX");
+        let want = if cfg!(target_os = "linux") {
+            dirs::home_dir().unwrap().join(".bitcoin-pocx")
+        } else {
+            dirs::data_local_dir().unwrap().join("Bitcoin-PoCX")
+        };
+        assert_eq!(got, want.display().to_string());
     }
 }
