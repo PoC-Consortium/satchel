@@ -357,7 +357,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             // Tolerate a missing/locked seed: a fresh merchant (first run) or
             // a locked encrypted one has no identity to show yet. The UI uses
             // seed_exists/locked to drive the wizard / unlock prompt.
-            let (status, identity, coins, auto_fund) = blocking(app, |e| {
+            let (status, identity, coins) = blocking(app, |e| {
                 let status = e.store.wallet_status()?;
                 let identity = if status.seed_exists && !status.locked {
                     e.store
@@ -368,7 +368,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 } else {
                     None
                 };
-                Ok((status, identity, e.configured_coins(), e.auto_fund))
+                Ok((status, identity, e.configured_coins()))
             })
             .await?;
             Ok(json!({
@@ -381,23 +381,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 "encrypted": status.encrypted,
                 "locked": status.locked,
                 "coins": coins,
-                "auto_fund": auto_fund,
             }))
-        }
-        // RC2: flip auto-fund at runtime (the Satchel Settings toggle). Takes
-        // effect immediately on the live engine; Satchel also persists its own
-        // copy so the choice survives a restart.
-        "setautofund" => {
-            let on = p
-                .get(0, "on")?
-                .as_bool()
-                .context("param 'on' must be a boolean")?;
-            let on = blocking_registry(app, move |r| {
-                r.set_auto_fund(on);
-                Ok(r.auto_fund())
-            })
-            .await?;
-            Ok(json!({ "auto_fund": on }))
         }
         "walletstatus" => {
             let status = blocking(app, |e| e.store.wallet_status()).await?;

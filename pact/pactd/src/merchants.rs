@@ -251,24 +251,6 @@ impl MerchantRegistry {
         &self.data_dir
     }
 
-    /// The current auto-fund setting (RC2): whether the scheduler funds our
-    /// swap legs automatically. Read from the engine config, so it is available
-    /// even before a merchant is loaded.
-    pub fn auto_fund(&self) -> bool {
-        self.cfg.auto_fund
-    }
-
-    /// Flip auto-fund at runtime (RC2): updates the stored config so any later
-    /// merchant build inherits it, AND the live active engine for immediate
-    /// effect (no pactd restart). Satchel persists its own copy of the choice so
-    /// it survives a restart (where it is re-applied via the launch flag).
-    pub fn set_auto_fund(&mut self, on: bool) {
-        self.cfg.auto_fund = on;
-        if let Some(engine) = self.engine.as_mut() {
-            engine.auto_fund = on;
-        }
-    }
-
     /// Allocate the next free `m<N>` id that collides with neither the manifest
     /// nor an existing on-disk `merchants/<id>/` dir (the desync guard from
     /// C10: a dir left behind after a manifest wipe must not be reused).

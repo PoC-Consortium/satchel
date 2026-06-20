@@ -7,7 +7,6 @@ import {
   IconButton,
   MenuItem,
   Select,
-  Switch,
   Tab,
   Tabs,
   TextField,
@@ -27,7 +26,7 @@ import { useI18n, useT, LANGUAGES } from "../i18n";
 import type { UiPrefs } from "../api/types";
 import { APP_VERSION, UPDATE_AVAILABLE } from "../version";
 import { isMainnet } from "../format";
-import { errMsg, listCoinConfig, saveBoard, saveNostrRelays, setAutoFund } from "../api/tauri";
+import { errMsg, listCoinConfig, saveBoard, saveNostrRelays } from "../api/tauri";
 import NetworkStamp from "../components/NetworkStamp";
 import CoinsScreen from "./CoinsScreen";
 
@@ -76,46 +75,15 @@ export default function SettingsScreen() {
 function GeneralTab() {
   const t = useT();
   return (
-    <>
-      <Section title={t("settings.appearance")}>
-        <Row label={t("settings.theme")} hint={t("settings.themeHint")}>
-          <ThemeToggle />
-        </Row>
-        <Row label={t("settings.language")} hint={t("settings.languageHint")}>
-          <LanguageSelect />
-        </Row>
-      </Section>
-      <Section title={t("settings.swaps")}>
-        <Row label={t("settings.autoFund")} hint={t("settings.autoFundHint")}>
-          <AutoFundToggle />
-        </Row>
-      </Section>
-    </>
+    <Section title={t("settings.appearance")}>
+      <Row label={t("settings.theme")} hint={t("settings.themeHint")}>
+        <ThemeToggle />
+      </Row>
+      <Row label={t("settings.language")} hint={t("settings.languageHint")}>
+        <LanguageSelect />
+      </Row>
+    </Section>
   );
-}
-
-// RC2 #1: auto-fund toggle. Reads the live state from getinfo; setAutoFund
-// applies it immediately (no relaunch) and persists it. Turning it OFF switches
-// to manual funding, where the funding-required alert kicks in.
-function AutoFundToggle() {
-  const { info } = useApp();
-  const [on, setOn] = useState<boolean>(info?.auto_fund ?? true);
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (typeof info?.auto_fund === "boolean") setOn(info.auto_fund);
-  }, [info?.auto_fund]);
-  const toggle = async (next: boolean) => {
-    setBusy(true);
-    setOn(next);
-    try {
-      await setAutoFund(next);
-    } catch {
-      setOn(!next); // revert on failure; the next getinfo poll reconciles
-    } finally {
-      setBusy(false);
-    }
-  };
-  return <Switch checked={on} disabled={busy} onChange={(_, v) => void toggle(v)} />;
 }
 
 function CoinsTab() {

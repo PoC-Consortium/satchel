@@ -1,52 +1,9 @@
-import { Alert, Box, Button, Chip, Stack, Tooltip, Typography } from "@mui/material";
-import { useEffect, useRef } from "react";
+import { Box, Button, Chip, Stack, Tooltip, Typography } from "@mui/material";
 import { useApp } from "../AppContext";
 import { useConfirm } from "../ui/ConfirmProvider";
 import { useT } from "../i18n";
 import { dumpSwap, errMsg, rpc } from "../api/tauri";
 import { asset, fmtAmt, isActive } from "../format";
-
-// RC2 #2: a short attention tone for "funding required" (manual flow). No OS
-// notification — just audio + the on-screen banner. Lazily creates one
-// AudioContext; silently no-ops if the webview blocks audio (banner still shows).
-let alertAudioCtx: AudioContext | null = null;
-function playFundingTone() {
-  try {
-    alertAudioCtx ??= new AudioContext();
-    if (alertAudioCtx.state === "suspended") void alertAudioCtx.resume();
-    const ctx = alertAudioCtx;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = 880;
-    osc.connect(gain).connect(ctx.destination);
-    const t0 = ctx.currentTime;
-    gain.gain.setValueAtTime(0.0001, t0);
-    gain.gain.exponentialRampToValueAtTime(0.18, t0 + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.4);
-    osc.start(t0);
-    osc.stop(t0 + 0.42);
-  } catch {
-    /* audio unavailable — the banner is the fallback */
-  }
-}
-
-// Webview autoplay policy suspends a fresh AudioContext until a user gesture, so
-// the first tone was silent. Create + resume it on the first interaction; by the
-// time a swap needs funding the user has clicked around, so the context runs.
-function unlockAudio() {
-  try {
-    alertAudioCtx ??= new AudioContext();
-    if (alertAudioCtx.state === "suspended") void alertAudioCtx.resume();
-  } catch {
-    /* ignore */
-  }
-}
-
-/** Whether this swap is waiting for OUR manual funding right now. */
-function needsMyFunding(s: Swap): boolean {
-  return primaryAction(s) === "fund";
-}
 import { narrate } from "../screens/narrate";
 import { C } from "../theme";
 import type { Swap } from "../api/types";
@@ -68,41 +25,10 @@ const canCancel = (s: Swap) =>
   ["created", "accepted"].includes(s.state) || (s.state === "funded_a" && s.role === "participant");
 
 export default function ActiveSwaps() {
-  const { swaps, refreshSwaps, log, info } = useApp();
+  const { swaps, refreshSwaps, log } = useApp();
   const confirm = useConfirm();
   const t = useT();
   const active = swaps.filter(isActive);
-
-  // Unlock the alert audio on the first user gesture (autoplay policy).
-  useEffect(() => {
-    const unlock = () => unlockAudio();
-    window.addEventListener("pointerdown", unlock, { once: true });
-    window.addEventListener("keydown", unlock, { once: true });
-    return () => {
-      window.removeEventListener("pointerdown", unlock);
-      window.removeEventListener("keydown", unlock);
-    };
-  }, []);
-
-  // RC2 #2: manual-funding alert. When auto-fund is OFF and a swap newly needs
-  // OUR funding, play a tone; a banner stays up while any swap awaits funding.
-  const autoFund = info?.auto_fund ?? true;
-  const needFunding = active.filter(needsMyFunding);
-  const seenFundingIds = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const ids = new Set(
-      swaps.filter((s) => isActive(s) && needsMyFunding(s)).map((s) => s.swap_id),
-    );
-    if (!autoFund) {
-      for (const id of ids) {
-        if (!seenFundingIds.current.has(id)) {
-          playFundingTone();
-          break;
-        }
-      }
-    }
-    seenFundingIds.current = ids;
-  }, [swaps, autoFund]);
 
   async function act(action: string, id: string) {
     try {
@@ -181,12 +107,6 @@ export default function ActiveSwaps() {
         </Typography>
         <Typography sx={{ fontSize: 11, color: "text.disabled" }}>{active.length}</Typography>
       </Box>
-
-      {!autoFund && needFunding.length > 0 && (
-        <Alert severity="warning" sx={{ borderRadius: 0, py: 0.5 }}>
-          {t("swaps.fundingRequired", { n: needFunding.length })}
-        </Alert>
-      )}
 
       <Box>
         {active.map((s, i) => (
