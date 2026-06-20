@@ -25,10 +25,11 @@ address the protocol falls back to the deterministic swap-key destination.
 import sys
 
 from regtest_harness import Harness
-from test_swap_e2e import Corkboard, Party, build_workspace, regtest_timelocks
+from test_swap_e2e import COINS_TOML, Corkboard, Party, build_workspace, regtest_timelocks
 
 GIVE_POCX = "btcx:50.0"
 GET_BTC = "btc:0.001"
+GET_LTC = "ltc:0.5"
 
 
 def _env(result):
@@ -272,6 +273,78 @@ def test_adaptor_redeem_cpfp(h):
         bob.stop()
 
 
+def test_adaptor_redeem_cpfp_ltc(h):
+    """Same CPFP bump as test_adaptor_redeem_cpfp, but on a btcx<->ltc adaptor
+    swap so the stuck redeem + child run on LITECOIND (a Core fork). This is the
+    first v2 adaptor swap on LTC (the LTC playground is v1-pinned), so it proves
+    both that the Taproot/MuSig2 path works on litecoind AND that CPFP — a
+    generic Core wallet op (signrawtransactionwithwallet + sendrawtransaction) —
+    bumps the redeem there. Requires Harness(with_ltc=True)."""
+    assert h.ltc is not None, "this test needs Harness(with_ltc=True)"
+    # Litecoin wallets: Bob funds leg B (LTC), so bob_ltc holds the coins;
+    # alice_ltc receives the redeem sweep (+ the CPFP child).
+    h.ltc.create_wallet("alice_ltc")
+    h.ltc.create_wallet("bob_ltc")
+    h.ltc.generate(110, "bob_ltc")  # >100 for coinbase maturity
+
+    alice = Party("adcpl-alice", h, h.workdir, "alice_pocx", "alice_btc", auto_init=False,
+                  coins_file=COINS_TOML, extra_coins=[("ltc", h.ltc.rpc_url(wallet="alice_ltc"))]).start()
+    bob = Party("adcpl-bob", h, h.workdir, "bob_pocx", "bob_btc", auto_init=False,
+                coins_file=COINS_TOML, extra_coins=[("ltc", h.ltc.rpc_url(wallet="bob_ltc"))]).start()
+    try:
+        alice.setup_seed()
+        bob.setup_seed()
+        t2, t1 = regtest_timelocks(h)
+
+        # leg A = btcx (Alice funds on PoCX); leg B = ltc (Bob funds on LTC).
+        init = _env(alice.rpc("adaptorinit", GIVE_POCX, GET_LTC, t1, t2))
+        sid = init["swap_id"]
+        accept = _env(bob.rpc("adaptoraccept", init))
+        alice.rpc("adaptorrecv", accept)
+
+        fa = _env(alice.rpc("adaptorfund", sid))
+        h.pocx.generate(1, "alice_pocx")
+        bob.rpc("adaptorrecv", fa)
+        fb = _env(bob.rpc("adaptorfund", sid))
+        h.ltc.generate(1, "bob_ltc")          # leg B 1 conf (regtest n_b = 1)
+        alice.rpc("adaptorrecv", fb)
+        na = _env(alice.rpc("adaptornonces", sid))
+        nb = _env(bob.rpc("adaptornonces", sid))
+        bob.rpc("adaptorrecv", na)
+        alice.rpc("adaptorrecv", nb)
+        pa = _env(alice.rpc("adaptorsign", sid))
+        pb = _env(bob.rpc("adaptorsign", sid))
+        bob.rpc("adaptorrecv", pa)
+        alice.rpc("adaptorrecv", pb)
+        alice.rpc("adaptorassemble", sid)
+        bob.rpc("adaptorassemble", sid)
+        b_txid, b_vout = fb["body"]["txid"], fb["body"]["vout"]   # leg B (LTC)
+
+        # Alice redeems leg B on LTC but we do NOT mine it.
+        alice.rpc("adaptorredeem", sid)
+        rec = alice.rpc("listadaptorswaps")[0]
+        assert rec["state"] == "redeemed_b", rec["state"]
+        redeem_txid = rec["final_txid_b"]
+        assert h.ltc.rpc("gettxout", redeem_txid, 0) is not None, "LTC redeem output missing pre-CPFP"
+
+        # The unconfirmed LTC redeem → a tick must CPFP-bump it on litecoind.
+        cpfp = False
+        for ev in alice.rpc("tick")["events"]:
+            print(f"[e2e]   cpfp-ltc[alice]: {ev['action']} {ev['detail'][:70]}")
+            if ev["action"] == "adaptor-cpfp":
+                cpfp = True
+        assert cpfp, "stuck LTC cooperative redeem was not CPFP-bumped"
+        assert h.ltc.rpc("gettxout", redeem_txid, 0) is None, "LTC redeem output not spent by a CPFP child"
+        assert len(h.ltc.rpc("getrawmempool")) >= 2, "expected LTC redeem + child in the mempool"
+
+        h.ltc.generate(2, "bob_ltc")
+        assert h.ltc.rpc("gettxout", b_txid, b_vout) is None, "LTC leg B redeem never confirmed"
+        print("[e2e] adaptor redeem CPFP on LTC OK: stuck litecoind redeem bumped by a child")
+    finally:
+        alice.stop()
+        bob.stop()
+
+
 def test_adaptor_depth_gate(h):
     """Reveal depth gate (spec v2 §8 / v1 §9.5): with `--coin-confs btc=2`, the
     initiator must NOT publish `t` (redeem leg B) until Bob's leg-B funding is 2
@@ -379,8 +452,12 @@ def main():
         test_adaptor_redeem_cpfp(h)
         test_adaptor_depth_gate(h)
         test_adaptor_corkboard_swap(h)
+    # LTC leg in its own harness (brings up litecoind) so the core suite stays
+    # litecoind-free: first v2 adaptor swap on LTC + CPFP on litecoind.
+    with Harness(with_ltc=True) as h:
+        test_adaptor_redeem_cpfp_ltc(h)
     print("[e2e] adaptor-swap suite passed "
-          "(happy + refund + fee-bump + redeem-cpfp + depth-gate + board)")
+          "(happy + refund + fee-bump + redeem-cpfp + depth-gate + board + ltc-cpfp)")
 
 
 if __name__ == "__main__":
