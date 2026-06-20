@@ -135,11 +135,8 @@ pub struct AdaptorSwapRecord {
     /// store the SAME values (the initiator's, carried in the signed init) so the
     /// redeem txs — and their MuSig2 sighashes — are byte-identical. The fee is
     /// committed into the adaptor signature and unbumpable, so the rate is
-    /// over-provisioned at init (M2). `#[serde(default)]` → pre-M2 records
-    /// deserialize to 0, treated as the legacy 2 sat/vB.
-    #[serde(default)]
+    /// over-provisioned at init (M2).
     pub redeem_feerate_a: u64,
-    #[serde(default)]
     pub redeem_feerate_b: u64,
     pub counterparty_identity: Option<String>,
     // Funding outpoints (built before broadcast, spec v2 §7).

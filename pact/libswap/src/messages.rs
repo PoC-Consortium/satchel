@@ -105,11 +105,9 @@ pub struct InitV2Body {
     /// Alice redeems). Both parties build the redeem txs at exactly these rates
     /// so the MuSig2 sighashes match; the fee is committed into the adaptor
     /// signature and cannot be bumped, so the initiator over-provisions (M2).
-    /// `#[serde(default)]` → the pre-M2 wire format deserializes to 0, which the
-    /// engine treats as the legacy 2 sat/vB.
-    #[serde(default)]
+    /// Required — an init without them is rejected (the participant also
+    /// bounds-checks 1..=500 sat/vB).
     pub redeem_feerate_a: u64,
-    #[serde(default)]
     pub redeem_feerate_b: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub offer_id: Option<String>,
