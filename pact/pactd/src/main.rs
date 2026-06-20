@@ -594,6 +594,30 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 blocking(app, move |e| e.store.get(&id)).await?,
             )?)
         }
+        // RC2 (#3b): a dev-shareable dump for ONE swap — its current record with
+        // secrets scrubbed + the pactd log lines mentioning it. Safe to hand to
+        // a dev (no seed/preimage/nonces). The UI's per-swap "Dump logs" button.
+        "dumpswap" => {
+            let id = p.str(0, "swap_id")?;
+            let dump = blocking_registry(app, move |r| {
+                let log_dir = r.data_dir().join("logs");
+                let engine = r.active()?;
+                // v1 record first (scrub its preimage); else the v2 adaptor
+                // record (stores no secret — `t` is never persisted).
+                let record = match engine.store.get(&id) {
+                    Ok(rec) => scrub_secrets(serde_json::to_value(&rec)?),
+                    Err(_) => serde_json::to_value(engine.store.get_adaptor(&id)?)?,
+                };
+                Ok(json!({
+                    "swap_id": id,
+                    "pactd_version": env!("CARGO_PKG_VERSION"),
+                    "record": record,
+                    "log": swap_log_lines(&log_dir, &id),
+                }))
+            })
+            .await?;
+            Ok(dump)
+        }
         "offer" => {
             let give = parse_coin_amount(&p.str(0, "give")?)?;
             let get = parse_coin_amount(&p.str(1, "get")?)?;
@@ -956,6 +980,53 @@ fn parse_network(name: &str) -> Result<Network> {
     }
 }
 
+/// RC2: the pactd log lines that mention `swap_id`, across all rolling
+/// `pactd.log*` files in `log_dir` (oldest first). The scheduler tags every
+/// swap event with `swap=<id>`, so a substring match isolates that swap's
+/// narration. Best-effort: unreadable files are skipped.
+fn swap_log_lines(log_dir: &Path, swap_id: &str) -> Vec<String> {
+    let mut files: Vec<PathBuf> = match std::fs::read_dir(log_dir) {
+        Ok(entries) => entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with("pactd.log"))
+            })
+            .collect(),
+        Err(_) => return Vec::new(),
+    };
+    files.sort();
+    let mut lines = Vec::new();
+    for f in files {
+        if let Ok(content) = std::fs::read_to_string(&f) {
+            lines.extend(
+                content
+                    .lines()
+                    .filter(|l| l.contains(swap_id))
+                    .map(str::to_string),
+            );
+        }
+    }
+    lines
+}
+
+/// RC2: redact swap secrets from a serialized record before it leaves the
+/// machine in a dev dump. The v1 `SwapRecord` carries the `preimage`; the v2
+/// adaptor record stores no secret. Never touches the seed/nonces (not in the
+/// record). Defensive: redacts any field named like a secret.
+fn scrub_secrets(mut v: Value) -> Value {
+    if let Some(obj) = v.as_object_mut() {
+        for k in ["preimage", "secret", "seed", "mnemonic", "secnonce"] {
+            if obj.contains_key(k) {
+                obj.insert(k.to_string(), json!("[redacted]"));
+            }
+        }
+    }
+    v
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -1156,6 +1227,49 @@ async fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scrub_secrets_redacts_preimage_keeps_rest() {
+        // RC2 #3b: the dev dump must never carry the v1 preimage (or any
+        // secret-named field), but everything else stays for diagnostics.
+        let rec = json!({
+            "swap_id": "abcd", "state": "completed", "preimage": "deadbeef",
+            "final_txid": "1111", "amount_a": 50_000_000u64
+        });
+        let scrubbed = scrub_secrets(rec);
+        assert_eq!(scrubbed["preimage"], json!("[redacted]"));
+        assert_eq!(scrubbed["state"], json!("completed"));
+        assert_eq!(scrubbed["final_txid"], json!("1111"));
+        // A record without a preimage (e.g. a v2 adaptor record) is untouched.
+        let v2 = json!({ "swap_id": "ef01", "state": "signed" });
+        assert_eq!(scrub_secrets(v2.clone()), v2);
+    }
+
+    #[test]
+    fn swap_log_lines_filters_by_id_across_files() {
+        let dir = std::env::temp_dir().join(format!("pactd-dumptest-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("pactd.log.2026-06-19"),
+            "INFO scheduler swap=aaaa action=funded\nINFO scheduler swap=bbbb action=redeem\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("pactd.log.2026-06-20"),
+            "INFO scheduler swap=aaaa action=completed\nINFO other unrelated line\n",
+        )
+        .unwrap();
+        let lines = swap_log_lines(&dir, "aaaa");
+        assert_eq!(lines.len(), 2, "two lines mention aaaa across both files");
+        assert!(lines.iter().all(|l| l.contains("aaaa")));
+        assert!(lines.iter().any(|l| l.contains("funded")));
+        assert!(lines.iter().any(|l| l.contains("completed")));
+        // Unknown id / missing dir → empty, no panic.
+        assert!(swap_log_lines(&dir, "zzzz").is_empty());
+        assert!(swap_log_lines(&dir.join("nope"), "aaaa").is_empty());
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn coin_arg_parsing() {

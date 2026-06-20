@@ -245,6 +245,12 @@ impl MerchantRegistry {
             .context("no active merchant — create or load one first")
     }
 
+    /// The pactd data dir (parent of `merchants/` and `logs/`) — RC2 uses it to
+    /// locate the rolling log file for the per-swap dump.
+    pub fn data_dir(&self) -> &Path {
+        &self.data_dir
+    }
+
     /// The current auto-fund setting (RC2): whether the scheduler funds our
     /// swap legs automatically. Read from the engine config, so it is available
     /// even before a merchant is loaded.
