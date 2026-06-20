@@ -245,7 +245,7 @@ export interface Offer {
 }
 
 /** A locally-stored private (off-market) offer from pactd `listprivateoffers`
- *  (PRIVATE_OFFERS.md). Never posted to a board; tracked so the maker can
+ *  (the Pact handbook, private offers). Never posted to a board; tracked so the maker can
  *  cancel its slip before the ttl lapses. */
 export interface PrivateOffer {
   offer_id: string;

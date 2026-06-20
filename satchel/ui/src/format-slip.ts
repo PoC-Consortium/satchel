@@ -1,5 +1,5 @@
 // Read-only slip helpers for the UI. The slip is the off-market artifact
-// (PRIVATE_OFFERS.md §3): `pactoffer1:<base64url(canonical_json(offer envelope))>`.
+// (spec/protocol.md §10): `pactoffer1:<base64url(canonical_json(offer envelope))>`.
 //
 // pactd is the ONLY authority — `takeoffer` re-decodes AND verifies the BIP340
 // signature in Rust before anything happens. This module decodes the slip

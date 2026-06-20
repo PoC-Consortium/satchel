@@ -3,7 +3,7 @@ name = "pact-nostr"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "Map Pact wire envelopes <-> Nostr events: public offer adverts (kind 31510) and gift-wrapped relay messages (kind 1059). Pure mapping + crypto, no relay I/O. See docs/NOSTR_TRANSPORT.md."
+description = "Map Pact wire envelopes <-> Nostr events: public offer adverts (kind 31510) and gift-wrapped relay messages (kind 1059). Pure mapping + crypto, no relay I/O. See spec/protocol.md §8.8."
 
 [dependencies]
 pact-proto = { path = "../pact-proto" }

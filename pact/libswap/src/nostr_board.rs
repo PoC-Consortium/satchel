@@ -1,5 +1,5 @@
 //! `NostrBoard` — the sync [`Noticeboard`] facade over the local Nostr
-//! buffers (docs/NOSTR_TRANSPORT.md).
+//! buffers (spec/protocol.md §8.8).
 //!
 //! It performs no network I/O. Every operation reads or writes the
 //! `nostr_*` SQLite tables; the async relay-pool service (Phase 3) drains

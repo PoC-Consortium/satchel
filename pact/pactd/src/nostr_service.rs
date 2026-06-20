@@ -1,4 +1,4 @@
-//! Background Nostr relay client (docs/NOSTR_TRANSPORT.md, "The sync boundary").
+//! Background Nostr relay client (spec/protocol.md §8.8, "The sync boundary").
 //!
 //! All async relay I/O is isolated here. Each scheduler tick runs three
 //! steps, so the engine lock is only ever held for fast SQLite work and
@@ -263,7 +263,7 @@ mod tests {
     //! pact-nostr mapping the relay round uses, hands the resulting events to
     //! a taker by hand, and checks the taker's `NostrBoard` buffers surface
     //! them. This covers everything except the websocket hop (that needs a
-    //! relay binary — the live-relay e2e in docs/NOSTR_TRANSPORT.md).
+    //! relay binary — the live-relay e2e in the Pact handbook (Nostr transport)).
 
     use super::*;
     use libswap::board::Noticeboard;

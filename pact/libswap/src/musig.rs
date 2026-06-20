@@ -1,5 +1,5 @@
 //! M1 crypto spike for `pact-htlc-v2` (Route A — Taproot/MuSig2 adaptor
-//! swaps). See `V2_ADAPTOR_SWAPS.md`.
+//! swaps). See `spec/protocol-v2.md`.
 //!
 //! This module proves, in isolation, the three crypto unknowns the v2
 //! protocol rests on — **before** any protocol, state machine, or engine

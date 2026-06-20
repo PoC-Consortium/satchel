@@ -497,7 +497,7 @@ The envelopes above are transport-agnostic (§8.1). Besides manual transport
 and the HTTP Corkboard, an implementation MAY carry them over **Nostr**
 relays. This binding changes nothing about the swap: it transports the same
 signed envelopes and the same `PACTSEALED1` relay blobs (§10). See
-[`../docs/NOSTR_TRANSPORT.md`](../docs/NOSTR_TRANSPORT.md) for the full design;
+the [Pact handbook](../docs/handbook-pact/) (Nostr transport) for the full design;
 the wire mapping is:
 
 - **Identity.** A party's Nostr key IS its Pact identity key — both are the

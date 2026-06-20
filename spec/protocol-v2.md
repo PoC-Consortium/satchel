@@ -217,7 +217,7 @@ Seed + swap index re-derive every long-term key (swap, refund) and `t`
 tapleaf. Completing an in-flight **cooperative** redeem additionally needs
 the persisted MuSig2 session state (nonces are not seed-derived, §3.2); if
 that state is lost mid-session, the swap falls back to the timelock refund —
-never to nonce reuse. (Restates docs/V2_ADAPTOR_SWAPS.md "Recovery contract".)
+never to nonce reuse.
 
 ## 10. Versioning
 
