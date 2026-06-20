@@ -100,8 +100,8 @@ about, because that's the real thing.
 
 ## The activity log and active-swaps dock
 
-While you're on the **Corkboard**, two extra panels are docked along the bottom of
-the content area (they appear only on that screen):
+Two panels are docked along the bottom of the content area, visible on every
+page:
 
 - **Your active swaps** — a live card for each swap in progress, showing its
   state, the amounts, your role, and — when needed — the action buttons to push a

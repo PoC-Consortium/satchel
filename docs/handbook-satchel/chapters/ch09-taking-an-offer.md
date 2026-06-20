@@ -35,9 +35,7 @@ cryptography:
    their chain before you lock anything. You are never the one exposed first.
 2. **Your side is funded automatically.** When the swap reaches the point where it
    needs *your* coins, Satchel funds your side for you — you don't have to click
-   anything. This is the default behaviour (the **Auto-fund swaps** setting, on out
-   of the box). If you'd rather lock in every swap by hand, you can turn it off in
-   **Settings → General** and fund each one yourself from the active-swaps dock.
+   anything. This is how every swap works — there is nothing to configure.
 3. **The engine watches both chains.** Satchel's engine monitors the blockchains
    for both coins, waiting for each funding to confirm to a safe depth.
 4. **The funds are released atomically.** Once both sides are locked, the engine
@@ -49,10 +47,10 @@ cryptography:
    automatically pulls your locked funds back to you. You don't have to do
    anything to get a refund — it's built in.
 
-> **Note** — With auto-fund on (the default) the whole flow is automatic — you
-> won't touch a button at all. If you've turned auto-fund off, the app asks you to
-> lock your side when it's your turn: the **fund** action appears in the
-> active-swaps dock — see the chapter on tracking your swaps.
+> **Note** — The whole flow is automatic: after you take an offer you won't touch
+> a button at all — funding, redeeming, and (if needed) refunding all happen on
+> their own. The **fund** and **refund** actions still appear in the active-swaps
+> dock if you ever want to act manually — see the chapter on tracking your swaps.
 
 ## You don't have to babysit it — but keep the app running
 

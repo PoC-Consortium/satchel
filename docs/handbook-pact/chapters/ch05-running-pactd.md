@@ -33,7 +33,7 @@ move funds on any chain until a backend is attached.
 | `--network` | string | `regtest` | One of `regtest`, `testnet`, `mainnet`. |
 | `--board-url` | string | none | Corkboard base URL(s), comma-separated (the HTTP transport). |
 | `--nostr-relay` | string | none | Nostr relay `wss://…` URL(s), comma-separated. Runs **alongside** any `--board-url`; empty or absent disables it. |
-| `--auto-fund` | flag | false | Auto-fund our leg in board-driven swaps. Sets the daemon's *starting* value; it can also be flipped at runtime with the `setautofund` RPC, and the current value is reported by `getinfo.auto_fund`. (Satchel defaults this **on** and toggles it live — see the note below.) |
+| `--auto-fund` | flag | false | Auto-fund our leg of swaps (the engine mechanism). The standalone CLI flag is opt-in; **Satchel always launches `pactd` with it on**. v2 (adaptor) swaps auto-fund regardless via the autopilot. The end-to-end harness uses this flag to drive manual-vs-auto funding. |
 | `--tick-secs` | u64 | `30` | Scheduler interval in seconds; `0` disables the background loop entirely. |
 | `--once` | flag | false | Run a single scheduler pass (`sync_board` + `tick`), print the resulting events as JSON, and exit. Exit code is `1` if any event has `action == "error"`. |
 | `--auto-init` | flag | false | Create the seed + state on first run (flat layout). No-op if a seed already exists. |
@@ -48,13 +48,12 @@ move funds on any chain until a backend is attached.
 > routable address to share a daemon — it will refuse to start. The RPC has no
 > remote-access model; see the chapter *Architecture & Trust Boundaries*.
 
-> **Note** — `--auto-fund` is the daemon's launch-time default; `setautofund`
-> changes it on the live engine without a relaunch. The standalone CLI flag
-> defaults **off** (opt-in). When `pactd` runs under Satchel, Satchel sets
-> auto-fund **on** for fresh installs and exposes a live toggle — so the
-> effective default for most users is on. Auto-fund is safe as a default because
-> offers are one-shot: a taken offer cannot be re-taken, so a maker's exposure
-> is bounded by the size of the offers they posted.
+> **Note** — The standalone `--auto-fund` flag is opt-in (off by default), but
+> **Satchel always launches `pactd` with it on** — auto-funding is the single,
+> always-on behaviour for app users. It is safe as a default because offers are
+> one-shot: a taken offer cannot be re-taken, so a maker's exposure is bounded by
+> the size of the offers they posted. (v2 adaptor swaps auto-fund regardless, via
+> the autopilot.)
 
 ## Logging
 

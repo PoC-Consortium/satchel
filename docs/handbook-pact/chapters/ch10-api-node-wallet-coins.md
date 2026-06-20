@@ -9,24 +9,17 @@ merchant* error) are covered in the chapter "JSON-RPC Conventions".
 
 | Method | Params | Returns | Mutates |
 |---|---|---|---|
-| `getinfo` | — | `{ name, version, protocol, network, identity?, seed_exists, encrypted, locked, coins, auto_fund }` | no |
+| `getinfo` | — | `{ name, version, protocol, network, identity?, seed_exists, encrypted, locked, coins }` | no |
 | `walletstatus` | — | `{ seed_exists, encrypted, locked }` | no |
-| `setautofund` | `on` (bool) | `{ auto_fund }` | yes |
 | `stop` | — | `"pactd stopping"` | yes (lifecycle) |
 
 - `getinfo` — `name` is always `"pactd"`; `version` is the crate version;
   `protocol` is the swap protocol version; `network` is the lowercased network
   name (`regtest`/`testnet`/`mainnet`); `coins` is the list of configured coin
-  ids; `auto_fund` reports whether the engine auto-funds our leg of board-driven
-  swaps. Tolerates a missing or locked seed — `identity` is `null` until a seed
+  ids. Tolerates a missing or locked seed — `identity` is `null` until a seed
   is present **and** unlocked.
 - `walletstatus` — the seed state triple. `locked` is true only when the seed
   is encrypted **and** its passphrase is not held in memory.
-- `setautofund` — flips auto-fund at runtime on the **live** engine (no
-  relaunch needed), and returns the new value. This is the runtime equivalent of
-  the `--auto-fund` launch flag; a front-end calls it from a settings toggle and
-  reads the current value back from `getinfo.auto_fund`. See the chapter
-  "Running pactd" for what auto-fund does.
 - `stop` — requests a graceful shutdown and returns immediately.
 
 ## Seed lifecycle

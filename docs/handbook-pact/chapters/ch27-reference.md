@@ -35,7 +35,7 @@ All methods are JSON-RPC over `POST /`. Grouped by area; see the named chapter
 for params and return shapes.
 
 **Node / info** (*"API: Node, Seed, Merchants, Coins"*): `getinfo`,
-`walletstatus`, `setautofund`, `stop`.
+`walletstatus`, `stop`.
 
 **Seed lifecycle** (same chapter): `createseed`, `generateseed`, `importseed`,
 `unlock`.

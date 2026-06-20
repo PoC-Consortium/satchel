@@ -21,18 +21,6 @@ The **General** tab holds your look-and-feel preferences.
   the app.
 - **Language** — selects the app's display language. At the moment **English** is
   the only language available; more may come later.
-- **Auto-fund swaps** — controls whether Satchel locks *your* side of a swap for
-  you. It's **on by default**, and the change applies live (no restart). When
-  **on**, the moment a swap you've made or taken needs your coins, the engine funds
-  your side automatically — you never click **fund**. When **off**, Satchel waits
-  for you to fund each swap by hand from the active-swaps dock, alerting you with a
-  tone and a banner when it's your turn (see *"Tracking Your Swaps"*).
-
-> **Note** — Leaving **Auto-fund swaps** on is safe because offers are *one-shot*:
-> once an offer is taken it can't be taken again, so the most you can ever fund is
-> the size of the offers you posted. Turn it off only if you prefer to confirm
-> every swap by hand.
-
 > **Tip** — There's also a quick theme and language reach from the header, but the
 > **General** tab is the canonical place to set them.
 

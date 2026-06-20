@@ -27,7 +27,7 @@ pactd --data-dir <DIR> [--coins-file <coins.toml>] [--coin <id>=<url[,url]> ...]
 | `--tick-secs <s>` | `30` | Background scheduler interval in seconds; `0` disables the loop. |
 | `--merchants` | off | Nested `merchants/<id>/` layout (one seed = one trading identity). Without it: flat single-seed layout in the data-dir root. |
 | `--auto-init` | off | Create seed + state on first run (flat layout). No-op if a seed already exists. |
-| `--auto-fund` | off | Auto-fund our leg of board-driven swaps. Sets the *starting* value; flip it live with the `setautofund` RPC, read it back from `getinfo.auto_fund`. (Satchel defaults this **on**.) |
+| `--auto-fund` | off | Auto-fund our leg of swaps. The CLI flag is opt-in, but **Satchel always launches with it on** — auto-funding is the single always-on behaviour. (v2 adaptor swaps auto-fund regardless, via the autopilot.) |
 
 > **Note** — the default RPC port is `9737`. Coin P2P/RPC ports live in each coin's chain params and are unrelated to this.
 

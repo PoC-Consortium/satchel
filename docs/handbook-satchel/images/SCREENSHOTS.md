@@ -28,7 +28,7 @@ path below, then rebuild with `./build.ps1`.
 | `ch08-offer-form.png` | 8 — Making an Offer | Post an offer form | Coins / price / swap-type / timelock filled, balances showing |
 | `ch09-take-confirm.png` | 9 — Taking an Offer | Take-offer confirmation dialog | Open over the Corkboard |
 | `ch10-swaps.png` | 10 — Tracking Swaps | Swaps page | Both **In flight** and **History** sections populated |
-| `ch10-dock.png` | 10 — Tracking Swaps | Active-swaps dock under Corkboard | A live swap card with a state-gated action button visible |
+| `ch10-dock.png` | 10 — Tracking Swaps | Active-swaps dock (any page) | A live swap card with a state-gated action button visible |
 | `ch11-wallets.png` | 11 — Your Wallets | Wallets page | At least two coin cards with balances |
 | `ch12-create-slip.png` | 12 — Private Offers | Create slip | Generated `pactoffer1:` slip box visible |
 | `ch12-my-slips.png` | 12 — Private Offers | My slips | At least one outstanding slip with expiry countdown and **Cancel** |
