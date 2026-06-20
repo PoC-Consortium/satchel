@@ -363,14 +363,22 @@ pub(crate) const CPFP_CHILD_VSIZE: u64 = 150;
 /// the package spans both vsizes. The committed redeem fee can't be RBF'd, so a
 /// child is the only lever — see V2_ADAPTOR_SWAPS.md. Pure, so the CPFP fee
 /// policy is unit-testable without a node.
-pub(crate) fn cpfp_child_fee(parent_fee: u64, parent_vsize: u64, target_feerate: u64) -> Option<u64> {
+pub(crate) fn cpfp_child_fee(
+    parent_fee: u64,
+    parent_vsize: u64,
+    target_feerate: u64,
+) -> Option<u64> {
     let parent_feerate = parent_fee / parent_vsize.max(1);
     if target_feerate <= parent_feerate {
         return None; // the parent already clears the target unaided
     }
     let package_vsize = parent_vsize + CPFP_CHILD_VSIZE;
     let desired_package_fee = target_feerate.saturating_mul(package_vsize);
-    Some(desired_package_fee.saturating_sub(parent_fee).max(MIN_SPEND_FEE_SAT))
+    Some(
+        desired_package_fee
+            .saturating_sub(parent_fee)
+            .max(MIN_SPEND_FEE_SAT),
+    )
 }
 
 /// Default confirmation requirement per chain — the fallback when the operator
@@ -1795,8 +1803,11 @@ impl Engine {
                 if rec.state == Signed && both_funded {
                     let net = rec.chain_a.network;
                     let (_, _, redeem_a_margin) = action_margins(net);
-                    let now =
-                        deadline_clock(net, local_now(), self.backend(&rec.chain_a)?.tip_median_time()?);
+                    let now = deadline_clock(
+                        net,
+                        local_now(),
+                        self.backend(&rec.chain_a)?.tip_median_time()?,
+                    );
                     if action_safe(now, redeem_a_margin, rec.t1) {
                         let op_b = outpoint(&rec.funding_b_txid, rec.funding_b_vout)?;
                         let spk_b = p.leg_b(&secp)?.script_pubkey(&secp)?;
