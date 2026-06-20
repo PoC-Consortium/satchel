@@ -100,7 +100,7 @@ Corkboard first, then run every scenario against a single shared `Harness`.
    competing second take (served-once + reject + auto-delist), and asserts
    every relay blob on the board is sealed ciphertext (`PACTSEALED1:`),
    never plaintext coordination JSON.
-8. *Private-offer swap* (PRIVATE_OFFERS.md): the maker builds an off-market
+8. *Private-offer swap* (see the Pact handbook, "Private (Off-Market) Offers"): the maker builds an off-market
    offer with `makeprivateoffer` (a `pactoffer1:` slip, posted to no board)
    and hands the slip to the taker out of band; `takeoffer <slip>` relays
    the take through the same blind relay and the swap auto-completes — with

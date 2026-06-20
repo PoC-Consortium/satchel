@@ -5,7 +5,7 @@ document specifies only what v2 changes. Everything not restated here
 (roles, transport, persistence philosophy, swap index `i`, the identity
 key) is inherited from v1 verbatim.
 
-Implementation plan and rationale: [`../docs/V2_ADAPTOR_SWAPS.md`](../docs/V2_ADAPTOR_SWAPS.md).
+Implementation plan and rationale: the [Pact handbook](../docs/handbook-pact/) (the v2 protocol chapters).
 
 ## 1. What changes from v1
 
@@ -71,8 +71,8 @@ one** partial signature. Implementations MUST persist the secret nonce to
 durable storage *before* releasing the corresponding public nonce, and on
 restart MUST resume from persisted state rather than regenerating
 (`store` `nonce_state`: `none → committed → revealed → consumed`). Reusing a
-nonce across two messages leaks the signing key. See docs/V2_ADAPTOR_SWAPS.md
-"Nonce-safety design".
+nonce across two messages leaks the signing key. See the Pact handbook chapter
+"v2 Taproot/MuSig2 Adaptor Swaps" (nonce-safety).
 
 ### 3.3 Swap identifier
 

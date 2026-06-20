@@ -29,29 +29,23 @@ that points readers at the handbooks for depth. To publish, push the contents of
 out with GitHub's conventions (`Home.md`, `_Sidebar.md`, `_Footer.md`, and one
 file per page).
 
-## 3. Design docs (engineering artifacts)
+## 3. Roadmap & specification
 
-The remaining Markdown files here are the original design/architecture documents
-written during development. They remain useful as deep background and rationale,
-but where they disagree with the code, **the handbooks (and the code) win** — the
-handbooks were re-verified against the implementation. Notable points the design
-docs predate:
+The earlier design/architecture docs (`ARCHITECTURE.md`, `V2_ADAPTOR_SWAPS.md`,
+`NOSTR_TRANSPORT.md`, `PRIVATE_OFFERS.md`, `SATCHEL.md`, `SATCHEL_BACKEND.md`,
+`SATCHEL_UI.md`) have been **removed** — they are fully superseded by the
+handbooks and the wiki, which are verified against the code. Their content lives
+on in:
 
-- **v2 (Taproot/MuSig2 adaptor) swaps run on every network, including mainnet**
-  (`ADAPTOR_MAINNET_ENABLED = true`) — older docs still describe v2 as "refused on
-  mainnet."
-- The Nostr transport is **shipped and prewired** (not "future work"), with six
-  default relays configured in Satchel.
-- Satchel's navigation is the eight-screen Public/Private layout (not the older
-  four-item nav).
+- the **Pact handbook** (architecture, the v1/v2 protocols, transports, private
+  offers, and the full RPC/CLI surface), and
+- the **Satchel handbook** + wiki (the app and its screens).
+
+What remains here, because the handbooks deliberately do not cover it:
 
 | File | Topic |
 |------|-------|
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | System architecture and trust boundaries |
-| [`TRADING_ROADMAP.md`](TRADING_ROADMAP.md) | Product roadmap and phases |
-| [`V2_ADAPTOR_SWAPS.md`](V2_ADAPTOR_SWAPS.md) | v2 Taproot/MuSig2 adaptor design |
-| [`NOSTR_TRANSPORT.md`](NOSTR_TRANSPORT.md) | Nostr transport design |
-| [`PRIVATE_OFFERS.md`](PRIVATE_OFFERS.md) | Private (off-market) offers design |
-| [`SATCHEL.md`](SATCHEL.md), [`SATCHEL_BACKEND.md`](SATCHEL_BACKEND.md), [`SATCHEL_UI.md`](SATCHEL_UI.md) | Satchel app, backend surface, and UI design |
+| [`TRADING_ROADMAP.md`](TRADING_ROADMAP.md) | Product strategy and regulatory (MiCA) positioning — not a tech doc the handbooks replace. |
 
-The normative protocol specification and test vectors live in [`../spec/`](../spec/).
+The normative protocol specification and deterministic test vectors live in
+[`../spec/`](../spec/) and remain authoritative; the handbooks cite them.

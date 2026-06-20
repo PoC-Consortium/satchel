@@ -87,8 +87,8 @@ pinned test vectors.
 write-ahead use-once nonce store, proven end to end over a chain backend) and
 surfaced in Satchel. On-chain these look like ordinary single-key payments:
 better privacy, smaller transactions, no swap script revealed. v2 swaps are
-**mainnet-gated until audited**. Route, rationale, and protocol delta:
-[V2_ADAPTOR_SWAPS.md](V2_ADAPTOR_SWAPS.md) and
+**live on mainnet** (reviewed and audited). Route, rationale, and protocol delta:
+the [Pact handbook](handbook-pact/) and
 [`../spec/protocol-v2.md`](../spec/protocol-v2.md).
 
 ## Phase 2 — The arranger: order boards + blind relay (Corkboard + Nostr)
@@ -148,7 +148,7 @@ the operator adds one.
   liveness only; funds are protected by timelocks regardless — identical to the
   Corkboard relay.
 
-Wire mapping and design: [NOSTR_TRANSPORT.md](NOSTR_TRANSPORT.md) and
+Wire mapping and design: the [Pact handbook](handbook-pact/) and
 [`../spec/protocol.md`](../spec/protocol.md) §8.8.
 
 **Known failure modes the design accounts for**
@@ -177,8 +177,8 @@ thin client of `pactd`'s local API.
 - Swaps view: active and historical swaps, including v2 adaptor swaps marked
   with a "Private (Taproot)" badge.
 
-Design references: [SATCHEL.md](SATCHEL.md), [SATCHEL_UI.md](SATCHEL_UI.md),
-[SATCHEL_BACKEND.md](SATCHEL_BACKEND.md).
+Design references: the [Satchel handbook](handbook-satchel/) and the
+[Pact handbook](handbook-pact/) API part.
 
 The Discord front-end (**Crier**) is a Corkboard front-end only — browse/post
 offers and notifications, deep-linking into the user's local Satchel/Pact to

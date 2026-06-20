@@ -9,8 +9,8 @@ Swap directly with a counterparty: the chain enforces the deal, so neither side
 can cheat and no third party ever holds your coins. The first supported pair is
 **BTCX ↔ BTC**; more coins follow.
 
+- Handbooks: [docs/handbook-pact/](docs/handbook-pact/) (developers & integrators) and [docs/handbook-satchel/](docs/handbook-satchel/) (users)
 - Plan: [docs/TRADING_ROADMAP.md](docs/TRADING_ROADMAP.md)
-- Design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Protocol spec: [spec/](spec/)
 
 > **Status:** live. Both swap protocols — v1 (hash-locked HTLC) and v2
