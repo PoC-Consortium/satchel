@@ -2469,12 +2469,8 @@ impl Engine {
     /// ~25% of the window to our own chain-B refund (T2). Waiting longer would
     /// compress the rest of the swap (fund B, let the initiator redeem B before
     /// T2) into an unsafe window. Nothing is locked on our side at `accepted`,
-    /// so the resulting abort costs nothing. A pre-C8 record (created_at == 0)
-    /// defers to the flat PRE_FUNDING_TIMEOUT_SECS backstop instead.
+    /// so the resulting abort costs nothing.
     fn funding_wait_expired(&self, rec: &SwapRecord) -> bool {
-        if rec.created_at == 0 {
-            return false;
-        }
         let window = u64::from(rec.t2).saturating_sub(rec.created_at);
         let deadline = rec.created_at + window / 4;
         local_now() >= deadline
@@ -2536,8 +2532,8 @@ impl Engine {
     fn prune_stale_pending_takes(&self, events: &mut Vec<TickEvent>) -> Result<()> {
         let now = local_now();
         for (offer_id, _offer_json, created_at) in self.store.pending_takes_with_age()? {
-            // `created_at == 0` is a pre-C8 row (migrated default): treat it as
-            // already-stale so it is cleaned up on the first tick after upgrade.
+            // Prune a take whose maker never followed through within the
+            // pre-funding window — the abandoned handshake the timeout targets.
             if now.saturating_sub(created_at) >= PRE_FUNDING_TIMEOUT_SECS {
                 self.store.remove_pending_take(&offer_id)?;
                 events.push(TickEvent {
@@ -3111,7 +3107,8 @@ impl Engine {
         let mut events = Vec::new();
         for o in self.store.my_offers_live()? {
             let final_expiry = o.created.saturating_add(o.valid_for);
-            if o.created != 0 && o.valid_for != 0 && now >= final_expiry {
+            // valid_for == 0 means "no expiry" — skip those.
+            if o.valid_for != 0 && now >= final_expiry {
                 // Mark expired FIRST so the de-list's auto-mark-revoked is a no-op
                 // (it only flips `live`), keeping the terminal state `expired`.
                 self.store.my_offer_set_state(&o.offer_id, "expired")?;
@@ -3379,11 +3376,7 @@ impl Engine {
             {
                 continue;
             }
-            let expiry = if body.created == 0 {
-                0
-            } else {
-                body.created + body.ttl_secs.unwrap_or(24 * 3600)
-            };
+            let expiry = body.created + body.ttl_secs.unwrap_or(24 * 3600);
             // Compute `expired` before moving body's String fields into the struct.
             let expired = body.expired(local_now());
             out.push(PrivateOfferInfo {
@@ -4231,16 +4224,17 @@ mod tests {
         // Bob resolves from his config: pocx override 7, btc default 1.
         assert_eq!((brec.n_a, brec.n_b), (7, 1));
 
-        // Migration: a pre-depth record (no n_a/n_b/final_tx_*_hex) still loads,
-        // defaulting to 0 / None (the old no-extra-gate behaviour).
-        let mut v = serde_json::to_value(&arec).unwrap();
-        let obj = v.as_object_mut().unwrap();
-        for k in ["n_a", "n_b", "final_tx_a_hex", "final_tx_b_hex"] {
-            obj.remove(k);
-        }
-        let back: crate::store::AdaptorSwapRecord = serde_json::from_value(v).unwrap();
-        assert_eq!((back.n_a, back.n_b), (0, 0));
-        assert!(back.final_tx_a_hex.is_none() && back.final_tx_b_hex.is_none());
+        // No backward compat: record fields are required — a blob missing one
+        // (e.g. a pre-depth record without n_a) no longer silently defaults, it
+        // fails to load. A full record round-trips.
+        let full = serde_json::to_value(&arec).unwrap();
+        assert!(serde_json::from_value::<crate::store::AdaptorSwapRecord>(full.clone()).is_ok());
+        let mut v = full;
+        v.as_object_mut().unwrap().remove("n_a");
+        assert!(
+            serde_json::from_value::<crate::store::AdaptorSwapRecord>(v).is_err(),
+            "a record missing a required field must not deserialize"
+        );
 
         std::fs::remove_dir_all(&ad).ok();
         std::fs::remove_dir_all(&bd).ok();
@@ -4404,18 +4398,19 @@ mod tests {
             serde_json::from_value::<InitV2Body>(without).is_err(),
             "an init without redeem feerates must not deserialize"
         );
-        // With them present, the body round-trips the negotiated rates verbatim.
-        let mut with = serde_json::from_value::<InitV2Body>(serde_json::json!({
+        // With every required field present, the body round-trips the
+        // negotiated rates verbatim.
+        let with = serde_json::from_value::<InitV2Body>(serde_json::json!({
             "protocol": "pact-htlc-v2",
             "chain_a": { "asset": "btcx", "network": "regtest" },
             "chain_b": { "asset": "btc", "network": "regtest" },
             "amount_a": 1u64, "amount_b": 2u64, "t1": 1_780_050_000u32, "t2": 1_780_020_000u32,
             "alice_swap_a": "x", "alice_swap_b": "y", "alice_refund_a": "z",
-            "adaptor_point": "p", "redeem_feerate_a": 30u64, "redeem_feerate_b": 45u64
+            "adaptor_point": "p", "alice_sweep_b": "",
+            "redeem_feerate_a": 30u64, "redeem_feerate_b": 45u64
         }))
         .unwrap();
         assert_eq!(with.redeem_feerate_a, 30);
-        with.redeem_feerate_b = 45;
         let round: InitV2Body =
             serde_json::from_str(&serde_json::to_string(&with).unwrap()).unwrap();
         assert_eq!(round.redeem_feerate_a, 30);
@@ -4751,13 +4746,14 @@ mod tests {
     }
 
     #[test]
-    fn c8_pre_c8_pending_take_is_pruned_immediately() {
-        // A row migrated from a pre-C8 db has created_at = 0, so it reads as
-        // ancient and is cleaned up on the first tick after upgrade.
-        let (engine, dir) = engine_with("c8-migrated", None);
+    fn stale_pending_take_is_pruned() {
+        // A take whose maker never followed through within the pre-funding
+        // window is cleaned up on the next tick.
+        let (engine, dir) = engine_with("stale-take", None);
+        let stale = local_now() - PRE_FUNDING_TIMEOUT_SECS - 60;
         engine
             .store
-            .put_pending_take("old", &pending_offer_from("m"), 0)
+            .put_pending_take("old", &pending_offer_from("m"), stale)
             .unwrap();
         let mut events = Vec::new();
         engine.prune_stale_pending_takes(&mut events).unwrap();

@@ -42,7 +42,6 @@ pub struct SwapRecord {
     /// Lets history sort by time. Records persisted before this field existed
     /// have no value in their JSON blob and deserialize to 0 (see migration
     /// note in [`Store::open`]).
-    #[serde(default)]
     pub created_at: u64,
     /// Our local BIP32 swap index `i` (spec §4.1).
     pub swap_index: u32,
@@ -72,13 +71,11 @@ pub struct SwapRecord {
     pub preimage: Option<String>,
     /// Refund transaction for the leg we funded, signed at funding time
     /// (spec §6.3) and broadcast by the scheduler once MTP >= T.
-    #[serde(default)]
     pub refund_tx_hex: Option<String>,
     /// Txid of our redeem/refund, once broadcast.
     pub final_txid: Option<String>,
     /// Full hex of that spend — kept for RBF fee-bumping and rebroadcast
     /// while unconfirmed (spec §7.4).
-    #[serde(default)]
     pub final_tx_hex: Option<String>,
 }
 
@@ -104,12 +101,8 @@ pub struct AdaptorSwapRecord {
     /// `n_b` gates the initiator's reveal (don't publish `t` until Bob's leg-B
     /// funding is this deep) and the redeem-completion check; `n_a` the
     /// leg-A redeem completion. Local policy, not consensus — each party sets
-    /// these from its own config. `#[serde(default)]` so pre-depth records
-    /// deserialize to 0 (treated as "no extra gate", the old behaviour) and are
-    /// re-defaulted on the next funding step.
-    #[serde(default)]
+    /// these from its own config.
     pub n_a: u32,
-    #[serde(default)]
     pub n_b: u32,
     /// Adaptor point `T` (compressed hex). The secret `t` is seed-derived by
     /// the initiator and never stored.
@@ -125,10 +118,8 @@ pub struct AdaptorSwapRecord {
     /// communicated in init/accept so both parties build the identical redeem tx
     /// and the proceeds land in a spendable core wallet (not a swap-key addr).
     /// `sweep_a` = where leg A is redeemed (Bob's addr); `sweep_b` = leg B
-    /// (Alice's addr). `None`/absent → the deterministic swap-key fallback.
-    #[serde(default)]
+    /// (Alice's addr). `None` → the deterministic swap-key fallback.
     pub sweep_a: Option<String>,
-    #[serde(default)]
     pub sweep_b: Option<String>,
     /// Negotiated cooperative-redeem feerates (sat/vB), one per chain, fixed at
     /// init (see [`crate::messages::InitV2Body::redeem_feerate_a`]). Both parties
@@ -159,9 +150,7 @@ pub struct AdaptorSwapRecord {
     /// RBF-bump (the single-key refund only — the cooperative redeem's fee is
     /// locked into the pre-signed adaptor signature and cannot be re-fee'd
     /// without a fresh MuSig2 round). See V2_ADAPTOR_SWAPS.md "fee-bump".
-    #[serde(default)]
     pub final_tx_a_hex: Option<String>,
-    #[serde(default)]
     pub final_tx_b_hex: Option<String>,
 }
 
@@ -222,7 +211,7 @@ impl Store {
              CREATE TABLE IF NOT EXISTS pending_takes (
                  offer_id   TEXT PRIMARY KEY,
                  offer      TEXT NOT NULL,
-                 created_at INTEGER NOT NULL DEFAULT 0
+                 created_at INTEGER NOT NULL
              );
              -- v2 MuSig2 use-once nonce sessions (spec v2 §3.2). One row per
              -- (swap, leg) signing session; state advances monotonically
@@ -279,34 +268,11 @@ impl Store {
                  offer_id     TEXT PRIMARY KEY,      -- = offer envelope swap_id
                  envelope     TEXT NOT NULL,         -- signed offer envelope JSON
                  created      INTEGER NOT NULL,      -- body.created (post time)
-                 valid_for    INTEGER NOT NULL,      -- ttl_secs; 0 = legacy/none
+                 valid_for    INTEGER NOT NULL,      -- ttl_secs; 0 = no expiry
                  last_refresh INTEGER NOT NULL DEFAULT 0,
                  state        TEXT NOT NULL DEFAULT 'live'
              );",
         )?;
-        // SwapRecord fields live inside the `record` JSON blob, not in their
-        // own columns, so adding `created_at` THERE needs no `ALTER TABLE`:
-        // blobs written before the field existed simply lack it and deserialize
-        // to 0 via `#[serde(default)]` (same forward-compat trick as
-        // `refund_tx_hex`).
-        //
-        // `pending_takes.created_at` (C8 take-timeout) IS a real column, so a
-        // db created before C8 needs the column added. `CREATE TABLE IF NOT
-        // EXISTS` above only covers fresh dbs; for existing ones we ALTER and
-        // swallow the "duplicate column name" error that fires once the column
-        // is already present (SQLite has no `ADD COLUMN IF NOT EXISTS`). Old
-        // rows default to created_at=0 and are therefore pruned on the first
-        // tick after upgrade — correct: a take that has outlived a restart is
-        // exactly the abandoned handshake the timeout targets.
-        match conn.execute(
-            "ALTER TABLE pending_takes ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0",
-            [],
-        ) {
-            Ok(_) => {}
-            Err(rusqlite::Error::SqliteFailure(_, Some(ref msg)))
-                if msg.contains("duplicate column") => {}
-            Err(e) => return Err(e.into()),
-        }
         Ok(Self {
             conn,
             data_dir: data_dir.to_path_buf(),
@@ -1270,13 +1236,13 @@ mod tests {
     }
 
     #[test]
-    fn old_records_without_created_at_default_to_zero() {
-        // Blobs written before the field existed lack it; serde fills 0 so
-        // migrated dbs still load (no ALTER TABLE — see Store::open).
+    fn record_fields_are_required_no_silent_default() {
+        // No backward compat: a blob missing a field (e.g. a record written
+        // before created_at existed) no longer silently defaults — it fails to
+        // load rather than masking a malformed record.
         let mut value = serde_json::to_value(record("ee")).unwrap();
         value.as_object_mut().unwrap().remove("created_at");
-        let parsed: SwapRecord = serde_json::from_value(value).unwrap();
-        assert_eq!(parsed.created_at, 0);
+        assert!(serde_json::from_value::<SwapRecord>(value).is_err());
     }
 
     #[test]

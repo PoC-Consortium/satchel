@@ -151,18 +151,16 @@ pub struct OfferBody {
     pub get_amount: u64,
     pub t1_secs: u32,
     pub t2_secs: u32,
-    #[serde(default)]
     pub ttl_secs: Option<u64>,
     /// Unix creation time, *inside the signed body* so expiry can be
     /// verified from the envelope alone (the board's listing TTL is
-    /// only a courtesy). 0 = legacy offer without expiry enforcement.
-    #[serde(default)]
+    /// only a courtesy).
     pub created: u64,
 }
 
 impl OfferBody {
     pub fn expired(&self, now: u64) -> bool {
-        self.created != 0 && now > self.created + self.ttl_secs.unwrap_or(24 * 3600)
+        now > self.created + self.ttl_secs.unwrap_or(24 * 3600)
     }
 }
 

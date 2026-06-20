@@ -98,7 +98,6 @@ pub struct InitV2Body {
     /// redeem tx AND the proceeds land in a spendable core wallet rather than a
     /// swap-key address. Empty = fall back to the deterministic swap-key
     /// destination (e.g. no node to ask for an address).
-    #[serde(default)]
     pub alice_sweep_b: String,
     /// Cooperative-redeem feerates (sat/vB) the initiator picked from her live
     /// estimators at init, one per chain (A = the leg Bob redeems, B = the leg
@@ -121,7 +120,6 @@ pub struct AcceptV2Body {
     pub bob_refund_b: String,
     /// Bob's fresh core-wallet sweep address on chain A (where he redeems leg
     /// A). See [`InitV2Body::alice_sweep_b`]. Empty = deterministic fallback.
-    #[serde(default)]
     pub bob_sweep_a: String,
 }
 
