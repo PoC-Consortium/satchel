@@ -23,8 +23,9 @@
 //!    keystore: an encrypted merchant is unlocked per session, in memory inside
 //!    pactd, forgotten on exit.
 //!
-//! Config: `satchel.json` in the app config dir (chain backends, boards,
-//! relays, plus per-install UI prefs), created with defaults on first run.
+//! Config: `satchel.json` in the app's LOCAL data dir (`%LOCALAPPDATA%` on
+//! Windows — not Roaming, since it holds the wallet seed; chain backends,
+//! boards, relays, plus per-install UI prefs), created with defaults on first run.
 //! Merchant ownership lives in pactd, not here.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -1141,7 +1142,10 @@ fn main() {
             // (datadir is where we read .cookie; or SATCHEL_PACTD_COOKIE=user:pass)
             if let Ok(url) = std::env::var("SATCHEL_PACTD_URL") {
                 let auth = resolve_external_auth()?;
-                let config_dir = net_config_dir(&app.path().app_config_dir()?);
+                // Local app data, NOT Roaming: this dir holds the wallet seed +
+                // merchants, which must never roam to a domain server / other
+                // machine. Also matches the node's %LOCALAPPDATA% datadir.
+                let config_dir = net_config_dir(&app.path().app_local_data_dir()?);
                 app.manage(AppState {
                     config: Mutex::new(load_or_create_config(&config_dir)?),
                     config_dir,
@@ -1162,7 +1166,10 @@ fn main() {
             // data dir and owns the merchant registry (C10); node connections
             // are machine-level. pactd boots seedless on a fresh install and
             // the UI's wizard calls createmerchant + createseed/importseed.
-            let config_dir = net_config_dir(&app.path().app_config_dir()?);
+            // Local app data, NOT Roaming: this dir holds the wallet seed +
+            // merchants, which must never roam to a domain server / other
+            // machine. Also matches the node's %LOCALAPPDATA% datadir.
+            let config_dir = net_config_dir(&app.path().app_local_data_dir()?);
             let config = load_or_create_config(&config_dir)?;
             let listen = config.listen.clone();
             let data_dir = pactd_data_dir(&config_dir);
