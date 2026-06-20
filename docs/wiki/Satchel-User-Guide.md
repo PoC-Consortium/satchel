@@ -19,9 +19,9 @@ Satchel uses a **merchant** model: one merchant = one seed = one trading identit
 - **Create slip** — the same form, but instead of posting it produces a copyable `pactoffer1:` slip you hand to a friend over chat. See [Private Offers](Private-Offers).
 - **Take a slip** — paste a `pactoffer1:` slip, review the decoded terms, and take it (the engine re-verifies the signature).
 - **My slips** — your outstanding private offers with expiry countdowns and a **Cancel** action.
-- **Swaps** — a read-only ledger of every swap (**In flight** + **History**), with verbatim engine narration and expandable on-chain detail. v2 rows carry a "Private (Taproot)" chip. Actions live in the Corkboard dock, not here.
+- **Swaps** — a read-only ledger of every swap (**In flight** + **History**), with verbatim engine narration and expandable on-chain detail. v2 rows carry a "Private (Taproot)" chip. Each swap has a **Dump logs** button (here and in the dock) that copies a secret-free diagnostics bundle for a developer. Actions live in the Corkboard dock, not here.
 - **Wallets** — **read-only** per-coin balances (one card per configured coin). There is no send/receive by design — these are your own nodes' wallets, and a full send/receive wallet arrives with the nodeless build.
-- **Settings** — tabs for **General** (theme + language), **Coins** (coin setup), **Network** (Nostr relays + Corkboards), and **About** (version, key-storage trust note, risk disclaimer).
+- **Settings** — tabs for **General** (theme, language, and the **Auto-fund swaps** toggle — on by default, so your side of a swap is funded automatically; turn it off to fund by hand), **Coins** (coin setup), **Network** (Nostr relays + Corkboards), and **About** (version, key-storage trust note, risk disclaimer). With auto-fund off, a swap that needs your funding raises an in-app tone + banner over the dock until you fund it.
 
 ## Themes & languages
 

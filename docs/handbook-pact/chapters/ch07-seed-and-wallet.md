@@ -91,6 +91,7 @@ mode):
 | `.cookie` | The per-run RPC cookie (data-dir root only). |
 | `pact.conf` | Optional `rpcuser` / `rpcpassword` for RPC auth. |
 | `merchants.json` | The merchant manifest (parent data dir, nested mode only). |
+| `logs/pactd.log.<date>` | Rolling daily log files (data-dir root). Secret-free; see the chapter "Running pactd". |
 
 The SQLite database is the engine's durable state. At a high level its tables
 are: `swaps` and `adaptor_swaps` (the v1 and v2 swap records), `meta`

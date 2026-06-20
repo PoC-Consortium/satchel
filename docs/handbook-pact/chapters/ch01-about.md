@@ -74,16 +74,17 @@ This handbook follows a few consistent conventions:
 - **Code blocks** are fenced with a language hint (`sh`, `json`, `rust`,
   `text`) and are meant to be copy-pasteable.
 
-## Version and status
+## Source revision and status
 
 > **Status** — Both swap protocols — v1 (HTLC) and v2 (Taproot/MuSig2 adaptor)
 > — are reviewed, audited, and live on mainnet.
 
-The handbook is kept in sync with the `master` branch, and the **code is the
-ultimate source of truth**. When a precise detail matters for your integration,
-confirm it against the code and the pinned test vectors before you rely on it.
-Where this handbook cites behaviour, it reflects the engine as of the `master`
-branch it was written against.
+Rather than a release-version number, this handbook tracks the **source revision**
+it was checked against: it was verified against commit `c3cd853` (June 2026), the
+hash printed on the copyright page. The **code is the ultimate source of truth** —
+when a precise detail matters for your integration, confirm it against the code at
+that revision and the pinned test vectors before you rely on it. When the engine
+moves, the hash is bumped and the affected pages are updated.
 
 ## Where to get help
 

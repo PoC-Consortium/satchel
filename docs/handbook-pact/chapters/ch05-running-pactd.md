@@ -33,7 +33,7 @@ move funds on any chain until a backend is attached.
 | `--network` | string | `regtest` | One of `regtest`, `testnet`, `mainnet`. |
 | `--board-url` | string | none | Corkboard base URL(s), comma-separated (the HTTP transport). |
 | `--nostr-relay` | string | none | Nostr relay `wss://…` URL(s), comma-separated. Runs **alongside** any `--board-url`; empty or absent disables it. |
-| `--auto-fund` | flag | false | Auto-fund our HTLC leg in board-driven swaps (a griefing trade-off — only enable for unattended makers you accept that risk for). |
+| `--auto-fund` | flag | false | Auto-fund our leg in board-driven swaps. Sets the daemon's *starting* value; it can also be flipped at runtime with the `setautofund` RPC, and the current value is reported by `getinfo.auto_fund`. (Satchel defaults this **on** and toggles it live — see the note below.) |
 | `--tick-secs` | u64 | `30` | Scheduler interval in seconds; `0` disables the background loop entirely. |
 | `--once` | flag | false | Run a single scheduler pass (`sync_board` + `tick`), print the resulting events as JSON, and exit. Exit code is `1` if any event has `action == "error"`. |
 | `--auto-init` | flag | false | Create the seed + state on first run (flat layout). No-op if a seed already exists. |
@@ -47,6 +47,30 @@ move funds on any chain until a backend is attached.
 > **Warning** — `--listen` is loopback-enforced by design. Do not try to bind a
 > routable address to share a daemon — it will refuse to start. The RPC has no
 > remote-access model; see the chapter *Architecture & Trust Boundaries*.
+
+> **Note** — `--auto-fund` is the daemon's launch-time default; `setautofund`
+> changes it on the live engine without a relaunch. The standalone CLI flag
+> defaults **off** (opt-in). When `pactd` runs under Satchel, Satchel sets
+> auto-fund **on** for fresh installs and exposes a live toggle — so the
+> effective default for most users is on. Auto-fund is safe as a default because
+> offers are one-shot: a taken offer cannot be re-taken, so a maker's exposure
+> is bounded by the size of the offers they posted.
+
+## Logging
+
+`pactd` writes its `tracing` output to **both** stdout and a rolling daily file
+at `<data-dir>/logs/pactd.log.<date>` (for example
+`logs/pactd.log.2026-06-20`). The file exists because a managed daemon spawned
+by Satchel has no stdout capture, so the file is the only record of what the
+engine did.
+
+- The scheduler tags every swap event (`tracing::info!(swap, action, detail)`),
+  so swap narration is captured per swap. The `dumpswap` RPC extracts the lines
+  for one `swap_id` from these files.
+- Verbosity follows `RUST_LOG` (an `EnvFilter`); the default level is `INFO`.
+- **No secrets are ever logged.** Seeds, passphrases, the v1 preimage, and
+  MuSig2 nonces are never passed to `tracing`, so the log file is safe to share
+  for diagnostics.
 
 ## RPC authentication
 

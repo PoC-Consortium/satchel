@@ -78,12 +78,15 @@ We use a few simple conventions throughout.
   chapter "Setting Up Your Coins"* — rather than by number, because numbers shift
   as the book grows.
 
-## Versions covered
+## What this edition tracks
 
-This edition covers **Satchel 0.1**, as of **June 2026**.
+Rather than a release-version number, this handbook tracks the **source revision**
+it was checked against: it was verified against commit `c3cd853` (June 2026). The
+commit hash on the copyright page is the single status marker — when the code
+moves, the hash is bumped and the affected pages are updated.
 
 > **Note** — The first trading pair is **BTCX ↔ BTC** (BTCX is Bitcoin-PoCX).
-> Screens, labels, and details can change between releases; where an exact detail
+> Screens, labels, and details evolve with the code; where an exact detail
 > matters, the app itself is the final word.
 
 ## A word on safety

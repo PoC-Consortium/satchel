@@ -3,7 +3,11 @@
 # Copyright and disclaimer {-}
 
 *Pact — Developer & Integrator Handbook*
-First Edition — June 2026
+Verified against commit `c3cd853` · June 2026
+
+This handbook tracks the code by commit hash rather than a release version: the
+hash above is the `pact` source revision its contents were verified against.
+When the code moves, the hash is bumped and the affected pages updated.
 
 Pact is open-source software. This handbook is distributed alongside the
 software and may be reproduced and shared under the same terms. See the

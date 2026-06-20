@@ -33,20 +33,26 @@ cryptography:
 
 1. **The maker funds first.** The party who posted the offer locks their coins on
    their chain before you lock anything. You are never the one exposed first.
-2. **The engine watches both chains.** Satchel's engine monitors the blockchains
+2. **Your side is funded automatically.** When the swap reaches the point where it
+   needs *your* coins, Satchel funds your side for you — you don't have to click
+   anything. This is the default behaviour (the **Auto-fund swaps** setting, on out
+   of the box). If you'd rather lock in every swap by hand, you can turn it off in
+   **Settings → General** and fund each one yourself from the active-swaps dock.
+3. **The engine watches both chains.** Satchel's engine monitors the blockchains
    for both coins, waiting for each funding to confirm to a safe depth.
-3. **The funds are released atomically.** Once both sides are locked, the engine
+4. **The funds are released atomically.** Once both sides are locked, the engine
    completes the exchange so that each of you can only claim your coin in a way
    that simultaneously lets the other claim theirs. Neither side can run off with
    both.
-4. **If anything stalls, you're auto-refunded.** If a counterparty disappears or a
+5. **If anything stalls, you're auto-refunded.** If a counterparty disappears or a
    chain gets stuck, the engine waits for the safety timelock and then
    automatically pulls your locked funds back to you. You don't have to do
    anything to get a refund — it's built in.
 
-> **Note** — The whole flow is automatic. You generally won't touch a button. When
-> the app *does* need you (for example, to fund your side), the action appears in
-> the active-swaps dock — see the chapter on tracking your swaps.
+> **Note** — With auto-fund on (the default) the whole flow is automatic — you
+> won't touch a button at all. If you've turned auto-fund off, the app asks you to
+> lock your side when it's your turn: the **fund** action appears in the
+> active-swaps dock — see the chapter on tracking your swaps.
 
 ## You don't have to babysit it — but keep the app running
 

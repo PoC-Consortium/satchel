@@ -138,6 +138,18 @@ To proceed, click **More info**, then **Run anyway**.
 > verify the source first — see the chapter *"Where to Get Help"* for the official
 > links.
 
+## Getting diagnostics for a developer
+
+If a swap misbehaves and you want a developer to look into it, you don't have to go
+hunting through log files. Open the swap — either its row on the **Swaps** page
+(expand it) or its card in the active-swaps dock — and press **Dump logs**. This
+copies a diagnostics bundle for that one swap to your clipboard: the swap's record
+plus the engine log lines about it. Paste it straight into your bug report.
+
+> **Tip** — The bundle is **secret-free**: it never contains your seed, recovery
+> phrase, swap preimage, or nonces, so it's safe to share. See *"Tracking Your
+> Swaps"* for more on the **Dump logs** button.
+
 ## Still stuck?
 
 If none of the above fixes it, the chapter *"Where to Get Help"* lists the project

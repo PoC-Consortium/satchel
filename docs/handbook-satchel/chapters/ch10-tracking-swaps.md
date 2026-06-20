@@ -51,7 +51,8 @@ Each swap row can be expanded to reveal its **on-chain detail** — the audit tr
 This shows both funding transactions and *your* settlement or refund (never the
 counterparty's settlement, and never the swap secret). Each transaction id has a
 **copy** button, so you can paste it into a block explorer if you ever want to see
-it on-chain yourself.
+it on-chain yourself. The expanded row also carries a **Dump logs** button for
+support — see *"Dump logs: diagnostics for support"* below.
 
 > **Tip** — You never *need* to check a block explorer; the swap completes on its
 > own. The on-chain detail is there for peace of mind and your own records.
@@ -87,6 +88,32 @@ waiting for the engine's automatic pass.
 > deadline, so you're covered either way.
 
 ![The active-swaps dock under the Corkboard, with state-gated action buttons.](images/processed/ch10-dock.png){width=85%}
+
+### When a swap needs your funding (auto-fund off)
+
+If you've turned **Auto-fund swaps** off in **Settings → General**, Satchel can't
+lock your side for you — so it makes sure you notice when it's your turn. The
+moment a swap newly needs your funding, Satchel plays a short **alert tone** and
+shows a **warning banner above the active-swaps dock** (under the Corkboard) that
+stays put until you press **fund**.
+
+> **Note** — This cue is **in-app only**: a tone and a banner. Satchel does not
+> raise a desktop or system notification, so keep an eye on the window when you're
+> funding swaps by hand. With **Auto-fund swaps** on (the default), your side is
+> locked automatically and you'll never see this alert.
+
+### Dump logs: diagnostics for support
+
+Every swap has a **Dump logs** button — on its card in the active-swaps dock, and
+on its expandable detail row on the **Swaps** page. Press it and Satchel copies a
+**diagnostics bundle** for that one swap to your clipboard: the swap's own record
+plus the engine log lines that mention it. Paste it into a bug report or a message
+to a developer when something has gone wrong.
+
+> **Tip** — The bundle is **secret-free and safe to share**. Secrets are scrubbed
+> out before it's copied, so it never contains your seed, your recovery phrase, the
+> swap preimage, or any nonces — just the information a developer needs to see what
+> happened.
 
 ## Closing the app mid-swap: the exit gate
 

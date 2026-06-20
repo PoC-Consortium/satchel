@@ -91,3 +91,23 @@ blocks (initiator and counterparty legs respectively).
 > counterparty's leg) or `refund` (after your timelock expires). Aborting a
 > funded swap is not an option because the coins are already committed
 > on-chain.
+
+## Diagnostics
+
+| Method | Params | Returns | Mutates |
+|---|---|---|---|
+| `dumpswap` | `swap_id` | `{ swap_id, pactd_version, record, log }` | no |
+
+- `dumpswap` — returns a developer-shareable diagnostics bundle for one swap:
+  its current `record` (the v1 `SwapRecord`, or the v2 `AdaptorSwapRecord` if the
+  id is a v2 swap) plus `log`, the array of `pactd` log lines that mention that
+  `swap_id` (the scheduler tags every event with `swap=<id>`). `pactd_version` is
+  the engine's crate version. Works for both protocol versions — the dispatch
+  tries the v1 store first, then the v2 adaptor store.
+
+> **Note** — `dumpswap` is **secret-safe by construction**. The record is passed
+> through `scrub_secrets`, which redacts the v1 preimage and any secret-named
+> field; the v2 adaptor record stores no secret (`t` is never persisted); and
+> seeds, passphrases, and MuSig2 nonces never appear in a record or in the log.
+> The bundle is safe to paste into a bug report. It backs Satchel's per-swap
+> **Dump logs** button.

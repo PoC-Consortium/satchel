@@ -20,6 +20,7 @@ Per-merchant data directory (flat root, or `merchants/<id>/` nested):
 | `.cookie` | Per-run RPC cookie `__cookie__:<hex>` (data-dir root only). |
 | `pact.conf` | Optional `rpcuser` / `rpcpassword`. |
 | `merchants.json` | Merchant manifest (parent data dir, nested mode). |
+| `logs/pactd.log.<date>` | Rolling daily log (data-dir root); secret-free; `RUST_LOG`, default `INFO`. |
 
 `pact.sqlite` tables: `swaps`, `meta` (counters / `relay_cursor` / private
 offers), `pending_takes`, `nonce_sessions`, `adaptor_swaps`, `nostr_outbox`,
@@ -34,7 +35,7 @@ All methods are JSON-RPC over `POST /`. Grouped by area; see the named chapter
 for params and return shapes.
 
 **Node / info** (*"API: Node, Seed, Merchants, Coins"*): `getinfo`,
-`walletstatus`, `stop`.
+`walletstatus`, `setautofund`, `stop`.
 
 **Seed lifecycle** (same chapter): `createseed`, `generateseed`, `importseed`,
 `unlock`.
@@ -63,6 +64,9 @@ for params and return shapes.
 `makeprivateoffer`, `takeoffer`, `listprivateoffers`, `cancelprivateoffer`.
 
 **Fees** (same chapter): `estimateswapfees`.
+
+**Diagnostics** (*"API: v1 HTLC Swaps"*): `dumpswap` (secret-free per-swap
+record + log bundle; works for v1 and v2).
 
 ## Error format
 

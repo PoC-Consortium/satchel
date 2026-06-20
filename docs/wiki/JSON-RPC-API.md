@@ -1,6 +1,6 @@
 # JSON-RPC API
 
-[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 47 methods, grouped below by area with a one-line purpose each. This is an index; for full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
+[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 49 methods, grouped below by area with a one-line purpose each. This is an index; for full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
 
 ## Conventions
 
@@ -15,8 +15,9 @@
 
 | Method | Purpose |
 |---|---|
-| `getinfo` | Daemon name/version/protocol/network, identity, seed status, coin ids. |
+| `getinfo` | Daemon name/version/protocol/network, identity, seed status, coin ids, `auto_fund`. |
 | `walletstatus` | `{ seed_exists, encrypted, locked }`. |
+| `setautofund` | Flip auto-fund (`on`) at runtime on the live engine; returns `{ auto_fund }`. |
 | `stop` | Trigger graceful shutdown. |
 
 ## Seed / wallet lifecycle
@@ -108,6 +109,12 @@ v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed and
 | `getbalance` | Balance for one chain. |
 | `getnewaddress` | Fresh HD address for one chain. |
 | `sendtoaddress` | Send from one chain (broadcasts). |
+
+## Diagnostics
+
+| Method | Purpose |
+|---|---|
+| `dumpswap` | Secret-free per-swap bundle (`swap_id`): scrubbed record + the `pactd` log lines mentioning that swap. Works for v1 and v2. Backs Satchel's **Dump logs** button. |
 
 ## See also
 
