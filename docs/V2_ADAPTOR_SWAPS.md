@@ -274,12 +274,22 @@ types differ in what is possible, and `adaptor_keep_moving` reflects that:
     `init` and the redeem it can still underpay. The designs below are the full
     fix and remain the reason v2 stays mainnet-gated.
 
-### Making the cooperative redeem bumpable (design suggestion)
+### Making the cooperative redeem bumpable
+
+**STATUS: design #1 (CPFP) is IMPLEMENTED (v2+, commit 340657d).** The
+redeem-nurse arm of `adaptor_keep_moving` now re-anchors the parent and bumps it
+with a self-funded child spending the redeem's own wallet-owned sweep output
+(`adaptor_cpfp_bump` / `cpfp_child_fee`; the wallet signs the child via
+`ChainBackend::wallet_sign_send`). Because M2 keeps the parent relayable, it sits
+in the mempool and a **plain CPFP child** suffices — `submitpackage` is NOT used,
+and is only needed for the sub-floor extreme (a future enhancement). Proven by
+`harness/test_adaptor_swap.py::test_adaptor_redeem_cpfp`. The original design
+analysis follows.
 
 Three candidate designs to lift the "cooperative redeem can't be fee-bumped"
 limitation, in order of preference:
 
-**1. CPFP via the redeem's own output + package relay — preferred.** The redeem
+**1. CPFP via the redeem's own output + package relay — preferred (IMPLEMENTED).** The redeem
 already sweeps to an output the **claimer** alone controls, so the claimer can
 bump it unilaterally at broadcast time: build a high-fee child spending that
 output and submit `[low-fee redeem, high-fee child]` together via
