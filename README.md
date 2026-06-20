@@ -63,7 +63,7 @@ posted on the **corkboard**, settled into your **satchel**. Deliberately no
 | [`corkboard/`](corkboard/) | **Corkboard** | Self-hostable order board: a single axum + SQLite/Postgres binary that stores signed offers and blind-relays encrypted blobs. The alternative transport to Nostr (Bisq-style, many operators). |
 | [`satchel/`](satchel/) | **Satchel** | Desktop app (Tauri shell + React/Vite/TypeScript/MUI frontend). Bundles and supervises `pactd`; shows read-only per-coin balances. Owns the GUI, never the swap logic. |
 | [`tools/`](tools/) | — | Dev tooling (e.g. `relay-prober` for Nostr relay eligibility) and playground scripts. |
-| [`docs/`](docs/) | — | Architecture, roadmap, and per-feature design docs. |
+| [`docs/`](docs/) | — | The **Pact** and **Satchel** handbooks (Markdown → PDF), the GitHub **wiki** pages (staged for `satchel.wiki.git`), and the product roadmap. |
 
 ## Building
 
