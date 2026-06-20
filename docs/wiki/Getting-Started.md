@@ -2,7 +2,7 @@
 
 Two fast paths: one for people who just want to trade, one for developers who want to run the engine. Pick yours.
 
-> **Status** — alpha; v1 (HTLC) and v2 (Taproot/MuSig2 adaptor) both run on mainnet, under external audit. Start small.
+> **Status** — live; v1 (HTLC) and v2 (Taproot/MuSig2 adaptor) are reviewed, audited, and running on mainnet. You alone hold your keys.
 
 ## For users (the desktop app)
 

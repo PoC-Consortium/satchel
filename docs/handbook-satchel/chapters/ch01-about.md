@@ -80,13 +80,11 @@ We use a few simple conventions throughout.
 
 ## Versions covered
 
-This edition covers **Satchel 0.1 (alpha)**, as of **June 2026**.
+This edition covers **Satchel 0.1**, as of **June 2026**.
 
-> **Note** — Satchel is *alpha* software: an early release, still under active
-> development and external security review. The first trading pair is
-> **BTCX ↔ BTC** (BTCX is Bitcoin-PoCX). Screens, labels, and details can change
-> between releases; where an exact detail matters, the app itself is the final
-> word.
+> **Note** — The first trading pair is **BTCX ↔ BTC** (BTCX is Bitcoin-PoCX).
+> Screens, labels, and details can change between releases; where an exact detail
+> matters, the app itself is the final word.
 
 ## A word on safety
 

@@ -32,9 +32,9 @@ but where they disagree with the code, **the handbooks (and the code) win** — 
 handbooks were re-verified against the implementation. Notable points the design
 docs predate:
 
-- **v2 (Taproot/MuSig2 adaptor) swaps now run on every network, including
-  mainnet** (`ADAPTOR_MAINNET_ENABLED = true`), under external audit — older docs
-  still describe v2 as "refused on mainnet."
+- **v2 (Taproot/MuSig2 adaptor) swaps run on every network, including mainnet**
+  (`ADAPTOR_MAINNET_ENABLED = true`) — older docs still describe v2 as "refused on
+  mainnet."
 - The Nostr transport is **shipped and prewired** (not "future work"), with six
   default relays configured in Satchel.
 - Satchel's navigation is the eight-screen Public/Private layout (not the older

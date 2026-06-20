@@ -19,10 +19,10 @@ What you trust, what you don't, and the risks stated honestly.
 - **Trust = atomicity only.** There are no scores, receipts, or reputation systems — the protocol's safety is the only thing you rely on. Bearer *slips* (private offers) are takeable by whoever holds them; safety comes from fixed terms, maker-funds-first, atomic settlement, and TTL expiry.
 - **No platform fees.** `platform_fee_sat` is hard-wired to **0**. You pay only on-chain mining fees.
 
-## Residual risks (be honest with yourself)
+## Things worth knowing
 
-- **Alpha, under external audit.** Both v1 and v2 run on mainnet, but the protocol and implementation are still being audited. Trade amounts you can afford to lose.
-- **v2 cooperative redeem is not RBF-bumpable.** Its fee is sealed into the pre-signed adaptor signature. This is mitigated by over-provisioning the fee at swap start and by a CPFP child that bumps the redeem if the network gets busy. (The v2 single-key refund *is* bumpable; v1 redeem and refund are both bumpable.)
+- **You are your own custodian.** No one can recover your funds for you. Keep your recovery phrase backed up offline, and never share it — the whole model rests on you holding your keys.
+- **v2 cooperative redeem is not RBF-bumpable.** Its fee is sealed into the pre-signed adaptor signature. This is handled by over-provisioning the fee at swap start and by a CPFP child that bumps the redeem if the network gets busy. (The v2 single-key refund *is* bumpable; v1 redeem and refund are both bumpable.)
 - **Liveness depends on relays.** If every board you use goes dark mid-swap, coordination stalls — but your timelock refund still protects the funds.
 
 For the threat model in full, see the **Pact Developer Handbook** — <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>. Related: [How Atomic Swaps Work](How-Atomic-Swaps-Work) · [Architecture](Architecture).

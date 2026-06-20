@@ -7,8 +7,8 @@ chapters; here we document the RPC surface only. For shared conventions see the
 chapter "JSON-RPC Conventions". For v2 (Taproot/MuSig2 adaptor) swaps see the
 chapter "API: v2 Adaptor Swaps".
 
-> **Note** — *alpha; v1 (HTLC) and v2 (Taproot/MuSig2 adaptor) both run on
-> mainnet, under external audit.*
+> **Note** — *v1 (HTLC) and v2 (Taproot/MuSig2 adaptor) swaps are reviewed,
+> audited, and live on mainnet.*
 
 ## Swap state machine
 

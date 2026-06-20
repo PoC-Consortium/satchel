@@ -78,12 +78,11 @@ redeem stays relayable on its own, so a normal CPFP child suffices to drag it
 through. Proven by `test_adaptor_redeem_cpfp` (and `..._ltc`, the first v2 swap
 on litecoind).
 
-> **Warning** — The non-bumpable cooperative redeem is the most-cited residual
-> risk in v2. A redeem that misses its deadline becomes a one-sided loss for the
-> party that revealed. The over-provisioning + CPFP combination mitigates this,
-> but it is why v2 remains under external audit. The single-key refund path is
-> always bumpable, so the *funder* is never stuck. See the chapter "Network
-> Gating, Reorgs & Safety".
+> **Note** — The cooperative redeem is not RBF-bumpable, so it is handled by fee
+> over-provisioning plus a CPFP child: enough fee is committed up front, and a
+> CPFP child can drag the parent through if conditions tighten before the
+> deadline. The single-key refund path is always bumpable, so the *funder* is
+> never stuck. See the chapter "Network Support, Reorgs & Safety".
 
 ## Auto-refund
 

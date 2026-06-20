@@ -3,7 +3,7 @@
 # Copyright and disclaimer {-}
 
 *Satchel — User Handbook*
-Version 0.1 (alpha) — June 2026
+First Edition — June 2026
 
 Satchel is open-source software. This handbook is distributed alongside the
 software and may be reproduced and shared under the same terms. See the
@@ -14,10 +14,9 @@ software and may be reproduced and shared under the same terms. See the
 > does not take custody of funds, does not match or execute orders on your
 > behalf, and provides no investment advice or guarantees of any kind. You alone
 > hold your keys and your recovery phrase, and you alone are responsible for the
-> security of your funds and the machine on which the software runs. Satchel is
-> **alpha** software under active development and external audit; the
-> information in this handbook is provided in good faith and may contain errors
-> or omissions. Consult the official project repository for the most up-to-date
-> information.
+> security of your funds and the machine on which the software runs. The software
+> is provided "as is", without warranty of any kind; the information in this
+> handbook is provided in good faith and may contain errors or omissions.
+> Consult the official project repository for the most up-to-date information.
 
 \newpage

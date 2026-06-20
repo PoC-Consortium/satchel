@@ -98,13 +98,11 @@ and the app is built so new coins can be added without a new release.
 
 ## Setting expectations
 
-Satchel is **alpha** software — an early release. The underlying swap protocols
-(both the original style and the newer, more private Taproot style) are under
-external security review. The design is careful and the safety guarantees are
-real, but this is new software handling real value.
+Satchel is live and released. The underlying swap protocols (both the original
+style and the newer, more private Taproot style) have been reviewed and audited.
+The design is careful and the safety guarantees are real — but it is software
+handling real value, and you alone hold your keys.
 
-> **Warning** — Because Satchel is alpha and under audit, treat it accordingly:
-> start small, keep amounts modest while you learn, and never put in more than
-> you are comfortable risking on early software. Above all, follow the safety
-> rules in the chapter *"Staying Safe"* — write down your recovery phrase, and
-> never share it.
+> **Warning** — Treat your funds with care: above all, follow the safety rules in
+> the chapter *"Staying Safe"* — write down your recovery phrase, and never share
+> it. Your keys and recovery phrase are yours alone to protect.

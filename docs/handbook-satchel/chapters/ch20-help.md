@@ -27,7 +27,7 @@ place to get it — and the only place to trust a download from.
 If something's broken or behaving oddly, a good bug report helps it get fixed
 fast. Open an issue on the repository's issue tracker, and include:
 
-1. **Your Satchel version** — from **Settings → About** (for example, 0.1 alpha).
+1. **Your Satchel version** — from **Settings → About** (for example, 0.1).
 2. **Which network** you were on (mainnet, testnet, or regtest) and which **coins
    and pair** were involved.
 3. **What you did, what you expected, and what actually happened** — step by step.
@@ -68,7 +68,6 @@ want to build on top of the engine, that's your reference.
 
 ## A final word
 
-Satchel is young, alpha software, and the project is small and moving fast. That
-means two things: you may hit rough edges — and your reports genuinely help shape
-what comes next. Thanks for trading carefully, keeping your recovery phrase safe,
-and helping the project improve.
+Satchel is live, and the project is small and moving fast. Your reports genuinely
+help shape what comes next. Thanks for trading carefully, keeping your recovery
+phrase safe, and helping the project improve.

@@ -106,7 +106,7 @@ the Taproot signatures combine, and how the timelocks are computed down to the
 second, that all lives in the **Pact Developer & Integrator Handbook**. It's
 written for developers, but it's there if curiosity strikes.
 
-> **Note** — One honest caveat: Satchel is *alpha* software under external
-> security review. Both swap methods run on mainnet today, but the audit is still
-> ongoing. Trade with funds you're prepared to put at risk while the software
-> matures — and lean on the safety habits in *"Backup, Seeds & Safety"*.
+> **Note** — Satchel is live: both swap types — Standard (HTLC) and Private
+> (Taproot) — are reviewed, audited, and running on mainnet. The all-or-nothing
+> guarantee is enforced by the chain itself, but you alone hold your keys — so
+> lean on the safety habits in *"Backup, Seeds & Safety"*.

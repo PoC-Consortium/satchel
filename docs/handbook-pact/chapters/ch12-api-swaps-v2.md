@@ -8,9 +8,9 @@ MuSig2 nonce exchange binds the secret — is covered in the protocol chapter
 "v2 Taproot/MuSig2 Adaptor Swaps". For shared RPC conventions see the chapter
 "JSON-RPC Conventions"; for the simpler HTLC route see "API: v1 HTLC Swaps".
 
-> **Note** — v2 adaptor swaps **run on mainnet now** (enabled on every
-> network), still under external audit. *alpha; v1 (HTLC) and v2
-> (Taproot/MuSig2 adaptor) both run on mainnet, under external audit.*
+> **Note** — v2 adaptor swaps are **live on every network, including mainnet**.
+> *v1 (HTLC) and v2 (Taproot/MuSig2 adaptor) swaps are reviewed, audited, and
+> live on mainnet.*
 
 ## Swap state machine
 
@@ -52,8 +52,8 @@ outpoint; `nonces`/`sign`/`assemble` complete the MuSig2 adaptor exchange;
 `refund` (timeout path). See "v2 Taproot/MuSig2 Adaptor Swaps" for why each
 step is required.
 
-> **Warning** — The cooperative key-path **redeem is NOT RBF-bumpable**. It is
-> mitigated by fee over-provisioning plus a CPFP child. The single-key
+> **Note** — The cooperative key-path **redeem is NOT RBF-bumpable**; it is
+> handled by fee over-provisioning plus a CPFP child. The single-key
 > **refund IS bumpable**. Budget fees accordingly when settling near a
 > deadline.
 

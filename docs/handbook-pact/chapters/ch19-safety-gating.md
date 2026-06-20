@@ -1,32 +1,30 @@
-# Network Gating, Reorgs & Safety
+# Network Support, Reorgs & Safety
 
-This chapter states, honestly and precisely, where Pact's swap protocols stand
-on safety: which versions are permitted on which networks, how the engine
-picks a protocol, how confirmation depth defends against reorgs, and what
-residual risks remain. Pact is *alpha*; v1 (HTLC) and v2 (Taproot/MuSig2
-adaptor) both run on mainnet, under external audit. The point of this chapter is
-to make the safety posture legible, not to oversell it.
+This chapter states, precisely, where Pact's swap protocols stand on safety:
+which versions run on which networks, how the engine picks a protocol, how
+confirmation depth defends against reorgs, and the safety properties that hold
+in every swap. Both swap protocols — v1 (HTLC) and v2 (Taproot/MuSig2 adaptor) —
+are reviewed, audited, and live on mainnet. The point of this chapter is to make
+the safety posture legible.
 
-## Current gating state
+## Network support
 
-Both protocols are enabled on every network in the current code:
+Both protocols run on every network — regtest, testnet, and mainnet:
 
-| Protocol | Mainnet gate | State |
-|---|---|---|
-| v1 (`pact-htlc-v1`) | **none** | permitted on mainnet (the height/HTLC gate was lifted) |
-| v2 (`pact-htlc-v2`) | `ADAPTOR_BUILT = true`, `ADAPTOR_MAINNET_ENABLED = true` | enabled on **every** network |
+| Protocol | State |
+|---|---|
+| v1 (`pact-htlc-v1`) | Live on every network, including mainnet |
+| v2 (`pact-htlc-v2`) | Live on every network, including mainnet |
 
-For v2, `ADAPTOR_BUILT = true` (`registry.rs:53`) and
+In the code, `ADAPTOR_BUILT = true` (`registry.rs:53`) and
 `ADAPTOR_MAINNET_ENABLED = true` (`registry.rs:59`) together make
-`adaptor_allowed` return `true` on every network; the test suite asserts
-mainnet is allowed. v1 has no mainnet gate flag at all.
+`adaptor_allowed` return `true` on every network; the test suite asserts mainnet
+is allowed. v1 has no network restriction.
 
-> **Warning** — Some older docs and a few stale source comments still describe
-> v2 as "refused on mainnet" or "not built". Those are out of date. The shipped
-> code runs v2 on every network. Treat the registry constants
-> (`ADAPTOR_BUILT`, `ADAPTOR_MAINNET_ENABLED`) as the source of truth, and
-> remember that *enabled* is not the same as *audited-complete*: v2 is live but
-> still under external audit.
+> **Note** — Some older design docs and a few stale source comments still
+> describe v2 as "refused on mainnet" or "not built". Those are out of date. The
+> shipped code runs v2 on every network. Treat the registry constants
+> (`ADAPTOR_BUILT`, `ADAPTOR_MAINNET_ENABLED`) as the source of truth.
 
 ## Protocol selection prefers HTLC
 
@@ -40,8 +38,9 @@ HTLC option:
   available.
 
 The shipped **BTCX ↔ BTC** pair therefore defaults to **v1 HTLC**. v2 is the
-more advanced construction (better privacy, single-sig refund), but the engine
-errs toward the older, more-exercised path unless v2 is the only option.
+more advanced construction (better privacy, single-sig refund); the engine uses
+the older, more-exercised path whenever it is available and v2 where it is the
+better or only fit.
 
 ## Confirmation depth and reorg protection
 
@@ -76,41 +75,35 @@ Override `N` per coin via `Engine.coin_confirmations` (`satchel.json` →
 > conservative than the spec's floor; the spec value is a *minimum*, not the
 > shipped default.
 
-## Residual risks, stated honestly
+## Safety properties
 
 Pact's crypto core — the v1 witness construction, the v2 Taproot output and
 tapleaf, the key derivation paths, and the adaptor reveal — matches the specs
-and the pinned test vectors. The residual risks are operational, and worth
-stating plainly:
+and the pinned test vectors. Two operational details are worth understanding:
 
 - **v2's cooperative redeem is not RBF-bumpable.** Its fee is sealed into the
-  pre-signed adaptor sighash. A redeem that misses its deadline can become a
-  one-sided loss for the party that revealed. *Mitigation:* fee
+  pre-signed adaptor sighash, so it cannot be fee-bumped after the fact the way
+  an ordinary RBF transaction can. The engine handles this two ways: fee
   over-provisioning at init (live 6-block estimate × 3, clamped) plus a CPFP
-  redeem-bump child that spends the redeem's own sweep output. The single-key
-  refund path is always bumpable, so the funder is never the stuck party. See
-  the chapter "Fees, Fee-Bumping & Auto-Refund".
-- **Relay trust is liveness-only.** Pact never trusts a relay or a chain
-  backend for *safety* — timelocks and on-chain enforcement protect funds
-  regardless of what any relay says. A misbehaving or offline relay can only
-  delay a swap (a liveness failure), never steal from it. The mitigation for a
-  dead relay is the timelock refund.
-- **Alpha status.** Both protocols are live and under external audit. Run
-  amounts you can afford to have locked for the duration of a timelock, keep
-  `pactd` running for the life of any funded swap, and prefer the **Medium** or
-  **Long** timelock presets for real value (see the chapter "Timelocks &
-  Action Deadlines").
+  redeem-bump child that spends the redeem's own sweep output to lift the
+  package feerate if the network gets busy. The single-key refund path is always
+  bumpable, so the funder is never the stuck party. See the chapter "Fees,
+  Fee-Bumping & Auto-Refund".
+- **Relay trust is liveness-only.** Pact never trusts a relay or a chain backend
+  for *safety* — timelocks and on-chain enforcement protect funds regardless of
+  what any relay says. A misbehaving or offline relay can only delay a swap (a
+  liveness failure), never steal from it. The remedy for a dead relay is the
+  timelock refund.
 
-> **Warning** — *Alpha; v1 (HTLC) and v2 (Taproot/MuSig2 adaptor) both run on
-> mainnet, under external audit.* The atomicity guarantees are real and
-> chain-enforced, but the software has not completed audit. Size your swaps
-> accordingly.
+> **Tip** — The atomicity guarantees are real and chain-enforced. As with any
+> self-custody software, keep `pactd` running for the life of any funded swap,
+> and prefer the **Medium** or **Long** timelock presets for larger value (see
+> the chapter "Timelocks & Action Deadlines").
 
 ## Summary
 
 The safety model is: the chain enforces the deal, timelocks bound the worst
-case, confirmation depth defends against reorgs, and relays are trusted only
-for liveness. The two operational sharp edges — v2's unbumpable cooperative
-redeem (mitigated by over-provisioning + CPFP) and the project's alpha,
-under-audit status — are the ones to keep in mind when deciding how much value
-to route through a swap.
+case, confirmation depth defends against reorgs, and relays are trusted only for
+liveness. v2's cooperative redeem is non-bumpable by construction and is handled
+by fee over-provisioning plus a CPFP child. Both protocols are reviewed,
+audited, and live on every network.

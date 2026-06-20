@@ -94,9 +94,9 @@ The **About** tab is your reference corner.
 - **Where your keys live** — a short trust note reminding you that your keys and
   recovery phrase stay on your own machine and are never sent to Satchel, to any
   noticeboard, or to anyone else.
-- **Risk disclaimer** — the alpha-software notice. Satchel is early-release
-  software under active development and external security review; trade with funds
-  you're prepared to put at risk while it matures.
+- **Risk disclaimer** — the self-custody notice. Satchel is provided without
+  warranty; you alone hold your keys and are responsible for safeguarding your
+  recovery phrase and the funds you trade.
 
 ## Where your settings are stored
 

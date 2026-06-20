@@ -50,8 +50,8 @@ everything the app needs.
 That's the whole installation. There is nothing to register and no account to
 create.
 
-> **Note** — **macOS is not supported yet.** A macOS build is planned but out of
-> scope for this alpha. For now, use Windows or Linux.
+> **Note** — **macOS is not supported yet.** A macOS build is planned. For now,
+> use Windows or Linux.
 
 ### What's inside the bundle
 
@@ -68,10 +68,10 @@ provide is your coin nodes.
 
 ## Windows: the SmartScreen prompt
 
-Satchel's alpha builds are **not yet code-signed** — signing is a paperwork step
-the project will complete closer to a stable release. Because of this, Windows
-**SmartScreen** may show a blue warning the first time you run the app, saying
-something like *"Windows protected your PC"*.
+Satchel's builds are **not yet code-signed** — signing is a paperwork step the
+project is still completing. Because of this, Windows **SmartScreen** may show a
+blue warning the first time you run the app, saying something like *"Windows
+protected your PC"*.
 
 This is expected for unsigned software and does not mean anything is wrong. To
 run it:

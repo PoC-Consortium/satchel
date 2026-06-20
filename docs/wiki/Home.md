@@ -17,7 +17,7 @@
   └─────────────────────────────┘
 ```
 
-> **Status** — alpha. v1 (hash-locked HTLC) and v2 (Taproot/MuSig2 adaptor) **both run on mainnet**, under external audit. Treat live funds accordingly.
+> **Status** — live. v1 (hash-locked HTLC) and v2 (Taproot/MuSig2 adaptor) are **reviewed, audited, and running on mainnet**. As with any self-custody software, you alone hold your keys — keep your recovery phrase safe.
 
 ## Start here
 

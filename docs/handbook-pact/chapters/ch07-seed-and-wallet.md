@@ -100,5 +100,5 @@ the Nostr `nostr_outbox` / `nostr_inbox` / `nostr_offer_cache` tables.
 
 > **Note** — Records are strict: a missing required field fails the load rather
 > than silently defaulting. There is no serde-default migration path — this is a
-> deliberate "no backward compatibility" stance for a pre-release product, so do
+> deliberate "no backward compatibility" stance, so do
 > not hand-edit the SQLite state and expect old shapes to be tolerated.

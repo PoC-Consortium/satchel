@@ -106,7 +106,7 @@ coins can use, and therefore which pairs are tradable at all — the engine
 When both protocols are possible, the engine **prefers HTLC**; the v2 adaptor
 protocol is selected only for Taproot pairs that lack an HTLC option. The shipped
 BTCX ↔ BTC pair therefore defaults to HTLC. (Note that v2 adaptor swaps are
-enabled on every network, including mainnet, under external audit.)
+enabled on every network, including mainnet.)
 
 ## Inspecting coins and pairs
 

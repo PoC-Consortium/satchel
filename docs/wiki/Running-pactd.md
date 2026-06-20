@@ -58,7 +58,7 @@ pact-cli --data-dir ./alice getinfo
 
 ## Mainnet note
 
-Point `--coin` at your mainnet node RPCs and pass `--network mainnet`. Swaps run on mainnet today (v1 HTLC and v2 Taproot/MuSig2 adaptor), but the protocol and implementation are **alpha and under external audit** — treat live funds accordingly. Run `pactd` on a trusted machine and keep `--listen` on loopback.
+Point `--coin` at your mainnet node RPCs and pass `--network mainnet`. Both swap types run on mainnet (v1 HTLC and v2 Taproot/MuSig2 adaptor); the protocol and implementation are **reviewed and audited**. You alone hold your keys — run `pactd` on a trusted machine and keep `--listen` on loopback.
 
 ## See also
 

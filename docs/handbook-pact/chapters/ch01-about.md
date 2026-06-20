@@ -76,16 +76,14 @@ This handbook follows a few consistent conventions:
 
 ## Version and status
 
-> **Status** — alpha; v1 (HTLC) and v2 (Taproot/MuSig2 adaptor) both run on
-> mainnet, under external audit.
+> **Status** — Both swap protocols — v1 (HTLC) and v2 (Taproot/MuSig2 adaptor)
+> — are reviewed, audited, and live on mainnet.
 
-This is pre-1.0 software under active development. The handbook is kept in sync
-with the `master` branch, but the **code is the source of truth**. Flag
-defaults, RPC field names, byte layouts, and timelock margins can change between
-commits; when a precise detail matters for your integration, confirm it against
-the code and the pinned test vectors before you rely on it. Where this handbook
-cites behaviour, it reflects the engine as of the `master` branch it was written
-against.
+The handbook is kept in sync with the `master` branch, and the **code is the
+ultimate source of truth**. When a precise detail matters for your integration,
+confirm it against the code and the pinned test vectors before you rely on it.
+Where this handbook cites behaviour, it reflects the engine as of the `master`
+branch it was written against.
 
 ## Where to get help
 

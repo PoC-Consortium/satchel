@@ -26,7 +26,7 @@ your control. Setting them up is a one-time job covered in the chapter *"Setting
 Your Coins"*.
 
 > **Note** — A future *nodeless* build is planned, which will let Satchel act as a
-> self-contained wallet without you running full nodes. For this alpha, nodes are
+> self-contained wallet without you running full nodes. For now, nodes are
 > required.
 
 ## Is it safe to close the app?
@@ -56,12 +56,12 @@ settle with the same atomic-swap safety.
 
 ## Can I trade on mainnet?
 
-**Yes.** Both swap types — **Standard (HTLC)** and **Private (Taproot)** — run on
-real mainnet today.
+**Yes.** Both swap types — **Standard (HTLC)** and **Private (Taproot)** — are
+reviewed, audited, and running on real mainnet today.
 
-> **Warning** — Satchel is **alpha** software still under external security review.
-> Mainnet trading works, but treat it accordingly: start small and only trade
-> funds you're prepared to put at risk while the software and its audit mature.
+> **Warning** — You alone hold your keys. Safeguard your recovery phrase, and
+> keep Satchel and your nodes running until a swap completes so the engine can
+> finish or refund on time.
 
 ## What coins are supported?
 
