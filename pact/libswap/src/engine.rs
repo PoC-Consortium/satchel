@@ -3651,9 +3651,11 @@ impl Engine {
     /// After a v2 handshake message is applied (`recv_adaptor`), advance the
     /// swap one step and relay the next message — the unattended board
     /// autopilot, mirroring v1. Idempotent / order-independent: emits at most
-    /// one outgoing message per call from the record + nonce state. Funding is
-    /// gated on `auto_fund` (it commits money); nonce/sign/assemble are safe to
-    /// automate (no new funds); redeem is the scheduler's job (`tick`).
+    /// one outgoing message per call from the record + nonce state. v2 ALWAYS
+    /// auto-funds (the Satchel auto-fund toggle gates v1 only): v2 funding is
+    /// one step of an automated handshake, so pausing it for manual funding just
+    /// wedges the swap. nonce/sign/assemble are safe to automate (no new funds);
+    /// redeem is the scheduler's job (`tick`).
     fn drive_adaptor_relay(
         &self,
         msg_type: &str,
@@ -3671,7 +3673,10 @@ impl Engine {
         let both_funded = rec.funding_a_txid.is_some() && rec.funding_b_txid.is_some();
 
         // 1. Fund my leg: initiator on `accept`; participant once leg A is in.
-        if self.auto_fund && !self.adaptor_my_leg_funded(rec) {
+        // No `auto_fund` gate — v2 always auto-funds (see the fn doc): the
+        // manual e2e drives via `adaptorrecv`, which never reaches this
+        // autopilot, so production board swaps are the only caller here.
+        if !self.adaptor_my_leg_funded(rec) {
             let ready = match rec.role {
                 Role::Initiator => msg_type == "accept",
                 Role::Participant => rec.funding_a_txid.is_some(),

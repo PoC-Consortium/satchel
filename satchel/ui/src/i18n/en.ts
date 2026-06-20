@@ -254,7 +254,7 @@ export const en = {
     swaps: "Swaps",
     autoFund: "Auto-fund swaps",
     autoFundHint:
-      "Fund your swap legs automatically. Turn off to fund each swap by hand — you'll get a tone and an on-screen alert when funding is required.",
+      "Fund your swap legs automatically. Turn off to fund standard swaps by hand — you'll get a tone and an on-screen alert when funding is required. Private (Taproot) swaps always auto-fund.",
     network: "Network",
     networkHint:
       "One coherent mode for this client — every coin runs on this network. Chosen when the merchant was created; mainnet is gated.",
