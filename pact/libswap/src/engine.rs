@@ -205,7 +205,7 @@ fn ensure_adaptor_supported(chain_a: &ChainRef, chain_b: &ChainRef) -> Result<()
     for c in [chain_a, chain_b] {
         ensure!(
             registry::adaptor_allowed(c.network),
-            "{}<->{}: v2 adaptor swaps are gated on {} (mainnet) pending the security audit",
+            "{}<->{}: v2 adaptor swaps are not available on {}",
             chain_a.coin_id,
             chain_b.coin_id,
             c.coin_id
@@ -537,10 +537,7 @@ impl Engine {
 
     /// Network admission policy: regtest is free; testnet and mainnet permit a
     /// plaintext seed but warn (encryption is the user's choice, as in Bitcoin
-    /// Core). Mainnet was closed pending external review and is now open for v1
-    /// (HTLC) swaps while the protocol + implementation are under audit; v2
-    /// adaptor swaps stay separately gated off mainnet (registry::adaptor_allowed
-    /// / ADAPTOR_MAINNET_ENABLED) until their audit completes.
+    /// Core). Mainnet is open for both v1 (HTLC) and v2+ (adaptor) swaps.
     fn ensure_network_allowed(&self, network: Network) -> Result<()> {
         match network {
             Network::Regtest => Ok(()),
@@ -561,13 +558,10 @@ impl Engine {
                 Ok(())
             }
             Network::Mainnet => {
-                // Was refused pending external review; the protocol + implementation
-                // are now under audit, so mainnet (v1 HTLC) is enabled. An
-                // unencrypted hot seed is far riskier here than on testnet —
-                // warn loudly, but permit it (Bitcoin-Core-style: your funds,
-                // your responsibility). NOTE: v2 adaptor swaps remain separately
-                // gated off mainnet via registry::ADAPTOR_MAINNET_ENABLED until
-                // their audit completes.
+                // Mainnet is enabled for both v1 (HTLC) and v2+ (adaptor;
+                // registry::ADAPTOR_MAINNET_ENABLED). An unencrypted hot seed is
+                // far riskier here than on testnet — warn loudly, but permit it
+                // (Bitcoin-Core-style: your funds, your responsibility).
                 if !self.store.seed_is_encrypted()? {
                     eprintln!(
                         "warning: running MAINNET with an UNENCRYPTED seed — anyone with \
@@ -837,10 +831,9 @@ impl Engine {
 
     /// v2 (pact-htlc-v2) initiator: build the adaptor-swap `init` (spec v2 §7).
     /// Reserves the swap index (so the v2 keys + adaptor secret are claimed)
-    /// and returns the signed `InitV2` envelope. Mainnet is refused by the
-    /// gate (`registry::ADAPTOR_MAINNET_ENABLED`); regtest/testnet run. The full
-    /// stateful lifecycle (funding, redeem, scheduler) is driven here on top of
-    /// the crypto/tx flow in `adaptor_engine`.
+    /// and returns the signed `InitV2` envelope. Runs on every network (v2+ is
+    /// mainnet-enabled). The full stateful lifecycle (funding, redeem,
+    /// scheduler) is driven here on top of the crypto/tx flow in `adaptor_engine`.
     pub fn adaptor_init(
         &self,
         network: Network,
@@ -4182,12 +4175,12 @@ mod tests {
             "pact-htlc-v1"
         );
 
-        // …but opting into v2 is still allowed for a Taproot pair off-mainnet,
-        // and rejected on mainnet (audit gate) — so the default flip didn't break
-        // the v2 path. (resolve_offer_protocol relies on this allowance.)
+        // …but opting into v2 is allowed for a Taproot pair on every network now
+        // that v2+ is mainnet-enabled (resolve_offer_protocol relies on this).
+        // A pair without Taproot on both legs still can't run v2.
         assert!(adaptor_offer_allowed("btcx", "btc", Network::Regtest));
         assert!(adaptor_offer_allowed("btcx", "btc", Network::Testnet));
-        assert!(!adaptor_offer_allowed("btcx", "btc", Network::Mainnet));
+        assert!(adaptor_offer_allowed("btcx", "btc", Network::Mainnet));
         assert!(!adaptor_offer_allowed("btcx", "doge", Network::Regtest));
     }
 
@@ -4257,7 +4250,7 @@ mod tests {
             .unwrap();
         assert!(bob.adaptor_accept(&v1_init).is_err());
 
-        // Mainnet is gated.
+        // Mainnet v2+ is enabled now (ADAPTOR_MAINNET_ENABLED) — init succeeds.
         assert!(alice
             .adaptor_init(
                 Network::Mainnet,
@@ -4266,7 +4259,7 @@ mod tests {
                 t1,
                 t2
             )
-            .is_err());
+            .is_ok());
 
         std::fs::remove_dir_all(&ad).ok();
         std::fs::remove_dir_all(&bd).ok();

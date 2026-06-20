@@ -19,10 +19,10 @@
 //!
 //! These primitives are now wired into the engine: [`ADAPTOR_BUILT`] is `true`
 //! and [`crate::registry::select_protocol`] returns `Adaptor` for taproot pairs
-//! (mainnet still gated on [`crate::registry::ADAPTOR_MAINNET_ENABLED`] until
-//! the v2 audit signs off). The nonce seeds in *this module's tests* are fixed
-//! for determinism; the production driver in [`crate::adaptor_engine`] uses
-//! fresh-random, use-once-persisted nonces.
+//! (v2+ is enabled on every network, [`crate::registry::ADAPTOR_MAINNET_ENABLED`]).
+//! The nonce seeds in *this module's tests* are fixed for determinism; the
+//! production driver in [`crate::adaptor_engine`] uses fresh-random,
+//! use-once-persisted nonces.
 //!
 //! [`ADAPTOR_BUILT`]: crate::registry::ADAPTOR_BUILT
 

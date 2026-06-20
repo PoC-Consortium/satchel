@@ -13,8 +13,8 @@
 //! These steps are now driven in production: [`crate::engine`] wraps them in
 //! signed envelopes (`messages.rs`) with pactd RPC routing, and the live
 //! two-node regtest harness exercises the full lifecycle
-//! (`harness/test_adaptor_swap.py`). Mainnet stays gated on
-//! [`crate::registry::ADAPTOR_MAINNET_ENABLED`] until the v2 audit completes.
+//! (`harness/test_adaptor_swap.py`). v2+ is enabled on every network
+//! ([`crate::registry::ADAPTOR_MAINNET_ENABLED`]).
 
 use anyhow::{Context, Result};
 use musig2::secp::{MaybeScalar, Point, Scalar};

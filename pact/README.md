@@ -8,7 +8,7 @@ References: COMIT `xmr-btc-swap` (Rust), decred `atomicswap` (protocol logic).
 - `libswap` — HTLC construction/verification, per-swap state machine
   (offer → funded → redeemed/refunded), key + preimage derivation from the
   Pact BIP39 seed, chain monitoring. Two protocols: v1 hash-locked HTLCs
-  and v2 Taproot/MuSig2 adaptor swaps (`pact-htlc-v2`, mainnet-gated)
+  and v2+ Taproot/MuSig2 adaptor swaps (`pact-htlc-v2`, CPFP-bumpable redeem)
 - `pactd` — daemon: local JSON-RPC 2.0 over HTTP (bitcoind-shaped), SQLite
   persistence, automatic refund scheduling (runs as a service; signs
   refunds with no human present — hot by design, bounded exposure)
@@ -57,9 +57,9 @@ Engine status (proven by the regtest e2e suite):
   MTP ≥ T, and **RBF fee-bumps** while a spend is unconfirmed
   (spec §7.4) — all with no human present. `pactd --once` runs a single
   pass (cron/tests).
-- v2 adaptor swaps (`pact-htlc-v2`) run on regtest/testnet but are
-  **refused on mainnet** until the adaptor security audit
-  (`ADAPTOR_MAINNET_ENABLED`); v1 is the default everywhere else.
+- v2+ adaptor swaps (`pact-htlc-v2`) run on **every network**
+  (`ADAPTOR_MAINNET_ENABLED`), with a CPFP-bumpable cooperative redeem; v1
+  (HTLC) is still the default for pairs that support it.
 - Coins and merchants are config/registry-driven: a shipped string-id coin
   registry (`btcx`, `btc`, each with declared capabilities) plus a capability
   pair resolver — no hardcoded asset enum. pactd owns merchants
@@ -77,9 +77,8 @@ Engine status (proven by the regtest e2e suite):
   unencrypted. `unlock` decrypts an encrypted seed for the session.
 - **Network policy**: regtest free; `--network testnet` allowed (spec §7.3
   timelock/confirmation minimums enforced — an unencrypted testnet seed is
-  warned, not refused); mainnet open for v1 (HTLC) swaps while the protocol +
-  implementation are under audit — v2 adaptor swaps stay gated off mainnet
-  until their audit completes.
+  warned, not refused); mainnet open for both v1 (HTLC) and v2+ (adaptor)
+  swaps. An unencrypted mainnet seed is warned, not refused.
 
 - **Electrum backend**: `tcp://host:port` / `ssl://host:port` URLs in the
   comma-separated backend lists select the Electrum protocol — works

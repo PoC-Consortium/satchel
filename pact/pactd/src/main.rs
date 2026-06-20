@@ -69,7 +69,7 @@ struct Args {
     /// Listen address for the JSON-RPC endpoint. Loopback only.
     #[arg(long, default_value = "127.0.0.1:9737")]
     listen: std::net::SocketAddr,
-    /// Network: regtest | testnet (mainnet refused pending audit).
+    /// Network: regtest | testnet | mainnet.
     #[arg(long, default_value = "regtest")]
     network: String,
     /// Corkboard base URL(s), comma-separated.

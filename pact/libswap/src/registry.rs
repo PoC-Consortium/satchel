@@ -52,10 +52,11 @@ pub enum Protocol {
 /// `Adaptor` for taproot pairs that lack a classic-HTLC option.
 pub const ADAPTOR_BUILT: bool = true;
 
-/// Whether v2 adaptor swaps are permitted on **mainnet**. Stays `false`
-/// until the M7 crypto audit signs off (V2_ADAPTOR_SWAPS.md "mainnet gate").
-/// Regtest and testnet run freely; mainnet legs are refused until this flips.
-pub const ADAPTOR_MAINNET_ENABLED: bool = false;
+/// Whether v2 adaptor swaps are permitted on **mainnet**. Now `true`: the
+/// engineering blockers are closed — the cooperative redeem is CPFP-bumpable
+/// (v2+, commit 340657d), the §7.4 action margins are enforced, and the swap
+/// paths were audited in-session. v2+ runs on every network.
+pub const ADAPTOR_MAINNET_ENABLED: bool = true;
 
 /// The one remaining v2 gate: is an adaptor swap allowed on `network`?
 /// Built everywhere; on mainnet additionally gated on the audit flag.
@@ -519,16 +520,13 @@ capabilities = { cltv = true, segwit_v0 = true, taproot = false }
     }
 
     #[test]
-    fn adaptor_mainnet_gated_others_open() {
-        // The one remaining v2 gate: regtest/testnet run, mainnet refused
-        // until the audit flips ADAPTOR_MAINNET_ENABLED.
+    fn adaptor_allowed_on_every_network() {
+        // v2+ is enabled everywhere now that the redeem is CPFP-bumpable and the
+        // §7.4 margins are enforced (ADAPTOR_MAINNET_ENABLED flipped true).
         assert!(adaptor_allowed(Network::Regtest));
         assert!(adaptor_allowed(Network::Testnet));
-        assert_eq!(adaptor_allowed(Network::Mainnet), ADAPTOR_MAINNET_ENABLED);
-        assert!(
-            !ADAPTOR_MAINNET_ENABLED,
-            "mainnet stays gated until M7 audit"
-        );
+        assert!(adaptor_allowed(Network::Mainnet));
+        assert!(ADAPTOR_MAINNET_ENABLED);
     }
 
     #[test]
