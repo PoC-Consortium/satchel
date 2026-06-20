@@ -8,8 +8,7 @@ state machines that drive a swap to completion (v1 HTLC and v2 adaptor), the
 roles each party plays, and the scheduler that walks every live swap forward
 on a clock.
 
-Two protocol versions ship today, both running on every network under
-external audit:
+Two protocol versions ship today, both running on every network:
 
 - **v1 (`pact-htlc-v1`)** — classic hash-timelock contracts (HTLCs) over
   P2WSH outputs. See the chapter "v1 HTLC Swaps".

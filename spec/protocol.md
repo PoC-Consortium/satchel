@@ -174,7 +174,7 @@ be shared freely.
 ## 5. The HTLC script
 
 Both chains use the identical witness script (only the keys, hash and
-locktime differ). It is the audited classic template (cf. Decred
+locktime differ). It is the classic template (cf. Decred
 `atomicswap`), with a preimage size guard:
 
 ```

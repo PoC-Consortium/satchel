@@ -12,7 +12,7 @@ You do. The engine holds your seed and keys locally, signs everything itself, an
 For now, yes — the engine drives a real node (or Electrum backend) per coin. You must have **at least two coins live** before Satchel lets you trade. A full send/receive wallet without your own node arrives with the planned nodeless build. See [Configuring Coins](Configuring-Coins).
 
 **Does this run on mainnet?**
-Yes. Both v1 (HTLC) and v2 (Taproot/MuSig2 adaptor) run on mainnet, reviewed and audited. You alone hold your keys — safeguard your recovery phrase.
+Yes. Both v1 (HTLC) and v2 (Taproot/MuSig2 adaptor) run on mainnet, reviewed. You alone hold your keys — safeguard your recovery phrase.
 
 **Which coins are supported?**
 The first pair is **BTCX ↔ BTC**. Litecoin (LTC) is the first added third coin. More coins can be added via `coins.toml` without recompiling — see [Configuring Coins](Configuring-Coins).

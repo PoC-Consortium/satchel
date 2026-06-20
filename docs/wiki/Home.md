@@ -17,7 +17,7 @@
   └─────────────────────────────┘
 ```
 
-> **Status** — live. v1 (hash-locked HTLC) and v2 (Taproot/MuSig2 adaptor) are **reviewed, audited, and running on mainnet**. As with any self-custody software, you alone hold your keys — keep your recovery phrase safe.
+> **Status** — live. v1 (hash-locked HTLC) and v2 (Taproot/MuSig2 adaptor) are **reviewed and running on mainnet**. As with any self-custody software, you alone hold your keys — keep your recovery phrase safe.
 >
 > *These docs were verified against commit `c3cd853`.*
 

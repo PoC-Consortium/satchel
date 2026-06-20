@@ -77,7 +77,7 @@ This handbook follows a few consistent conventions:
 ## Source revision and status
 
 > **Status** — Both swap protocols — v1 (HTLC) and v2 (Taproot/MuSig2 adaptor)
-> — are reviewed, audited, and live on mainnet.
+> — are reviewed and live on mainnet.
 
 Rather than a release-version number, this handbook tracks the **source revision**
 it was checked against: it was verified against commit `c3cd853` (June 2026), the

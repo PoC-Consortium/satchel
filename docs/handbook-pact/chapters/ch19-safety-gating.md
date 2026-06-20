@@ -4,7 +4,7 @@ This chapter states, precisely, where Pact's swap protocols stand on safety:
 which versions run on which networks, how the engine picks a protocol, how
 confirmation depth defends against reorgs, and the safety properties that hold
 in every swap. Both swap protocols — v1 (HTLC) and v2 (Taproot/MuSig2 adaptor) —
-are reviewed, audited, and live on mainnet. The point of this chapter is to make
+are reviewed and live on mainnet. The point of this chapter is to make
 the safety posture legible.
 
 ## Network support
@@ -105,5 +105,5 @@ and the pinned test vectors. Two operational details are worth understanding:
 The safety model is: the chain enforces the deal, timelocks bound the worst
 case, confirmation depth defends against reorgs, and relays are trusted only for
 liveness. v2's cooperative redeem is non-bumpable by construction and is handled
-by fee over-provisioning plus a CPFP child. Both protocols are reviewed,
-audited, and live on every network.
+by fee over-provisioning plus a CPFP child. Both protocols are reviewed
+and live on every network.

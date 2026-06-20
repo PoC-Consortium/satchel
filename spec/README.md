@@ -16,7 +16,7 @@ independently of Pact.
   pinned by `pact/libswap/tests/vectors.rs`)
 - [`protocol-v2.md`](protocol-v2.md) — v2 spec (`pact-htlc-v2`): Taproot/MuSig2
   adaptor swaps. Specifies only what changes from v1; route + rationale in the
-  [Pact handbook](../docs/handbook-pact/). Live on mainnet (reviewed and audited).
+  [Pact handbook](../docs/handbook-pact/). Live on mainnet (reviewed).
 - `vectors/htlc_v2.json` — v2 vectors (regenerate:
   `cargo run -p libswap --example gen-vectors-v2`; pinned by `tests/vectors_v2.rs`)
 

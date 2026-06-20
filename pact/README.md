@@ -105,7 +105,7 @@ Engine status (proven by the regtest e2e suite):
 Still open before real-money networks: a live-fire e2e against a running
 electrs-pocx + BTC electrs pair (needs a Linux/CI host — RocksDB on
 Windows is impractical), backup/restore tooling, Tor/SOCKS5 support for
-board + Electrum connections, external audit (gates mainnet).
+board + Electrum connections.
 
 ## Definition of done (Phase 1)
 

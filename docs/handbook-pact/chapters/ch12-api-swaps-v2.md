@@ -9,7 +9,7 @@ MuSig2 nonce exchange binds the secret — is covered in the protocol chapter
 "JSON-RPC Conventions"; for the simpler HTLC route see "API: v1 HTLC Swaps".
 
 > **Note** — v2 adaptor swaps are **live on every network, including mainnet**.
-> *v1 (HTLC) and v2 (Taproot/MuSig2 adaptor) swaps are reviewed, audited, and
+> *v1 (HTLC) and v2 (Taproot/MuSig2 adaptor) swaps are reviewed and
 > live on mainnet.*
 
 ## Swap state machine

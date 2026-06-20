@@ -14,7 +14,7 @@ can cheat and no third party ever holds your coins. The first supported pair is
 - Protocol spec: [spec/](spec/)
 
 > **Status:** live. Both swap protocols — v1 (hash-locked HTLC) and v2
-> (Taproot/MuSig2 adaptor) — are reviewed, audited, and running on mainnet. v1
+> (Taproot/MuSig2 adaptor) — are reviewed and running on mainnet. v1
 > is the default; v2 is selected automatically for Taproot-only pairs.
 
 ## How it works

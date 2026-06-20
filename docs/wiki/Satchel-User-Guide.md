@@ -27,7 +27,7 @@ Satchel uses a **merchant** model: one merchant = one seed = one trading identit
 
 Light / Dark / System themes, repainting immediately and persisted. The UI ships an English bundle today (the i18n layer is in place for more).
 
-> **Warning** — real funds, your keys alone. The chain enforces the deal, and the protocol and implementation are reviewed and audited. When you close Satchel with a live swap, the exit dialog lets you **keep running** so the engine can finish or refund — heed it.
+> **Warning** — real funds, your keys alone. The chain enforces the deal, and the protocol and implementation are reviewed. When you close Satchel with a live swap, the exit dialog lets you **keep running** so the engine can finish or refund — heed it.
 
 ## See also
 

@@ -66,7 +66,7 @@
 
 ## Swaps — v2 adaptor (Taproot/MuSig2)
 
-v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed and audited).
+v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed).
 
 | Method | Purpose |
 |---|---|

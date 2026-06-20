@@ -87,7 +87,7 @@ pinned test vectors.
 write-ahead use-once nonce store, proven end to end over a chain backend) and
 surfaced in Satchel. On-chain these look like ordinary single-key payments:
 better privacy, smaller transactions, no swap script revealed. v2 swaps are
-**live on mainnet** (reviewed and audited). Route, rationale, and protocol delta:
+**live on mainnet** (reviewed). Route, rationale, and protocol delta:
 the [Pact handbook](handbook-pact/) and
 [`../spec/protocol-v2.md`](../spec/protocol-v2.md).
 

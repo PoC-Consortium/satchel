@@ -57,7 +57,7 @@ settle with the same atomic-swap safety.
 ## Can I trade on mainnet?
 
 **Yes.** Both swap types — **Standard (HTLC)** and **Private (Taproot)** — are
-reviewed, audited, and running on real mainnet today.
+reviewed and running on real mainnet today.
 
 > **Warning** — You alone hold your keys. Safeguard your recovery phrase, and
 > keep Satchel and your nodes running until a swap completes so the engine can

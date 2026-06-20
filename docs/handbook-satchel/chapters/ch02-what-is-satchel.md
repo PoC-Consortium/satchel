@@ -99,7 +99,7 @@ and the app is built so new coins can be added without a new release.
 ## Setting expectations
 
 Satchel is live and released. The underlying swap protocols (both the original
-style and the newer, more private Taproot style) have been reviewed and audited.
+style and the newer, more private Taproot style) have been reviewed.
 The design is careful and the safety guarantees are real — but it is software
 handling real value, and you alone hold your keys.
 

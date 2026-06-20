@@ -30,7 +30,7 @@ export const en = {
   // Risk disclaimer (first-run welcome + Settings → About).
   disclaimer: {
     title: "Self-custody — your keys, your responsibility",
-    body: "Satchel performs non-custodial atomic swaps: you alone hold your keys, and a merchant's seed holds hot transit keys while a swap is in flight. The swap protocols (v1 HTLC and v2 Taproot/MuSig2) are reviewed and audited. MIT-licensed and provided as-is, with no warranty — back up your recovery phrase and use at your own risk.",
+    body: "Satchel performs non-custodial atomic swaps: you alone hold your keys, and a merchant's seed holds hot transit keys while a swap is in flight. The swap protocols (v1 HTLC and v2 Taproot/MuSig2) are reviewed and live on mainnet. MIT-licensed and provided as-is, with no warranty — back up your recovery phrase and use at your own risk.",
   },
   nav: {
     public: "Public",
