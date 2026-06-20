@@ -100,6 +100,21 @@ pub trait ChainBackend {
     /// Fund `address` with exactly `amount_sat` via the core wallet
     /// (HTLC funding is a normal send, spec §6.1).
     fn wallet_send(&self, address: &str, amount_sat: u64) -> Result<String>;
+
+    /// Sign `tx`'s input(s) with the node wallet and broadcast it, given the
+    /// value + scriptPubKey of its single prevout so a segwit/taproot input can
+    /// be signed before that prevout confirms. Used to CPFP-bump an unconfirmed
+    /// cooperative redeem (v2+): a self-funded child spending the redeem's own
+    /// (wallet-owned sweep) output. Only the wallet-backed Core primary
+    /// implements it; chain-only backends cannot sign.
+    fn wallet_sign_send(
+        &self,
+        _tx: &Transaction,
+        _prevout_value_sat: u64,
+        _prevout_spk: &ScriptBuf,
+    ) -> Result<Txid> {
+        bail!("this backend has no wallet; cannot sign a CPFP child")
+    }
 }
 
 /// Bitcoin Core / pocx-node JSON-RPC backend.
@@ -347,6 +362,49 @@ impl ChainBackend for CoreRpcBackend {
         let balance = self.rpc.call("getbalance", &[])?;
         let coins = balance.as_f64().context("getbalance: non-numeric")?;
         Ok((coins * 1e8).round() as u64)
+    }
+
+    fn wallet_sign_send(
+        &self,
+        tx: &Transaction,
+        prevout_value_sat: u64,
+        prevout_spk: &ScriptBuf,
+    ) -> Result<Txid> {
+        let unsigned = bitcoin::consensus::encode::serialize_hex(tx);
+        // The prevout is unconfirmed (the parent redeem in the mempool), so the
+        // wallet needs its amount + spk explicitly to produce a segwit/taproot
+        // signature. The wallet holds the key (the sweep address it issued).
+        let prevout = &tx.input[0].previous_output;
+        let amount = format!(
+            "{}.{:08}",
+            prevout_value_sat / 100_000_000,
+            prevout_value_sat % 100_000_000
+        );
+        let prevtxs = json!([{
+            "txid": prevout.txid.to_string(),
+            "vout": prevout.vout,
+            "scriptPubKey": hex::encode(prevout_spk.as_bytes()),
+            "amount": amount,
+        }]);
+        let signed = self
+            .rpc
+            .call("signrawtransactionwithwallet", &[json!(unsigned), prevtxs])?;
+        anyhow::ensure!(
+            signed["complete"].as_bool() == Some(true),
+            "wallet could not fully sign the CPFP child (is the redeem swept to a \
+             wallet-owned address?): {signed}"
+        );
+        let signed_hex = signed["hex"]
+            .as_str()
+            .context("signrawtransactionwithwallet: no hex")?;
+        match self.rpc.call("sendrawtransaction", &[json!(signed_hex)]) {
+            Ok(txid) => Ok(Txid::from_str(
+                txid.as_str().context("sendrawtransaction: non-string")?,
+            )?),
+            // An unchanged child re-sent each tick is already in the mempool.
+            Err(e) if is_already_broadcast(&e) => Ok(tx.compute_txid()),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -861,5 +919,16 @@ impl ChainBackend for MultiBackend {
 
     fn wallet_balance(&self) -> Result<u64> {
         self.primary().wallet_balance()
+    }
+
+    fn wallet_sign_send(
+        &self,
+        tx: &Transaction,
+        prevout_value_sat: u64,
+        prevout_spk: &ScriptBuf,
+    ) -> Result<Txid> {
+        // Wallet op: the primary (Core) backend owns the sweep key.
+        self.primary()
+            .wallet_sign_send(tx, prevout_value_sat, prevout_spk)
     }
 }

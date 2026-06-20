@@ -146,10 +146,9 @@ pub struct AdaptorSwapRecord {
     pub final_txid_a: Option<String>,
     pub final_txid_b: Option<String>,
     /// Full hex of our last-broadcast spend on each leg, kept while it is
-    /// unconfirmed so the scheduler can rebroadcast (both spend types) or
-    /// RBF-bump (the single-key refund only — the cooperative redeem's fee is
-    /// locked into the pre-signed adaptor signature and cannot be re-fee'd
-    /// without a fresh MuSig2 round). See V2_ADAPTOR_SWAPS.md "fee-bump".
+    /// unconfirmed so the scheduler can rebroadcast, RBF-bump (the single-key
+    /// refund), or CPFP-bump (the cooperative redeem, whose own fee is locked
+    /// into the pre-signed adaptor signature — v2+). See V2_ADAPTOR_SWAPS.md.
     pub final_tx_a_hex: Option<String>,
     pub final_tx_b_hex: Option<String>,
 }

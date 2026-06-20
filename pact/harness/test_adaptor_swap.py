@@ -205,6 +205,73 @@ def test_adaptor_refund_feebump(h):
         bob.stop()
 
 
+def test_adaptor_redeem_cpfp(h):
+    """CPFP bump of the cooperative redeem (v2+). The redeem's fee is sealed in
+    the adaptor signature and cannot be RBF'd, so once it is broadcast but still
+    unconfirmed the scheduler must CPFP-bump it: a self-funded child spending the
+    redeem's own (wallet-owned sweep) output. We broadcast Alice's leg-B redeem,
+    DON'T mine it, drive `tick`, and assert an `adaptor-cpfp` event AND that the
+    redeem output is now spent by an in-mempool child — then mining settles both."""
+    alice = Party("adcp-alice", h, h.workdir, "alice_pocx", "alice_btc", auto_init=False).start()
+    bob = Party("adcp-bob", h, h.workdir, "bob_pocx", "bob_btc", auto_init=False).start()
+    try:
+        alice.setup_seed()
+        bob.setup_seed()
+        t2, t1 = regtest_timelocks(h)
+
+        init = _env(alice.rpc("adaptorinit", GIVE_POCX, GET_BTC, t1, t2))
+        sid = init["swap_id"]
+        accept = _env(bob.rpc("adaptoraccept", init))
+        alice.rpc("adaptorrecv", accept)
+
+        # Fund both legs and drive the handshake to Signed.
+        fa = _env(alice.rpc("adaptorfund", sid))
+        h.pocx.generate(1, "alice_pocx")
+        bob.rpc("adaptorrecv", fa)
+        fb = _env(bob.rpc("adaptorfund", sid))
+        h.btc.generate(1, "bob_btc")
+        alice.rpc("adaptorrecv", fb)
+        na = _env(alice.rpc("adaptornonces", sid))
+        nb = _env(bob.rpc("adaptornonces", sid))
+        bob.rpc("adaptorrecv", na)
+        alice.rpc("adaptorrecv", nb)
+        pa = _env(alice.rpc("adaptorsign", sid))
+        pb = _env(bob.rpc("adaptorsign", sid))
+        bob.rpc("adaptorrecv", pa)
+        alice.rpc("adaptorrecv", pb)
+        alice.rpc("adaptorassemble", sid)
+        bob.rpc("adaptorassemble", sid)
+        b_txid, b_vout = fb["body"]["txid"], fb["body"]["vout"]   # leg B (BTC)
+
+        # Alice redeems leg B but we do NOT mine it — it sits unconfirmed.
+        alice.rpc("adaptorredeem", sid)
+        rec = alice.rpc("listadaptorswaps")[0]
+        assert rec["state"] == "redeemed_b", rec["state"]
+        redeem_txid = rec["final_txid_b"]
+        # No child yet: the redeem output is present in the mempool.
+        assert h.btc.rpc("gettxout", redeem_txid, 0) is not None, "redeem output missing pre-CPFP"
+
+        # The unconfirmed redeem → a tick must CPFP-bump it with a child.
+        cpfp = False
+        for ev in alice.rpc("tick")["events"]:
+            print(f"[e2e]   cpfp[alice]: {ev['action']} {ev['detail'][:70]}")
+            if ev["action"] == "adaptor-cpfp":
+                cpfp = True
+        assert cpfp, "stuck cooperative redeem was not CPFP-bumped"
+        # The child now spends the redeem's output (so gettxout reports it spent),
+        # and both parent + child sit in the mempool.
+        assert h.btc.rpc("gettxout", redeem_txid, 0) is None, "redeem output not spent by a CPFP child"
+        assert len(h.btc.rpc("getrawmempool")) >= 2, "expected redeem + child in the mempool"
+
+        # Mining confirms the package; leg B is cooperatively redeemed.
+        h.btc.generate(2, "bob_btc")
+        assert h.btc.rpc("gettxout", b_txid, b_vout) is None, "leg B redeem never confirmed"
+        print("[e2e] adaptor redeem CPFP OK: stuck redeem bumped by a self-funded child")
+    finally:
+        alice.stop()
+        bob.stop()
+
+
 def test_adaptor_depth_gate(h):
     """Reveal depth gate (spec v2 §8 / v1 §9.5): with `--coin-confs btc=2`, the
     initiator must NOT publish `t` (redeem leg B) until Bob's leg-B funding is 2
@@ -309,9 +376,11 @@ def main():
         test_adaptor_swap(h)
         test_adaptor_refund(h)
         test_adaptor_refund_feebump(h)
+        test_adaptor_redeem_cpfp(h)
         test_adaptor_depth_gate(h)
         test_adaptor_corkboard_swap(h)
-    print("[e2e] adaptor-swap suite passed (happy + refund + fee-bump + depth-gate + board)")
+    print("[e2e] adaptor-swap suite passed "
+          "(happy + refund + fee-bump + redeem-cpfp + depth-gate + board)")
 
 
 if __name__ == "__main__":

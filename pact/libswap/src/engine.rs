@@ -31,7 +31,7 @@ use crate::registry;
 use crate::store::{AdaptorSwapRecord, Store, SwapRecord};
 use crate::swap::{
     build_redeem_tx, build_refund_tx, spend_fee_sat, Role, State, SwapParams, DUST_LIMIT_SAT,
-    FUND_TX_VSIZE, MIN_SPEND_FEE_SAT, REDEEM_TX_VSIZE, REFUND_TX_VSIZE,
+    FUND_TX_VSIZE, HTLC_SPEND_SEQUENCE, MIN_SPEND_FEE_SAT, REDEEM_TX_VSIZE, REFUND_TX_VSIZE,
 };
 
 pub struct Engine {
@@ -351,6 +351,27 @@ pub(crate) const MAX_REDEEM_FEERATE: u64 = 500;
 /// Fallback redeem feerate for non-regtest when the initiator has no live
 /// estimator to ask — conservative, but not catastrophically low.
 const ADAPTOR_REDEEM_FEERATE_FALLBACK: u64 = 20;
+
+/// Estimated vsize of the self-funded CPFP child that bumps a stuck cooperative
+/// redeem (v2+): a 1-in (wallet-owned sweep output) 1-out wallet tx. Slightly
+/// over-estimated so the realised package feerate meets or beats the target.
+pub(crate) const CPFP_CHILD_VSIZE: u64 = 150;
+
+/// The child fee (sat) that lifts a stuck cooperative redeem's PACKAGE feerate
+/// to `target` sat/vB, or `None` when the parent already pays at least `target`
+/// on its own (nothing to bump). `parent_fee` is the redeem's committed fee;
+/// the package spans both vsizes. The committed redeem fee can't be RBF'd, so a
+/// child is the only lever — see V2_ADAPTOR_SWAPS.md. Pure, so the CPFP fee
+/// policy is unit-testable without a node.
+pub(crate) fn cpfp_child_fee(parent_fee: u64, parent_vsize: u64, target_feerate: u64) -> Option<u64> {
+    let parent_feerate = parent_fee / parent_vsize.max(1);
+    if target_feerate <= parent_feerate {
+        return None; // the parent already clears the target unaided
+    }
+    let package_vsize = parent_vsize + CPFP_CHILD_VSIZE;
+    let desired_package_fee = target_feerate.saturating_mul(package_vsize);
+    Some(desired_package_fee.saturating_sub(parent_fee).max(MIN_SPEND_FEE_SAT))
+}
 
 /// Default confirmation requirement per chain — the fallback when the operator
 /// hasn't set a per-coin depth (see [`Engine::confirmations_for`]): regtest → 1;
@@ -1648,11 +1669,10 @@ impl Engine {
     ///   B) until Bob's leg-B funding is `n_b` confirmations deep, so a shallow
     ///   funding cannot reorg out from under the reveal (spec v2 §8 / v1 §9.5).
     /// - **Keep the spend moving.** While a redeem/refund sits unconfirmed the
-    ///   scheduler re-broadcasts it; for the single-key CLTV refund it RBF-bumps
-    ///   the fee (deterministic re-sign, the unattended-safe path). The
-    ///   cooperative MuSig2 redeem is re-broadcast only — its fee is committed
-    ///   in the pre-signed adaptor signature and cannot change without a fresh
-    ///   interactive signing round (see [`Self::adaptor_keep_moving`]).
+    ///   scheduler re-broadcasts it; the single-key CLTV refund RBF-bumps the fee
+    ///   (deterministic re-sign), and the cooperative MuSig2 redeem — which can't
+    ///   be RBF'd — is CPFP-bumped with a self-funded child (v2+; see
+    ///   [`Self::adaptor_keep_moving`]).
     fn adaptor_tick_one(&self, rec: &AdaptorSwapRecord) -> Result<Option<TickEvent>> {
         use AdaptorState::*;
         let ev = |action: &str, detail: String| {
@@ -1830,11 +1850,11 @@ impl Engine {
     ///   and re-signed with the deterministic single-key refund key — safe by
     ///   construction (no MuSig2, deterministic nonce). Falls back to a plain
     ///   rebroadcast once a higher fee would dust the output.
-    /// - A cooperative **redeem** is re-broadcast unchanged: its fee is sealed
-    ///   into the pre-signed adaptor signature's sighash, so it cannot be
-    ///   re-fee'd without a fresh interactive MuSig2 round (out of scope without
-    ///   a protocol change; see V2_ADAPTOR_SWAPS.md). Rebroadcast still recovers
-    ///   from a dropped mempool entry.
+    /// - A cooperative **redeem** can't be RBF'd (its fee is sealed into the
+    ///   pre-signed adaptor signature), so it is re-anchored in the mempool and
+    ///   **CPFP-bumped** with a self-funded child spending its own sweep output
+    ///   ([`Self::adaptor_cpfp_bump`], v2+). Unilateral, byte-identical redeem,
+    ///   no protocol change; see V2_ADAPTOR_SWAPS.md.
     fn adaptor_keep_moving(
         &self,
         rec: &AdaptorSwapRecord,
@@ -1870,16 +1890,94 @@ impl Engine {
         if is_refund {
             return self.adaptor_bump_refund(rec, &backend, tx_hex);
         }
-        // Cooperative redeem: fee is fixed by the adaptor signature — rebroadcast only.
+        // Cooperative redeem: its committed fee can't be RBF'd, so re-anchor the
+        // parent in the mempool (recover a dropped entry) and CPFP-bump it with a
+        // self-funded child spending its own wallet-owned sweep output (v2+). The
+        // child is built and signed unilaterally — the signed redeem stays
+        // byte-identical, so no fresh MuSig2 round and no counterparty needed.
         let tx: bitcoin::Transaction =
             bitcoin::consensus::encode::deserialize(&hex::decode(tx_hex)?)
                 .context("corrupt final_tx_hex")?;
-        let txid = backend.broadcast(&tx)?;
+        let parent_txid = backend.broadcast(&tx)?;
+        let amount = if chain.coin_id == rec.chain_b.coin_id {
+            rec.amount_b
+        } else {
+            rec.amount_a
+        };
+        let (action, detail) = match self.adaptor_cpfp_bump(&backend, &tx, amount) {
+            Ok(Some(child)) => (
+                "adaptor-cpfp",
+                format!("{parent_txid} (redeem) bumped by child {child}"),
+            ),
+            // No bump warranted (parent already pays the target / output too small).
+            Ok(None) => (
+                "adaptor-rebroadcast",
+                format!("{parent_txid} (redeem at/above target feerate)"),
+            ),
+            // CPFP unavailable (e.g. redeem not swept to a wallet address). The
+            // parent is still re-anchored; surface it without failing the tick.
+            Err(e) => (
+                "adaptor-rebroadcast",
+                format!("{parent_txid} (CPFP unavailable: {e:#})"),
+            ),
+        };
         Ok(Some(TickEvent {
             swap_id: rec.swap_id.clone(),
-            action: "adaptor-rebroadcast".into(),
-            detail: format!("{txid} (cooperative redeem — fixed fee, cannot RBF)"),
+            action: action.into(),
+            detail,
         }))
+    }
+
+    /// CPFP-bump a stuck cooperative redeem (v2+): broadcast a self-funded child
+    /// spending the redeem's own (wallet-owned sweep) output at a fee that lifts
+    /// the package to the live feerate. Unilateral — the claimer owns the sweep
+    /// output, so the signed redeem is untouched and the counterparty is not
+    /// involved. The child RBF-signals, so a later tick at a higher feerate
+    /// replaces it (escalation). `None` when no bump is warranted (parent already
+    /// pays the target, or the output is too small to fund a child).
+    fn adaptor_cpfp_bump(
+        &self,
+        backend: &MultiBackend,
+        parent: &bitcoin::Transaction,
+        amount: u64,
+    ) -> Result<Option<bitcoin::Txid>> {
+        let parent_out = &parent.output[0];
+        let parent_value = parent_out.value.to_sat();
+        let parent_fee = amount.saturating_sub(parent_value);
+        let target = backend.fee_rate_sat_per_vb()?;
+        let Some(child_fee) =
+            cpfp_child_fee(parent_fee, crate::taproot::KEYPATH_REDEEM_VSIZE, target)
+        else {
+            return Ok(None); // parent already clears the target unaided
+        };
+        let Some(child_value) = parent_value.checked_sub(child_fee) else {
+            return Ok(None); // output can't cover the child fee
+        };
+        if child_value <= DUST_LIMIT_SAT {
+            return Ok(None);
+        }
+        let dest = backend
+            .params()
+            .parse_address(&backend.wallet_new_address()?)?;
+        let child = bitcoin::Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: vec![bitcoin::TxIn {
+                previous_output: OutPoint {
+                    txid: parent.compute_txid(),
+                    vout: 0,
+                },
+                script_sig: bitcoin::ScriptBuf::new(),
+                sequence: bitcoin::Sequence::from_consensus(HTLC_SPEND_SEQUENCE),
+                witness: bitcoin::Witness::default(),
+            }],
+            output: vec![bitcoin::TxOut {
+                value: bitcoin::Amount::from_sat(child_value),
+                script_pubkey: dest,
+            }],
+        };
+        let txid = backend.wallet_sign_send(&child, parent_value, &parent_out.script_pubkey)?;
+        Ok(Some(txid))
     }
 
     /// RBF-replace an unconfirmed single-key CLTV refund at an escalated fee
@@ -4415,6 +4513,28 @@ mod tests {
             serde_json::from_str(&serde_json::to_string(&with).unwrap()).unwrap();
         assert_eq!(round.redeem_feerate_a, 30);
         assert_eq!(round.redeem_feerate_b, 45);
+    }
+
+    #[test]
+    fn cpfp_child_fee_lifts_package_to_target() {
+        // v2+: the cooperative redeem can't be RBF'd, so a child bumps the
+        // package. Parent: 111 vB at 10 sat/vB committed = 1110 sat fee.
+        let parent_vsize = crate::taproot::KEYPATH_REDEEM_VSIZE;
+        let parent_fee = 10 * parent_vsize; // committed at 10 sat/vB
+
+        // Target below what the parent already pays: no child needed.
+        assert_eq!(cpfp_child_fee(parent_fee, parent_vsize, 5), None);
+        assert_eq!(cpfp_child_fee(parent_fee, parent_vsize, 10), None);
+
+        // Target 50 sat/vB: the package (parent+child vsizes) must pay
+        // 50 * (111 + 150) = 13050 sat; child covers the shortfall over parent.
+        let pkg_vsize = parent_vsize + CPFP_CHILD_VSIZE;
+        let child = cpfp_child_fee(parent_fee, parent_vsize, 50).unwrap();
+        assert_eq!(child, 50 * pkg_vsize - parent_fee);
+        // The realised package feerate meets the target.
+        assert!((parent_fee + child) / pkg_vsize >= 50);
+        // Never below the relay floor.
+        assert!(cpfp_child_fee(0, parent_vsize, 1).unwrap() >= MIN_SPEND_FEE_SAT);
     }
 
     #[test]
