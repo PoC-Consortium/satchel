@@ -31,6 +31,18 @@ function playFundingTone() {
   }
 }
 
+// Webview autoplay policy suspends a fresh AudioContext until a user gesture, so
+// the first tone was silent. Create + resume it on the first interaction; by the
+// time a swap needs funding the user has clicked around, so the context runs.
+function unlockAudio() {
+  try {
+    alertAudioCtx ??= new AudioContext();
+    if (alertAudioCtx.state === "suspended") void alertAudioCtx.resume();
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Whether this swap is waiting for OUR manual funding right now. */
 function needsMyFunding(s: Swap): boolean {
   return primaryAction(s) === "fund";
@@ -60,6 +72,17 @@ export default function ActiveSwaps() {
   const confirm = useConfirm();
   const t = useT();
   const active = swaps.filter(isActive);
+
+  // Unlock the alert audio on the first user gesture (autoplay policy).
+  useEffect(() => {
+    const unlock = () => unlockAudio();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
 
   // RC2 #2: manual-funding alert. When auto-fund is OFF and a swap newly needs
   // OUR funding, play a tone; a banner stays up while any swap awaits funding.

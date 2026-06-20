@@ -32,10 +32,6 @@ import ExitGate from "./components/ExitGate";
 
 type Modal = { kind: "merchants" } | { kind: "wizard"; mode: "create" | "import" } | null;
 
-// Routes that show the active-swaps dock above the activity log. Trading views
-// only (the Corkboard today; add the next trading view here when it lands).
-const SWAP_DOCK_ROUTES: Route[] = ["board"];
-
 export default function App() {
   const app = useApp();
   const t = useT();
@@ -115,10 +111,10 @@ export default function App() {
                   {screen()}
                 </Box>
               </Box>
-              {/* Fixed bottom docks — always visible regardless of page scroll.
-                  Active swaps sit directly above the activity log on trading
-                  views, and only when a swap is in flight (else it collapses). */}
-              {SWAP_DOCK_ROUTES.includes(route) && <ActiveSwaps />}
+              {/* Fixed bottom docks — always visible regardless of page scroll
+                  AND on every page (RC2), so the fund button + funding alert are
+                  never hidden behind a tab. Collapses when no swap is in flight. */}
+              <ActiveSwaps />
               <LogPanel collapsed={logCollapsed} onToggle={toggleLog} />
             </Box>
           </Box>
