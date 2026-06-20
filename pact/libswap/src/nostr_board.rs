@@ -90,9 +90,17 @@ mod tests {
     use serde_json::json;
 
     fn store() -> Store {
-        // A fresh in-memory-style store under a temp dir (no seed needed:
-        // NostrBoard never touches keys).
-        let dir = std::env::temp_dir().join(format!("pact-nostrboard-{}", std::process::id()));
+        // A fresh store under a UNIQUE temp dir (no seed needed: NostrBoard
+        // never touches keys). The dir is keyed by process id AND a per-call
+        // counter so parallel tests can't collide on the same SQLite file —
+        // keying on the process id alone made them race under CI's parallelism.
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static SEQ: AtomicU32 = AtomicU32::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "pact-nostrboard-{}-{}",
+            std::process::id(),
+            SEQ.fetch_add(1, Ordering::Relaxed)
+        ));
         let _ = std::fs::remove_dir_all(&dir);
         Store::open(&dir, None).unwrap()
     }
