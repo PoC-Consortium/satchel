@@ -29,8 +29,8 @@ export const en = {
   },
   // Risk disclaimer (first-run welcome + Settings → About).
   disclaimer: {
-    title: "Experimental — tech demo",
-    body: "Satchel is early alpha software for a regtest tech demo — do not use it with real funds. Swaps are non-custodial but unaudited (especially the v2 Taproot/MuSig2 path), and a merchant's seed holds hot transit keys. MIT-licensed and provided as-is, with no warranty: use at your own risk.",
+    title: "Self-custody — your keys, your responsibility",
+    body: "Satchel performs non-custodial atomic swaps: you alone hold your keys, and a merchant's seed holds hot transit keys while a swap is in flight. The swap protocols (v1 HTLC and v2 Taproot/MuSig2) are reviewed and audited. MIT-licensed and provided as-is, with no warranty — back up your recovery phrase and use at your own risk.",
   },
   nav: {
     public: "Public",
