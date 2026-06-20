@@ -39,6 +39,43 @@ use tokio::sync::Notify;
 const COOKIE_FILE: &str = ".cookie";
 const CONF_FILE: &str = "pact.conf";
 
+/// Initialise tracing to BOTH stdout and a rolling daily file under
+/// `<data_dir>/logs/pactd.log` (RC2: managed Satchel discards stdout, so a file
+/// is the only way devs see what the engine did). The returned guard flushes
+/// the non-blocking file writer on drop — keep it alive for the whole process.
+/// The log carries config/scheduler narration only (txids, states); it never
+/// logs secrets (seed/preimage/nonces are never passed to `tracing`). Falls back
+/// to stdout-only if the log dir can't be created.
+fn init_logging(data_dir: &Path) -> Option<tracing_appender::non_blocking::WorkerGuard> {
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::{fmt, EnvFilter};
+
+    let filter =
+        || EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let log_dir = data_dir.join("logs");
+    match std::fs::create_dir_all(&log_dir) {
+        Ok(()) => {
+            let file = tracing_appender::rolling::daily(&log_dir, "pactd.log");
+            let (non_blocking, guard) = tracing_appender::non_blocking(file);
+            tracing_subscriber::registry()
+                .with(filter())
+                .with(fmt::layer())
+                .with(fmt::layer().with_ansi(false).with_writer(non_blocking))
+                .init();
+            Some(guard)
+        }
+        Err(e) => {
+            tracing_subscriber::registry()
+                .with(filter())
+                .with(fmt::layer())
+                .init();
+            eprintln!("warning: pactd file logging disabled ({}): {e}", log_dir.display());
+            None
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "pactd", version, about = "Pact swap daemon (PoCX trading)")]
 struct Args {
@@ -905,8 +942,9 @@ fn parse_network(name: &str) -> Result<Network> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
     let args = Args::parse();
+    // Keep the file-writer guard alive for the whole process (flushes on drop).
+    let _log_guard = init_logging(&args.data_dir);
     let network = parse_network(&args.network)?;
     let passphrase = std::env::var("PACT_PASSPHRASE").ok();
 
