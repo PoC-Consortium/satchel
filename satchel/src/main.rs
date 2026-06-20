@@ -194,6 +194,10 @@ struct Config {
     /// playground writes its own satchel.json, overriding this.
     nostr_relays: Vec<String>,
     listen: String,
+    /// RC2: auto-fund both swap legs by default. Safe because offers are
+    /// one-shot, so a maker's exposure is bounded by their posted book. Users
+    /// can turn it off (→ manual funding + the funding-required alert) via the
+    /// Settings toggle, which calls the `setautofund` RPC and persists here.
     auto_fund: bool,
     tick_secs: u64,
     /// Per-install UI preferences (UI-1), persisted here instead of localStorage.
@@ -211,7 +215,7 @@ impl Default for Config {
                 .map(|s| s.to_string())
                 .collect(),
             listen: default_listen().into(),
-            auto_fund: false,
+            auto_fund: true,
             tick_secs: 30,
             ui: UiPrefs::default(),
         }
@@ -853,6 +857,30 @@ async fn pactd_rpc(
     .map_err(|e| format!("{e:#}"))
 }
 
+/// RC2: set auto-fund and persist the choice. Applies LIVE via the
+/// `setautofund` RPC (no pactd relaunch); also persists to the Satchel config so
+/// it survives a restart (re-applied via the `--auto-fund` launch flag). If
+/// pactd isn't up yet, the persisted flag takes effect on the next launch.
+#[tauri::command]
+async fn set_auto_fund(app: tauri::AppHandle, on: bool) -> Result<(), String> {
+    let conn = app.state::<RpcState>().0.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || -> anyhow::Result<()> {
+        {
+            let state = app.state::<AppState>();
+            let mut cfg = state.config.lock().unwrap();
+            cfg.auto_fund = on;
+            save_config(&state.config_dir, &cfg)?;
+        }
+        if !conn.auth.is_empty() {
+            pactd_call(&conn.url, &conn.auth, "setautofund", &json!([on]))?;
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("join error: {e}"))?
+    .map_err(|e| format!("{e:#}"))
+}
+
 /// C6: the exit-gate's terminal action. ExitGate has already run the 4-state
 /// matrix (and any offer `boardrevoke`s) and now tells Satchel how to leave:
 ///
@@ -1121,6 +1149,7 @@ fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             pactd_rpc,
+            set_auto_fund,
             quit_app,
             get_ui_prefs,
             set_ui_prefs,

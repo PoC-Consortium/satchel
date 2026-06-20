@@ -88,6 +88,16 @@ export const saveBoard = (urls: string) => invoke("save_board", { urls }) as Pro
 export const saveNostrRelays = (urls: string) =>
   invoke("save_nostr_relays", { urls }) as Promise<void>;
 
+/** RC2: set auto-fund. Persists the choice AND applies it live (no relaunch). */
+export const setAutoFund = (on: boolean) => invoke("set_auto_fund", { on }) as Promise<void>;
+
+/** RC2: a dev-shareable diagnostics bundle for one swap (record + log lines),
+ *  secrets scrubbed. Backs the per-swap "Dump logs" button. */
+export const dumpSwap = (swapId: string) =>
+  rpc<{ swap_id: string; pactd_version: string; record: unknown; log: string[] }>("dumpswap", [
+    swapId,
+  ]);
+
 // ---- Private (off-market) offers — PRIVATE_OFFERS.md -----------------------
 // Thin wrappers over pactd RPCs. A private offer is built/signed/stored locally
 // and handed to a friend as a `slip` string over their own chat; nothing is

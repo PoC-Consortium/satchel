@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Box,
+  Button,
   Chip,
   Collapse,
   IconButton,
@@ -17,6 +18,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useApp } from "../AppContext";
 import { useT } from "../i18n";
 import { asset, fmtAmt, isActive, isTerminal, settlementLeg } from "../format";
+import { dumpSwap } from "../api/tauri";
 import { narrate } from "./narrate";
 import { C } from "../theme";
 import type { Swap, SwapState } from "../api/types";
@@ -210,6 +212,17 @@ function SwapAudit({ s }: { s: Swap }) {
       /* clipboard blocked — the id is selectable inline as a fallback */
     }
   };
+  // RC2 #3b: copy a secret-free diagnostics bundle (record + log lines) to the
+  // clipboard, for the user to paste to the developers.
+  const dump = async () => {
+    try {
+      const d = await dumpSwap(s.swap_id);
+      await navigator.clipboard.writeText(JSON.stringify(d, null, 2));
+      showToast(t("swaps.dumpCopied"));
+    } catch {
+      showToast(t("swaps.dumpFailed"));
+    }
+  };
   const settleOn = settlementLeg(s.role, s.state);
   const settleLabel = s.state === "refunded" ? t("swaps.audit.refunded") : t("swaps.audit.received");
   const legs = [
@@ -234,6 +247,13 @@ function SwapAudit({ s }: { s: Swap }) {
           )}
         </Box>
       ))}
+      <Box sx={{ pl: 1, mt: 0.5 }}>
+        <Tooltip title={t("swaps.dumpHint")}>
+          <Button size="small" variant="text" color="inherit" onClick={() => void dump()}>
+            {t("swaps.dump")}
+          </Button>
+        </Tooltip>
+      </Box>
     </Box>
   );
 }
