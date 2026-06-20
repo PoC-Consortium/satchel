@@ -1,9 +1,40 @@
-import { Box, Button, Chip, Stack, Tooltip, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, Stack, Tooltip, Typography } from "@mui/material";
+import { useEffect, useRef } from "react";
 import { useApp } from "../AppContext";
 import { useConfirm } from "../ui/ConfirmProvider";
 import { useT } from "../i18n";
-import { errMsg, rpc } from "../api/tauri";
+import { dumpSwap, errMsg, rpc } from "../api/tauri";
 import { asset, fmtAmt, isActive } from "../format";
+
+// RC2 #2: a short attention tone for "funding required" (manual flow). No OS
+// notification — just audio + the on-screen banner. Lazily creates one
+// AudioContext; silently no-ops if the webview blocks audio (banner still shows).
+let alertAudioCtx: AudioContext | null = null;
+function playFundingTone() {
+  try {
+    alertAudioCtx ??= new AudioContext();
+    if (alertAudioCtx.state === "suspended") void alertAudioCtx.resume();
+    const ctx = alertAudioCtx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 880;
+    osc.connect(gain).connect(ctx.destination);
+    const t0 = ctx.currentTime;
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.18, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.4);
+    osc.start(t0);
+    osc.stop(t0 + 0.42);
+  } catch {
+    /* audio unavailable — the banner is the fallback */
+  }
+}
+
+/** Whether this swap is waiting for OUR manual funding right now. */
+function needsMyFunding(s: Swap): boolean {
+  return primaryAction(s) === "fund";
+}
 import { narrate } from "../screens/narrate";
 import { C } from "../theme";
 import type { Swap } from "../api/types";
@@ -25,10 +56,30 @@ const canCancel = (s: Swap) =>
   ["created", "accepted"].includes(s.state) || (s.state === "funded_a" && s.role === "participant");
 
 export default function ActiveSwaps() {
-  const { swaps, refreshSwaps, log } = useApp();
+  const { swaps, refreshSwaps, log, info } = useApp();
   const confirm = useConfirm();
   const t = useT();
   const active = swaps.filter(isActive);
+
+  // RC2 #2: manual-funding alert. When auto-fund is OFF and a swap newly needs
+  // OUR funding, play a tone; a banner stays up while any swap awaits funding.
+  const autoFund = info?.auto_fund ?? true;
+  const needFunding = active.filter(needsMyFunding);
+  const seenFundingIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const ids = new Set(
+      swaps.filter((s) => isActive(s) && needsMyFunding(s)).map((s) => s.swap_id),
+    );
+    if (!autoFund) {
+      for (const id of ids) {
+        if (!seenFundingIds.current.has(id)) {
+          playFundingTone();
+          break;
+        }
+      }
+    }
+    seenFundingIds.current = ids;
+  }, [swaps, autoFund]);
 
   async function act(action: string, id: string) {
     try {
@@ -58,6 +109,18 @@ export default function ActiveSwaps() {
       confirmLabel: t("swaps.refundConfirm"),
     });
     if (ok) void act("refund", id);
+  }
+
+  // RC2 #3b: copy a secret-free diagnostics bundle (record + log lines) for this
+  // swap to the clipboard, for the user to paste to the devs.
+  async function dump(id: string) {
+    try {
+      const d = await dumpSwap(id);
+      await navigator.clipboard.writeText(JSON.stringify(d, null, 2));
+      log(`diagnostics for ${id} copied (${d.log.length} log lines) — paste to the devs`);
+    } catch (e) {
+      log(`dump ${id}: ${errMsg(e)}`);
+    }
   }
 
   // Empty → render nothing so the dock collapses entirely.
@@ -96,6 +159,12 @@ export default function ActiveSwaps() {
         <Typography sx={{ fontSize: 11, color: "text.disabled" }}>{active.length}</Typography>
       </Box>
 
+      {!autoFund && needFunding.length > 0 && (
+        <Alert severity="warning" sx={{ borderRadius: 0, py: 0.5 }}>
+          {t("swaps.fundingRequired", { n: needFunding.length })}
+        </Alert>
+      )}
+
       <Box>
         {active.map((s, i) => (
           <ActiveSwapRow
@@ -106,6 +175,7 @@ export default function ActiveSwaps() {
             onAction={(a) => void act(a, s.swap_id)}
             onCancel={() => void cancel(s.swap_id)}
             onRefund={() => void refund(s.swap_id)}
+            onDump={() => void dump(s.swap_id)}
           />
         ))}
       </Box>
@@ -120,6 +190,7 @@ function ActiveSwapRow({
   onAction,
   onCancel,
   onRefund,
+  onDump,
 }: {
   s: Swap;
   first: boolean;
@@ -127,6 +198,7 @@ function ActiveSwapRow({
   onAction: (a: string) => void;
   onCancel: () => void;
   onRefund: () => void;
+  onDump: () => void;
 }) {
   const t = useT();
   const refundAt = s.role === "initiator" ? s.t1 : s.t2;
@@ -180,6 +252,11 @@ function ActiveSwapRow({
             {t("swaps.refund")}
           </Button>
         )}
+        <Tooltip title={t("swaps.dumpHint")}>
+          <Button size="small" variant="text" color="inherit" onClick={onDump}>
+            {t("swaps.dump")}
+          </Button>
+        </Tooltip>
       </Stack>
     </Box>
   );

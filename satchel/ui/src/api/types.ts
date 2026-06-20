@@ -120,6 +120,8 @@ export interface Info {
   identity?: string | null;
   seed_exists?: boolean;
   locked?: boolean;
+  /** RC2: whether the scheduler auto-funds our swap legs (Settings toggle). */
+  auto_fund?: boolean;
 }
 
 /** A swap leg's chain ref (older builds used `asset` instead of `coin_id`). */
