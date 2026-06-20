@@ -51,8 +51,7 @@ fn init_logging(data_dir: &Path) -> Option<tracing_appender::non_blocking::Worke
     use tracing_subscriber::util::SubscriberInitExt;
     use tracing_subscriber::{fmt, EnvFilter};
 
-    let filter =
-        || EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = || EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let log_dir = data_dir.join("logs");
     match std::fs::create_dir_all(&log_dir) {
         Ok(()) => {
@@ -70,7 +69,10 @@ fn init_logging(data_dir: &Path) -> Option<tracing_appender::non_blocking::Worke
                 .with(filter())
                 .with(fmt::layer())
                 .init();
-            eprintln!("warning: pactd file logging disabled ({}): {e}", log_dir.display());
+            eprintln!(
+                "warning: pactd file logging disabled ({}): {e}",
+                log_dir.display()
+            );
             None
         }
     }
