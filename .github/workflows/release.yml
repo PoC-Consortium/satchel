@@ -101,5 +101,8 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "Satchel ${{ github.ref_name }}"
           releaseDraft: true
-          prerelease: false
+          # Hyphenated tags are pre-releases (v0.1.0-rc1, -alpha, -beta); a clean
+          # vX.Y.Z is a full release. Pre-releases are excluded from
+          # releases/latest, so the in-app update check never offers an RC.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           args: --target ${{ matrix.triple }}
