@@ -345,6 +345,100 @@ def test_adaptor_redeem_cpfp_ltc(h):
         bob.stop()
 
 
+def test_adaptor_funding_cpfp(h):
+    """The funding-bump nurse (v2, CPFP-via-change). A v2 funding/lock that goes
+    out under the market is bumped by a CHILD spending its change output. RBF is
+    impossible for a v2 funding — its outpoint is committed into the MuSig2 adaptor
+    signatures already exchanged, so changing the txid would invalidate them — so
+    the nurse keeps the outpoint FIXED and CPFPs instead (mirrors the redeem-side
+    adaptor_cpfp_bump). The swap then completes, proving the adaptor sigs over the
+    unchanged outpoint are still valid.
+
+    Reaching Signed with the funding still UNCONFIRMED is fine: signing commits the
+    funding *outpoint* (txid:vout), known the moment adaptorfund broadcasts — no
+    confirmation is needed until the reveal/redeem depth gate. That unconfirmed
+    window is exactly where the nurse acts. As in the v1 test we pin Alice's
+    funding wallet (~2 sat/vB) under the regtest fee fallback (~10 sat/vB)."""
+    alice = Party("adfc-alice", h, h.workdir, "alice_pocx", "alice_btc", auto_init=False).start()
+    bob = Party("adfc-bob", h, h.workdir, "bob_pocx", "bob_btc", auto_init=False).start()
+    try:
+        alice.setup_seed()
+        bob.setup_seed()
+        t2, t1 = regtest_timelocks(h)
+        alice_btc_before = float(h.btc.rpc("getbalance", wallet="alice_btc"))
+        bob_pocx_before = float(h.pocx.rpc("getbalance", wallet="bob_pocx"))
+
+        # Pin Alice's leg-A (PoCX) funding under the regtest "market".
+        h.pocx.rpc("settxfee", 0.00002, wallet="alice_pocx")  # ~2 sat/vB
+
+        init = _env(alice.rpc("adaptorinit", GIVE_POCX, GET_BTC, t1, t2))
+        sid = init["swap_id"]
+        accept = _env(bob.rpc("adaptoraccept", init))
+        alice.rpc("adaptorrecv", accept)
+
+        # Alice funds leg A cheap — DO NOT mine (leave it unconfirmed for the
+        # nurse). Bob funds leg B and confirms it.
+        fa = _env(alice.rpc("adaptorfund", sid))
+        bob.rpc("adaptorrecv", fa)
+        fb = _env(bob.rpc("adaptorfund", sid))
+        h.btc.generate(1, "bob_btc")
+        alice.rpc("adaptorrecv", fb)
+        a_txid, a_vout = fa["body"]["txid"], fa["body"]["vout"]   # leg A (PoCX)
+        b_txid, b_vout = fb["body"]["txid"], fb["body"]["vout"]   # leg B (BTC)
+
+        # Handshake to Signed (outpoints known; no confirmation needed to sign).
+        na = _env(alice.rpc("adaptornonces", sid)); nb = _env(bob.rpc("adaptornonces", sid))
+        bob.rpc("adaptorrecv", na); alice.rpc("adaptorrecv", nb)
+        pa = _env(alice.rpc("adaptorsign", sid)); pb = _env(bob.rpc("adaptorsign", sid))
+        bob.rpc("adaptorrecv", pa); alice.rpc("adaptorrecv", pb)
+        alice.rpc("adaptorassemble", sid); bob.rpc("adaptorassemble", sid)
+        assert alice.rpc("listadaptorswaps")[0]["state"] == "signed", "leg A should sign unconfirmed"
+
+        # The unconfirmed, under-priced leg-A funding → a tick CPFP-bumps it
+        # (the nurse runs before the reveal logic, so it fires even though leg B
+        # is already fundable).
+        cpfp = False
+        for ev in alice.rpc("tick")["events"]:
+            print(f"[e2e]   fundcpfp[alice]: {ev['action']} {ev['detail'][:70]}")
+            if ev["action"] == "funding-cpfp-bump":
+                cpfp = True
+        assert cpfp, "stuck v2 funding was not CPFP-bumped"
+
+        # Child + funding both sit in the mempool, and the leg-A SWAP output (the
+        # adaptor-committed outpoint) is UNCHANGED — CPFP spends the change, never
+        # the swap output, so the exchanged sigs stay valid.
+        assert len(h.pocx.rpc("getrawmempool")) >= 2, "expected funding + child in the mempool"
+        assert h.pocx.rpc("gettxout", a_txid, a_vout, True) is not None, \
+            "the funding outpoint must be unchanged (CPFP spends change, not the swap output)"
+        print(f"[e2e] v2 funding CPFP'd, outpoint {a_txid[:12]}…:{a_vout} intact")
+
+        # Mine the package, then complete the swap — proving the adaptor sigs over
+        # the unchanged outpoint still redeem.
+        h.pocx.generate(1, "alice_pocx")
+        for ev in alice.rpc("tick")["events"]:   # reveal t (redeem leg B)
+            print(f"[e2e]   v2[alice]: {ev['action']} {ev['detail'][:60]}")
+        assert alice.rpc("listadaptorswaps")[0]["state"] == "redeemed_b", "Alice did not reveal/redeem B"
+        h.btc.generate(1, "bob_btc")
+        for ev in bob.rpc("tick")["events"]:     # extract t, redeem leg A
+            print(f"[e2e]   v2[bob]: {ev['action']} {ev['detail'][:60]}")
+        h.pocx.generate(1, "alice_pocx")
+
+        assert h.btc.rpc("gettxout", b_txid, b_vout) is None, "leg B (BTC) not redeemed"
+        assert h.pocx.rpc("gettxout", a_txid, a_vout) is None, "leg A (PoCX) not redeemed"
+        assert float(h.btc.rpc("getbalance", wallet="alice_btc")) > alice_btc_before, \
+            "Alice's leg-B redeem missed her core wallet"
+        assert float(h.pocx.rpc("getbalance", wallet="bob_pocx")) > bob_pocx_before, \
+            "Bob's leg-A redeem missed his core wallet"
+        print("[e2e] funding-cpfp-bump (v2) OK: child bumped the lock, swap completed cleanly")
+    finally:
+        try:
+            h.pocx.rpc("settxfee", 0, wallet="alice_pocx")
+        except Exception:
+            pass
+        alice.stop()
+        bob.stop()
+
+
 def test_adaptor_depth_gate(h):
     """Reveal depth gate (spec v2 §8 / v1 §9.5): with `--coin-confs btc=2`, the
     initiator must NOT publish `t` (redeem leg B) until Bob's leg-B funding is 2
@@ -450,6 +544,7 @@ def main():
         test_adaptor_refund(h)
         test_adaptor_refund_feebump(h)
         test_adaptor_redeem_cpfp(h)
+        test_adaptor_funding_cpfp(h)
         test_adaptor_depth_gate(h)
         test_adaptor_corkboard_swap(h)
     # LTC leg in its own harness (brings up litecoind) so the core suite stays
@@ -457,7 +552,7 @@ def main():
     with Harness(with_ltc=True) as h:
         test_adaptor_redeem_cpfp_ltc(h)
     print("[e2e] adaptor-swap suite passed "
-          "(happy + refund + fee-bump + redeem-cpfp + depth-gate + board + ltc-cpfp)")
+          "(happy + refund + fee-bump + redeem-cpfp + funding-cpfp + depth-gate + board + ltc-cpfp)")
 
 
 if __name__ == "__main__":
