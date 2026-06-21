@@ -25,6 +25,7 @@ pub mod board;
 pub mod chain;
 pub mod coins_file;
 pub mod engine;
+pub mod fee_policy;
 pub mod htlc;
 pub mod keys;
 pub mod messages;
@@ -37,4 +38,5 @@ pub mod store;
 pub mod swap;
 pub mod taproot;
 
+pub use fee_policy::FeeBumpPolicy;
 pub use pact_proto::PROTOCOL_VERSION;

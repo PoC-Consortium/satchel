@@ -297,6 +297,20 @@ impl Params {
     }
 }
 
+/// Flattened JSON view of a fee-bump policy for `get/setfeepolicy` — one level so
+/// the CLI/UI sets each field by a simple typed name (no nested objects). The two
+/// `step_pct` fields are kept in sync (single knob, decision #3), so the redeem
+/// value represents both.
+fn fee_policy_json(p: &libswap::FeeBumpPolicy) -> Value {
+    json!({
+        "max_feerate_sat_vb": p.max_feerate_sat_vb,
+        "min_fee_sat": p.min_fee_sat,
+        "reservation_mult": p.funding.reservation_mult,
+        "committed_mult": p.redeem.committed_mult,
+        "step_pct": p.redeem.step_pct,
+    })
+}
+
 /// Validate a coin id against the shipped registry, returning its canonical
 /// (lowercase) id.
 fn parse_coin(name: &str) -> Result<String> {
@@ -394,6 +408,46 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         "walletstatus" => {
             let status = blocking(app, |e| e.store.wallet_status()).await?;
             Ok(serde_json::to_value(status)?)
+        }
+        // The active merchant's fee-bump policy (per-merchant; pactd's store owns
+        // it). Callable from the CLI like any other method — typed params, no JSON
+        // blob.
+        "getfeepolicy" => {
+            let policy = blocking(app, |e| Ok(e.fee_bump)).await?;
+            Ok(fee_policy_json(&policy))
+        }
+        // Update the active merchant's policy. Each field is optional; only the
+        // fields supplied change. `step_pct` sets both the redeem and refund step
+        // (single knob). Validated server-side; persisted; applied live.
+        "setfeepolicy" => {
+            let max = p.opt_u64(0, "max_feerate_sat_vb");
+            let min = p.opt_u64(1, "min_fee_sat");
+            let reservation = p.opt_u64(2, "reservation_mult");
+            let committed = p.opt_u64(3, "committed_mult");
+            let step = p.opt_u64(4, "step_pct");
+            let policy = blocking_mut(app, move |e| {
+                let mut pol = e.fee_bump;
+                if let Some(v) = max {
+                    pol.max_feerate_sat_vb = v;
+                }
+                if let Some(v) = min {
+                    pol.min_fee_sat = v;
+                }
+                if let Some(v) = reservation {
+                    pol.funding.reservation_mult = v;
+                }
+                if let Some(v) = committed {
+                    pol.redeem.committed_mult = v;
+                }
+                if let Some(v) = step {
+                    pol.redeem.step_pct = v;
+                    pol.refund.step_pct = v;
+                }
+                e.set_fee_bump(pol)?;
+                Ok(e.fee_bump)
+            })
+            .await?;
+            Ok(fee_policy_json(&policy))
         }
         "listcoins" => {
             // Shipped registry + which are configured + a live connection

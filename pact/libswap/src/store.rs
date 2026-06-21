@@ -512,6 +512,22 @@ impl Store {
         self.meta_set("relay_cursor", &cursor.to_string())
     }
 
+    /// The persisted fee-bump policy for this merchant, or `None` if never set
+    /// (callers fall back to [`FeeBumpPolicy::default`]). Stored as a JSON blob in
+    /// `meta` so a CLI/RPC-set policy survives restart with no Satchel involved.
+    pub fn fee_policy(&self) -> Result<Option<crate::FeeBumpPolicy>> {
+        match self.meta_get("fee_policy")? {
+            Some(json) => Ok(Some(
+                serde_json::from_str(&json).context("corrupt stored fee_policy")?,
+            )),
+            None => Ok(None),
+        }
+    }
+
+    pub fn set_fee_policy(&self, policy: &crate::FeeBumpPolicy) -> Result<()> {
+        self.meta_set("fee_policy", &serde_json::to_string(policy)?)
+    }
+
     // ---- Nostr transport buffers (spec/protocol.md §8.8) ----
     // NostrBoard (sync) and the relay service (async) communicate only
     // through these; neither calls the other directly.

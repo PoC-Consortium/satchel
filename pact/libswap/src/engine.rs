@@ -31,7 +31,7 @@ use crate::registry;
 use crate::store::{AdaptorSwapRecord, Store, SwapRecord};
 use crate::swap::{
     build_redeem_tx, build_refund_tx, spend_fee_sat, Role, State, SwapParams, DUST_LIMIT_SAT,
-    FUND_TX_VSIZE, HTLC_SPEND_SEQUENCE, MIN_SPEND_FEE_SAT, REDEEM_TX_VSIZE, REFUND_TX_VSIZE,
+    FUND_TX_VSIZE, HTLC_SPEND_SEQUENCE, REDEEM_TX_VSIZE, REFUND_TX_VSIZE,
 };
 
 pub struct Engine {
@@ -61,6 +61,12 @@ pub struct Engine {
     /// be griefed into locking funds until T1 by takers who never fund.
     /// Per-trade caps are the roadmap mitigation.
     pub auto_fund: bool,
+    /// Unified fee-bump policy (see [`crate::fee_policy`]). Loaded from this
+    /// merchant's store at [`Engine::open`] (or the default if never set), and
+    /// changed at runtime via [`Engine::set_fee_bump`] (pactd `setfeepolicy`).
+    /// Defaults reproduce the historical hardcoded consts, so behaviour is
+    /// unchanged until an operator overrides it.
+    pub fee_bump: crate::fee_policy::FeeBumpPolicy,
 }
 
 fn chain_params(chain: &ChainRef) -> Result<&'static ChainParams> {
@@ -334,43 +340,29 @@ fn validate_offer_offsets(network: Network, t1_secs: u32, t2_secs: u32) -> Resul
 /// for a negotiated rate elsewhere.
 pub(crate) const REGTEST_REDEEM_FEERATE: u64 = 2;
 
-/// Over-provisioning multiplier on the live estimate when the initiator fixes
-/// the cooperative-redeem feerate at init. The redeem fee is committed into the
-/// adaptor signature and cannot be RBF'd, so the committed value alone must
-/// still confirm if the fee market drifts up between init and the actual redeem
-/// (potentially hours later).
-///
-/// This is now just the UNATTENDED floor, not the whole defence: the v2+ CPFP
-/// child ([`Self::adaptor_cpfp_bump`]) tops up a stuck redeem from its own
-/// output whenever the scheduler is running. So the committed fee only has to
-/// cover the case where CPFP can't act (e.g. Satchel closed in the window
-/// between the redeem broadcast and its confirmation). 2× buys "confirms
-/// unattended unless the market more than doubles since init" — a real margin —
-/// without the heavier common-case overpay 3× cost (M2 set 3× before CPFP
-/// existed). 1× would leave zero unattended buffer. See spec/protocol-v2.md.
-pub(crate) const ADAPTOR_REDEEM_FEERATE_MULT: u64 = 2;
+// The v2 committed-redeem over-provision multiplier is now
+// `FeeBumpPolicy::redeem.committed_mult` (default 2); see crate::fee_policy.
 
-/// Upper bound on a negotiated redeem feerate (sat/vB). Caps the initiator's
-/// over-provisioning AND lets the participant reject an init that sets an
-/// absurd rate to grief the counterparty (whose redeem fee would eat its
-/// output). Matches the estimator's own clamp.
+/// Upper bound on a negotiated redeem feerate (sat/vB) — the **protocol** bound
+/// (spec v2 §5), distinct from the local `FeeBumpPolicy::max_feerate_sat_vb` bump
+/// ceiling (which happens to equal it). Caps the initiator's over-provisioning AND
+/// lets the participant reject an init that sets an absurd rate to grief the
+/// counterparty (whose redeem fee would eat its output). Matches the estimator's
+/// own clamp.
 pub(crate) const MAX_REDEEM_FEERATE: u64 = 500;
 
 /// Fallback redeem feerate for non-regtest when the initiator has no live
 /// estimator to ask — conservative, but not catastrophically low.
 const ADAPTOR_REDEEM_FEERATE_FALLBACK: u64 = 20;
 
-/// Funding-fee headroom for the pre-flight fundability gate
-/// ([`Engine::ensure_can_fund`]). The funding tx is the ONLY wallet-funded
-/// action in a swap — redeem/refund/bump fees all come out of the output being
-/// spent, never the spendable balance, but funding draws it. So above the bare
-/// swap amount we reserve the worst-case funding fee: the ceiling a funding
-/// CPFP-bump would chase. `ceiling = min(MULT × live feerate, MAX_REDEEM_FEERATE)`
-/// (reusing the 500 sat/vB sanity cap), and `reserve = ceiling × FUNDING_VSIZE_EST`.
-/// This stops an exact-balance offer from passing the gate then failing at fund
-/// time, and a fee spike between post and broadcast from tipping a tight wallet
-/// short. The same ceiling sizes the (roadmap) funding-bump cap.
-const FUNDING_BUMP_FEERATE_MULT: u64 = 3;
+// Funding-fee headroom for the pre-flight fundability gate
+// ([`Engine::ensure_can_fund`]). The funding tx is the ONLY wallet-funded action
+// in a swap — redeem/refund/bump fees all come out of the output being spent,
+// never the spendable balance, but funding draws it. So above the bare swap amount
+// we reserve the worst-case funding fee: the ceiling a funding bump would chase,
+// `ceiling = min(reservation_mult × live feerate, max_feerate_sat_vb)`, times
+// FUNDING_VSIZE_EST. The reservation multiplier is now
+// `FeeBumpPolicy::funding.reservation_mult` (default 3); see crate::fee_policy.
 /// Padded vsize (vB) of a typical funding tx (1–2-in, 2-out segwit) used to turn
 /// the ceiling feerate into a sat reserve. Over-estimated so the reserve is never
 /// short.
@@ -387,13 +379,16 @@ pub(crate) const CPFP_CHILD_VSIZE: u64 = 150;
 /// The child fee (sat) that lifts a stuck cooperative redeem's PACKAGE feerate
 /// to `target` sat/vB, or `None` when the parent already pays at least `target`
 /// on its own (nothing to bump). `parent_fee` is the redeem's committed fee;
-/// the package spans both vsizes. The committed redeem fee can't be RBF'd, so a
+/// the package spans both vsizes. `min_fee` is the policy floor for the child
+/// (`FeeBumpPolicy::min_fee_sat`) — passed in rather than hardcoded so the
+/// configurable floor is honoured. The committed redeem fee can't be RBF'd, so a
 /// child is the only lever — see spec/protocol-v2.md. Pure, so the CPFP fee
 /// policy is unit-testable without a node.
 pub(crate) fn cpfp_child_fee(
     parent_fee: u64,
     parent_vsize: u64,
     target_feerate: u64,
+    min_fee: u64,
 ) -> Option<u64> {
     let parent_feerate = parent_fee / parent_vsize.max(1);
     if target_feerate <= parent_feerate {
@@ -401,11 +396,7 @@ pub(crate) fn cpfp_child_fee(
     }
     let package_vsize = parent_vsize + CPFP_CHILD_VSIZE;
     let desired_package_fee = target_feerate.saturating_mul(package_vsize);
-    Some(
-        desired_package_fee
-            .saturating_sub(parent_fee)
-            .max(MIN_SPEND_FEE_SAT),
-    )
+    Some(desired_package_fee.saturating_sub(parent_fee).max(min_fee))
 }
 
 /// Default confirmation requirement per chain — the fallback when the operator
@@ -437,14 +428,28 @@ impl Engine {
         passphrase: Option<&str>,
         coins: BTreeMap<String, String>,
     ) -> Result<Self> {
+        let store = Store::open(data_dir, passphrase)?;
+        // A previously CLI/RPC-set policy survives restart; else the default.
+        let fee_bump = store.fee_policy()?.unwrap_or_default();
         Ok(Self {
-            store: Store::open(data_dir, passphrase)?,
+            store,
             coins,
             coin_confirmations: BTreeMap::new(),
             board_url: None,
             nostr_relays: None,
             auto_fund: false,
+            fee_bump,
         })
+    }
+
+    /// Update the live fee-bump policy and persist it for this merchant (pactd
+    /// `setfeepolicy`). Validated before it takes effect; the persisted value is
+    /// reloaded on the next [`Engine::open`].
+    pub fn set_fee_bump(&mut self, policy: crate::fee_policy::FeeBumpPolicy) -> Result<()> {
+        let policy = policy.validated()?;
+        self.store.set_fee_policy(&policy)?;
+        self.fee_bump = policy;
+        Ok(())
     }
 
     fn backend(&self, chain: &ChainRef) -> Result<MultiBackend> {
@@ -514,17 +519,20 @@ impl Engine {
     /// The cooperative-redeem feerate (sat/vB) the initiator fixes at init for
     /// `chain` (M2). Regtest keeps the legacy low fee so the deterministic e2e
     /// is unchanged; elsewhere it is the live 6-block estimate over-provisioned
-    /// by [`ADAPTOR_REDEEM_FEERATE_MULT`] (the committed fee can't be RBF'd; the
-    /// CPFP child handles bigger spikes when the scheduler is up), clamped to
-    /// [`MAX_REDEEM_FEERATE`], with a conservative fallback when no backend is
-    /// reachable. Only the initiator calls this; the participant adopts the
-    /// value from the signed init, so the two parties never diverge.
+    /// by [`crate::fee_policy::RedeemPolicy::committed_mult`] (the committed fee
+    /// can't be RBF'd; the CPFP child handles bigger spikes when the scheduler is
+    /// up). Clamped to the **protocol** [`MAX_REDEEM_FEERATE`] (NOT the local
+    /// `max_feerate_sat_vb` bump ceiling): this value is negotiated into the init
+    /// message and must pass the counterparty's protocol validation (§2 init
+    /// check). A conservative fallback applies when no backend is reachable. Only
+    /// the initiator calls this; the participant adopts the value from the signed
+    /// init, so the two parties never diverge.
     fn adaptor_redeem_feerate(&self, chain: &ChainRef) -> u64 {
         if chain.network == Network::Regtest {
             return REGTEST_REDEEM_FEERATE;
         }
         match self.backend(chain).and_then(|b| b.fee_rate_sat_per_vb()) {
-            Ok(rate) => (rate * ADAPTOR_REDEEM_FEERATE_MULT)
+            Ok(rate) => (rate * self.fee_bump.redeem.committed_mult)
                 .clamp(REGTEST_REDEEM_FEERATE, MAX_REDEEM_FEERATE),
             Err(_) => ADAPTOR_REDEEM_FEERATE_FALLBACK,
         }
@@ -685,9 +693,14 @@ impl Engine {
             .backend(&chain)
             .and_then(|b| b.fee_rate_sat_per_vb())
             .unwrap_or(FUNDING_FEERATE_FALLBACK);
+        // Reserve the worst-case funding-bump ceiling the nurse may chase. The
+        // clamp is written panic-safe: `u64::clamp` panics if `min > max`, and a
+        // low `max_feerate_sat_vb` (< FUNDING_FEERATE_FALLBACK) would otherwise
+        // crash here, so the floor drops with the ceiling.
+        let max_feerate = self.fee_bump.max_feerate_sat_vb;
         let ceiling = live
-            .saturating_mul(FUNDING_BUMP_FEERATE_MULT)
-            .clamp(FUNDING_FEERATE_FALLBACK, MAX_REDEEM_FEERATE);
+            .saturating_mul(self.fee_bump.funding.reservation_mult)
+            .clamp(FUNDING_FEERATE_FALLBACK.min(max_feerate), max_feerate);
         let fee_headroom = ceiling.saturating_mul(FUNDING_VSIZE_EST);
         let needed = amount.saturating_add(fee_headroom);
         ensure!(
@@ -1998,10 +2011,16 @@ impl Engine {
         let parent_out = &parent.output[0];
         let parent_value = parent_out.value.to_sat();
         let parent_fee = amount.saturating_sub(parent_value);
-        let target = backend.fee_rate_sat_per_vb()?;
-        let Some(child_fee) =
-            cpfp_child_fee(parent_fee, crate::taproot::KEYPATH_REDEEM_VSIZE, target)
-        else {
+        // Chase market, but never above the policy ceiling.
+        let target = backend
+            .fee_rate_sat_per_vb()?
+            .min(self.fee_bump.max_feerate_sat_vb);
+        let Some(child_fee) = cpfp_child_fee(
+            parent_fee,
+            crate::taproot::KEYPATH_REDEEM_VSIZE,
+            target,
+            self.fee_bump.min_fee_sat,
+        ) else {
             return Ok(None); // parent already clears the target unaided
         };
         let Some(child_value) = parent_value.checked_sub(child_fee) else {
@@ -2058,15 +2077,24 @@ impl Engine {
         };
         let destination = old_tx.output[0].script_pubkey.clone();
         let old_fee = amount.saturating_sub(old_tx.output[0].value.to_sat());
-        let new_fee = old_fee + (old_fee / 2).max(MIN_SPEND_FEE_SAT);
-        if amount <= new_fee + DUST_LIMIT_SAT {
-            let txid = backend.broadcast(&old_tx)?;
-            return Ok(Some(TickEvent {
-                swap_id: rec.swap_id.clone(),
-                action: "adaptor-rebroadcast".into(),
-                detail: txid.to_string(),
-            }));
-        }
+        // Escalate per policy, capped at max_feerate. `None` = already at the
+        // ceiling (nothing relayable); the dust case is when a higher fee would
+        // push the output under dust. Both fall back to rebroadcasting the
+        // existing tx in case mempools dropped it.
+        let new_fee = match self
+            .fee_bump
+            .escalate(old_fee, self.fee_bump.refund.step_pct, REFUND_TX_VSIZE)
+        {
+            Some(f) if amount > f + DUST_LIMIT_SAT => f,
+            _ => {
+                let txid = backend.broadcast(&old_tx)?;
+                return Ok(Some(TickEvent {
+                    swap_id: rec.swap_id.clone(),
+                    action: "adaptor-rebroadcast".into(),
+                    detail: txid.to_string(),
+                }));
+            }
+        };
         let outpoint = old_tx.input[0].previous_output;
         let refund_kp = seed
             .refund_secret_key(coin_of(chain)?, rec.swap_index)?
@@ -2988,17 +3016,26 @@ impl Engine {
 
         let destination = old_tx.output[0].script_pubkey.clone();
         let old_fee = amount.saturating_sub(old_tx.output[0].value.to_sat());
-        // ~50% escalation, at least the floor — comfortably clears the
-        // BIP125 absolute-fee-increase requirement for our tx sizes.
-        let new_fee = old_fee + (old_fee / 2).max(MIN_SPEND_FEE_SAT);
-        if amount <= new_fee + DUST_LIMIT_SAT {
-            let txid = backend.broadcast(&old_tx)?;
-            return Ok(Some(TickEvent {
-                swap_id: rec.swap_id.clone(),
-                action: "rebroadcast".into(),
-                detail: txid.to_string(),
-            }));
-        }
+        // Policy escalation, capped at max_feerate (was a fixed ~50%, uncapped).
+        // `None` = already at the ceiling (nothing relayable); the dust case is
+        // when a higher fee would push the output under dust. Both fall back to
+        // rebroadcasting the existing tx in case mempools dropped it.
+        let (step_pct, vsize) = if is_redeem {
+            (self.fee_bump.redeem.step_pct, REDEEM_TX_VSIZE)
+        } else {
+            (self.fee_bump.refund.step_pct, REFUND_TX_VSIZE)
+        };
+        let new_fee = match self.fee_bump.escalate(old_fee, step_pct, vsize) {
+            Some(f) if amount > f + DUST_LIMIT_SAT => f,
+            _ => {
+                let txid = backend.broadcast(&old_tx)?;
+                return Ok(Some(TickEvent {
+                    swap_id: rec.swap_id.clone(),
+                    action: "rebroadcast".into(),
+                    detail: txid.to_string(),
+                }));
+            }
+        };
 
         let outpoint = old_tx.input[0].previous_output;
         let seed = self.store.seed()?;
@@ -4195,6 +4232,7 @@ pub struct PendingTakeInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::swap::MIN_SPEND_FEE_SAT;
 
     fn engine_with(tag: &str, passphrase: Option<&str>) -> (Engine, std::path::PathBuf) {
         let dir = std::env::temp_dir().join(format!("libswap-engine-{tag}-{}", std::process::id()));
@@ -4582,18 +4620,57 @@ mod tests {
         let parent_fee = 10 * parent_vsize; // committed at 10 sat/vB
 
         // Target below what the parent already pays: no child needed.
-        assert_eq!(cpfp_child_fee(parent_fee, parent_vsize, 5), None);
-        assert_eq!(cpfp_child_fee(parent_fee, parent_vsize, 10), None);
+        assert_eq!(cpfp_child_fee(parent_fee, parent_vsize, 5, MIN_SPEND_FEE_SAT), None);
+        assert_eq!(cpfp_child_fee(parent_fee, parent_vsize, 10, MIN_SPEND_FEE_SAT), None);
 
         // Target 50 sat/vB: the package (parent+child vsizes) must pay
         // 50 * (111 + 150) = 13050 sat; child covers the shortfall over parent.
         let pkg_vsize = parent_vsize + CPFP_CHILD_VSIZE;
-        let child = cpfp_child_fee(parent_fee, parent_vsize, 50).unwrap();
+        let child = cpfp_child_fee(parent_fee, parent_vsize, 50, MIN_SPEND_FEE_SAT).unwrap();
         assert_eq!(child, 50 * pkg_vsize - parent_fee);
         // The realised package feerate meets the target.
         assert!((parent_fee + child) / pkg_vsize >= 50);
-        // Never below the relay floor.
-        assert!(cpfp_child_fee(0, parent_vsize, 1).unwrap() >= MIN_SPEND_FEE_SAT);
+        // Never below the passed-in floor: with the default floor, a tiny natural
+        // fee (target 1 → 261 sat) is lifted to MIN_SPEND_FEE_SAT.
+        assert_eq!(cpfp_child_fee(0, parent_vsize, 1, MIN_SPEND_FEE_SAT).unwrap(), MIN_SPEND_FEE_SAT);
+        // The floor is honoured from the arg, not hardcoded: with a floor of 1 the
+        // natural fee (target × package vsize = 261) is returned unraised.
+        assert_eq!(cpfp_child_fee(0, parent_vsize, 1, 1).unwrap(), pkg_vsize);
+    }
+
+    #[test]
+    fn fee_policy_defaults_then_persists_across_reopen() {
+        let (mut engine, dir) = engine_with("feepolicy", None);
+        // A fresh merchant starts on the defaults.
+        assert_eq!(engine.fee_bump, crate::fee_policy::FeeBumpPolicy::default());
+
+        // Change a couple of fields and persist.
+        let mut pol = engine.fee_bump;
+        pol.max_feerate_sat_vb = 250;
+        pol.redeem.committed_mult = 4;
+        engine.set_fee_bump(pol).unwrap();
+        assert_eq!(engine.fee_bump.max_feerate_sat_vb, 250);
+        drop(engine);
+
+        // Reopening the same store reloads the persisted policy (survives restart
+        // with no Satchel involved).
+        let engine2 = Engine::open(&dir, None, BTreeMap::new()).unwrap();
+        assert_eq!(engine2.fee_bump.max_feerate_sat_vb, 250);
+        assert_eq!(engine2.fee_bump.redeem.committed_mult, 4);
+        // Untouched fields keep their defaults.
+        assert_eq!(engine2.fee_bump.funding.reservation_mult, 3);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn set_fee_bump_rejects_invalid_and_keeps_old() {
+        let (mut engine, dir) = engine_with("feepolicy-bad", None);
+        let mut pol = engine.fee_bump;
+        pol.max_feerate_sat_vb = crate::fee_policy::MAX_FEERATE_CEILING + 1; // over the ceiling
+        assert!(engine.set_fee_bump(pol).is_err());
+        // The live policy is unchanged after a rejected update.
+        assert_eq!(engine.fee_bump, crate::fee_policy::FeeBumpPolicy::default());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
