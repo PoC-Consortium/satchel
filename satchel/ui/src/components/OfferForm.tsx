@@ -109,18 +109,11 @@ export default function OfferForm({
   const [side, setSide] = useState<Side>("sell");
   const [baseAmt, setBaseAmt] = useState("");
   const [price, setPrice] = useState(""); // quote-per-base, in the chosen denom
-  // Price unit is SHARED with the Corkboard (useDenom). If the Corkboard denom
-  // was never set and the user hasn't touched the unit here, fall back to our
-  // per-base default; otherwise reflect — and update — the shared denom.
-  const { denom: cbDenom, setDenom: setCbDenom } = useDenom();
-  const [unitTouched, setUnitTouched] = useState(false);
-  const [cbHadDenom] = useState(() => {
-    try {
-      return localStorage.getItem(CORKBOARD_DENOM_KEY) != null;
-    } catch {
-      return false;
-    }
-  });
+  // Price unit is the SAME shared preference the Corkboard uses (useDenom) — the
+  // form always mirrors it, so the two can never drift. We only SEED it (below)
+  // when it was never chosen, from our per-base default.
+  const { denom, setDenom } = useDenom();
+  const onDenom = (d: Denom) => setDenom(d);
   const [proto, setProto] = useState<string | null>(null); // explicit override
   const [term, setTerm] = useState<Term>("medium");
   const [validMin, setValidMin] = useState("60"); // offer lifetime (minutes)
@@ -159,13 +152,18 @@ export default function OfferForm({
   const base = pair?.base ?? "";
   const quote = pair?.quote ?? "";
 
-  // Effective price unit: the Corkboard's denom if it was ever set (or once the
-  // user picks one here), else our per-base default — which tracks the pair.
-  const denom: Denom = cbHadDenom || unitTouched ? cbDenom : defaultDenom(base);
-  const onDenom = (d: Denom) => {
-    setCbDenom(d); // shared with the Corkboard
-    setUnitTouched(true);
-  };
+  // Seed the shared denom once, from our per-base default (mBTC for a BTCX base,
+  // coin else), only if it was never chosen — so BTCX prices read well on a fresh
+  // setup AND the Corkboard immediately mirrors it. Thereafter it's one shared
+  // preference the user controls from either screen.
+  useEffect(() => {
+    if (!base) return;
+    try {
+      if (localStorage.getItem(CORKBOARD_DENOM_KEY) == null) setDenom(defaultDenom(base));
+    } catch {
+      /* ignore */
+    }
+  }, [base, setDenom]);
 
   // Live wallet balances per configured coin.
   useEffect(() => {
