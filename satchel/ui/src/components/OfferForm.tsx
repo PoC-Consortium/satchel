@@ -13,16 +13,13 @@ import {
   Box,
   Button,
   Divider,
-  IconButton,
   MenuItem,
   Select,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
-  Tooltip,
   Typography,
 } from "@mui/material";
-import SwapVertIcon from "@mui/icons-material/SwapVert";
 import { useApp } from "../AppContext";
 import { useConfirm } from "../ui/ConfirmProvider";
 import { useDenom } from "../denom";
@@ -318,32 +315,17 @@ export default function OfferForm({
         ))}
       </TextField>
 
-      {/* Direction (Sell/Buy the base) + quick flip */}
-      <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={side}
-          onChange={(_, v) => v && setSide(v as Side)}
-          sx={{ flex: 1 }}
-        >
-          <ToggleButton value="sell" sx={{ flex: 1 }}>
-            {t("makeOffer.sell", { sym: symOf(base) })}
-          </ToggleButton>
-          <ToggleButton value="buy" sx={{ flex: 1 }}>
-            {t("makeOffer.buy", { sym: symOf(base) })}
-          </ToggleButton>
-        </ToggleButtonGroup>
-        <Tooltip title={t("makeOffer.flip")}>
-          <IconButton
-            size="small"
-            aria-label={t("makeOffer.flip")}
-            onClick={() => setSide((s) => (s === "sell" ? "buy" : "sell"))}
-          >
-            <SwapVertIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </Box>
+      {/* Direction — Sell/Buy the base coin (this is the give↔get swap). */}
+      <ToggleButtonGroup
+        exclusive
+        fullWidth
+        size="small"
+        value={side}
+        onChange={(_, v) => v && setSide(v as Side)}
+      >
+        <ToggleButton value="sell">{t("makeOffer.sell", { sym: symOf(base) })}</ToggleButton>
+        <ToggleButton value="buy">{t("makeOffer.buy", { sym: symOf(base) })}</ToggleButton>
+      </ToggleButtonGroup>
 
       {/* Amount — always in the base coin. */}
       <TextField

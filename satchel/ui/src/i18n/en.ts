@@ -58,7 +58,6 @@ export const en = {
     noPairs: "No tradable pairs — connect at least two coins in Settings → Coins.",
     sell: "Sell {sym}",
     buy: "Buy {sym}",
-    flip: "Swap direction",
     amount: "Amount",
     youGive: "You give",
     youGet: "You get",
