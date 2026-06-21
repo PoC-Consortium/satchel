@@ -43,7 +43,7 @@ param([switch]$Down, [switch]$FirstRun)
 
 $ErrorActionPreference = "Stop"
 $Repo    = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path   # repo root (script now lives in tools/)
-$AppData = Join-Path $env:APPDATA "org.pocx.satchel"
+$AppData = Join-Path $env:LOCALAPPDATA "org.pocx.satchel"
 # Satchel nests test networks in a per-network subdir (Bitcoin-Core style); this
 # is a regtest playground, so all its state lives under <config>/regtest and we
 # launch Satchel with SATCHEL_NETWORK=regtest.
