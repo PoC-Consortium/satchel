@@ -46,6 +46,7 @@ What remains here, because the handbooks deliberately do not cover it:
 | File | Topic |
 |------|-------|
 | [`TRADING_ROADMAP.md`](TRADING_ROADMAP.md) | Product strategy and regulatory (MiCA) positioning — not a tech doc the handbooks replace. |
+| [`FUNDING_FEE_BUMP.md`](FUNDING_FEE_BUMP.md) | Design + follow-up TODO for the funding fee-bump nurse (v1 RBF / v2 CPFP) — the one remaining fee-spike gap. |
 
 The normative protocol specification and deterministic test vectors live in
 [`../spec/`](../spec/) and remain authoritative; the handbooks cite them.
