@@ -335,12 +335,20 @@ fn validate_offer_offsets(network: Network, t1_secs: u32, t2_secs: u32) -> Resul
 pub(crate) const REGTEST_REDEEM_FEERATE: u64 = 2;
 
 /// Over-provisioning multiplier on the live estimate when the initiator fixes
-/// the cooperative-redeem feerate at init (M2). The redeem fee is committed
-/// into the adaptor signature and cannot be RBF'd, so it must still confirm if
-/// the fee market drifts up between init and the actual redeem (potentially
-/// hours later). A fresh interactive round (v3 bumpable redeem) is the real
-/// fix; until then we pad. See spec/protocol-v2.md.
-pub(crate) const ADAPTOR_REDEEM_FEERATE_MULT: u64 = 3;
+/// the cooperative-redeem feerate at init. The redeem fee is committed into the
+/// adaptor signature and cannot be RBF'd, so the committed value alone must
+/// still confirm if the fee market drifts up between init and the actual redeem
+/// (potentially hours later).
+///
+/// This is now just the UNATTENDED floor, not the whole defence: the v2+ CPFP
+/// child ([`Self::adaptor_cpfp_bump`]) tops up a stuck redeem from its own
+/// output whenever the scheduler is running. So the committed fee only has to
+/// cover the case where CPFP can't act (e.g. Satchel closed in the window
+/// between the redeem broadcast and its confirmation). 2× buys "confirms
+/// unattended unless the market more than doubles since init" — a real margin —
+/// without the heavier common-case overpay 3× cost (M2 set 3× before CPFP
+/// existed). 1× would leave zero unattended buffer. See spec/protocol-v2.md.
+pub(crate) const ADAPTOR_REDEEM_FEERATE_MULT: u64 = 2;
 
 /// Upper bound on a negotiated redeem feerate (sat/vB). Caps the initiator's
 /// over-provisioning AND lets the participant reject an init that sets an
@@ -506,7 +514,8 @@ impl Engine {
     /// The cooperative-redeem feerate (sat/vB) the initiator fixes at init for
     /// `chain` (M2). Regtest keeps the legacy low fee so the deterministic e2e
     /// is unchanged; elsewhere it is the live 6-block estimate over-provisioned
-    /// by [`ADAPTOR_REDEEM_FEERATE_MULT`] (the redeem is unbumpable), clamped to
+    /// by [`ADAPTOR_REDEEM_FEERATE_MULT`] (the committed fee can't be RBF'd; the
+    /// CPFP child handles bigger spikes when the scheduler is up), clamped to
     /// [`MAX_REDEEM_FEERATE`], with a conservative fallback when no backend is
     /// reachable. Only the initiator calls this; the participant adopts the
     /// value from the signed init, so the two parties never diverge.
