@@ -37,11 +37,14 @@ Below the groups:
 
 - **Swaps** — your full trade history and the swaps currently running.
 - **Wallets** — read-only balances from your own coin nodes.
+- **Relays** — a read-only monitor of your Nostr relays, so you can see at a
+  glance which ones are connected and how healthy they are.
 
 And at the foot of the rail:
 
-- **Settings** — appearance, language, your coin connections, and the
-  noticeboards Satchel talks to.
+- **Settings** — appearance, language, your coin connections, the noticeboards
+  Satchel talks to, and fee-bumping preferences. Its tabs are **General**,
+  **Coins**, **Network**, **Fees**, and **About**.
 
 > **Tip** — If you ever feel lost, click **Corkboard**. It's the home base and it's
 > where your live swaps and activity log are docked (more on that below).
@@ -97,6 +100,30 @@ about, because that's the real thing.
 
 > **Warning** — If there's no network stamp, you are on mainnet and trading with
 > real money. Double-check amounts before you confirm anything.
+
+## The Relays monitor
+
+Click **Relays** in the navigation to open a simple health screen for your Nostr
+relays. It's a **monitor only** — one row per relay you've configured — so you can
+see whether your offers have a way out onto the network.
+
+The header reads **"{up} / {total} connected"** — how many of your relays are
+live right now — with a refresh button beside it. Each row then shows:
+
+- A **status dot** — green when the relay is connected, amber while it's
+  connecting, red if it was terminated or banned, grey otherwise.
+- The **relay URL**.
+- A short **status label**, the connection **latency** in milliseconds, and how
+  long it's been **up**.
+
+If you have no relays configured (or none are reachable), the screen points you to
+**Settings** to add some.
+
+![The Relays monitor: one row per Nostr relay with status, latency, and uptime.](images/processed/ch06-relays.png){width=80%}
+
+> **Note** — This screen only *shows* you relay health; you don't add or remove
+> relays here. To change which relays Satchel uses, go to **Settings → Network**
+> (covered in the *Settings* chapter).
 
 ## The activity log and active-swaps dock
 

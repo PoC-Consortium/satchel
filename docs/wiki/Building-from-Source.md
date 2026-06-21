@@ -54,6 +54,8 @@ cd ..        && cargo tauri build               # full bundle
 
 > **Note — sidecar staging.** The Tauri config lists `pactd` and `pact-cli` as `externalBin` sidecars, so a dev/build run refuses to start unless `satchel/binaries/<name>-<host-triple>.exe` exist. The playground scripts stage these by copying fresh debug binaries.
 
+> **Note — install locations (Windows).** Satchel stores its config and seed under **`%LOCALAPPDATA%`** (machine-bound — the seed must not roam; it was previously under Roaming `%APPDATA%`). The per-user installer also appends the install dir to your user **PATH**, so `pact-cli`/`pactd` run from any terminal — open a **new** terminal after installing for the change to take effect.
+
 ## One-shot regtest playground
 
 ```sh

@@ -8,6 +8,14 @@ connected. Click **Wallets** in the left navigation to open it.
 You'll see one card per configured coin, each with the coin's icon, name, symbol,
 and a large balance figure. The balances come live from your own coin nodes.
 
+Each card also tells you **which node wallet that coin is scoped to**. If you've
+named a wallet for the coin (in **Settings → Coins**), the card shows
+**"wallet · {name}"** — every RPC for that coin uses exactly that wallet. If you
+*haven't*, the card shows a small warning, **"default wallet (not scoped)"**,
+meaning the coin falls back to the node's default wallet; the tooltip points you to
+**Settings → Coins** to set one explicitly. On a node with more than one wallet
+loaded, naming the wallet removes any doubt about which balance you're looking at.
+
 ## Why it's read-only
 
 There's no **Send** or **Receive** button here, and that's on purpose. These

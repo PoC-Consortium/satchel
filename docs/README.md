@@ -3,7 +3,7 @@
 This folder holds the project's documentation. It comes in three forms, all
 kept in sync and checked against the code.
 
-> **Status** — these docs were verified against commit `c7e513f`. The docs track
+> **Status** — these docs were verified against commit `90fd55d`. The docs track
 > the code by **commit hash** rather than a release version; when the code moves,
 > the hash (in each handbook's front-matter and the wiki footer) is bumped and
 > the affected pages are updated.
@@ -46,7 +46,8 @@ What remains here, because the handbooks deliberately do not cover it:
 | File | Topic |
 |------|-------|
 | [`TRADING_ROADMAP.md`](TRADING_ROADMAP.md) | Product strategy and regulatory (MiCA) positioning — not a tech doc the handbooks replace. |
-| [`FUNDING_FEE_BUMP.md`](FUNDING_FEE_BUMP.md) | Follow-up TODO: unify + parameterize the fee-bump policy (per-tx strategies, configurable, Satchel settings) and add the funding nurse (v1 RBF / v2 CPFP). |
+| [`FUNDING_FEE_BUMP.md`](FUNDING_FEE_BUMP.md) | Design + rationale for the unified `FeeBumpPolicy` and the funding fee-bump nurse (v1 RBF / v2 CPFP-via-change). **Implemented** — the developer-facing behaviour now lives in the Pact handbook's *Fees, Fee-Bumping & Auto-Refund* chapter. |
+| [`FUNDING_FEE_BUMP_PLAN.md`](FUNDING_FEE_BUMP_PLAN.md) | The phased implementation plan for the above (PR-1…PR-6), now landed. |
 
 The normative protocol specification and deterministic test vectors live in
 [`../spec/`](../spec/) and remain authoritative; the handbooks cite them.

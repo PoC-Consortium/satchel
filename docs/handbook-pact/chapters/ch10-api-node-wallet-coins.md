@@ -22,6 +22,45 @@ merchant* error) are covered in the chapter "JSON-RPC Conventions".
   is encrypted **and** its passphrase is not held in memory.
 - `stop` — requests a graceful shutdown and returns immediately.
 
+### Fee policy
+
+The active merchant's local fee-bump policy — the knobs that drive funding-nurse
+bumps, redeem over-provisioning, and the auto-refund fee escalation. Both methods
+are scoped to the active merchant.
+
+| Method | Params | Returns | Mutates |
+|---|---|---|---|
+| `getfeepolicy` | — | the policy object (below) | no |
+| `setfeepolicy` | positional, all optional (below) | the full updated policy | yes (live + persisted) |
+
+The policy object is a flat shape:
+
+```json
+{ "max_feerate_sat_vb": 500, "min_fee_sat": 1000,
+  "reservation_mult": 3, "committed_mult": 2, "step_pct": 50 }
+```
+
+- `getfeepolicy` — read-only; returns the active merchant's current policy.
+- `setfeepolicy` — **positional** params, all optional, in order
+  `[max_feerate_sat_vb?, min_fee_sat?, reservation_mult?, committed_mult?, step_pct?]`.
+  Only the fields you supply change; the rest keep their current values. `step_pct`
+  is a single knob that sets **both** the redeem step and the refund step. The new
+  values are validated server-side, applied live, and persisted per-merchant (they
+  survive a restart). Returns the full updated policy (same shape).
+
+| Field | Default | Range | What it does |
+|---|---|---|---|
+| `max_feerate_sat_vb` | 500 | `1..=500` | Local ceiling on any bump's feerate (sat/vB). |
+| `min_fee_sat` | 1000 | `≥ 1` | Floor on each bump increment (sat). |
+| `reservation_mult` | 3 | `1..=1000` | Funding-nurse target multiplier over the old feerate. |
+| `committed_mult` | 2 | `1..=1000` | Redeem fee over-provision multiplier. |
+| `step_pct` | 50 | `1..=1000` | Per-step escalation percentage (redeem **and** refund). |
+
+> **Note** — These knobs are the *local* policy; `max_feerate_sat_vb` is distinct
+> from the protocol-negotiated redeem-feerate bound. See the chapter "Fees,
+> Fee-Bumping & Auto-Refund" for what each value does in the funding nurse, the
+> redeem path, and the refund escalation.
+
 ## Seed lifecycle
 
 | Method | Params | Returns | Mutates |

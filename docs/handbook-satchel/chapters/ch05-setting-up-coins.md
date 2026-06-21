@@ -54,7 +54,12 @@ The fields, in order:
     containing a one-time login, and Satchel reads it automatically. Nothing to
     type, nothing to store. When you choose this, a **Node data directory** field
     appears — point it at your node's data folder, and Satchel finds the cookie
-    inside (it shows you the exact path it will read).
+    inside (it shows you the exact path it will read). It comes **prefilled with
+    the right default for your operating system** — `%LOCALAPPDATA%\<Node>` on
+    Windows, `~/Library/Application Support/<Node>` on macOS, `~/.<node>` on Linux
+    — so the cookie path is correct out of the box and Windows users no longer
+    have to hand-fix it. Change it only if your node keeps its data somewhere
+    custom.
 
   - **User / password** — if your node is set up with a fixed `rpcuser` and
     `rpcpassword` (common for a node on another machine), choose this and enter
