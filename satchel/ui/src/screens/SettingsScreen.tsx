@@ -25,13 +25,11 @@ import { usePrefs } from "../prefs";
 import { useI18n, useT, LANGUAGES } from "../i18n";
 import type { UiPrefs } from "../api/types";
 import { APP_VERSION, UPDATE_AVAILABLE } from "../version";
-import { isMainnet } from "../format";
 import { errMsg, listCoinConfig, rpc, saveBoard, saveNostrRelays } from "../api/tauri";
-import NetworkStamp from "../components/NetworkStamp";
 import CoinsScreen from "./CoinsScreen";
 
 // UI-3: Settings is split into MUI Tabs — General/Appearance (theme, language),
-// Coins (node config), Network (network display), About (version + update
+// Coins (node config), Network (relays + boards), About (version + update
 // placeholder + the trust-model note). All prior functionality is preserved;
 // it is only reorganised behind tabs.
 type SettingsTab = "general" | "coins" | "network" | "fees" | "about";
@@ -106,7 +104,7 @@ function CoinsTab() {
 // optional self-hosted Corkboards. Each is a plain add/remove URL list; saving
 // relaunches the active merchant's pactd so it picks the transports up.
 function NetworkTab() {
-  const { network, log } = useApp();
+  const { log } = useApp();
   const t = useT();
   const [boards, setBoards] = useState<string[]>([]);
   const [relays, setRelays] = useState<string[]>([]);
@@ -148,16 +146,8 @@ function NetworkTab() {
 
   return (
     <Section title={t("settings.network")}>
-      <Row label={t("settings.network")} hint={t("settings.networkHint")}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-          {network && isMainnet(network) ? (
-            <Typography sx={{ fontWeight: 600 }}>{t("network.mainnet")}</Typography>
-          ) : (
-            <NetworkStamp network={network} />
-          )}
-        </Box>
-      </Row>
-
+      {/* The network mode (mainnet/testnet/regtest) is fixed at launch (a CLI
+          arg), not a setting — it's shown in the top-bar badge, so no row here. */}
       <UrlList
         title={t("settings.nostrRelays")}
         desc={t("settings.nostrRelaysDesc")}

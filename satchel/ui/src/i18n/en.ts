@@ -253,8 +253,6 @@ export const en = {
     language: "Language",
     languageHint: "More languages land as translations are contributed.",
     network: "Network",
-    networkHint:
-      "One coherent mode for this client — every coin runs on this network. Chosen when the merchant was created; mainnet is gated.",
     boards: "Corkboards",
     boardsDesc:
       "Optional self-hosted HTTP boards. Add any you trust; leave empty to rely on Nostr.",
