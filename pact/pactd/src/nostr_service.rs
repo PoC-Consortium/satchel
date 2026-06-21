@@ -229,6 +229,49 @@ impl NostrService {
             })
             .collect()
     }
+
+    /// Rich per-relay status for the Relays monitor (and the header dot reads
+    /// `connected`). A cheap in-memory read of the relay pool's status + stats —
+    /// no network round-trip.
+    pub async fn relay_details(&self) -> Vec<RelayInfo> {
+        self.client
+            .relays()
+            .await
+            .into_iter()
+            .map(|(url, relay)| {
+                let status = relay.status();
+                let stats = relay.stats();
+                let connected = matches!(status, RelayStatus::Connected);
+                RelayInfo {
+                    url: url.to_string(),
+                    // RelayStatus Display → "Connected"/"Connecting"/… ; lower-case
+                    // for a stable wire token the UI maps to a colour/label.
+                    status: status.to_string().to_lowercase(),
+                    connected,
+                    latency_ms: stats.latency().map(|d| d.as_millis() as u64),
+                    // Only meaningful while connected (it's the last-connect time).
+                    connected_since: connected.then(|| stats.connected_at().as_secs()),
+                    attempts: stats.attempts(),
+                    success: stats.success(),
+                    bytes_sent: stats.bytes_sent(),
+                    bytes_received: stats.bytes_received(),
+                }
+            })
+            .collect()
+    }
+}
+
+/// One relay's live status for the Relays monitor (pactd `boardstatus`).
+pub struct RelayInfo {
+    pub url: String,
+    pub status: String,
+    pub connected: bool,
+    pub latency_ms: Option<u64>,
+    pub connected_since: Option<u64>,
+    pub attempts: usize,
+    pub success: usize,
+    pub bytes_sent: usize,
+    pub bytes_received: usize,
 }
 
 /// Map one outbox row to the Nostr event to publish. Logs (rather than silently

@@ -138,6 +138,33 @@ export function impliedRate(giveSat: number, getSat: number): string {
 /** Hours from seconds, dropping the decimal when it's a whole number of hours. */
 export const hours = (secs: number): string => (secs / 3600).toFixed(secs % 3600 ? 1 : 0);
 
+/** Bytes → "1.2 MB" style (for the Relays monitor traffic counters). */
+export function formatBytes(n: number | undefined): string {
+  const b = n ?? 0;
+  if (b < 1024) return `${b} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let v = b / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
+}
+
+/** Compact uptime since a unix timestamp: "1h 03m" / "12m" / "45s" / "—". For
+ *  the Relays monitor (how long a relay has held its current connection). */
+export function uptimeSince(unix: number | null | undefined): string {
+  if (!unix) return "—";
+  const s = Math.max(0, Math.floor(Date.now() / 1000) - unix);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ${String(m % 60).padStart(2, "0")}m`;
+  return `${Math.floor(h / 24)}d ${h % 24}h`;
+}
+
 export function ago(unix: number): string {
   if (!unix) return "age unknown";
   const s = Math.max(0, Math.floor(Date.now() / 1000) - unix);

@@ -16,6 +16,7 @@ import LogPanel from "./components/LogPanel";
 import Toasts from "./components/Toasts";
 import { Disconnected, NoTauri } from "./components/StatusViews";
 import SwapsScreen from "./screens/SwapsScreen";
+import RelaysScreen from "./screens/RelaysScreen";
 import CorkboardScreen from "./screens/CorkboardScreen";
 import PostOfferScreen from "./screens/PostOfferScreen";
 import PrivateCreateScreen from "./screens/PrivateCreateScreen";
@@ -79,6 +80,8 @@ export default function App() {
         return <PrivateReceiveScreen />;
       case "swaps":
         return <SwapsScreen />;
+      case "relays":
+        return <RelaysScreen />;
       case "wallets":
         return <WalletScreen />;
       case "settings":

@@ -17,6 +17,7 @@ import NoteAddOutlinedIcon from "@mui/icons-material/NoteAddOutlined";
 import ListAltOutlinedIcon from "@mui/icons-material/ListAltOutlined";
 import MoveToInboxOutlinedIcon from "@mui/icons-material/MoveToInboxOutlined";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import SensorsOutlinedIcon from "@mui/icons-material/SensorsOutlined";
 import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
@@ -43,6 +44,7 @@ export type Route =
   | "private-slips"
   | "private-receive"
   | "swaps"
+  | "relays"
   | "wallets"
   | "settings";
 
@@ -68,6 +70,7 @@ const PRIVATE_ITEMS: NavDef[] = [
 // Top-level items below the venue groups.
 const ACTIVITY: NavDef[] = [
   { route: "swaps", labelKey: "nav.swaps", icon: <SwapHorizIcon /> },
+  { route: "relays", labelKey: "nav.relays", icon: <SensorsOutlinedIcon /> },
   { route: "wallets", labelKey: "nav.wallets", icon: <AccountBalanceWalletOutlinedIcon /> },
 ];
 

@@ -806,12 +806,24 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         // configured relay. Empty when the Nostr transport isn't configured.
         "boardstatus" => {
             let relays = match &app.nostr {
-                Some(svc) => svc.relay_status().await,
+                Some(svc) => svc.relay_details().await,
                 None => Vec::new(),
             };
             let relays: Vec<Value> = relays
                 .into_iter()
-                .map(|(url, connected)| json!({ "url": url, "connected": connected }))
+                .map(|r| {
+                    json!({
+                        "url": r.url,
+                        "connected": r.connected,
+                        "status": r.status,
+                        "latency_ms": r.latency_ms,
+                        "connected_since": r.connected_since,
+                        "attempts": r.attempts,
+                        "success": r.success,
+                        "bytes_sent": r.bytes_sent,
+                        "bytes_received": r.bytes_received,
+                    })
+                })
                 .collect();
             Ok(json!({ "relays": relays }))
         }

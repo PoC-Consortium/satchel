@@ -110,6 +110,17 @@ export interface CoinConfig {
 export interface RelayStatus {
   url: string;
   connected: boolean;
+  /** Pool status token: connected | connecting | pending | disconnected |
+   *  terminated | banned | sleeping | initialized. */
+  status?: string;
+  /** Round-trip latency in ms, when measured. */
+  latency_ms?: number | null;
+  /** Unix seconds since the current connection was established (uptime base). */
+  connected_since?: number | null;
+  attempts?: number;
+  success?: number;
+  bytes_sent?: number;
+  bytes_received?: number;
 }
 
 /** `getinfo` — extended in Phase B/C with seed + identity state. */
