@@ -129,7 +129,8 @@ export default function CorkboardScreen() {
     const relayIds = new Set(list.map((o) => o.swap_id));
     const staged = new Set<string>();
     try {
-      const mine = (await rpc<{ offers?: MyOfferRow[] }>("listmyoffers")).offers || [];
+      // listmyoffers returns a BARE array (unlike boardlistoffers' { offers }).
+      const mine = (await rpc<MyOfferRow[]>("listmyoffers")) || [];
       for (const m of mine) {
         if (m.state !== "live" || !m.offer?.swap_id) continue;
         if (relayIds.has(m.offer.swap_id)) continue; // already live on the board
