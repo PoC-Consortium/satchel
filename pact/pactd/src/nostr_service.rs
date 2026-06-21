@@ -128,20 +128,44 @@ impl NostrService {
         };
 
         // ---- publish the outbox ----
-        for (id, kind, recipient, payload) in &prep.outbox {
-            match build_event(kind, recipient.as_deref(), payload, &keys) {
-                // Fire-and-forget: the relay pool buffers + delivers once
-                // connected, so an `Ok` means dispatched — mark it sent and move
-                // on (re-publishing every tick would spam relays; genuine loss is
-                // covered by the app-level re-post). A hard send error keeps the
-                // row queued to retry next round.
-                Some(event) => match self.client.send_event(&event).await {
-                    Ok(_) => out.sent_outbox.push(*id),
-                    Err(err) => tracing::warn!("nostr: send {kind} failed: {err:#}; will retry"),
-                },
-                // Unbuildable row: build_event already logged why. Drop it so a
-                // permanently-malformed row can't wedge the queue.
-                None => out.sent_outbox.push(*id),
+        // Break early on a dead pool: with NO relay connected, `send_event` can
+        // still return `Ok` (the pool buffers the event), which would mark the
+        // offer "sent" though it reached nobody. Leave the rows queued so they
+        // retry once a relay connects, and say why — never a false success.
+        let connected = self
+            .relay_status()
+            .await
+            .into_iter()
+            .filter(|(_, up)| *up)
+            .count();
+        if connected == 0 {
+            if !prep.outbox.is_empty() {
+                tracing::warn!(
+                    "nostr: nothing connected to send to — {} message(s) stay queued (will retry)",
+                    prep.outbox.len()
+                );
+            }
+        } else {
+            for (id, kind, recipient, payload) in &prep.outbox {
+                match build_event(kind, recipient.as_deref(), payload, &keys) {
+                    // Mark sent ONLY if the event reached at least one relay. An
+                    // `Ok` whose success set is empty (reached nobody) or a hard
+                    // error keeps the row queued to retry next round — re-sending
+                    // an actually-delivered offer would spam relays, but a
+                    // never-delivered one must not be silently dropped.
+                    Some(event) => match self.client.send_event(&event).await {
+                        Ok(output) if !output.success.is_empty() => out.sent_outbox.push(*id),
+                        Ok(_) => {
+                            tracing::warn!("nostr: {kind} reached no relay — will retry")
+                        }
+                        Err(err) => {
+                            tracing::warn!("nostr: send {kind} failed: {err:#}; will retry")
+                        }
+                    },
+                    // Unbuildable row: build_event already logged why. Drop it so a
+                    // permanently-malformed row can't wedge the queue.
+                    None => out.sent_outbox.push(*id),
+                }
             }
         }
 
