@@ -1084,6 +1084,14 @@ fn scrub_secrets(mut v: Value) -> Value {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // rustls 0.23 needs a process-wide CryptoProvider. nostr-sdk's TLS stack
+    // (async-wsocket → tokio-rustls) links BOTH aws-lc-rs and ring, so rustls
+    // won't auto-select one — and every wss:// handshake to a Nostr relay then
+    // fails inside a background task (the panic goes to stderr, which managed
+    // Satchel discards, so the log shows only downstream subscription timeouts
+    // and the relays never reach Connected; ws:// works because it skips TLS).
+    // Install the provider explicitly, before any relay connection is attempted.
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let args = Args::parse();
     // Keep the file-writer guard alive for the whole process (flushes on drop).
     let _log_guard = init_logging(&args.data_dir);

@@ -9,6 +9,10 @@ description = "Pact daemon: local JSON-RPC over libswap, SQLite persistence, aut
 libswap = { workspace = true }
 pact-nostr = { path = "../../pact-nostr" }
 nostr-sdk = "0.44"
+# Only to install a process-wide rustls CryptoProvider at startup (see main()):
+# nostr-sdk → tokio-rustls pulls rustls 0.23, which refuses to auto-pick a
+# provider when both aws-lc-rs and ring are linked, breaking all wss:// relays.
+rustls = "0.23"
 bitcoin = { workspace = true }
 hex = { workspace = true }
 tokio = { workspace = true }

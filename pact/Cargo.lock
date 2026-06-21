@@ -1372,6 +1372,7 @@ dependencies = [
  "nostr-sdk",
  "pact-nostr",
  "pact-proto",
+ "rustls",
  "serde",
  "serde_json",
  "tokio",
