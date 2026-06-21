@@ -227,16 +227,24 @@ async fn nostr_pass(app: &App, svc: &nostr_service::NostrService) -> Result<()> 
     blocking(app, move |e| nostr_service::apply(&e.store, &apply)).await
 }
 
-/// Kick one Nostr relay pass right now (best-effort) — called after a merchant
-/// becomes usable (load / seed provisioned / unlocked) so its offers populate
-/// immediately instead of waiting up to a full scheduler tick. A no-op when the
-/// transport isn't configured.
-async fn kick_nostr(app: &App) {
-    if let Some(svc) = app.nostr.clone() {
-        if let Err(err) = nostr_pass(app, &svc).await {
+/// Kick one Nostr relay pass right now (best-effort, FIRE-AND-FORGET) — called
+/// after a merchant becomes usable (load / seed provisioned / unlocked) so its
+/// offers populate soon instead of waiting up to a full scheduler tick. Spawned
+/// on the runtime so the calling RPC (importseed/loadmerchant/unlock) returns at
+/// once: a relay round is a network round-trip to every configured relay, two
+/// fetches each up to FETCH_TIMEOUT (10s) — tens of seconds on cold/slow relays
+/// — and must NEVER block the UI (this caused a ~30s hang after seed creation).
+/// The scheduler's next tick runs the pass regardless. No-op when unconfigured.
+fn kick_nostr(app: &App) {
+    let Some(svc) = app.nostr.clone() else {
+        return;
+    };
+    let app = app.clone();
+    tokio::spawn(async move {
+        if let Err(err) = nostr_pass(&app, &svc).await {
             tracing::warn!("nostr: on-load pass failed: {err:#}");
         }
-    }
+    });
 }
 
 // ---- JSON-RPC plumbing -------------------------------------------------
@@ -458,7 +466,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             let encrypted = passphrase.is_some();
             let mnemonic =
                 blocking_mut(app, move |e| e.store.create_seed(passphrase.as_deref())).await?;
-            kick_nostr(app).await;
+            kick_nostr(app);
             // The mnemonic is returned exactly once, for the user to back up.
             Ok(json!({ "mnemonic": mnemonic, "encrypted": encrypted }))
         }
@@ -478,7 +486,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             .await?;
             let identity =
                 blocking(app, |e| Ok(e.store.seed()?.identity_pubkey()?.to_string())).await?;
-            kick_nostr(app).await;
+            kick_nostr(app);
             // Echo the normalized phrase so the client can confirm, plus the
             // derived identity so the UI can show the new merchant at once.
             Ok(json!({ "mnemonic": phrase, "encrypted": encrypted, "identity": identity }))
@@ -488,7 +496,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             blocking_mut(app, move |e| e.store.unlock(&passphrase)).await?;
             let identity =
                 blocking(app, |e| Ok(e.store.seed()?.identity_pubkey()?.to_string())).await?;
-            kick_nostr(app).await;
+            kick_nostr(app);
             Ok(json!({ "unlocked": true, "identity": identity }))
         }
         // ---- merchants owned by pactd (C10) — the Bitcoin-Core wallet analog.
@@ -503,7 +511,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         "loadmerchant" => {
             let id = p.str(0, "id")?;
             let meta = blocking_registry(app, move |r| r.load(&id)).await?;
-            kick_nostr(app).await;
+            kick_nostr(app);
             Ok(json!({ "id": meta.id, "label": meta.label }))
         }
         "unloadmerchant" => {
@@ -715,7 +723,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             // buffers (and publish our outbox) BEFORE the engine pass, so a
             // take/init that just arrived is dispatched by sync_board this tick.
             // Best-effort + a no-op when the Nostr transport isn't configured.
-            kick_nostr(app).await;
+            kick_nostr(app);
             let events = blocking(app, |e| {
                 let mut ev = e.sync_board();
                 ev.extend(e.tick());
