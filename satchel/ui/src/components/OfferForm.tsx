@@ -82,7 +82,7 @@ export default function OfferForm({
     ttlSecs?: number,
   ) => void;
 }) {
-  const { coins, symOf, network } = useApp();
+  const { coins, symOf } = useApp();
   const confirm = useConfirm();
   const t = useT();
   const configured = useMemo(() => coins.filter((c) => c.configured), [coins]);
@@ -157,8 +157,8 @@ export default function OfferForm({
   const giveCaps = useMemo(() => configured.find((c) => c.id === give)?.capabilities, [configured, give]);
   const wantCaps = useMemo(() => configured.find((c) => c.id === want)?.capabilities, [configured, want]);
   const { options: protoOptions, preferred } = useMemo(
-    () => (sameCoin ? { options: [], preferred: null } : offerProtocols(giveCaps, wantCaps, network)),
-    [giveCaps, wantCaps, network, sameCoin],
+    () => (sameCoin ? { options: [], preferred: null } : offerProtocols(giveCaps, wantCaps)),
+    [giveCaps, wantCaps, sameCoin],
   );
   const effProto = proto && protoOptions.includes(proto) ? proto : preferred;
   const protoLabel = (p: string) => (p === PROTOCOL_V2 ? t("coins.protoPrivate") : t("makeOffer.protoStandard"));

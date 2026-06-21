@@ -99,23 +99,23 @@ export const fmtBareLocale = (n: number): string => fmtBare(n).replace(".", deci
 // ---- offer protocol selection (mirrors engine::board_offer_protocol) -------
 // A maker may pin a swap protocol on an offer; the board carries it in the offer
 // body. The suite defaults to v1 (classic HTLC — auditable, battle-tested);
-// v2 (Taproot/MuSig2 adaptor, "Private (Taproot)") is opt-in, offered when both
-// legs are Taproot AND we're off-mainnet (mainnet stays audit-gated). Keep this
-// in lockstep with the engine; if it ever diverges the daemon still rejects an
-// illegal forced choice, so the worst case is a clear error rather than a bad swap.
+// v2 (Taproot/MuSig2 adaptor, "Private (Taproot)") is opt-in, offered whenever
+// both legs are Taproot-capable — on EVERY network including mainnet (the engine
+// allows it too: registry::ADAPTOR_MAINNET_ENABLED). Keep this in lockstep with
+// the engine; if it ever diverges the daemon still rejects an illegal forced
+// choice, so the worst case is a clear error rather than a bad swap.
 
 export const PROTOCOL_V1 = "pact-htlc-v1";
 export const PROTOCOL_V2 = "pact-htlc-v2";
 
 /** Which protocols a maker can post for a give/get pair, and the preferred
- *  (default) one — given each leg's capabilities and the active network. */
+ *  (default) one — given each leg's capabilities. */
 export function offerProtocols(
   give: Capabilities | undefined,
   get: Capabilities | undefined,
-  network: string | null,
 ): { options: string[]; preferred: string | null } {
   const htlc = !!give?.cltv && !!give?.segwit_v0 && !!get?.cltv && !!get?.segwit_v0;
-  const adaptor = !!give?.taproot && !!get?.taproot && !isMainnet(network);
+  const adaptor = !!give?.taproot && !!get?.taproot;
   // HTLC first so it's the default-selected option; v2 is the opt-in alternative.
   const options: string[] = [];
   if (htlc) options.push(PROTOCOL_V1);
