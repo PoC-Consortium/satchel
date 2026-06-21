@@ -1219,6 +1219,10 @@ async fn main() -> Result<()> {
         let scheduler = app.clone();
         let interval = Duration::from_secs(args.tick_secs);
         tokio::spawn(async move {
+            // Re-advertise still-valid offers once, the first tick a merchant is
+            // active — so offers soft-de-listed on the last clean close come back
+            // immediately on restart (not after up to a full REFRESH_SECS).
+            let mut readvertised = false;
             loop {
                 // Poll-then-sleep: run a pass immediately (no cold-start gap for
                 // an already-active merchant), then wait `interval` between
@@ -1230,6 +1234,17 @@ async fn main() -> Result<()> {
                     reg.active_id().is_some()
                 };
                 if has_active {
+                    // One-time on boot: re-advertise still-valid offers (queues
+                    // re-listings) BEFORE the first nostr pass, so they publish in
+                    // the same tick.
+                    if !readvertised {
+                        readvertised = true;
+                        match blocking(&scheduler, |e| e.readvertise_offers()).await {
+                            Ok(n) if n > 0 => tracing::info!(count = n, "re-advertised offers on boot"),
+                            Ok(_) => {}
+                            Err(err) => tracing::warn!("re-advertise on boot failed: {err:#}"),
+                        }
+                    }
                     // Move Nostr mail/offers into the local buffers *before* the
                     // engine pass, so a take/init that just arrived is dispatched
                     // by sync_board in the same tick.
@@ -1287,10 +1302,15 @@ async fn main() -> Result<()> {
         reg.active_id().is_some()
     };
     if has_active {
-        match blocking(&app, |e| e.revoke_live_offers()).await {
-            Ok(n) if n > 0 => tracing::info!(count = n, "revoke-on-close: withdrew live offers"),
+        // Soft de-list (NOT terminal): drop the relay listings so we don't
+        // advertise while offline, but keep the offers live + unblocked so the
+        // next startup re-advertises them (see readvertise on boot). The user's
+        // explicit "withdraw & exit" goes through ExitGate → revoke_board_offer,
+        // which IS terminal.
+        match blocking(&app, |e| e.delist_live_offers()).await {
+            Ok(n) if n > 0 => tracing::info!(count = n, "de-list-on-close: paused live offers"),
             Ok(_) => {}
-            Err(err) => tracing::warn!("revoke-on-close failed: {err:#}"),
+            Err(err) => tracing::warn!("de-list-on-close failed: {err:#}"),
         }
     }
 

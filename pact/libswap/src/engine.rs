@@ -3670,6 +3670,59 @@ impl Engine {
         Ok(n)
     }
 
+    /// SOFT de-list of every live offer on a clean shutdown: tell the boards to
+    /// drop the listing (so we don't advertise while offline) but keep the offer
+    /// LIVE and unblocked locally, so the next startup re-advertises it
+    /// ([`Self::readvertise_offers`]). This is the auto-on-close path; it is
+    /// deliberately NOT terminal — unlike the user's explicit withdraw
+    /// ([`Self::revoke_board_offer`]), which records a local block and marks the
+    /// offer revoked for good.
+    pub fn delist_live_offers(&self) -> Result<usize> {
+        let live = self.store.my_offers_live()?;
+        let n = live.len();
+        for o in &live {
+            let revocation =
+                match self.signed_envelope("revoke", &o.offer_id, serde_json::json!({})) {
+                    Ok(env) => env,
+                    Err(err) => {
+                        eprintln!("warning: delist-on-close sign failed for {}: {err:#}", o.offer_id);
+                        continue;
+                    }
+                };
+            for (_, board) in self.boards()? {
+                let _ = board.revoke(&revocation); // best-effort; TTL drops it anyway
+            }
+        }
+        Ok(n)
+    }
+
+    /// On startup, re-advertise still-valid offers — those soft-de-listed on the
+    /// last clean close, or whose relay TTL lapsed while offline — so a maker who
+    /// returns within an offer's `valid_for` resumes advertising instead of
+    /// silently losing it. Re-posts the stored signed envelope to every board and
+    /// rolls the relay TTL. Offers past their final expiry are skipped (the next
+    /// `refresh_offers` retires them). Returns how many were re-advertised.
+    pub fn readvertise_offers(&self) -> Result<usize> {
+        let now = local_now();
+        let mut n = 0;
+        for o in self.store.my_offers_live()? {
+            let final_expiry = o.created.saturating_add(o.valid_for);
+            if o.valid_for != 0 && now >= final_expiry {
+                continue; // expired — leave it for refresh_offers to retire
+            }
+            let offer: Envelope = match serde_json::from_str(&o.envelope) {
+                Ok(env) => env,
+                Err(_) => continue,
+            };
+            for (_, board) in self.boards()? {
+                let _ = board.post_offer(&offer); // queues a fresh-TTL (re)listing
+            }
+            self.store.my_offer_touch_refresh(&o.offer_id, now)?;
+            n += 1;
+        }
+        Ok(n)
+    }
+
     /// Take an offer from the board: remember it, signal interest to the
     /// maker through the relay (echoing the maker's signed offer so they
     /// can rebuild terms statelessly).
