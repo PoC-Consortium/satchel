@@ -102,9 +102,31 @@ function WalletCard({ c, bal }: { c: CoinInfo; bal: Bal | undefined }) {
     <Card variant="outlined">
       <CardContent sx={{ display: "flex", alignItems: "center", gap: 1.6 }}>
         <CoinGlyph coin={c} configured />
-        <Box>
+        <Box sx={{ minWidth: 0 }}>
           <Typography sx={{ fontSize: 15, fontWeight: 600 }}>{c.display_name}</Typography>
           <Typography sx={{ color: "text.secondary", fontFamily: C.mono, fontSize: 12 }}>{c.symbol}</Typography>
+          {c.wallet ? (
+            <Tooltip title={t("wallets.walletScopedHint")}>
+              <Typography
+                sx={{
+                  color: "text.secondary",
+                  fontFamily: C.mono,
+                  fontSize: 11,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {t("wallets.walletName", { wallet: c.wallet })}
+              </Typography>
+            </Tooltip>
+          ) : (
+            <Tooltip title={t("wallets.walletDefaultHint")}>
+              <Typography sx={{ color: "warning.main", fontSize: 11 }}>
+                {t("wallets.walletDefault")}
+              </Typography>
+            </Tooltip>
+          )}
         </Box>
         <Box sx={{ ml: "auto", textAlign: "right" }}>
           <Tooltip title={bal?.error ?? ""} disableHoverListener={!bal?.error}>

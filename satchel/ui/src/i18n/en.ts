@@ -391,6 +391,11 @@ export const en = {
     noCoins: "No coins set up yet",
     noCoinsBody: "Connect a coin in Settings → Coins and its wallet appears here.",
     goToCoins: "Go to Coins",
+    walletName: "wallet · {wallet}",
+    walletScopedHint: "Every RPC for this coin is scoped to this node wallet.",
+    walletDefault: "default wallet (not scoped)",
+    walletDefaultHint:
+      "No wallet set for this coin, so RPCs use the node's default wallet. Set one in Settings → Coins to scope every call to a specific wallet.",
     balanceLabel: "{symbol} balance",
     receive: "Receive",
     send: "Send",

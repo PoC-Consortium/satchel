@@ -478,6 +478,12 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                     blocking(app, move |e| e.coin_confirmations_view(net, &coin_id))
                         .await
                         .unwrap_or((0, 0));
+                // The Core wallet this coin's RPC is scoped to (parsed from the
+                // configured URL); null when none is set (node default wallet).
+                let wid = def.id.to_string();
+                let wallet = blocking(app, move |e| Ok(e.coin_wallet(&wid)))
+                    .await
+                    .unwrap_or(None);
                 coins.push(json!({
                     "id": def.id,
                     "display_name": def.display_name,
@@ -491,6 +497,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                     "bech32_hrp": params.bech32_hrp,
                     "confirmations": confirmations,
                     "default_confirmations": default_confirmations,
+                    "wallet": wallet,
                 }));
             }
             Ok(json!({ "network": format!("{net:?}").to_lowercase(), "coins": coins }))

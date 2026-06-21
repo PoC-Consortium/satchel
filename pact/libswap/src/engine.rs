@@ -505,6 +505,20 @@ impl Engine {
         ordered
     }
 
+    /// The Core-wallet name a coin's primary backend is scoped to, parsed from
+    /// its configured URL (`…/wallet/<name>`). `None` when the URL carries no
+    /// wallet path (the node's *default* wallet — i.e. wallet ops are NOT
+    /// explicitly scoped). Ground truth for display: it reflects exactly the
+    /// endpoint every wallet RPC for this coin hits. The primary is the first
+    /// comma-separated backend (the wallet-qualified Core RPC).
+    pub fn coin_wallet(&self, coin_id: &str) -> Option<String> {
+        let url = self.coins.get(coin_id)?;
+        let primary = url.split(',').next().unwrap_or(url);
+        let after = primary.split("/wallet/").nth(1)?;
+        let name = after.split(['/', '?', '#']).next().unwrap_or(after);
+        (!name.is_empty()).then(|| name.to_string())
+    }
+
     /// The confirmation depth (reorg-safety / finality) to require for `chain`:
     /// the operator's per-coin setting if present, else the network/spacing
     /// [`default_confirmations`] heuristic. The single source of truth for
@@ -4973,6 +4987,30 @@ mod tests {
         assert_eq!(engine2.fee_bump.redeem.committed_mult, 4);
         // Untouched fields keep their defaults.
         assert_eq!(engine2.fee_bump.funding.reservation_mult, 3);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn coin_wallet_parses_the_scoped_wallet_from_the_url() {
+        let (mut e, dir) = engine_with("walletparse", None);
+        // Wallet-qualified URL → the name; works with userpass or cookie auth and
+        // with extra (comma-separated) backends after the primary.
+        e.coins.insert(
+            "btc".into(),
+            "http://u:p@127.0.0.1:8332/wallet/alice,tcp://127.0.0.1:50001".into(),
+        );
+        assert_eq!(e.coin_wallet("btc"), Some("alice".into()));
+        e.coins.insert(
+            "btcx".into(),
+            "http://__cookie__:deadbeef@127.0.0.1:19443/wallet/pocx".into(),
+        );
+        assert_eq!(e.coin_wallet("btcx"), Some("pocx".into()));
+        // No wallet path → None (node default, not explicitly scoped).
+        e.coins
+            .insert("ltc".into(), "http://u:p@127.0.0.1:9332".into());
+        assert_eq!(e.coin_wallet("ltc"), None);
+        // Unconfigured coin → None.
+        assert_eq!(e.coin_wallet("nope"), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
