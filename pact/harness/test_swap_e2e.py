@@ -640,6 +640,95 @@ def test_chain_watched_funding(h):
         bob.stop()
 
 
+def test_funding_fee_bump_v1(h):
+    """The funding-bump nurse (v1, RBF). A funding/lock that goes out UNDER the
+    market is RBF-bumped by the scheduler while it is still unconfirmed — the one
+    swap tx that previously had no bump at all. The swap then completes through
+    chain-watched detection, which proves three things at once:
+
+      1. the nurse actually replaces the under-priced funding (a new txid);
+      2. the rebuilt+re-signed refund and the updated outpoint are correct
+         (the swap still runs to completion afterwards); and
+      3. the RBF is invisible to the counterparty, who detects the lock by
+         scriptPubKey, not txid (Bob is never given the funded_a message — he
+         discovers the BUMPED funding by its script).
+
+    Setup trick: regtest's fee estimator returns the ~10 sat/vB fallback, so we
+    pin Alice's funding wallet BELOW that (settxfee ~2 sat/vB). That gap (market
+    10 > broadcast 2) is exactly what the nurse reacts to."""
+    alice = Party("alicefb", h, h.workdir, "alice_pocx", "alice_btc").start()  # initiator
+    bob = Party("bobfb", h, h.workdir, "bob_pocx", "bob_btc").start()          # participant
+    try:
+        before = balances(h)
+        t2, t1 = regtest_timelocks(h)
+        m_init = msg(h.workdir, "fb_init.json")
+        m_accept = msg(h.workdir, "fb_accept.json")
+        # funded_a is written but NEVER delivered to Bob (chain-watched path).
+        m_dump_a = msg(h.workdir, "fb_funded_a.json")
+        m_dump_b = msg(h.workdir, "fb_funded_b.json")
+
+        # Pin Alice's POCX funding wallet under the regtest "market" (~10 sat/vB
+        # fallback) so the lock goes out under-priced.
+        h.pocx.rpc("settxfee", 0.00002, wallet="alice_pocx")  # ~2 sat/vB
+
+        # Handshake only.
+        alice.cli("offer", "--give", f"btcx:{GIVE_POCX}", "--get", f"btc:{GET_BTC}",
+                  "--t1", str(t1), "--t2", str(t2), "--out", m_init)
+        sid = swap_id_from(m_init)
+        bob.cli("accept", "--in", m_init, "--out", m_accept)
+        alice.cli("recv", "--in", m_accept)
+
+        # Alice funds chain A cheap; do NOT mine — leave it unconfirmed so the
+        # nurse can act.
+        alice.cli("fund", "--swap", sid, "--out", m_dump_a)
+        orig_txid, _ = outpoint_from(m_dump_a)
+
+        # The scheduler RBF-bumps the unconfirmed, under-priced funding.
+        events = drive_until(
+            alice, lambda evs: any(e["action"] == "funding-fee-bump" for e in evs))
+        bump = next(e for e in events if e["action"] == "funding-fee-bump")
+        print(f"[e2e] funding bumped: {bump['detail']}")
+
+        # The stored funding pointer now references a NEW txid, and the original
+        # is gone from the mempool (replaced by the higher-fee version).
+        new_txid = alice.rpc("getswap", sid)["htlc_a_txid"]
+        assert new_txid and new_txid != orig_txid, \
+            f"funding txid did not change after bump: {orig_txid} -> {new_txid}"
+        assert h.pocx.rpc("gettxout", orig_txid, 0, True) is None and \
+            h.pocx.rpc("gettxout", orig_txid, 1, True) is None, \
+            "original (replaced) funding is still in the mempool"
+        print(f"[e2e] funding RBF: {orig_txid[:12]}… replaced by {new_txid[:12]}…")
+
+        # Confirm the bumped funding, then complete via chain-watched detection:
+        # Bob never received funded_a — he finds the BUMPED lock by its script,
+        # which is exactly why the RBF is safe for him.
+        h.pocx.generate(1, "alice_pocx")
+        drive_until(bob, lambda evs: any(e["action"] == "funded-a" for e in evs))
+        bob.cli("fund", "--swap", sid, "--out", m_dump_b)
+        h.btc.generate(1, "bob_btc")
+        drive_until(alice, lambda evs: any(e["action"] == "auto-redeem" for e in evs))
+        h.btc.generate(1, "bob_btc")  # confirm Alice's reveal on chain B
+        drive_until(bob, lambda evs: any(e["action"] == "auto-redeem" for e in evs))
+        h.pocx.generate(1, "alice_pocx")
+
+        # Bob got POCX (and Alice got BTC): the bumped funding completed cleanly.
+        assert_htlc_spent(h.btc, m_dump_b, "chain-B")
+        after = balances(h)
+        assert after["bob_pocx"] >= before["bob_pocx"] + float(GIVE_POCX) - FEE_SLACK, \
+            f"bob did not receive POCX after a bumped funding: {before} -> {after}"
+        assert after["alice_btc"] >= before["alice_btc"] + float(GET_BTC) - FEE_SLACK, \
+            f"alice did not receive BTC after a bumped funding: {before} -> {after}"
+        print("[e2e] funding-fee-bump (v1 RBF) scenario OK")
+    finally:
+        # Restore estimator-driven fees so later scenarios are unaffected.
+        try:
+            h.pocx.rpc("settxfee", 0, wallet="alice_pocx")
+        except Exception:
+            pass
+        alice.stop()
+        bob.stop()
+
+
 def test_balance_validation(h):
     """An offer you can't fund is refused up front (not left to fail at fund
     time / pollute the board with un-fundable offers). The other scenarios
@@ -1042,7 +1131,8 @@ def main():
     failures = 0
     tests = (test_complete_swap, test_refund,
              test_daemon_autopilot_swap, test_daemon_autopilot_refund,
-             test_chain_watched_funding, test_balance_validation,
+             test_chain_watched_funding, test_funding_fee_bump_v1,
+             test_balance_validation,
              test_create_import_then_swap, test_coin_setup, test_corkboard_swap,
              test_board_reset_recovery, test_nostr_relay_swap, test_private_offer_swap)
     with Harness(keep=True) as h:
