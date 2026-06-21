@@ -352,6 +352,25 @@ pub(crate) const MAX_REDEEM_FEERATE: u64 = 500;
 /// estimator to ask — conservative, but not catastrophically low.
 const ADAPTOR_REDEEM_FEERATE_FALLBACK: u64 = 20;
 
+/// Funding-fee headroom for the pre-flight fundability gate
+/// ([`Engine::ensure_can_fund`]). The funding tx is the ONLY wallet-funded
+/// action in a swap — redeem/refund/bump fees all come out of the output being
+/// spent, never the spendable balance, but funding draws it. So above the bare
+/// swap amount we reserve the worst-case funding fee: the ceiling a funding
+/// CPFP-bump would chase. `ceiling = min(MULT × live feerate, MAX_REDEEM_FEERATE)`
+/// (reusing the 500 sat/vB sanity cap), and `reserve = ceiling × FUNDING_VSIZE_EST`.
+/// This stops an exact-balance offer from passing the gate then failing at fund
+/// time, and a fee spike between post and broadcast from tipping a tight wallet
+/// short. The same ceiling sizes the (roadmap) funding-bump cap.
+const FUNDING_BUMP_FEERATE_MULT: u64 = 3;
+/// Padded vsize (vB) of a typical funding tx (1–2-in, 2-out segwit) used to turn
+/// the ceiling feerate into a sat reserve. Over-estimated so the reserve is never
+/// short.
+const FUNDING_VSIZE_EST: u64 = 250;
+/// Feerate (sat/vB) assumed for the headroom when the live estimator can't be
+/// reached. Also the floor of the ceiling clamp.
+const FUNDING_FEERATE_FALLBACK: u64 = 20;
+
 /// Estimated vsize of the self-funded CPFP child that bumps a stuck cooperative
 /// redeem (v2+): a 1-in (wallet-owned sweep output) 1-out wallet tx. Slightly
 /// over-estimated so the realised package feerate meets or beats the target.
@@ -626,26 +645,47 @@ impl Engine {
         Ok(envelope)
     }
 
-    /// §9 step 0, initiator: allocate index, derive H, build `init`.
-    /// `n_a`/`n_b` default per spec §7.3 when not given.
-    /// Refuse to advertise or take a swap we can't fund: the leg we'll have to
-    /// lock (the maker's `give`, or the taker's `get`) must already be covered
-    /// by the core wallet. Caught up front instead of failing later at fund
-    /// time — and it keeps un-fundable offers off the board. The on-chain fee is
-    /// paid on top from the wallet, so an exact-balance offer can still fail at
-    /// fund time; this catches the common "you don't have it" case.
+    /// Hard pre-flight for the gated paths (board post / take / private take):
+    /// the leg we'll lock (the maker's `give`, the taker's `get`) must already be
+    /// covered by the core wallet, INCLUDING funding-fee headroom. Called only
+    /// after the chain-up gate (`ensure_chains_live`), so the node is reachable
+    /// and the balance read should succeed — and unlike the old best-effort form
+    /// this REFUSES when it can't, rather than silently letting an un-fundable
+    /// swap onto the board. The pure envelope builders (`offer`,
+    /// `make_private_offer`) deliberately do NOT call this — they must work
+    /// offline; funding is hard-gated again at `fund` time.
+    ///
+    /// Headroom: we reserve `amount + ceiling × FUNDING_VSIZE_EST`, where
+    /// `ceiling = min(MULT × live feerate, MAX_REDEEM_FEERATE)`. The funding tx is
+    /// the only wallet-funded action (redeem/refund/bump fees come out of the
+    /// output), so this is the only place wallet headroom matters — and sizing it
+    /// to the funding-bump ceiling means an exact-balance offer can't pass here
+    /// then fail at fund time, nor can a fee spike between post and broadcast.
     fn ensure_can_fund(&self, network: Network, coin_id: &str, amount: u64) -> Result<()> {
-        // Best-effort: only refuse when we can actually read the balance and it's
-        // short. If it can't be read (coin unconfigured here, node unreachable,
-        // wallet not loaded), don't block — fund() is the hard backstop, and you
-        // couldn't have funded offline anyway. In the common case (node up, which
-        // post/take already require) this is a firm pre-flight check.
-        if let Ok(balance) = self.wallet_balance(network, coin_id) {
-            ensure!(
-                balance >= amount,
-                "insufficient {coin_id} balance to fund this swap: have {balance} sat, need {amount} sat"
-            );
-        }
+        let chain = ChainRef {
+            coin_id: coin_id.to_string(),
+            network,
+        };
+        let balance = self.backend(&chain)?.wallet_balance().with_context(|| {
+            format!(
+                "couldn't read {coin_id} balance to confirm this swap is fundable \
+                 — is the node up and a wallet loaded?"
+            )
+        })?;
+        let live = self
+            .backend(&chain)
+            .and_then(|b| b.fee_rate_sat_per_vb())
+            .unwrap_or(FUNDING_FEERATE_FALLBACK);
+        let ceiling = live
+            .saturating_mul(FUNDING_BUMP_FEERATE_MULT)
+            .clamp(FUNDING_FEERATE_FALLBACK, MAX_REDEEM_FEERATE);
+        let fee_headroom = ceiling.saturating_mul(FUNDING_VSIZE_EST);
+        let needed = amount.saturating_add(fee_headroom);
+        ensure!(
+            balance >= needed,
+            "insufficient {coin_id} balance to fund this swap: have {balance} sat, \
+             need ~{needed} sat ({amount} to lock + ~{fee_headroom} funding-fee headroom)"
+        );
         Ok(())
     }
 
@@ -670,8 +710,9 @@ impl Engine {
             network,
         };
         ensure_pair_supported(&chain_a, &chain_b)?;
-        // We (the initiator) lock the `give` leg — refuse if we can't fund it.
-        self.ensure_can_fund(network, &give.0, give.1)?;
+        // No fund check here: `offer` is a pure envelope builder (works offline).
+        // Fundability is hard-gated where money is actually committed — board
+        // post / take (`ensure_can_fund`, after the chain-up gate) and `fund`.
         let n_a = match n_a {
             Some(n) => n,
             None => self.confirmations_for(&chain_a)?,
@@ -3367,9 +3408,9 @@ impl Engine {
             network,
         };
         ensure_pair_supported(&chain_a, &chain_b)?;
-        // We fund the `give` leg when the slip is taken — don't issue a slip
-        // the core wallet can't cover.
-        self.ensure_can_fund(network, &give.0, give.1)?;
+        // No fund check here: `make_private_offer` is a pure builder (a slip can
+        // be drafted offline). Fundability is hard-gated when the slip is taken
+        // (after the chain-up gate) and again at `fund`.
         let proto = resolve_offer_protocol(&give.0, &get.0, network, protocol)?;
 
         let body = crate::board::OfferBody {
