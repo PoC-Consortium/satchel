@@ -20,7 +20,7 @@ import {
 import { useApp } from "../AppContext";
 import { useConfirm } from "../ui/ConfirmProvider";
 import { useT } from "../i18n";
-import { rpc } from "../api/tauri";
+import { assessLockFunds, rpc } from "../api/tauri";
 import {
   canonicalAmount,
   decimalSeparator,
@@ -33,6 +33,7 @@ import {
   PROTOCOL_V2,
 } from "../format";
 import FeePreview from "./FeePreview";
+import InsufficientFunds from "./InsufficientFunds";
 import { C } from "../theme";
 
 // Timelock presets — raw T1/T2 hours are too low-level (and dangerous) to ask a
@@ -178,12 +179,17 @@ export default function OfferForm({
     const ttlSecs = validForMin * 60;
     const lbl = { fontSize: 12, color: "text.secondary" } as const;
     const val = { textAlign: "right", fontFamily: C.mono, fontSize: 13.5 } as const;
+    // The maker locks the `give` leg when the offer is taken. Pre-flight the
+    // funds so the summary warns + disables before the post RPC does.
+    const giveSat = Math.round(Number(canonicalAmount(giveAmt)) * 1e8);
+    const funds = await assessLockFunds(give, want, giveSat);
     // Review/confirm step (same shape as the take-offer summary): the trade, the
     // swap type, the refund window, the plain-language note, and the network-cost
     // breakdown all live here — the decision screen, not the form.
     const ok = await confirm({
       title: confirmTitle,
       wide: true,
+      confirmDisabled: funds ? !funds.ok : false,
       confirmLabel: submitLabel,
       body: (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
@@ -217,6 +223,7 @@ export default function OfferForm({
           </Box>
           <Typography sx={{ fontSize: 12, color: "text.secondary" }}>{t("makeOffer.note")}</Typography>
           <FeePreview giveCoin={give} getCoin={want} />
+          <InsufficientFunds check={funds} />
         </Box>
       ),
     });

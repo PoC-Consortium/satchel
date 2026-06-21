@@ -490,6 +490,10 @@ export const en = {
     summary: "A swap is 2 on-chain transactions you pay for: funding on the give-chain, redeem on the receive-chain.",
     fallbackTip: "A node was unreachable, so a conservative default fee rate was used — treat these as a guess.",
   },
+  funds: {
+    insufficient:
+      "Not enough {sym} to fund this swap — need ~{need} {sym} (amount + funding fee), wallet has {have} {sym}.",
+  },
   wizard: {
     welcome: "Welcome to Satchel",
     connectTitle: "Connect the Pact engine",

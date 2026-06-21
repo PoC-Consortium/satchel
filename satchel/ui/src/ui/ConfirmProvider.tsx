@@ -13,6 +13,9 @@ export interface ConfirmOpts {
   danger?: boolean;
   /** Widen the dialog for richer bodies (e.g. the take summary with fees). */
   wide?: boolean;
+  /** Disable the confirm button (e.g. insufficient funds) — the user can still
+   *  read the summary and cancel, but can't proceed. */
+  confirmDisabled?: boolean;
 }
 
 type ConfirmFn = (opts: ConfirmOpts) => Promise<boolean>;
@@ -64,6 +67,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                 onClick={() => close(true)}
                 variant="contained"
                 color={opts.danger ? "error" : "primary"}
+                disabled={opts.confirmDisabled}
               >
                 {opts.confirmLabel ?? t("common.confirm")}
               </Button>

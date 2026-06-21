@@ -12,6 +12,7 @@ import type {
   Merchant,
   MerchantList,
   PrivateOffer,
+  SwapFees,
   UiPrefs,
 } from "./types";
 
@@ -158,4 +159,48 @@ export function errMsg(e: unknown): string {
   if (typeof e === "string") return e;
   if (e instanceof Error) return e.message;
   return String(e);
+}
+
+/** The leg the user will LOCK and whether the core wallet covers it. */
+export interface LockFunds {
+  ok: boolean;
+  coin: string;
+  /** Spendable balance (sat). */
+  haveSat: number;
+  /** Lock amount + funding fee (sat). */
+  needSat: number;
+  feeSat: number;
+  amountSat: number;
+}
+
+/** Pre-flight funds check for the leg the user will LOCK before they commit
+ *  (maker locks `give`, taker locks `get`). Mirrors the engine's ensure_can_fund
+ *  intent — balance must cover the lock amount plus the funding fee — so the
+ *  make/take summaries can warn + disable BEFORE the RPC. Returns null when it
+ *  can't be assessed (node/wallet unreadable); the UI then doesn't block, since
+ *  the engine still hard-gates. `lockCoin` is passed as the `give` side of
+ *  estimateswapfees so its `fund` leg is the lock-leg funding fee. */
+export async function assessLockFunds(
+  lockCoin: string,
+  otherCoin: string,
+  amountSat: number,
+): Promise<LockFunds | null> {
+  try {
+    const [bal, fees] = await Promise.all([
+      rpc<{ balance_sat: number }>("getbalance", [lockCoin]),
+      rpc<SwapFees>("estimateswapfees", [lockCoin, otherCoin]),
+    ]);
+    const feeSat = fees.give.legs.find((l) => l.name === "fund")?.fee_sat ?? 0;
+    const needSat = amountSat + feeSat;
+    return {
+      ok: bal.balance_sat >= needSat,
+      coin: lockCoin,
+      haveSat: bal.balance_sat,
+      needSat,
+      feeSat,
+      amountSat,
+    };
+  } catch {
+    return null;
+  }
 }

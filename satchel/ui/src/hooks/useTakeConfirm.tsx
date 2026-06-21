@@ -14,6 +14,8 @@ import { useT } from "../i18n";
 import { useDenom } from "../denom";
 import CounterpartyTag from "../components/CounterpartyTag";
 import FeePreview from "../components/FeePreview";
+import InsufficientFunds from "../components/InsufficientFunds";
+import { assessLockFunds } from "../api/tauri";
 import { ago, baseQuote, denomLabel, fmtBare, fmtDenom, hours } from "../format";
 import { C } from "../theme";
 import type { OfferBody } from "../api/types";
@@ -50,6 +52,10 @@ export function useTakeConfirm(): ConfirmTake {
       const youGet = leg(b.give_amount, b.give_asset);
       const posted = b.created ? `posted ${ago(b.created)}` : null;
 
+      // The taker locks the coin they GIVE (the maker's get leg). Pre-flight the
+      // funds so the summary warns + disables before the boardtake RPC does.
+      const funds = await assessLockFunds(b.get_asset, b.give_asset, b.get_amount);
+
       const row = (label: string, value: ReactNode, valueColor = "text.primary") => (
         <>
           <Typography sx={{ fontSize: 12, color: "text.secondary" }}>{label}</Typography>
@@ -61,6 +67,7 @@ export function useTakeConfirm(): ConfirmTake {
         title: t("takeConfirm.title"),
         wide: true,
         confirmLabel: t("takeConfirm.confirm"),
+        confirmDisabled: funds ? !funds.ok : false,
         body: (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
             {/* Who you'd trade with. */}
@@ -106,6 +113,7 @@ export function useTakeConfirm(): ConfirmTake {
             {/* Network-cost summary — taker-perspective legs (you fund the coin
                 you give, redeem the coin you get). Corkboard charges nothing. */}
             <FeePreview giveCoin={b.get_asset} getCoin={b.give_asset} />
+            <InsufficientFunds check={funds} />
           </Box>
         ),
       });
