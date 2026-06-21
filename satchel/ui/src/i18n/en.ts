@@ -269,6 +269,27 @@ export const en = {
     netSave: "Save & reconnect",
     netSaving: "Saving & reconnecting…",
     netSaved: "Saved",
+    // Fees tab — fee-bump policy (per active merchant).
+    tabFees: "Fees",
+    fees: "Fee bumping",
+    feesScope: "These settings apply to the active merchant.",
+    feesIntro:
+      "Safety/cost trade-offs for fee bumps, not required setup. New values apply to future bumps; swaps already funded keep the policy they were funded under.",
+    feeMax: "Max feerate (sat/vB)",
+    feeMaxHint:
+      "Ceiling for every fee bump. Default 500, also the hard system maximum. Lower it to cap costs.",
+    feeReservation: "Funding bump reservation (×)",
+    feeReservationHint:
+      "Balance the funds check sets aside as bump headroom. Higher rescues bigger fee spikes but ties up more balance and rejects more swaps. Default 3.",
+    feeCommitted: "Redeem over-provision (×)",
+    feeCommittedHint:
+      "How much extra the v2 redeem fee is pre-paid so it confirms even when Satchel is closed. Applies to new swaps only. Default 2.",
+    feeStep: "RBF escalation step (%)",
+    feeStepHint: "How aggressively a stuck spend's fee climbs each scheduler pass. Default 50.",
+    feeSave: "Save",
+    feeSaving: "Saving…",
+    feeSaved: "Saved",
+    feeReset: "Reset to defaults",
     coins: "Coins & nodes",
     coinsHint: "Connect each coin to your own node. Genesis is checked before anything is saved.",
     about: "About",

@@ -26,7 +26,7 @@ import { useI18n, useT, LANGUAGES } from "../i18n";
 import type { UiPrefs } from "../api/types";
 import { APP_VERSION, UPDATE_AVAILABLE } from "../version";
 import { isMainnet } from "../format";
-import { errMsg, listCoinConfig, saveBoard, saveNostrRelays } from "../api/tauri";
+import { errMsg, listCoinConfig, rpc, saveBoard, saveNostrRelays } from "../api/tauri";
 import NetworkStamp from "../components/NetworkStamp";
 import CoinsScreen from "./CoinsScreen";
 
@@ -34,7 +34,7 @@ import CoinsScreen from "./CoinsScreen";
 // Coins (node config), Network (network display), About (version + update
 // placeholder + the trust-model note). All prior functionality is preserved;
 // it is only reorganised behind tabs.
-type SettingsTab = "general" | "coins" | "network" | "about";
+type SettingsTab = "general" | "coins" | "network" | "fees" | "about";
 
 export default function SettingsScreen() {
   const t = useT();
@@ -61,12 +61,14 @@ export default function SettingsScreen() {
         <Tab value="general" label={t("settings.tabGeneral")} sx={{ minHeight: 40 }} />
         <Tab value="coins" label={t("settings.tabCoins")} sx={{ minHeight: 40 }} />
         <Tab value="network" label={t("settings.tabNetwork")} sx={{ minHeight: 40 }} />
+        <Tab value="fees" label={t("settings.tabFees")} sx={{ minHeight: 40 }} />
         <Tab value="about" label={t("settings.tabAbout")} sx={{ minHeight: 40 }} />
       </Tabs>
 
       {tab === "general" && <GeneralTab />}
       {tab === "coins" && <CoinsTab />}
       {tab === "network" && <NetworkTab />}
+      {tab === "fees" && <FeesTab />}
       {tab === "about" && <AboutTab />}
     </Box>
   );
@@ -313,6 +315,131 @@ function UrlList({
         </Button>
       </Box>
     </Box>
+  );
+}
+
+// Fee-bump policy — per the active merchant (pactd's store owns it; the engine
+// reloads it on launch). Read via getfeepolicy, written via setfeepolicy (typed,
+// applied live, no relaunch). Four knobs; the low-level min_fee_sat floor is not
+// exposed but is preserved across saves.
+type FeePolicy = {
+  max_feerate_sat_vb: number;
+  min_fee_sat: number;
+  reservation_mult: number;
+  committed_mult: number;
+  step_pct: number;
+};
+
+const FEE_DEFAULTS: FeePolicy = {
+  max_feerate_sat_vb: 500,
+  min_fee_sat: 1000,
+  reservation_mult: 3,
+  committed_mult: 2,
+  step_pct: 50,
+};
+
+function FeesTab() {
+  const t = useT();
+  const { log } = useApp();
+  const [pol, setPol] = useState<FeePolicy>(FEE_DEFAULTS);
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("");
+
+  async function load() {
+    try {
+      const p = await rpc<FeePolicy>("getfeepolicy", []);
+      setPol({ ...FEE_DEFAULTS, ...p });
+    } catch {
+      /* keep defaults if the engine isn't ready */
+    } finally {
+      setLoaded(true);
+    }
+  }
+  useEffect(() => {
+    void load();
+  }, []);
+
+  async function save() {
+    setBusy(true);
+    setStatus(t("settings.feeSaving"));
+    try {
+      // Positional params: max, min, reservation, committed, step. min_fee_sat is
+      // not editable here but is round-tripped so it isn't reset.
+      await rpc("setfeepolicy", [
+        pol.max_feerate_sat_vb,
+        pol.min_fee_sat,
+        pol.reservation_mult,
+        pol.committed_mult,
+        pol.step_pct,
+      ]);
+      log("fee policy updated");
+      setStatus(t("settings.feeSaved"));
+      await load();
+    } catch (e) {
+      setStatus(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const num = (key: keyof FeePolicy, min: number, max: number) => (
+    <TextField
+      size="small"
+      type="number"
+      value={pol[key]}
+      disabled={busy}
+      inputProps={{ min, max, step: 1 }}
+      onChange={(e) => {
+        const v = Math.floor(Number(e.target.value));
+        if (Number.isFinite(v)) setPol({ ...pol, [key]: v });
+      }}
+      sx={{ width: 120 }}
+    />
+  );
+
+  // Built outside the JSX so the field-key string literals aren't flagged by the
+  // i18n no-literal-string guard (they are property keys, not display copy).
+  const maxField = num("max_feerate_sat_vb", 1, 500);
+  const reservationField = num("reservation_mult", 1, 100);
+  const committedField = num("committed_mult", 1, 100);
+  const stepField = num("step_pct", 1, 1000);
+
+  return (
+    <Section title={t("settings.fees")}>
+      <Typography sx={{ color: "text.secondary", fontSize: 13, mb: 0.5 }}>
+        {t("settings.feesScope")}
+      </Typography>
+      <Typography sx={{ color: "text.secondary", fontSize: 13, mb: 1.5 }}>
+        {t("settings.feesIntro")}
+      </Typography>
+      <Row label={t("settings.feeMax")} hint={t("settings.feeMaxHint")}>
+        {maxField}
+      </Row>
+      <Row label={t("settings.feeReservation")} hint={t("settings.feeReservationHint")}>
+        {reservationField}
+      </Row>
+      <Row label={t("settings.feeCommitted")} hint={t("settings.feeCommittedHint")}>
+        {committedField}
+      </Row>
+      <Row label={t("settings.feeStep")} hint={t("settings.feeStepHint")}>
+        {stepField}
+      </Row>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mt: 1.5 }}>
+        <Button variant="contained" onClick={() => void save()} disabled={busy || !loaded}>
+          {t("settings.feeSave")}
+        </Button>
+        <Button
+          variant="outlined"
+          color="inherit"
+          disabled={busy}
+          onClick={() => setPol((prev) => ({ ...FEE_DEFAULTS, min_fee_sat: prev.min_fee_sat }))}
+        >
+          {t("settings.feeReset")}
+        </Button>
+        {status && <Typography sx={{ fontSize: 13, color: "text.secondary" }}>{status}</Typography>}
+      </Box>
+    </Section>
   );
 }
 
