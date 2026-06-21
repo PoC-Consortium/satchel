@@ -427,6 +427,9 @@ export const en = {
     hiddenOffers:
       "{count} more offer(s) for pairs you haven't connected. Set up both coins to trade them:",
     yourOffer: "your offer",
+    offerStaged: "posting…",
+    offerStagedTip:
+      "Posted from this device and waiting to be confirmed back from a relay. It's advertising; it becomes live once a relay echoes it.",
     take: "Take offer",
     legDown: "One of this pair's nodes is down — start it (or check Settings → Coins) before taking.",
     withdraw: "Withdraw",

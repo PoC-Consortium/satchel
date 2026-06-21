@@ -47,6 +47,14 @@ type Leg = (sats: number, coin: string) => string;
 // keeps your pair instead of snapping back to the first one.
 const PAIR_KEY = "satchel.corkboard.pair";
 
+// One row from pactd `listmyoffers` — the maker's own offers from the local
+// store (the `offer` envelope is Offer-shaped: swap_id / from / body).
+interface MyOfferRow {
+  offer_id: string;
+  offer: Offer;
+  state: string;
+}
+
 export default function CorkboardScreen() {
   const { identity, swaps, symOf, log, refreshSwaps, coins } = useApp();
   // A leg is tradeable only when its coin has a live ("ok") node. Used to gate
@@ -61,6 +69,8 @@ export default function CorkboardScreen() {
   const [loaded, setLoaded] = useState(false);
   const [boardErr, setBoardErr] = useState<string | null>(null);
   const [offers, setOffers] = useState<Offer[]>([]);
+  // Own offers shown optimistically but not yet seen back from a relay.
+  const [stagedIds, setStagedIds] = useState<Set<string>>(() => new Set());
   const [available, setAvailable] = useState<Set<string>>(new Set());
   const [savedBoards, setSavedBoards] = useState("");
   const [pairFilter, setPairFilter] = useState<string>(() => {
@@ -112,6 +122,24 @@ export default function CorkboardScreen() {
       setLoaded(true);
       return;
     }
+    // Optimistically merge our OWN live offers from the local store so a posted
+    // offer shows INSTANTLY — even before a relay round-trips it back into the
+    // fetched board. "Staged" = not yet seen back from a relay (rendered
+    // dimmer/italic until it goes live).
+    const relayIds = new Set(list.map((o) => o.swap_id));
+    const staged = new Set<string>();
+    try {
+      const mine = (await rpc<{ offers?: MyOfferRow[] }>("listmyoffers")).offers || [];
+      for (const m of mine) {
+        if (m.state !== "live" || !m.offer?.swap_id) continue;
+        if (relayIds.has(m.offer.swap_id)) continue; // already live on the board
+        list = [...list, { swap_id: m.offer.swap_id, from: m.offer.from, body: m.offer.body }];
+        staged.add(m.offer.swap_id);
+      }
+    } catch {
+      /* listmyoffers is optional (older pactd / no offers) */
+    }
+    setStagedIds(staged);
     setOffers(list);
     setLoaded(true);
   }, [boardSel]);
@@ -284,6 +312,7 @@ export default function CorkboardScreen() {
     priceUnit: quoteUnit,
     denom,
     myId,
+    stagedIds,
     selectedKey: selected,
     onSelect: selectLevel,
   };
@@ -476,6 +505,7 @@ export default function CorkboardScreen() {
                         key={o.swap_id}
                         o={o}
                         mine={o.from === myId}
+                        staged={stagedIds.has(o.swap_id)}
                         state={offerState(o, mySwapIds)}
                         legDown={!coinLive(o.body.give_asset) || !coinLive(o.body.get_asset)}
                         fmtLeg={fmtLeg}
@@ -547,6 +577,7 @@ interface ColProps {
   priceUnit: string;
   denom: Denom;
   myId: string | null;
+  stagedIds: Set<string>;
   selectedKey: string | null;
   onSelect: (key: string) => void;
 }
@@ -555,7 +586,7 @@ interface ColProps {
 // price levels; the rest fold behind a "Show N more" toggle.
 const DEPTH_CAP = 8;
 
-function BookColumn({ side, levels, maxSize, baseSym, quoteSym, priceUnit, denom, myId, selectedKey, onSelect }: ColProps) {
+function BookColumn({ side, levels, maxSize, baseSym, quoteSym, priceUnit, denom, myId, stagedIds, selectedKey, onSelect }: ColProps) {
   const t = useT();
   const [showAll, setShowAll] = useState(false);
   const isBid = side === "bid";
@@ -630,6 +661,7 @@ function BookColumn({ side, levels, maxSize, baseSym, quoteSym, priceUnit, denom
               priceColor={priceColor}
               baseSym={baseSym}
               mineHere={lvl.offers.some((o) => o.from === myId)}
+              stagedHere={lvl.offers.some((o) => o.from === myId && stagedIds.has(o.swap_id))}
               selected={selectedKey === `${side}:${lvl.key}`}
               onSelect={() => onSelect(`${side}:${lvl.key}`)}
             />
@@ -662,6 +694,7 @@ function LevelRow({
   priceColor,
   baseSym,
   mineHere,
+  stagedHere,
   selected,
   onSelect,
 }: {
@@ -672,6 +705,8 @@ function LevelRow({
   priceColor: string;
   baseSym: string;
   mineHere: boolean;
+  /** This level's only own offer(s) are staged (not yet relay-confirmed). */
+  stagedHere?: boolean;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -689,7 +724,18 @@ function LevelRow({
   );
   const meta = (
     <Box sx={{ display: "flex", alignItems: "center", justifyContent: isBid ? "flex-start" : "flex-end", gap: 0.5, width: 20 }}>
-      {mineHere && <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: C.dim }} />}
+      {mineHere && (
+        <Box
+          sx={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            // Hollow dot while staged (posted, not yet relay-confirmed); filled
+            // once it's live on the board.
+            ...(stagedHere ? { border: `1px solid ${C.dim}` } : { bgcolor: C.dim }),
+          }}
+        />
+      )}
       <Typography sx={{ fontSize: 11, color: "text.secondary" }}>{lvl.offers.length}</Typography>
     </Box>
   );
@@ -768,6 +814,7 @@ function OfferStateChip({ state }: { state: OfferState }) {
 function OfferRow({
   o,
   mine,
+  staged,
   state,
   legDown,
   fmtLeg,
@@ -776,6 +823,8 @@ function OfferRow({
 }: {
   o: Offer;
   mine: boolean;
+  /** Our own offer, shown optimistically but not yet seen back from a relay. */
+  staged?: boolean;
   state: OfferState;
   /** One of the offer's legs has a down/unconfigured node — can't take it. */
   legDown?: boolean;
@@ -800,12 +849,20 @@ function OfferRow({
         gap: 1.25,
         py: 1,
         px: 0.5,
-        opacity: state === "expired" ? 0.6 : 1,
+        opacity: staged ? 0.65 : state === "expired" ? 0.6 : 1,
+        fontStyle: staged ? "italic" : "normal",
         bgcolor: mine ? C.mineBg : "transparent",
       }}
     >
       {mine ? (
-        <Chip size="small" variant="outlined" label={t("corkboard.yourOffer")} sx={{ height: 22 }} />
+        <Tooltip title={staged ? t("corkboard.offerStagedTip") : ""} disableHoverListener={!staged}>
+          <Chip
+            size="small"
+            variant="outlined"
+            label={staged ? t("corkboard.offerStaged") : t("corkboard.yourOffer")}
+            sx={{ height: 22, fontStyle: staged ? "italic" : "normal" }}
+          />
+        </Tooltip>
       ) : (
         <CounterpartyTag id={o.from} />
       )}
