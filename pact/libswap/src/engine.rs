@@ -1814,6 +1814,13 @@ impl Engine {
 
         match rec.role {
             Role::Initiator => {
+                // Nurse our own (leg-A) funding while unconfirmed — CPFP it up to
+                // market if it went out under-priced.
+                if rec.state == Signed {
+                    if let Some(ev) = self.maybe_bump_funding_v2(rec, "a")? {
+                        return Ok(Some(ev));
+                    }
+                }
                 // Redeem leg B (reveal t) once Bob's leg-B funding is n_b deep
                 // and we are still before T2. The depth gate is the reveal's
                 // reorg safety: never publish t against a funding that can still
@@ -1857,6 +1864,12 @@ impl Engine {
                 Ok(None)
             }
             Role::Participant => {
+                // Nurse our own (leg-B) funding while unconfirmed.
+                if rec.state == Signed {
+                    if let Some(ev) = self.maybe_bump_funding_v2(rec, "b")? {
+                        return Ok(Some(ev));
+                    }
+                }
                 // Claim leg A as soon as Alice's leg-B redeem reveals t. No
                 // depth gate: once t is on chain it is valid even if that spend
                 // later reorgs, so racing to redeem A is always correct — but
@@ -2051,6 +2064,123 @@ impl Engine {
         };
         let txid = backend.wallet_sign_send(&child, parent_value, &parent_out.script_pubkey)?;
         Ok(Some(txid))
+    }
+
+    /// v2 funding nurse: CPFP-bump our own unconfirmed funding (`leg` = "a"/"b")
+    /// by spending its **change** output, leaving the funding outpoint UNCHANGED.
+    /// RBF is forbidden here — the outpoint feeds the 2-of-2 MuSig2 adaptor sigs
+    /// already exchanged with the counterparty, so changing the txid would
+    /// invalidate them (re-doing the MuSig2 round needs the counterparty). Mirrors
+    /// the redeem-side [`Self::adaptor_cpfp_bump`]. Liveness only: no change output
+    /// (exact-UTXO funding) → can't CPFP → stall → refund. Returns an event only
+    /// when it acts; no record change (the funding outpoint and refund stay valid).
+    fn maybe_bump_funding_v2(&self, rec: &AdaptorSwapRecord, leg: &str) -> Result<Option<TickEvent>> {
+        let secp = bitcoin::secp256k1::Secp256k1::new();
+        let p = self.adaptor_params(rec)?;
+        let (chain, leg_obj, txid, vout) = match leg {
+            "a" => (
+                &rec.chain_a,
+                p.leg_a(&secp)?,
+                rec.funding_a_txid.as_deref(),
+                rec.funding_a_vout,
+            ),
+            _ => (
+                &rec.chain_b,
+                p.leg_b(&secp)?,
+                rec.funding_b_txid.as_deref(),
+                rec.funding_b_vout,
+            ),
+        };
+        let (Some(txid), Some(_vout)) = (txid, vout) else {
+            return Ok(None); // our leg not funded yet
+        };
+        let leg_spk = leg_obj.script_pubkey(&secp)?;
+        let backend = self.backend(chain)?;
+        let outpoint = OutPoint {
+            txid: bitcoin::Txid::from_str(txid)?,
+            vout: _vout,
+        };
+        // Only nurse while the funding is unconfirmed.
+        match backend.get_txout(&outpoint, &leg_spk)? {
+            Some(txout) if txout.confirmations == 0 => {}
+            _ => return Ok(None),
+        }
+        // Deadline gate against this leg's OWN refund timelock (leg A → T1, leg B
+        // → T2) with the fund margin; past it, let it stall → refund.
+        let deadline = if leg == "a" { rec.t1 } else { rec.t2 };
+        let net = chain.network;
+        let (fund_margin, _, _) = action_margins(net);
+        let now = deadline_clock(net, local_now(), backend.tip_median_time()?);
+        if !action_safe(now, fund_margin, deadline) {
+            return Ok(None);
+        }
+        // The funding's change output is the CPFP budget. No change output
+        // (exact-UTXO funding) → can't CPFP → stall → refund (acceptable).
+        let Some((change_vout, change_value, change_spk)) =
+            backend.wallet_change_output(txid, &leg_spk)?
+        else {
+            return Ok(None);
+        };
+        let (parent_fee, parent_vsize) = backend.wallet_tx_fee_vsize(txid)?;
+        let old_feerate = parent_fee / parent_vsize.max(1);
+        let market = backend.fee_rate_sat_per_vb()?;
+        let target = market.min(self.fee_bump.max_feerate_sat_vb).min(
+            self.fee_bump
+                .funding
+                .reservation_mult
+                .saturating_mul(old_feerate),
+        );
+        if target <= old_feerate {
+            return Ok(None);
+        }
+        let Some(child_fee) =
+            cpfp_child_fee(parent_fee, parent_vsize, target, self.fee_bump.min_fee_sat)
+        else {
+            return Ok(None); // parent already clears the target
+        };
+        let Some(child_value) = change_value.checked_sub(child_fee) else {
+            return Ok(None); // change can't cover the child fee
+        };
+        if child_value <= DUST_LIMIT_SAT {
+            return Ok(None);
+        }
+        // A child spending the funding's change output → a fresh wallet address.
+        let dest = backend
+            .params()
+            .parse_address(&backend.wallet_new_address()?)?;
+        let child = bitcoin::Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: vec![bitcoin::TxIn {
+                previous_output: OutPoint {
+                    txid: bitcoin::Txid::from_str(txid)?,
+                    vout: change_vout,
+                },
+                script_sig: bitcoin::ScriptBuf::new(),
+                sequence: bitcoin::Sequence::from_consensus(HTLC_SPEND_SEQUENCE),
+                witness: bitcoin::Witness::default(),
+            }],
+            output: vec![bitcoin::TxOut {
+                value: bitcoin::Amount::from_sat(child_value),
+                script_pubkey: dest,
+            }],
+        };
+        // A recoverable signing/broadcast failure is a graceful no-op (liveness).
+        let child_txid = match backend.wallet_sign_send(&child, change_value, &change_spk) {
+            Ok(t) => t,
+            Err(e) => {
+                return Ok(Some(TickEvent {
+                    swap_id: rec.swap_id.clone(),
+                    action: "funding-cpfp-skipped".into(),
+                    detail: format!("leg {leg}: {e:#}"),
+                }));
+            }
+        };
+        Ok(Some(TickEvent {
+            swap_id: rec.swap_id.clone(),
+            action: "funding-cpfp-bump".into(),
+            detail: format!("leg {leg}: {child_txid} (package -> {target} sat/vB)"),
+        }))
     }
 
     /// RBF-replace an unconfirmed single-key CLTV refund at an escalated fee
@@ -2783,6 +2913,13 @@ impl Engine {
             // window has closed (or chain B never appeared) fall back to the T1
             // refund of chain A rather than chase a redeem we can't finish.
             (Role::Initiator, State::FundedA) => {
+                // Nurse our own (leg-A) funding while it is unconfirmed — RBF it up
+                // to the current market if it went out under-priced.
+                if let Some(ev) =
+                    self.maybe_bump_funding_v1(rec, "a", &self.backend(&rec.chain_a)?)?
+                {
+                    return Ok(Some(ev));
+                }
                 let backend_b = self.backend(&rec.chain_b)?;
                 // No point advancing to FundedB once we could no longer reveal s
                 // safely (§7.4 reveal deadline T2 − 2h): fall back to the T1
@@ -2854,6 +2991,10 @@ impl Engine {
             // redeem chain A when it appears, refund chain B after T2.
             (Role::Participant, State::FundedB) => {
                 let backend_b = self.backend(&rec.chain_b)?;
+                // Nurse our own (leg-B) funding while it is unconfirmed.
+                if let Some(ev) = self.maybe_bump_funding_v1(rec, "b", &backend_b)? {
+                    return Ok(Some(ev));
+                }
                 let outpoint_b = OutPoint {
                     txid: bitcoin::Txid::from_str(
                         rec.htlc_b_txid.as_deref().context("no HTLC B")?,
@@ -3067,6 +3208,133 @@ impl Engine {
             swap_id: rec.swap_id.clone(),
             action: "fee-bump".into(),
             detail: format!("{txid} (fee {old_fee} -> {new_fee} sat)"),
+        }))
+    }
+
+    /// v1 funding nurse: RBF-bump our own unconfirmed funding (`leg` = "a"/"b")
+    /// when the market has risen above the rate it went out at, before the
+    /// fund-margin deadline. Returns an event only when it bumps (or skips on a
+    /// recoverable `bumpfee` failure); a silent `Ok(None)` is the common no-op.
+    ///
+    /// Liveness only, never a loss: a stalled funding refunds at the timelock. RBF
+    /// is safe vs the counterparty because they detect the lock by **scriptPubKey,
+    /// not txid** (`find_funding` → `scantxoutset raw(<spk>)`), so an RBF that keeps
+    /// the HTLC output identical is invisible to them — and we run only while the
+    /// funding is unconfirmed, before they have waited out the confirmations. The
+    /// v1 refund is a single-key CLTV spend, so re-signing it against the new
+    /// outpoint is purely local (no counterparty round).
+    fn maybe_bump_funding_v1(
+        &self,
+        rec: &SwapRecord,
+        leg: &str,
+        backend: &MultiBackend,
+    ) -> Result<Option<TickEvent>> {
+        let params = self.swap_params(rec)?;
+        let (chain, amount, htlc, txid, vout) = match leg {
+            "a" => (
+                &rec.chain_a,
+                rec.amount_a,
+                params.htlc_a()?,
+                rec.htlc_a_txid.as_deref(),
+                rec.htlc_a_vout,
+            ),
+            _ => (
+                &rec.chain_b,
+                rec.amount_b,
+                params.htlc_b()?,
+                rec.htlc_b_txid.as_deref(),
+                rec.htlc_b_vout,
+            ),
+        };
+        let (Some(txid), Some(vout)) = (txid, vout) else {
+            return Ok(None); // our leg isn't funded yet
+        };
+        let htlc_spk = htlc.script_pubkey();
+        let outpoint = OutPoint {
+            txid: bitcoin::Txid::from_str(txid)?,
+            vout,
+        };
+        // Only nurse while the funding is unconfirmed; once it has a confirmation
+        // (or vanished) there is nothing to bump.
+        match backend.get_txout(&outpoint, &htlc_spk)? {
+            Some(txout) if txout.confirmations == 0 => {}
+            _ => return Ok(None),
+        }
+        // Deadline gate against this leg's OWN refund timelock on its OWN chain
+        // (leg A → T1, leg B → T2), with the fund margin. Past it, stop bumping and
+        // let it stall → refund.
+        let deadline = if leg == "a" { rec.t1 } else { rec.t2 };
+        let net = chain.network;
+        let (fund_margin, _, _) = action_margins(net);
+        let now = deadline_clock(net, local_now(), backend.tip_median_time()?);
+        if !action_safe(now, fund_margin, deadline) {
+            return Ok(None);
+        }
+        // Recompute the broadcast feerate; chase market, bounded by the policy
+        // ceiling AND the funds-gate reservation (× old_feerate, so the bump stays
+        // within the headroom that gate set aside).
+        let (old_fee, fvsize) = backend.wallet_tx_fee_vsize(txid)?;
+        let old_feerate = old_fee / fvsize.max(1);
+        let market = backend.fee_rate_sat_per_vb()?;
+        let target = market
+            .min(self.fee_bump.max_feerate_sat_vb)
+            .min(
+                self.fee_bump
+                    .funding
+                    .reservation_mult
+                    .saturating_mul(old_feerate),
+            );
+        if target <= old_feerate {
+            return Ok(None); // already paying enough
+        }
+        // RBF via the wallet. A recoverable failure (insufficient funds — the funds
+        // gate is a soft pre-flight, not a lock — or not-replaceable) is a graceful
+        // no-op for this tick, never a crash: the funding stalls → refund.
+        let new_txid = match backend.wallet_bumpfee(txid, target) {
+            Ok(t) => t,
+            Err(e) => {
+                return Ok(Some(TickEvent {
+                    swap_id: rec.swap_id.clone(),
+                    action: "funding-bump-skipped".into(),
+                    detail: format!("leg {leg}: {e:#}"),
+                }));
+            }
+        };
+        // Re-locate the HTLC output on the replacement (the bump funds itself from
+        // change; the HTLC value is unchanged but its vout can move).
+        let new_vout = backend.find_vout(&new_txid, &hex::encode(htlc_spk.as_bytes()))?;
+        let new_outpoint = OutPoint {
+            txid: bitcoin::Txid::from_str(&new_txid)?,
+            vout: new_vout,
+        };
+        // Rebuild + re-sign the refund against the new outpoint (single-key, local).
+        let seed = self.store.seed()?;
+        let key = seed.swap_secret_key(coin_of(chain)?, rec.swap_index)?;
+        let destination = backend
+            .params()
+            .parse_address(&backend.wallet_new_address()?)?;
+        let fee = spend_fee_sat(backend.fee_rate_sat_per_vb()?, REFUND_TX_VSIZE);
+        let refund_tx = build_refund_tx(&htlc, new_outpoint, amount, destination, fee, &key)?;
+        // Persist the new pointer + refund atomically. On a crash before this,
+        // find_funding (spk-based) re-discovers the live outpoint on restart and
+        // the refund is rebuilt next tick — self-healing.
+        let mut updated = rec.clone();
+        updated.refund_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&refund_tx));
+        match leg {
+            "a" => {
+                updated.htlc_a_txid = Some(new_txid.clone());
+                updated.htlc_a_vout = Some(new_vout);
+            }
+            _ => {
+                updated.htlc_b_txid = Some(new_txid.clone());
+                updated.htlc_b_vout = Some(new_vout);
+            }
+        }
+        self.store.put(&updated)?;
+        Ok(Some(TickEvent {
+            swap_id: rec.swap_id.clone(),
+            action: "funding-fee-bump".into(),
+            detail: format!("leg {leg}: {new_txid} (funding {old_feerate} -> {target} sat/vB)"),
         }))
     }
 }

@@ -115,6 +115,35 @@ pub trait ChainBackend {
     ) -> Result<Txid> {
         bail!("this backend has no wallet; cannot sign a CPFP child")
     }
+
+    /// A wallet tx's fee (sat) + vsize (vB), for recomputing a funding's broadcast
+    /// feerate at bump time (`fee / vsize`) without persisting it. Wallet-backed
+    /// Core primary only (the funding nurse).
+    fn wallet_tx_fee_vsize(&self, _txid: &str) -> Result<(u64, u64)> {
+        bail!("this backend has no wallet; cannot read a tx fee/vsize")
+    }
+
+    /// The wallet-OWNED change output of `funding_txid` — `(vout, value_sat, spk)`
+    /// — for a CPFP child on a v2 funding. Identified positively by `ismine` (the
+    /// HTLC output is a P2WSH/P2TR script the wallet does NOT own, so `ismine`
+    /// cleanly selects the change). `None` when the funding has no change output
+    /// (exact-UTXO funding → can't CPFP). `htlc_spk` is skipped explicitly as a
+    /// belt-and-suspenders cross-check. Wallet-backed Core primary only.
+    fn wallet_change_output(
+        &self,
+        _funding_txid: &str,
+        _htlc_spk: &ScriptBuf,
+    ) -> Result<Option<(u32, u64, ScriptBuf)>> {
+        bail!("this backend has no wallet; cannot find a change output")
+    }
+
+    /// RBF-bump a wallet-owned tx via the node's `bumpfee`, targeting `feerate`
+    /// (sat/vB); returns the replacement txid. The v1 funding nurse: the funding is
+    /// wallet-owned and broadcast BIP125-replaceable. Errors if not replaceable or
+    /// the wallet can't afford the higher fee. Wallet-backed Core primary only.
+    fn wallet_bumpfee(&self, _txid: &str, _feerate_sat_vb: u64) -> Result<String> {
+        bail!("this backend has no wallet; cannot bumpfee")
+    }
 }
 
 /// Bitcoin Core / pocx-node JSON-RPC backend.
@@ -349,9 +378,21 @@ impl ChainBackend for CoreRpcBackend {
             amount_sat / 100_000_000,
             amount_sat % 100_000_000
         );
-        let txid = self
-            .rpc
-            .call("sendtoaddress", &[json!(address), json!(amount)])?;
+        // Funding is the ONLY use of wallet_send, and the funding nurse RBF-bumps
+        // it, so broadcast it explicitly BIP125-replaceable rather than relying on
+        // the node's -walletrbf default. Positional sendtoaddress args:
+        // address, amount, comment, comment_to, subtractfeefromamount, replaceable.
+        let txid = self.rpc.call(
+            "sendtoaddress",
+            &[
+                json!(address),
+                json!(amount),
+                json!(""),
+                json!(""),
+                json!(false),
+                json!(true),
+            ],
+        )?;
         Ok(txid
             .as_str()
             .context("sendtoaddress: non-string")?
@@ -405,6 +446,74 @@ impl ChainBackend for CoreRpcBackend {
             Err(e) if is_already_broadcast(&e) => Ok(tx.compute_txid()),
             Err(e) => Err(e),
         }
+    }
+
+    fn wallet_tx_fee_vsize(&self, txid: &str) -> Result<(u64, u64)> {
+        // verbose `gettransaction` includes the `decoded` tx (for vsize) and the
+        // wallet-computed `fee` (negative BTC for a send).
+        let tx = self.rpc.call(
+            "gettransaction",
+            &[json!(txid), json!(true), json!(true)],
+        )?;
+        let fee_btc = tx["fee"]
+            .as_f64()
+            .context("gettransaction: no fee (not a wallet tx?)")?;
+        let fee_sat = (fee_btc.abs() * 1e8).round() as u64;
+        let vsize = tx["decoded"]["vsize"]
+            .as_u64()
+            .context("gettransaction: no decoded.vsize")?;
+        Ok((fee_sat, vsize))
+    }
+
+    fn wallet_change_output(
+        &self,
+        funding_txid: &str,
+        htlc_spk: &ScriptBuf,
+    ) -> Result<Option<(u32, u64, ScriptBuf)>> {
+        let tx = self.rpc.call(
+            "gettransaction",
+            &[json!(funding_txid), json!(true), json!(true)],
+        )?;
+        let htlc_hex = hex::encode(htlc_spk.as_bytes());
+        let vouts = tx["decoded"]["vout"]
+            .as_array()
+            .context("gettransaction: no decoded.vout")?;
+        for vout in vouts {
+            let spk_hex = vout["scriptPubKey"]["hex"].as_str().unwrap_or_default();
+            if spk_hex.is_empty() || spk_hex == htlc_hex {
+                continue; // the HTLC output (not wallet-owned) — skip
+            }
+            // Positive ownership check: the HTLC output is a script the wallet does
+            // not own, so `ismine` selects the change output unambiguously.
+            let is_mine = vout["scriptPubKey"]["address"]
+                .as_str()
+                .and_then(|addr| self.rpc.call("getaddressinfo", &[json!(addr)]).ok())
+                .and_then(|info| info["ismine"].as_bool())
+                .unwrap_or(false);
+            if is_mine {
+                let n = vout["n"].as_u64().context("vout without n")? as u32;
+                let value_sat = (vout["value"]
+                    .as_f64()
+                    .context("vout without value")?
+                    * 1e8)
+                    .round() as u64;
+                let spk = ScriptBuf::from_bytes(hex::decode(spk_hex)?);
+                return Ok(Some((n, value_sat, spk)));
+            }
+        }
+        Ok(None) // no wallet-owned change (exact-UTXO funding)
+    }
+
+    fn wallet_bumpfee(&self, txid: &str, feerate_sat_vb: u64) -> Result<String> {
+        // Core's `bumpfee` `fee_rate` option is sat/vB (Core ≥ 0.21).
+        let res = self.rpc.call(
+            "bumpfee",
+            &[json!(txid), json!({ "fee_rate": feerate_sat_vb })],
+        )?;
+        Ok(res["txid"]
+            .as_str()
+            .context("bumpfee: no replacement txid")?
+            .to_string())
     }
 }
 
@@ -930,5 +1039,21 @@ impl ChainBackend for MultiBackend {
         // Wallet op: the primary (Core) backend owns the sweep key.
         self.primary()
             .wallet_sign_send(tx, prevout_value_sat, prevout_spk)
+    }
+
+    fn wallet_tx_fee_vsize(&self, txid: &str) -> Result<(u64, u64)> {
+        self.primary().wallet_tx_fee_vsize(txid)
+    }
+
+    fn wallet_change_output(
+        &self,
+        funding_txid: &str,
+        htlc_spk: &ScriptBuf,
+    ) -> Result<Option<(u32, u64, ScriptBuf)>> {
+        self.primary().wallet_change_output(funding_txid, htlc_spk)
+    }
+
+    fn wallet_bumpfee(&self, txid: &str, feerate_sat_vb: u64) -> Result<String> {
+        self.primary().wallet_bumpfee(txid, feerate_sat_vb)
     }
 }
