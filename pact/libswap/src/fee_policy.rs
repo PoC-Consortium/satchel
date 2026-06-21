@@ -20,6 +20,12 @@ pub const MAX_FEERATE_CEILING: u64 = 500;
 /// Upper bound on the RBF escalation step (percent), a pure sanity guard.
 const MAX_STEP_PCT: u64 = 1000;
 
+/// Upper bound on the funding-reservation and committed-redeem multipliers, a
+/// pure sanity guard. Well above any sensible value (the redeem feerate then
+/// clamps to `MAX_FEERATE_CEILING` anyway), but bounded so a fat-fingered RPC
+/// value can't overflow the `rate × mult` products at the use sites.
+const MAX_MULT: u64 = 1000;
+
 /// The unified, configurable fee-bump policy. `Copy` (small, all-scalar) so bump
 /// sites take it by value freely.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -112,12 +118,12 @@ impl FeeBumpPolicy {
             "max_feerate_sat_vb must be 1..={MAX_FEERATE_CEILING} sat/vB (the estimator's hard ceiling)"
         );
         ensure!(
-            self.funding.reservation_mult >= 1,
-            "funding.reservation_mult must be >= 1"
+            (1..=MAX_MULT).contains(&self.funding.reservation_mult),
+            "funding.reservation_mult must be 1..={MAX_MULT}"
         );
         ensure!(
-            self.redeem.committed_mult >= 1,
-            "redeem.committed_mult must be >= 1"
+            (1..=MAX_MULT).contains(&self.redeem.committed_mult),
+            "redeem.committed_mult must be 1..={MAX_MULT}"
         );
         ensure!(
             (1..=MAX_STEP_PCT).contains(&self.redeem.step_pct),
@@ -220,6 +226,16 @@ mod tests {
 
         let mut p = FeeBumpPolicy::default();
         p.redeem.step_pct = 0;
+        assert!(p.validated().is_err());
+
+        // Multipliers are bounded above so a fat-fingered value can't overflow
+        // `rate × mult` at the use sites.
+        let mut p = FeeBumpPolicy::default();
+        p.redeem.committed_mult = MAX_MULT + 1;
+        assert!(p.validated().is_err());
+
+        let mut p = FeeBumpPolicy::default();
+        p.funding.reservation_mult = MAX_MULT + 1;
         assert!(p.validated().is_err());
     }
 

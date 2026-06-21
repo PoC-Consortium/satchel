@@ -484,9 +484,13 @@ impl ChainBackend for CoreRpcBackend {
                 continue; // the HTLC output (not wallet-owned) — skip
             }
             // Positive ownership check: the HTLC output is a script the wallet does
-            // not own, so `ismine` selects the change output unambiguously.
-            let is_mine = vout["scriptPubKey"]["address"]
+            // not own, so `ismine` selects the change output unambiguously. Resolve
+            // the address from `address` (Core ≥ 22) or `addresses[0]` (older Core),
+            // so the check isn't silently defeated on an older node.
+            let addr = vout["scriptPubKey"]["address"]
                 .as_str()
+                .or_else(|| vout["scriptPubKey"]["addresses"][0].as_str());
+            let is_mine = addr
                 .and_then(|addr| self.rpc.call("getaddressinfo", &[json!(addr)]).ok())
                 .and_then(|info| info["ismine"].as_bool())
                 .unwrap_or(false);
