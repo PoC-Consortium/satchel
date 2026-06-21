@@ -3,7 +3,7 @@ import { Box, Chip, Tooltip, Typography } from "@mui/material";
 import { rpc } from "../api/tauri";
 import { useApp } from "../AppContext";
 import { useT } from "../i18n";
-import { commas, fmtBare } from "../format";
+import { commas, fmtFee } from "../format";
 import { C } from "../theme";
 import type { FeeSide, SwapFees } from "../api/types";
 
@@ -85,7 +85,7 @@ function FeeSideRows({ side, symbol }: { side: FeeSide; symbol: string }) {
             {leg.name === "refund" ? `${leg.name} (if it stalls)` : leg.name}
           </span>
           <span style={{ opacity: leg.name === "refund" ? 0.6 : 1 }}>
-            {fmtBare(leg.fee_sat)} {symbol}
+            {fmtFee(leg.fee_sat)} {symbol}
           </span>
         </Box>
       ))}

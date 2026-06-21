@@ -17,6 +17,16 @@ import type {
 export const fmtBare = (n: number): string =>
   (n / 1e8).toFixed(8).replace(/0+$/, "").replace(/\.$/, ".0");
 
+/** sats → coin amount with ALWAYS 8 fraction digits (e.g. "0.00100000"), for
+ *  fee displays where the full precision should be visible and not trimmed.
+ *  Locale-aware separator + no grouping, matching the sat/vB rate line. */
+export const fmtFee = (n: number): string =>
+  new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 8,
+    maximumFractionDigits: 8,
+    useGrouping: false,
+  }).format(n / 1e8);
+
 /** sats → "1.5 POCX" style with the asset symbol appended. */
 export const fmtAmt = (n: number, asset: string): string =>
   `${fmtBare(n)} ${String(asset).toUpperCase()}`;
