@@ -1,49 +1,58 @@
-// The shared offer-builder form: pick give/get coins, enter a unit price and an
-// amount (price + either side fills the other, exchange-style), pick a swap type
-// when the pair allows more than one, and a Short/Medium/Long timelock preset.
-// It hands the validated (give, want, t1, t2, protocol) to `onSubmit`. Used by
-// the public "Post an offer" dialog (→ boardpostoffer) and the private "Create
-// slip" screen (→ makeprivateoffer). No swap logic lives here.
+// The shared offer-builder form. The user picks a CANONICAL pair (base/quote,
+// ordered the same everywhere — see `baseQuote`), a direction (Sell/Buy the
+// base), the base-coin amount, and a unit price that is ALWAYS quote-per-base
+// (e.g. BTC per BTCX) — invariant to direction, so flipping Sell↔Buy never
+// changes the price. The price unit is a user-chosen denom (BTC/mBTC/µBTC/sat),
+// defaulting to milli for a BTCX base and coin otherwise. It hands the validated
+// (give, want, t1, t2, protocol, ttl) to `onSubmit`. Used by the public "Post an
+// offer" dialog (→ boardpostoffer) and the private "Create slip" screen
+// (→ makeprivateoffer). No swap logic lives here.
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Box,
   Button,
   Divider,
+  IconButton,
   MenuItem,
   Select,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from "@mui/material";
+import SwapVertIcon from "@mui/icons-material/SwapVert";
 import { useApp } from "../AppContext";
 import { useConfirm } from "../ui/ConfirmProvider";
+import { useDenom } from "../denom";
 import { useT } from "../i18n";
 import { assessLockFunds, rpc } from "../api/tauri";
 import {
+  baseQuote,
   canonicalAmount,
   decimalSeparator,
+  denomLabel,
+  denomUnitSats,
+  DENOMS,
   fmtBare,
-  fmtBareLocale,
+  fmtPrice,
   hours,
   offerProtocols,
+  pairKey,
   parseAmount,
   sanitizeAmountInput,
   PROTOCOL_V2,
+  type Denom,
 } from "../format";
 import FeePreview from "./FeePreview";
 import InsufficientFunds from "./InsufficientFunds";
 import { C } from "../theme";
+import type { Pair } from "../api/types";
 
 // Timelock presets — raw T1/T2 hours are too low-level (and dangerous) to ask a
 // user for, so we offer Short/Medium/Long with safe 2:1 gaps (T1 = 2×T2). Every
-// preset clears the engine's spec §7.4 action margins: Bob must fund before
-// T2−3h and Alice must reveal before T2−2h, so T2 needs real headroom. The old
-// 3h/6h "short" (gap 3h) violated both the §7.4 fund margin and the 4h structural
-// gap (T1−T2 ≥ 4h) and was rejected at take time — lifted here. T2 ≥ 6h now leaves
-// a comfortable funding+reveal window; gaps (≥ 6h) sit well above the 4h minimum.
-// Longer = safer margin but slower auto-refund if a trade stalls. Medium default.
+// preset clears the engine's spec §7.4 action margins. Medium default.
 export const TERMS = {
   short: { t1: 12 * 3600, t2: 6 * 3600 },
   medium: { t1: 24 * 3600, t2: 12 * 3600 },
@@ -51,13 +60,17 @@ export const TERMS = {
 } as const;
 export type Term = keyof typeof TERMS;
 
-// Display a derived price ratio (receive per give) compactly, in the locale.
-function fmtPriceLocale(ratio: number): string {
-  const s = (ratio >= 1 ? ratio.toFixed(6) : ratio.toPrecision(6))
-    .replace(/0+$/, "")
-    .replace(/\.$/, "");
-  return s.replace(".", decimalSeparator());
-}
+// The Corkboard persists its selected pair here; the form defaults to it so you
+// land on the pair you were just looking at.
+const CORKBOARD_PAIR_KEY = "satchel.corkboard.pair";
+// localStorage key the Corkboard denom (useDenom) persists under — we read it to
+// decide whether to honour it or fall back to our per-base default.
+const CORKBOARD_DENOM_KEY = "satchel.denom";
+// Fallback price-unit when the Corkboard denom was never set: milli for a BTCX
+// base (its quote price is tiny → reads better), coin for everything else.
+const defaultDenom = (base: string): Denom => (base === "btcx" ? "milli" : "coin");
+
+type Side = "sell" | "buy"; // sell = give the base coin; buy = get the base coin
 
 export default function OfferForm({
   submitLabel,
@@ -87,23 +100,77 @@ export default function OfferForm({
   const t = useT();
   const configured = useMemo(() => coins.filter((c) => c.configured), [coins]);
 
-  const [give, setGive] = useState("");
-  const [want, setWant] = useState("");
-  const [giveAmt, setGiveAmt] = useState("");
-  const [wantAmt, setWantAmt] = useState("");
-  const [price, setPrice] = useState(""); // receive-coin per give-coin
+  // Tradable pairs (capability-derived, from listpairs) → canonical base/quote.
+  const [pairs, setPairs] = useState<{ key: string; base: string; quote: string }[]>([]);
+  const [pairKeySel, setPairKeySel] = useState<string>(() => {
+    try {
+      return localStorage.getItem(CORKBOARD_PAIR_KEY) || "";
+    } catch {
+      return "";
+    }
+  });
+  const [side, setSide] = useState<Side>("sell");
+  const [baseAmt, setBaseAmt] = useState("");
+  const [price, setPrice] = useState(""); // quote-per-base, in the chosen denom
+  // Price unit is SHARED with the Corkboard (useDenom). If the Corkboard denom
+  // was never set and the user hasn't touched the unit here, fall back to our
+  // per-base default; otherwise reflect — and update — the shared denom.
+  const { denom: cbDenom, setDenom: setCbDenom } = useDenom();
+  const [unitTouched, setUnitTouched] = useState(false);
+  const [cbHadDenom] = useState(() => {
+    try {
+      return localStorage.getItem(CORKBOARD_DENOM_KEY) != null;
+    } catch {
+      return false;
+    }
+  });
   const [proto, setProto] = useState<string | null>(null); // explicit override
   const [term, setTerm] = useState<Term>("medium");
   const [validMin, setValidMin] = useState("60"); // offer lifetime (minutes)
   const [balances, setBalances] = useState<Record<string, string>>({});
 
-  // Sensible defaults once coins load: give = first, want = a different one.
+  // Load the capability-derived pairs (same source as the Corkboard).
   useEffect(() => {
-    if (!give && configured[0]) setGive(configured[0].id);
-    if (!want && configured[1]) setWant(configured[1].id);
-  }, [configured, give, want]);
+    let alive = true;
+    (async () => {
+      try {
+        const r = await rpc<{ pairs: Pair[] }>("listpairs");
+        const opts = r.pairs
+          .filter((p) => p.available)
+          .map((p) => {
+            const { base, quote } = baseQuote(p.coin_a, p.coin_b);
+            return { key: pairKey(p.coin_a, p.coin_b), base, quote };
+          })
+          .sort((x, y) => symOf(x.base).localeCompare(symOf(y.base)));
+        if (alive) setPairs(opts);
+      } catch {
+        /* none yet */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [symOf]);
 
-  // Live wallet balances per configured coin (shown under each amount field).
+  // Default to the Corkboard's pair; fall back to the first if it's gone.
+  useEffect(() => {
+    if (!pairs.length) return;
+    if (!pairs.some((p) => p.key === pairKeySel)) setPairKeySel(pairs[0].key);
+  }, [pairs, pairKeySel]);
+
+  const pair = useMemo(() => pairs.find((p) => p.key === pairKeySel), [pairs, pairKeySel]);
+  const base = pair?.base ?? "";
+  const quote = pair?.quote ?? "";
+
+  // Effective price unit: the Corkboard's denom if it was ever set (or once the
+  // user picks one here), else our per-base default — which tracks the pair.
+  const denom: Denom = cbHadDenom || unitTouched ? cbDenom : defaultDenom(base);
+  const onDenom = (d: Denom) => {
+    setCbDenom(d); // shared with the Corkboard
+    setUnitTouched(true);
+  };
+
+  // Live wallet balances per configured coin.
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -121,56 +188,43 @@ export default function OfferForm({
     };
   }, [configured]);
 
-  // Price + either amount fills the other; `give` is the size anchor. Amounts are
-  // computed in sats so the posted values stay exact.
-  const computeWantFrom = (g: string, p: string) => {
-    const gn = parseAmount(g);
-    const pn = parseAmount(p);
-    if (gn > 0 && pn > 0) setWantAmt(fmtBareLocale(Math.round(gn * pn * 1e8)));
-  };
-  const onGiveAmt = (v: string) => {
-    const s = sanitizeAmountInput(v);
-    setGiveAmt(s);
-    computeWantFrom(s, price);
-  };
-  const onPrice = (v: string) => {
-    const s = sanitizeAmountInput(v);
-    setPrice(s);
-    computeWantFrom(giveAmt, s);
-  };
-  const onWantAmt = (v: string) => {
-    const s = sanitizeAmountInput(v);
-    setWantAmt(s);
-    const gn = parseAmount(giveAmt);
-    const wn = parseAmount(s);
-    if (gn > 0 && wn > 0) setPrice(fmtPriceLocale(wn / gn));
-  };
+  // The give/get coins follow the direction; the SIZE is always the base coin and
+  // the PRICE is always quote-per-base, so neither changes when you flip.
+  const giveCoin = side === "sell" ? base : quote;
+  const wantCoin = side === "sell" ? quote : base;
 
-  const sameCoin = !!give && give === want;
+  const baseNum = parseAmount(baseAmt);
+  const priceNum = parseAmount(price);
+  // quote sats = baseCoin × (quote-sats per base-coin); price is in `denom` units.
+  const quoteSats =
+    baseNum > 0 && priceNum > 0 ? Math.round(baseNum * priceNum * denomUnitSats(denom)) : 0;
+  const baseSats = baseNum > 0 ? Math.round(baseNum * 1e8) : 0;
+  // The raw quote-per-base in whole quote coin, for the "= 0.0000043 BTC/BTCX" hint.
+  const rawPriceCoin = priceNum > 0 ? (priceNum * denomUnitSats(denom)) / 1e8 : 0;
 
-  // Chain-up gate: don't let the user post/create an offer whose own node is
-  // down — the engine refuses it too, this is the friendly up-front block.
+  const giveStr = side === "sell" ? canonicalAmount(baseAmt) : fmtBare(quoteSats);
+  const wantStr = side === "sell" ? fmtBare(quoteSats) : canonicalAmount(baseAmt);
+  const giveSat = side === "sell" ? baseSats : quoteSats;
+
+  // Chain-up gate: refuse to post when a leg's own node is down (the engine does
+  // too — this is the friendly up-front block).
   const coinLive = (id: string) => coins.find((c) => c.id === id)?.status === "ok";
-  const legDown = !sameCoin && ((!!give && !coinLive(give)) || (!!want && !coinLive(want)));
+  const legDown = !!base && !!quote && (!coinLive(base) || !coinLive(quote));
 
-  // Which swap protocols this pair+network allows, and the preferred default.
-  const giveCaps = useMemo(() => configured.find((c) => c.id === give)?.capabilities, [configured, give]);
-  const wantCaps = useMemo(() => configured.find((c) => c.id === want)?.capabilities, [configured, want]);
+  // Which swap protocols this pair allows (capabilities are symmetric, so pass
+  // base+quote regardless of direction), and the preferred default.
+  const baseCaps = useMemo(() => configured.find((c) => c.id === base)?.capabilities, [configured, base]);
+  const quoteCaps = useMemo(() => configured.find((c) => c.id === quote)?.capabilities, [configured, quote]);
   const { options: protoOptions, preferred } = useMemo(
-    () => (sameCoin ? { options: [], preferred: null } : offerProtocols(giveCaps, wantCaps)),
-    [giveCaps, wantCaps, sameCoin],
+    () => (base && quote ? offerProtocols(baseCaps, quoteCaps) : { options: [], preferred: null }),
+    [baseCaps, quoteCaps, base, quote],
   );
   const effProto = proto && protoOptions.includes(proto) ? proto : preferred;
   const protoLabel = (p: string) => (p === PROTOCOL_V2 ? t("coins.protoPrivate") : t("makeOffer.protoStandard"));
 
-  const valid =
-    !!give &&
-    !!want &&
-    !sameCoin &&
-    !legDown &&
-    parseAmount(giveAmt) > 0 &&
-    parseAmount(wantAmt) > 0 &&
-    !!effProto;
+  const valid = !!base && !!quote && !legDown && baseNum > 0 && quoteSats > 0 && !!effProto;
+
+  const unitLabel = quote ? denomLabel(quote, symOf(quote), denom) : "";
 
   async function submit() {
     if (!valid || busy || !effProto) return;
@@ -179,13 +233,7 @@ export default function OfferForm({
     const ttlSecs = validForMin * 60;
     const lbl = { fontSize: 12, color: "text.secondary" } as const;
     const val = { textAlign: "right", fontFamily: C.mono, fontSize: 13.5 } as const;
-    // The maker locks the `give` leg when the offer is taken. Pre-flight the
-    // funds so the summary warns + disables before the post RPC does.
-    const giveSat = Math.round(Number(canonicalAmount(giveAmt)) * 1e8);
-    const funds = await assessLockFunds(give, want, giveSat);
-    // Review/confirm step (same shape as the take-offer summary): the trade, the
-    // swap type, the refund window, the plain-language note, and the network-cost
-    // breakdown all live here — the decision screen, not the form.
+    const funds = await assessLockFunds(giveCoin, wantCoin, giveSat);
     const ok = await confirm({
       title: confirmTitle,
       wide: true,
@@ -206,9 +254,13 @@ export default function OfferForm({
             }}
           >
             <Typography sx={lbl}>{t("makeOffer.give")}</Typography>
-            <Box sx={val}>{giveAmt} {symOf(give)}</Box>
+            <Box sx={val}>{giveStr} {symOf(giveCoin)}</Box>
             <Typography sx={lbl}>{t("makeOffer.want")}</Typography>
-            <Box sx={{ ...val, color: "primary.main" }}>{wantAmt} {symOf(want)}</Box>
+            <Box sx={{ ...val, color: "primary.main" }}>{wantStr} {symOf(wantCoin)}</Box>
+            <Typography sx={lbl}>{t("makeOffer.price")}</Typography>
+            <Box sx={val}>
+              {price} {unitLabel} / {symOf(base)}
+            </Box>
             <Box sx={{ gridColumn: "1 / -1", my: 0.25 }}>
               <Divider />
             </Box>
@@ -222,24 +274,17 @@ export default function OfferForm({
             <Box sx={val}>{t("makeOffer.validForMins", { mins: validForMin })}</Box>
           </Box>
           <Typography sx={{ fontSize: 12, color: "text.secondary" }}>{t("makeOffer.note")}</Typography>
-          <FeePreview giveCoin={give} getCoin={want} />
+          <FeePreview giveCoin={giveCoin} getCoin={wantCoin} />
           <InsufficientFunds check={funds} />
         </Box>
       ),
     });
     if (!ok) return;
-    // Only force a protocol when the user picked the non-preferred one; otherwise
-    // let the engine apply its own default.
     const forced = effProto === preferred ? undefined : effProto;
-    onSubmit(
-      `${give}:${canonicalAmount(giveAmt)}`,
-      `${want}:${canonicalAmount(wantAmt)}`,
-      t1,
-      t2,
-      forced,
-      ttlSecs,
-    );
+    onSubmit(`${giveCoin}:${giveStr}`, `${wantCoin}:${wantStr}`, t1, t2, forced, ttlSecs);
   }
+
+  const noPairs = pairs.length === 0;
 
   return (
     <Box
@@ -248,56 +293,127 @@ export default function OfferForm({
         e.preventDefault();
         submit();
       }}
-      sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}
+      sx={{ display: "flex", flexDirection: "column", gap: 1.75 }}
     >
-      <MoneyRow
-        label={t("makeOffer.give")}
-        coins={configured}
-        coin={give}
-        amount={giveAmt}
-        balance={give ? balances[give] : undefined}
-        symOf={symOf}
-        onCoin={setGive}
-        onAmount={onGiveAmt}
-        t={t}
-      />
-
-      {/* Unit price — receive falls out of give × price (and vice versa). */}
+      {/* Pair */}
       <TextField
-        label={t("makeOffer.price")}
+        select
+        label={t("makeOffer.pair")}
         size="small"
         fullWidth
-        placeholder={t("makeOffer.pricePlaceholder")}
-        value={price}
-        onChange={(e) => onPrice(e.target.value)}
+        value={noPairs ? "" : pairKeySel}
+        onChange={(e) => setPairKeySel(e.target.value)}
+        disabled={noPairs}
+        helperText={noPairs ? t("makeOffer.noPairs") : " "}
+      >
+        {noPairs && (
+          <MenuItem value="" disabled>
+            {t("makeOffer.noCoins")}
+          </MenuItem>
+        )}
+        {pairs.map((p) => (
+          <MenuItem key={p.key} value={p.key}>
+            {symOf(p.base)} / {symOf(p.quote)}
+          </MenuItem>
+        ))}
+      </TextField>
+
+      {/* Direction (Sell/Buy the base) + quick flip */}
+      <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={side}
+          onChange={(_, v) => v && setSide(v as Side)}
+          sx={{ flex: 1 }}
+        >
+          <ToggleButton value="sell" sx={{ flex: 1 }}>
+            {t("makeOffer.sell", { sym: symOf(base) })}
+          </ToggleButton>
+          <ToggleButton value="buy" sx={{ flex: 1 }}>
+            {t("makeOffer.buy", { sym: symOf(base) })}
+          </ToggleButton>
+        </ToggleButtonGroup>
+        <Tooltip title={t("makeOffer.flip")}>
+          <IconButton
+            size="small"
+            aria-label={t("makeOffer.flip")}
+            onClick={() => setSide((s) => (s === "sell" ? "buy" : "sell"))}
+          >
+            <SwapVertIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
+
+      {/* Amount — always in the base coin. */}
+      <TextField
+        label={t("makeOffer.amount")}
+        size="small"
+        fullWidth
+        placeholder={`0${decimalSeparator()}0`}
+        value={baseAmt}
+        onChange={(e) => setBaseAmt(sanitizeAmountInput(e.target.value))}
         inputMode="decimal"
         autoComplete="off"
-        helperText={give && want && !sameCoin ? t("makeOffer.priceUnit", { quote: symOf(want), give: symOf(give) }) : " "}
+        InputProps={{ endAdornment: <Typography sx={{ color: "text.secondary", fontSize: 13 }}>{symOf(base)}</Typography> }}
+        helperText={
+          base
+            ? balances[base] !== undefined
+              ? t("makeOffer.balance", { amt: balances[base], sym: symOf(base) })
+              : t("makeOffer.balanceLoading")
+            : " "
+        }
       />
 
-      <MoneyRow
-        label={t("makeOffer.want")}
-        coins={configured}
-        coin={want}
-        amount={wantAmt}
-        balance={want ? balances[want] : undefined}
-        symOf={symOf}
-        onCoin={setWant}
-        onAmount={onWantAmt}
-        t={t}
-      />
+      {/* Price — quote per base, invariant; unit is the user's denom choice. */}
+      <Box>
+        <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+          <TextField
+            label={t("makeOffer.price")}
+            size="small"
+            fullWidth
+            placeholder={t("makeOffer.pricePlaceholder")}
+            value={price}
+            onChange={(e) => setPrice(sanitizeAmountInput(e.target.value))}
+            inputMode="decimal"
+            autoComplete="off"
+          />
+          <Select size="small" value={denom} onChange={(e) => onDenom(e.target.value as Denom)} sx={{ minWidth: 96 }}>
+            {DENOMS.map((d) => (
+              <MenuItem key={d} value={d}>
+                {quote ? denomLabel(quote, symOf(quote), d) : d}
+              </MenuItem>
+            ))}
+          </Select>
+        </Box>
+        <Typography sx={{ fontSize: 11.5, color: "text.secondary", mt: 0.5 }}>
+          {base && quote
+            ? t("makeOffer.priceUnit", { unit: unitLabel, base: symOf(base) }) +
+              (rawPriceCoin > 0 ? `  ·  ${fmtPrice(rawPriceCoin)} ${symOf(quote)} / ${symOf(base)}` : "")
+            : " "}
+        </Typography>
+      </Box>
 
-      {sameCoin && (
-        <Typography sx={{ color: "error.main", fontSize: 12 }}>{t("makeOffer.sameCoin")}</Typography>
+      {/* Derived give/get summary. */}
+      {valid && (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25, px: 0.5 }}>
+          <Typography sx={{ fontSize: 12.5 }}>
+            <Box component="span" sx={{ color: "text.secondary" }}>{t("makeOffer.youGive")}: </Box>
+            <Box component="span" sx={{ fontFamily: C.mono }}>{giveStr} {symOf(giveCoin)}</Box>
+          </Typography>
+          <Typography sx={{ fontSize: 12.5 }}>
+            <Box component="span" sx={{ color: "text.secondary" }}>{t("makeOffer.youGet")}: </Box>
+            <Box component="span" sx={{ fontFamily: C.mono, color: "primary.main" }}>{wantStr} {symOf(wantCoin)}</Box>
+          </Typography>
+        </Box>
       )}
 
-      {!sameCoin && legDown && (
+      {legDown && (
         <Typography sx={{ color: "error.main", fontSize: 12 }}>{t("makeOffer.legDown")}</Typography>
       )}
 
-      {/* Swap type — a dropdown (scales to future protocols); a static line when
-          the pair+network only supports one. */}
-      {!sameCoin && effProto && (
+      {/* Swap type — dropdown when the pair allows more than one, else a line. */}
+      {base && quote && effProto && (
         protoOptions.length > 1 ? (
           <TextField
             select
@@ -320,16 +436,10 @@ export default function OfferForm({
         )
       )}
 
-      {/* Timelock preset (Short/Medium/Long) instead of raw T1/T2. */}
+      {/* Timelock preset. */}
       <Box>
         <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 0.75 }}>{t("makeOffer.term")}</Typography>
-        <ToggleButtonGroup
-          exclusive
-          fullWidth
-          size="small"
-          value={term}
-          onChange={(_, v) => v && setTerm(v as Term)}
-        >
+        <ToggleButtonGroup exclusive fullWidth size="small" value={term} onChange={(_, v) => v && setTerm(v as Term)}>
           <ToggleButton value="short">{t("makeOffer.termShort")}</ToggleButton>
           <ToggleButton value="medium">{t("makeOffer.termMedium")}</ToggleButton>
           <ToggleButton value="long">{t("makeOffer.termLong")}</ToggleButton>
@@ -339,9 +449,7 @@ export default function OfferForm({
         </Typography>
       </Box>
 
-      {/* Offer validity (minutes): while you're online the engine keeps the
-          listing alive (refreshing its short relay TTL); after this window it
-          stops and the offer expires. */}
+      {/* Offer validity (minutes). */}
       <TextField
         label={t("makeOffer.validFor")}
         size="small"
@@ -361,70 +469,6 @@ export default function OfferForm({
           {submitLabel}
         </Button>
       </Box>
-    </Box>
-  );
-}
-
-// One coin+amount line: a compact coin picker beside an amount field whose
-// floating label names the side and whose helper text shows the live balance.
-function MoneyRow({
-  label,
-  coins,
-  coin,
-  amount,
-  balance,
-  symOf,
-  onCoin,
-  onAmount,
-  t,
-}: {
-  label: string;
-  coins: { id: string; symbol: string }[];
-  coin: string;
-  amount: string;
-  balance: string | undefined;
-  symOf: (id: string) => string;
-  onCoin: (id: string) => void;
-  onAmount: (v: string) => void;
-  t: (k: string, vars?: Record<string, string | number>) => string;
-}) {
-  return (
-    <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
-      <Select
-        size="small"
-        value={coins.some((c) => c.id === coin) ? coin : ""}
-        onChange={(e) => onCoin(e.target.value)}
-        displayEmpty
-        sx={{ minWidth: 104 }}
-      >
-        {coins.length === 0 && (
-          <MenuItem value="" disabled>
-            {t("makeOffer.noCoins")}
-          </MenuItem>
-        )}
-        {coins.map((c) => (
-          <MenuItem key={c.id} value={c.id}>
-            {symOf(c.id)}
-          </MenuItem>
-        ))}
-      </Select>
-      <TextField
-        label={label}
-        size="small"
-        fullWidth
-        placeholder={`0${decimalSeparator()}0`}
-        value={amount}
-        onChange={(e) => onAmount(e.target.value)}
-        inputMode="decimal"
-        autoComplete="off"
-        helperText={
-          coin
-            ? balance !== undefined
-              ? t("makeOffer.balance", { amt: balance, sym: symOf(coin) })
-              : t("makeOffer.balanceLoading")
-            : " "
-        }
-      />
     </Box>
   );
 }

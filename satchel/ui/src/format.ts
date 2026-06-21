@@ -306,6 +306,10 @@ export const DENOMS: Denom[] = ["coin", "milli", "micro", "sat"];
 /** sats in one unit of each denomination (coin = 1e8 sats). */
 const DENOM_SATS: Record<Denom, number> = { coin: 1e8, milli: 1e5, micro: 1e2, sat: 1 };
 
+/** Sats in one unit of denomination `d`. For converting a price/amount typed in
+ *  a chosen denom back to exact sats (offer form's unit'd price field). */
+export const denomUnitSats = (d: Denom): number => DENOM_SATS[d];
+
 /** Per-coin unit label. BTC uses the familiar bits/sat names; other coins fall
  *  back to m-/µ- prefixes on their symbol (atomic unit shown as "sat"). */
 export function denomLabel(coinId: string, sym: string, d: Denom): string {

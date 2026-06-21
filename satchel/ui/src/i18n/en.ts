@@ -52,9 +52,18 @@ export const en = {
       "Post a signed offer to the Corkboard. Nothing is locked — it's just an advert; withdraw any time, and a swap only starts when someone takes it and both sides fund.",
     give: "You give",
     want: "You receive",
-    // Price-assisted entry: price + either amount fills the other (bidirectional).
+    // Canonical pair + direction: pick the pair, choose Sell/Buy the base, enter
+    // the base amount and a quote-per-base price (invariant to direction).
+    pair: "Pair",
+    noPairs: "No tradable pairs — connect at least two coins in Settings → Coins.",
+    sell: "Sell {sym}",
+    buy: "Buy {sym}",
+    flip: "Swap direction",
+    amount: "Amount",
+    youGive: "You give",
+    youGet: "You get",
     price: "Price",
-    priceUnit: "{quote} per {give}",
+    priceUnit: "{unit} per {base}",
     pricePlaceholder: "unit price",
     balance: "Balance: {amt} {sym}",
     balanceLoading: "Balance: …",
