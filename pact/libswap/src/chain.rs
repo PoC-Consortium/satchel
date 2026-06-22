@@ -451,10 +451,9 @@ impl ChainBackend for CoreRpcBackend {
     fn wallet_tx_fee_vsize(&self, txid: &str) -> Result<(u64, u64)> {
         // verbose `gettransaction` includes the `decoded` tx (for vsize) and the
         // wallet-computed `fee` (negative BTC for a send).
-        let tx = self.rpc.call(
-            "gettransaction",
-            &[json!(txid), json!(true), json!(true)],
-        )?;
+        let tx = self
+            .rpc
+            .call("gettransaction", &[json!(txid), json!(true), json!(true)])?;
         let fee_btc = tx["fee"]
             .as_f64()
             .context("gettransaction: no fee (not a wallet tx?)")?;
@@ -496,11 +495,8 @@ impl ChainBackend for CoreRpcBackend {
                 .unwrap_or(false);
             if is_mine {
                 let n = vout["n"].as_u64().context("vout without n")? as u32;
-                let value_sat = (vout["value"]
-                    .as_f64()
-                    .context("vout without value")?
-                    * 1e8)
-                    .round() as u64;
+                let value_sat =
+                    (vout["value"].as_f64().context("vout without value")? * 1e8).round() as u64;
                 let spk = ScriptBuf::from_bytes(hex::decode(spk_hex)?);
                 return Ok(Some((n, value_sat, spk)));
             }
