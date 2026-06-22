@@ -5413,10 +5413,7 @@ mod tests {
         put_live_offer(&engine, "b", Network::Regtest, "btcx", 250);
         put_live_offer(&engine, "c", Network::Regtest, "btc", 999);
         put_live_offer(&engine, "d", Network::Mainnet, "btcx", 500);
-        engine
-            .store
-            .my_offer_put("e", "not json", 0, 0, 0)
-            .unwrap();
+        engine.store.my_offer_put("e", "not json", 0, 0, 0).unwrap();
 
         let (sum, count) = engine
             .committed_give_for_coin(Network::Regtest, "btcx")
