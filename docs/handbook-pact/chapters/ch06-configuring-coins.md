@@ -55,6 +55,24 @@ bech32_hrp   = "rltc"
 > A `coins.toml` entry may also carry a `connection` sub-table with RPC defaults;
 > that is Satchel's concern and is ignored by the engine.
 
+### The `%NODEDIR%` datadir token
+
+A `connection` sub-table's `datadir` value may use a `%NODEDIR%/<Name>` token.
+Satchel expands it to the node's **real per-OS default data directory** for a
+Bitcoin-Core-family node named `<Name>`, which is where that node writes its
+`.cookie`:
+
+| OS | `%NODEDIR%/<Name>` resolves to |
+|---|---|
+| Windows | `%LOCALAPPDATA%\<Name>` |
+| macOS | `~/Library/Application Support/<Name>` |
+| Linux | `~/.<name>` (lowercased) |
+
+This is why the bundled templates use `%NODEDIR%/Bitcoin-PoCX`, `%NODEDIR%/Bitcoin`,
+and `%NODEDIR%/Litecoin`: each resolves to the correct cookie path on every OS
+without per-platform editing. The `datadir` field also understands `~`,
+`%LOCALAPPDATA%`, and `%APPDATA%`; anything else is left literal.
+
 ## Attaching backends with `--coin`
 
 A coin in the registry is *configured* by attaching a chain backend with

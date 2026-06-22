@@ -1,6 +1,6 @@
 # JSON-RPC API
 
-[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 48 methods, grouped below by area with a one-line purpose each. This is an index; for full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
+[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 54 methods, grouped below by area with a one-line purpose each. This is an index; for full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
 
 ## Conventions
 
@@ -17,6 +17,8 @@
 |---|---|
 | `getinfo` | Daemon name/version/protocol/network, identity, seed status, coin ids. |
 | `walletstatus` | `{ seed_exists, encrypted, locked }`. |
+| `getfeepolicy` | Active merchant's fee-bump policy `{ max_feerate_sat_vb, min_fee_sat, reservation_mult, committed_mult, step_pct }`. |
+| `setfeepolicy` | Update the fee-bump policy — positional, all optional `[max_feerate_sat_vb?, min_fee_sat?, reservation_mult?, committed_mult?, step_pct?]`; returns the updated policy; persisted per-merchant. |
 | `stop` | Trigger graceful shutdown. |
 
 ## Seed / wallet lifecycle

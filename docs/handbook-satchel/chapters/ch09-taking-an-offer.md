@@ -21,6 +21,11 @@ coins first — you never send first.* You can still cancel before you fund your
 side, and if anything stalls the engine auto-refunds you after the safety
 timelock.
 
+Just like posting an offer, the dialog runs a **funds check** first: it confirms
+your wallet can cover the **amount plus the funding fee** for your side, and if it
+can't, it shows a "Not enough … (amount + funding fee)" alert and blocks the take
+until you can.
+
 ![The take-offer confirmation dialog.](images/processed/ch09-take-confirm.png){width=65%}
 
 Read it over and confirm. The swap is now under way.

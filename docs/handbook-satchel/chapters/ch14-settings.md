@@ -2,10 +2,10 @@
 
 Everything you can configure in Satchel lives behind the **Settings** gear, which
 you'll find in the top-right header and again at the foot of the left-hand
-navigation. Settings is organised into four tabs — **General**, **Coins**,
-**Network**, and **About** — and this chapter takes them in turn.
+navigation. Settings is organised into five tabs — **General**, **Coins**,
+**Network**, **Fees**, and **About** — and this chapter takes them in turn.
 
-![The Settings screen with its four tabs.](images/processed/ch14-settings-tabs.png){width=85%}
+![The Settings screen with its tabs.](images/processed/ch14-settings-tabs.png){width=85%}
 
 Most of what's here you'll set once and forget. None of it touches your coins or
 your recovery phrase — these are preferences and connection details, nothing
@@ -43,8 +43,9 @@ coins, a **Trading pairs** list tells you which pairs are ready to trade.
 
 The **Network** tab controls your noticeboards — the places your offers are
 posted and browsed. (For the bigger picture of how these work, see the chapter
-*"Trading over Nostr & Corkboard"*.) It shows your current network at the top, and
-then two editable lists.
+*"Trading over Nostr & Corkboard"*.) It holds just two editable lists. (The old
+read-only "network mode" row is gone — which network you're on is fixed when
+Satchel launches and is shown in the top-bar badge instead.)
 
 ### Nostr relays
 
@@ -60,6 +61,11 @@ already in the list, so you normally don't need to touch this.
 > off**. That's a valid choice — for instance, if you only ever trade over a
 > private Corkboard — but with an empty list your offers won't reach the open
 > Nostr network at all.
+
+> **Tip** — This is the place you **add and remove** relays, but to *watch* how
+> they're doing — which are connected, their latency and uptime — open the
+> top-level **Relays** screen in the left navigation (described in the *Tour of
+> the Interface* chapter). That screen is monitor-only.
 
 ### Corkboards
 
@@ -81,6 +87,42 @@ you'll see the header's relay dot update to reflect what's now reachable.
 > **Tip** — If a freshly added relay or board shows amber or red after saving,
 > double-check the address for a typo. The chapter *"Troubleshooting"* has a short
 > section on noticeboards that won't connect.
+
+## Fees
+
+The **Fees** tab holds one advanced, optional section — **Fee bumping** — that
+tunes how aggressively Satchel will raise on-chain fees to get a stuck swap
+transaction confirmed. **You don't need to touch this to trade.** The defaults are
+sensible; these are safety-versus-cost trade-offs for the rare swap that needs a
+nudge.
+
+A couple of things to know before you change anything:
+
+- The settings apply to your **active merchant**.
+- New values affect **future** bumps only. A swap that's already funded keeps the
+  policy it was funded under, so changing these won't disturb a trade in flight.
+
+The four knobs are:
+
+- **Max feerate (sat/vB)** — the ceiling for every fee bump, so a runaway fee
+  market can never drain you. Range 1–500; **default 500** (also the hard system
+  maximum).
+- **Funding bump reservation (×)** — how much extra balance the funds check sets
+  aside as headroom for a possible future bump. Range 1–100; **default 3**.
+- **Redeem over-provision (×)** — how much extra a Private (Taproot) redeem fee is
+  pre-paid, so the redeem still confirms even if Satchel happens to be closed.
+  Range 1–100; **default 2**. Applies to new swaps only.
+- **RBF escalation step (%)** — how steeply a stuck transaction's fee climbs on
+  each retry. Range 1–1000; **default 50**.
+
+Press **Save** to apply your changes — they take effect **live, with no restart** —
+or **Reset to defaults** to put all four back the way they came.
+
+![The Fees tab: the four fee-bumping knobs with Save and Reset to defaults.](images/processed/ch14-fees-tab.png){width=80%}
+
+> **Note** — If you've never heard of fee bumping or RBF, that's fine — leave this
+> tab alone. Satchel handles fees for you out of the box; these knobs exist only
+> for people who want fine control over the cost of a stalled swap.
 
 ## About
 

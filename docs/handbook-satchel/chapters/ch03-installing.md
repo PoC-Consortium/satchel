@@ -50,8 +50,21 @@ everything the app needs.
 That's the whole installation. There is nothing to register and no account to
 create.
 
+On **Windows**, the installer also tucks the engine's command-line tools —
+`pact-cli` and `pactd` — onto your **user PATH**, so you can run them from any
+terminal. You won't need them for ordinary trading, but if you do want them,
+**open a new terminal** afterwards: an already-open window won't see the change
+until it's reopened.
+
 > **Note** — **macOS is not supported yet.** A macOS build is planned. For now,
 > use Windows or Linux.
+
+> **Warning** — If you installed an **earlier release-candidate build** of
+> Satchel, a now-fixed installer bug could have truncated your Windows user PATH,
+> dropping unrelated entries past a certain length (so a tool like `cargo` might
+> suddenly seem to have vanished from the command line). Current builds fix this.
+> If something went missing, just **re-add it once** — for example, add
+> `%USERPROFILE%\.cargo\bin` back to your PATH — and it'll stick.
 
 ### What's inside the bundle
 
@@ -65,6 +78,12 @@ The bundle contains two things working together:
 
 So a single download gives you both the face and the engine. The only thing you
 provide is your coin nodes.
+
+> **Note** — On **Windows**, Satchel keeps its merchants, your recovery seed, and
+> your settings under **`%LOCALAPPDATA%`** (your machine-local app-data folder),
+> not the roaming `%APPDATA%`. This is deliberate: a spending seed should stay
+> tied to this one machine and never roam to others. You don't have to do anything
+> with this — it's just where Satchel stores things.
 
 ## Windows: the SmartScreen prompt
 

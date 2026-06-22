@@ -8,24 +8,51 @@ swap only starts when someone takes your offer and both sides fund their legs �
 and you can withdraw the offer any time before that. So there's no risk in
 posting; take your time getting the terms right.
 
-![The Post an offer form: give and receive coins, price, swap type, and safety timelock.](images/processed/ch08-offer-form.png){width=70%}
+![The Post an offer form: pair, direction, amount, price, swap type, and safety timelock.](images/processed/ch08-offer-form.png){width=70%}
 
 ## Filling in the form
 
-### You give / You receive
+The form reads top to bottom the way you'd describe a trade out loud: *which pair,
+which way, how much, at what price.*
 
-Pick the coin you're offering under **You give** and the coin you want under
-**You receive**, each with an amount. Beneath each amount field Satchel shows your
-**live balance** in that coin (pulled from your own node), so you can see what you
-have to work with. The two coins must be different, and both their nodes need to
-be live — if a node is down, Satchel blocks the post and tells you to start it.
+### Pair
+
+First choose the **Pair** you want to trade — a single canonical pairing such as
+**BTCX / BTC**. The dropdown lists every pair your connected coins can form, and
+it defaults to whatever pair you were last looking at on the Corkboard. If it's
+empty, you simply haven't connected enough coins yet — the form tells you to
+connect at least two under **Settings → Coins**.
+
+### Sell / Buy
+
+A two-button **direction toggle** sets which way you're trading the pair's *base*
+coin: **Sell {base}** means you give the base coin, **Buy {base}** means you
+receive it. (If you've used an earlier version: the old flip button is gone —
+this toggle replaces it, and it's clearer about what's happening.)
+
+### Amount
+
+The **Amount** is always entered in the **base coin**, with the base symbol shown
+at the end of the field. Just beneath it Satchel shows your **live balance** in
+that coin (pulled straight from your own node), so you can see what you have to
+work with.
 
 ### Price
 
-The **Price** field lets you work the way an exchange does: enter a unit price and
-one amount, and Satchel fills in the other amount for you. It works in both
-directions — type the receive amount and it back-fills the price. The label under
-the field reminds you of the units (quote coin per give coin).
+The **Price** is always quoted **quote-coin per base-coin**, and — this is the
+nice part — it **doesn't change when you flip Sell to Buy.** The price of the pair
+is the price of the pair; only the direction of the trade changes. A small label
+spells out the unit ("{unit} per {base}") and shows the raw rate as a hint.
+
+Next to the price is a **denomination dropdown** — **BTC / mBTC / µBTC / sat** —
+so you can quote in whatever unit you think in. This is the **same** denomination
+setting the Corkboard uses, so the two always agree and never drift apart.
+
+### Give / get summary
+
+From your amount and price, Satchel shows a plain **"You give …" / "You get …"**
+summary so there's no ambiguity about what you're actually offering before you go
+any further.
 
 ### Swap type
 
@@ -38,7 +65,8 @@ dropdown appears so you can pick:
 
 If the pair only supports one type, Satchel just shows it as a line of text —
 there's nothing to choose. Both are equally safe; the safety chapter explains the
-difference.
+difference. **Private (Taproot)** is now selectable on **mainnet** too, not just
+on the test networks, whenever both coins support Taproot.
 
 ### Safety timelock
 
@@ -79,6 +107,20 @@ before anything goes out, summarising:
 - a **network-cost preview** so you know roughly what the on-chain fees will be.
 
 Check it over, then confirm.
+
+### The funds check
+
+Before it lets you confirm, the review dialog quietly checks that your wallet can
+actually fund your side — and it checks for the **amount plus the on-chain funding
+fee**, not just the bare amount. If you'd come up short, it shows a red **"Not
+enough … (amount + funding fee)"** alert telling you roughly what you need versus
+what you have, and the confirm button stays **disabled** until you lower the
+amount or top up. This catches the awkward case where you have *almost* enough but
+not quite enough to also pay the miner.
+
+> **Tip** — Fee figures in the preview are always shown to **8 decimal places**
+> (for example `0.00100000`), so you can read them exactly without rounding
+> surprises.
 
 > **Note** — There are **no platform fees**. The Corkboard charges nothing to post
 > or trade. The only cost is the ordinary on-chain mining fee you'd pay for any

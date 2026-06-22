@@ -69,6 +69,10 @@ the pane prompts you to "pick a price level above.")
 Each offer row shows:
 
 - **The counterparty** — a tag for who posted it, or "your offer" if it's yours.
+  An offer you've *just* posted shows a dimmed, italic **"posting…"** badge (and a
+  hollow dot in the ladder) for the brief moment between when you post it and when
+  a relay echoes it back; once confirmed it switches to the normal "your offer"
+  tag and goes solid. See *Posting an offer* below.
 - **Amounts from your perspective** — what you would give and what you would
   receive if you took it. You don't have to do the maker's math in reverse;
   Satchel flips it for you.
@@ -98,6 +102,22 @@ The **Take offer** button is disabled in two cases:
 - **A node is down** — if one of the two coins for this pair isn't reachable,
   Satchel blocks the take with a note to start the node or check **Settings →
   Coins**. This is a friendly guard; the engine would refuse it anyway.
+
+## Your own offers on the board
+
+When you post an offer, it shows up on the board **instantly** — you don't wait
+for the network. While it's still travelling out to a relay it wears a dimmed,
+italic **"posting…"** badge (a hollow dot in the ladder), which simply means
+*"posted from this device and already advertising; waiting to be confirmed back
+from a relay."* The moment a relay echoes it, the badge becomes the ordinary
+**"your offer"** tag and the dot fills in — it's now fully live.
+
+> **Note** — Your offers also **survive a restart.** When you close Satchel
+> cleanly it quietly stops advertising your offers (so the board doesn't show
+> stale listings while you're away), and the moment you start it again it
+> re-advertises every offer that's still within its valid-for window — before the
+> first new board refresh. You won't lose offers just by closing the app. Only an
+> explicit **withdraw** removes one for good.
 
 ## Withdrawing your own offer
 

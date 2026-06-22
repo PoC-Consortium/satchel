@@ -698,30 +698,105 @@ impl Engine {
             coin_id: coin_id.to_string(),
             network,
         };
-        let balance = self.backend(&chain)?.wallet_balance().with_context(|| {
-            format!(
-                "couldn't read {coin_id} balance to confirm this swap is fundable \
-                 — is the node up and a wallet loaded?"
-            )
-        })?;
-        let live = self
-            .backend(&chain)
-            .and_then(|b| b.fee_rate_sat_per_vb())
-            .unwrap_or(FUNDING_FEERATE_FALLBACK);
-        // Reserve the worst-case funding-bump ceiling the nurse may chase. The
-        // clamp is written panic-safe: `u64::clamp` panics if `min > max`, and a
-        // low `max_feerate_sat_vb` (< FUNDING_FEERATE_FALLBACK) would otherwise
-        // crash here, so the floor drops with the ceiling.
-        let max_feerate = self.fee_bump.max_feerate_sat_vb;
-        let ceiling = live
-            .saturating_mul(self.fee_bump.funding.reservation_mult)
-            .clamp(FUNDING_FEERATE_FALLBACK.min(max_feerate), max_feerate);
-        let fee_headroom = ceiling.saturating_mul(FUNDING_VSIZE_EST);
+        let balance = self.wallet_balance_for(&chain)?;
+        let fee_headroom = self.funding_fee_headroom(&chain);
         let needed = amount.saturating_add(fee_headroom);
         ensure!(
             balance >= needed,
             "insufficient {coin_id} balance to fund this swap: have {balance} sat, \
              need ~{needed} sat ({amount} to lock + ~{fee_headroom} funding-fee headroom)"
+        );
+        Ok(())
+    }
+
+    /// Read the live core-wallet balance (sat) for `chain`, with a friendly
+    /// error if the node/wallet isn't reachable.
+    fn wallet_balance_for(&self, chain: &ChainRef) -> Result<u64> {
+        self.backend(chain)?.wallet_balance().with_context(|| {
+            format!(
+                "couldn't read {} balance to confirm this swap is fundable \
+                 — is the node up and a wallet loaded?",
+                chain.coin_id
+            )
+        })
+    }
+
+    /// Worst-case funding-fee headroom (sat) reserved per funding tx for `chain`.
+    /// Sized to the funding-bump ceiling the nurse may chase, so an exact-balance
+    /// offer can't pass a fund gate then fail at fund time, nor can a fee spike
+    /// between post and broadcast.
+    fn funding_fee_headroom(&self, chain: &ChainRef) -> u64 {
+        let live = self
+            .backend(chain)
+            .and_then(|b| b.fee_rate_sat_per_vb())
+            .unwrap_or(FUNDING_FEERATE_FALLBACK);
+        // The clamp is written panic-safe: `u64::clamp` panics if `min > max`,
+        // and a low `max_feerate_sat_vb` (< FUNDING_FEERATE_FALLBACK) would
+        // otherwise crash here, so the floor drops with the ceiling.
+        let max_feerate = self.fee_bump.max_feerate_sat_vb;
+        let ceiling = live
+            .saturating_mul(self.fee_bump.funding.reservation_mult)
+            .clamp(FUNDING_FEERATE_FALLBACK.min(max_feerate), max_feerate);
+        ceiling.saturating_mul(FUNDING_VSIZE_EST)
+    }
+
+    /// Sum of give-leg amounts (and the offer count) across this maker's
+    /// still-live offers whose `give` leg is `coin_id` on `network`. Used by the
+    /// post-time cumulative funds gate.
+    fn committed_give_for_coin(&self, network: Network, coin_id: &str) -> Result<(u64, usize)> {
+        let net_str = format!("{network:?}").to_lowercase();
+        let mut sum = 0u64;
+        let mut count = 0usize;
+        for o in self.store.my_offers_live()? {
+            // Skip anything that won't parse — a malformed local row shouldn't
+            // block a legitimate new offer.
+            let Ok(env) = serde_json::from_str::<Envelope>(&o.envelope) else {
+                continue;
+            };
+            let Ok(body) = serde_json::from_value::<crate::board::OfferBody>(env.body) else {
+                continue;
+            };
+            if body.give_asset == coin_id && body.network == net_str {
+                sum = sum.saturating_add(body.give_amount);
+                count += 1;
+            }
+        }
+        Ok((sum, count))
+    }
+
+    /// Like [`Self::ensure_can_fund`], but also charges the give-leg amounts the
+    /// maker has ALREADY committed across their still-live offers in the same
+    /// coin. Nothing is locked on-chain (offers are advertisements, funded only
+    /// when taken), so without this a maker could post many offers that each
+    /// individually fit their balance but together exceed it; a taker who
+    /// commits against the surplus would then see the maker's fund fail at take
+    /// time. Best-effort — in-flight takes aren't subtracted and cross-coin
+    /// balances aren't netted — but it stops the obvious cumulative-overcommit
+    /// case. The new offer isn't in the store yet, so it's charged separately.
+    fn ensure_can_fund_new_offer(
+        &self,
+        network: Network,
+        coin_id: &str,
+        amount: u64,
+    ) -> Result<()> {
+        let chain = ChainRef {
+            coin_id: coin_id.to_string(),
+            network,
+        };
+        let balance = self.wallet_balance_for(&chain)?;
+        let fee_headroom = self.funding_fee_headroom(&chain);
+        let (committed, n_live) = self.committed_give_for_coin(network, coin_id)?;
+        // Every live offer plus this new one needs its own funding-fee headroom
+        // when taken, so headroom scales with the offer count.
+        let n_offers = (n_live as u64).saturating_add(1);
+        let total_amount = amount.saturating_add(committed);
+        let needed = total_amount.saturating_add(fee_headroom.saturating_mul(n_offers));
+        ensure!(
+            balance >= needed,
+            "insufficient {coin_id} balance to advertise this offer: have {balance} sat, \
+             need ~{needed} sat ({amount} for this offer + {committed} already committed \
+             across {n_live} live offer(s) + ~funding-fee headroom). Withdraw or let some \
+             offers expire first."
         );
         Ok(())
     }
@@ -2089,7 +2164,11 @@ impl Engine {
     /// the redeem-side [`Self::adaptor_cpfp_bump`]. Liveness only: no change output
     /// (exact-UTXO funding) → can't CPFP → stall → refund. Returns an event only
     /// when it acts; no record change (the funding outpoint and refund stay valid).
-    fn maybe_bump_funding_v2(&self, rec: &AdaptorSwapRecord, leg: &str) -> Result<Option<TickEvent>> {
+    fn maybe_bump_funding_v2(
+        &self,
+        rec: &AdaptorSwapRecord,
+        leg: &str,
+    ) -> Result<Option<TickEvent>> {
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let p = self.adaptor_params(rec)?;
         let (chain, leg_obj, txid, vout) = match leg {
@@ -2239,20 +2318,21 @@ impl Engine {
         // ceiling (nothing relayable); the dust case is when a higher fee would
         // push the output under dust. Both fall back to rebroadcasting the
         // existing tx in case mempools dropped it.
-        let new_fee = match self
-            .fee_bump
-            .escalate(old_fee, self.fee_bump.refund.step_pct, REFUND_TX_VSIZE)
-        {
-            Some(f) if amount > f + DUST_LIMIT_SAT => f,
-            _ => {
-                let txid = backend.broadcast(&old_tx)?;
-                return Ok(Some(TickEvent {
-                    swap_id: rec.swap_id.clone(),
-                    action: "adaptor-rebroadcast".into(),
-                    detail: txid.to_string(),
-                }));
-            }
-        };
+        let new_fee =
+            match self
+                .fee_bump
+                .escalate(old_fee, self.fee_bump.refund.step_pct, REFUND_TX_VSIZE)
+            {
+                Some(f) if amount > f + DUST_LIMIT_SAT => f,
+                _ => {
+                    let txid = backend.broadcast(&old_tx)?;
+                    return Ok(Some(TickEvent {
+                        swap_id: rec.swap_id.clone(),
+                        action: "adaptor-rebroadcast".into(),
+                        detail: txid.to_string(),
+                    }));
+                }
+            };
         let outpoint = old_tx.input[0].previous_output;
         let refund_kp = seed
             .refund_secret_key(coin_of(chain)?, rec.swap_index)?
@@ -3322,14 +3402,12 @@ impl Engine {
         let (old_fee, fvsize) = backend.wallet_tx_fee_vsize(txid)?;
         let old_feerate = old_fee / fvsize.max(1);
         let market = backend.fee_rate_sat_per_vb()?;
-        let target = market
-            .min(self.fee_bump.max_feerate_sat_vb)
-            .min(
-                self.fee_bump
-                    .funding
-                    .reservation_mult
-                    .saturating_mul(old_feerate),
-            );
+        let target = market.min(self.fee_bump.max_feerate_sat_vb).min(
+            self.fee_bump
+                .funding
+                .reservation_mult
+                .saturating_mul(old_feerate),
+        );
         if target <= old_feerate {
             return Ok(None); // already paying enough
         }
@@ -3540,8 +3618,9 @@ impl Engine {
         };
         self.ensure_chains_live(&[&chain_a, &chain_b])?;
         // We fund the `give` leg when this offer is taken — don't advertise a
-        // swap the core wallet can't cover.
-        self.ensure_can_fund(network, &give.0, give.1)?;
+        // swap the core wallet can't cover, and don't advertise more than the
+        // wallet can cover across all our live offers in this coin combined.
+        self.ensure_can_fund_new_offer(network, &give.0, give.1)?;
         let body = crate::board::OfferBody {
             protocol: proto,
             network: format!("{network:?}").to_lowercase(),
@@ -3685,7 +3764,10 @@ impl Engine {
                 match self.signed_envelope("revoke", &o.offer_id, serde_json::json!({})) {
                     Ok(env) => env,
                     Err(err) => {
-                        eprintln!("warning: delist-on-close sign failed for {}: {err:#}", o.offer_id);
+                        eprintln!(
+                            "warning: delist-on-close sign failed for {}: {err:#}",
+                            o.offer_id
+                        );
                         continue;
                     }
                 };
@@ -5001,8 +5083,14 @@ mod tests {
         let parent_fee = 10 * parent_vsize; // committed at 10 sat/vB
 
         // Target below what the parent already pays: no child needed.
-        assert_eq!(cpfp_child_fee(parent_fee, parent_vsize, 5, MIN_SPEND_FEE_SAT), None);
-        assert_eq!(cpfp_child_fee(parent_fee, parent_vsize, 10, MIN_SPEND_FEE_SAT), None);
+        assert_eq!(
+            cpfp_child_fee(parent_fee, parent_vsize, 5, MIN_SPEND_FEE_SAT),
+            None
+        );
+        assert_eq!(
+            cpfp_child_fee(parent_fee, parent_vsize, 10, MIN_SPEND_FEE_SAT),
+            None
+        );
 
         // Target 50 sat/vB: the package (parent+child vsizes) must pay
         // 50 * (111 + 150) = 13050 sat; child covers the shortfall over parent.
@@ -5013,7 +5101,10 @@ mod tests {
         assert!((parent_fee + child) / pkg_vsize >= 50);
         // Never below the passed-in floor: with the default floor, a tiny natural
         // fee (target 1 → 261 sat) is lifted to MIN_SPEND_FEE_SAT.
-        assert_eq!(cpfp_child_fee(0, parent_vsize, 1, MIN_SPEND_FEE_SAT).unwrap(), MIN_SPEND_FEE_SAT);
+        assert_eq!(
+            cpfp_child_fee(0, parent_vsize, 1, MIN_SPEND_FEE_SAT).unwrap(),
+            MIN_SPEND_FEE_SAT
+        );
         // The floor is honoured from the arg, not hardcoded: with a floor of 1 the
         // natural fee (target × package vsize = 261) is returned unraised.
         assert_eq!(cpfp_child_fee(0, parent_vsize, 1, 1).unwrap(), pkg_vsize);
@@ -5289,6 +5380,67 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("btc") && err.contains("backend"), "{err}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Insert a live offer straight into the store, mirroring what `post_board_offer`
+    /// registers, so `committed_give_for_coin` has rows to sum without a live node.
+    fn put_live_offer(
+        engine: &Engine,
+        id: &str,
+        network: Network,
+        give_asset: &str,
+        give_amount: u64,
+    ) {
+        let body = crate::board::OfferBody {
+            protocol: "pact-htlc-v1".into(),
+            network: format!("{network:?}").to_lowercase(),
+            give_asset: give_asset.into(),
+            give_amount,
+            get_asset: "btc".into(),
+            get_amount: 100,
+            t1_secs: 1,
+            t2_secs: 1,
+            ttl_secs: None,
+            created: 0,
+        };
+        let env = Envelope {
+            v: 1,
+            msg_type: "offer".into(),
+            swap_id: id.into(),
+            from: "maker".into(),
+            body: serde_json::to_value(&body).unwrap(),
+            sig: String::new(),
+        };
+        engine
+            .store
+            .my_offer_put(id, &serde_json::to_string(&env).unwrap(), 0, 0, 0)
+            .unwrap();
+    }
+
+    #[test]
+    fn committed_give_sums_only_matching_coin_and_network() {
+        let (engine, dir) = engine_with("committed-give", None);
+        // Two live btcx offers on regtest, one btc offer, one foreign-network
+        // btcx offer, and one malformed row — only the two regtest btcx offers
+        // should be charged against a new regtest btcx offer.
+        put_live_offer(&engine, "a", Network::Regtest, "btcx", 100);
+        put_live_offer(&engine, "b", Network::Regtest, "btcx", 250);
+        put_live_offer(&engine, "c", Network::Regtest, "btc", 999);
+        put_live_offer(&engine, "d", Network::Mainnet, "btcx", 500);
+        engine.store.my_offer_put("e", "not json", 0, 0, 0).unwrap();
+
+        let (sum, count) = engine
+            .committed_give_for_coin(Network::Regtest, "btcx")
+            .unwrap();
+        assert_eq!((sum, count), (350, 2));
+
+        // The btc leg is summed independently.
+        let (btc_sum, btc_count) = engine
+            .committed_give_for_coin(Network::Regtest, "btc")
+            .unwrap();
+        assert_eq!((btc_sum, btc_count), (999, 1));
+
         std::fs::remove_dir_all(&dir).ok();
     }
 

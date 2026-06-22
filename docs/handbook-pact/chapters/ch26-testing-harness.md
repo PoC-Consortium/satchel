@@ -56,6 +56,7 @@ Corkboard first, then run every scenario against a single shared `Harness`.
 | `test_daemon_autopilot_swap` | Alice drives everything over `pactd` JSON-RPC (cookie auth; an unauthenticated call is rejected 401); duplicated backends (multi-backend path); the scheduler auto-redeems and RBF-bumps Alice's unconfirmed redeem; books `completed` on confirmation. |
 | `test_daemon_autopilot_refund` | Both parties walk away after funding; the `tick` scheduler alone reclaims both legs after the timelocks — and does nothing before them. |
 | `test_chain_watched_funding` | `funded` messages are withheld; the swap still completes via on-chain funding discovery. |
+| `test_funding_fee_bump_v1` | The v1 RBF funding nurse: funding is pinned under the fee fallback, then ticks bump it — asserts a `funding-fee-bump` event and that the funding txid is replaced; completes via chain-watched detection (the RBF replacement is invisible to the counterparty). |
 | `test_balance_validation` | Make-offer / take balance checks reject under-funded actions. |
 | `test_create_import_then_swap` | Seedless start: Alice `createseed`, Bob `importseed` (encrypted) via the wizard's seed-lifecycle RPCs, then a normal swap. |
 | `test_coin_setup` | `listcoins` / `listpairs` / `validatecoin`: configured + connected + genesis state, capability-derived pair availability, and the genesis-hash gate (accepts the right node, rejects a cross-wired one). |
@@ -73,6 +74,7 @@ Corkboard first, then run every scenario against a single shared `Harness`.
 | `test_adaptor_refund_feebump` | The single-key refund is RBF-bumpable (deterministic re-sign). |
 | `test_adaptor_redeem_cpfp` | CPFP child bumps an unbumpable cooperative redeem on BTC (the key-path redeem fee is sealed; a self-funded child spends the redeem's own output). |
 | `test_adaptor_redeem_cpfp_ltc` | The same CPFP redeem-bump on litecoind — the first v2 swap on LTC. |
+| `test_adaptor_funding_cpfp` | The v2 CPFP-via-change funding nurse: drives to `Signed` with leg-A funding unconfirmed, then a tick emits `funding-cpfp-bump` — asserts the child spends the funding's change while the leg-A swap outpoint stays unchanged; the package is mined and the swap completes (adaptor sigs over the unchanged outpoint still redeem). |
 | `test_adaptor_depth_gate` | The reveal/redeem gate fires at the configured `--coin-confs` confirmation depth. |
 | `test_adaptor_corkboard_swap` | A board-driven v2 swap (a PoCX↔BTC pair off-mainnet defaults to `pact-htlc-v2`, so a plain `boardpostoffer` posts a v2 offer). |
 

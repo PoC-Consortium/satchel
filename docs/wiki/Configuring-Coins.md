@@ -27,6 +27,8 @@ The first URL is the wallet-qualified Core-RPC primary (this funds swaps); extra
 
 In Satchel, **Settings → Coins** gives each coin a structured RPC form: **RPC host/port**, **Cookie file** (auto-reads `.cookie`) or **User/password** auth, an optional **wallet name**, and a **Confirmations before final** field. The flow is **validate-genesis-then-save**: clicking **Validate node** runs `validatecoin` (a genesis-hash check) and **Save** stays disabled until it passes — nothing is persisted until the genesis matches. Editing a validated form invalidates it again.
 
+The data-dir / cookie path field understands `~`, `%LOCALAPPDATA%`, `%APPDATA%`, and the **`%NODEDIR%/<Name>`** token. `%NODEDIR%/<Name>` resolves to the node's real per-OS default data dir — Windows `%LOCALAPPDATA%\<Name>`, macOS `~/Library/Application Support/<Name>`, Linux `~/.<name>` — so cookie auth works out-of-the-box on every OS. The bundled templates use it (`%NODEDIR%/Bitcoin-PoCX`, `%NODEDIR%/Bitcoin`, `%NODEDIR%/Litecoin`), so the form is prefilled with the correct path and Windows users no longer have to hand-fix it.
+
 ## Confirmation depth
 
 Each coin has a confirmation depth for reorg finality (`N≥1`), which gates auto-redeem and swap completion. Set it per-coin with `--coin-confs <id>=<N>` (or the Satchel **Confirmations before final** field). Left blank, a default heuristic applies:
