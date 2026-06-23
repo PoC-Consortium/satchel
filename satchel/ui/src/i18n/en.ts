@@ -222,7 +222,14 @@ export const en = {
     // Multi-step onboarding (create/import -> secret -> confirm -> passphrase).
     chooseTitle: "Set up {label}",
     enterTitle: "Import your recovery phrase",
-    enterBody: "Paste the 12 or 24-word BIP39 phrase for the seed you're restoring.",
+    enterBody:
+      "Type each word — they autocomplete as you go — or paste the whole phrase. We check it before you continue.",
+    wordCount: "{n} words",
+    wordAria: "Word {n}",
+    checkIncomplete: "Enter all {n} words.",
+    checkUnknown: "Some words aren't in the BIP39 wordlist — check the highlighted ones.",
+    checkBadChecksum: "Checksum doesn't match — re-check your words and their order.",
+    checkOk: "Recovery phrase looks valid.",
     verifyTitle: "Confirm your backup",
     verifyBody: "Type the words at these positions to confirm you wrote the phrase down.",
     verifyWord: "Word #{n}",
