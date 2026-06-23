@@ -2108,7 +2108,11 @@ impl Engine {
     /// the redeem-side [`Self::adaptor_cpfp_bump`]. Liveness only: no change output
     /// (exact-UTXO funding) → can't CPFP → stall → refund. Returns an event only
     /// when it acts; no record change (the funding outpoint and refund stay valid).
-    fn maybe_bump_funding_v2(&self, rec: &AdaptorSwapRecord, leg: &str) -> Result<Option<TickEvent>> {
+    fn maybe_bump_funding_v2(
+        &self,
+        rec: &AdaptorSwapRecord,
+        leg: &str,
+    ) -> Result<Option<TickEvent>> {
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let p = self.adaptor_params(rec)?;
         let (chain, leg_obj, txid, vout) = match leg {
@@ -2258,20 +2262,21 @@ impl Engine {
         // ceiling (nothing relayable); the dust case is when a higher fee would
         // push the output under dust. Both fall back to rebroadcasting the
         // existing tx in case mempools dropped it.
-        let new_fee = match self
-            .fee_bump
-            .escalate(old_fee, self.fee_bump.refund.step_pct, REFUND_TX_VSIZE)
-        {
-            Some(f) if amount > f + DUST_LIMIT_SAT => f,
-            _ => {
-                let txid = backend.broadcast(&old_tx)?;
-                return Ok(Some(TickEvent {
-                    swap_id: rec.swap_id.clone(),
-                    action: "adaptor-rebroadcast".into(),
-                    detail: txid.to_string(),
-                }));
-            }
-        };
+        let new_fee =
+            match self
+                .fee_bump
+                .escalate(old_fee, self.fee_bump.refund.step_pct, REFUND_TX_VSIZE)
+            {
+                Some(f) if amount > f + DUST_LIMIT_SAT => f,
+                _ => {
+                    let txid = backend.broadcast(&old_tx)?;
+                    return Ok(Some(TickEvent {
+                        swap_id: rec.swap_id.clone(),
+                        action: "adaptor-rebroadcast".into(),
+                        detail: txid.to_string(),
+                    }));
+                }
+            };
         let outpoint = old_tx.input[0].previous_output;
         let refund_kp = seed
             .refund_secret_key(coin_of(chain)?, rec.swap_index)?
@@ -3341,14 +3346,12 @@ impl Engine {
         let (old_fee, fvsize) = backend.wallet_tx_fee_vsize(txid)?;
         let old_feerate = old_fee / fvsize.max(1);
         let market = backend.fee_rate_sat_per_vb()?;
-        let target = market
-            .min(self.fee_bump.max_feerate_sat_vb)
-            .min(
-                self.fee_bump
-                    .funding
-                    .reservation_mult
-                    .saturating_mul(old_feerate),
-            );
+        let target = market.min(self.fee_bump.max_feerate_sat_vb).min(
+            self.fee_bump
+                .funding
+                .reservation_mult
+                .saturating_mul(old_feerate),
+        );
         if target <= old_feerate {
             return Ok(None); // already paying enough
         }
@@ -5050,8 +5053,14 @@ mod tests {
         let parent_fee = 10 * parent_vsize; // committed at 10 sat/vB
 
         // Target below what the parent already pays: no child needed.
-        assert_eq!(cpfp_child_fee(parent_fee, parent_vsize, 5, MIN_SPEND_FEE_SAT), None);
-        assert_eq!(cpfp_child_fee(parent_fee, parent_vsize, 10, MIN_SPEND_FEE_SAT), None);
+        assert_eq!(
+            cpfp_child_fee(parent_fee, parent_vsize, 5, MIN_SPEND_FEE_SAT),
+            None
+        );
+        assert_eq!(
+            cpfp_child_fee(parent_fee, parent_vsize, 10, MIN_SPEND_FEE_SAT),
+            None
+        );
 
         // Target 50 sat/vB: the package (parent+child vsizes) must pay
         // 50 * (111 + 150) = 13050 sat; child covers the shortfall over parent.
@@ -5062,7 +5071,10 @@ mod tests {
         assert!((parent_fee + child) / pkg_vsize >= 50);
         // Never below the passed-in floor: with the default floor, a tiny natural
         // fee (target 1 → 261 sat) is lifted to MIN_SPEND_FEE_SAT.
-        assert_eq!(cpfp_child_fee(0, parent_vsize, 1, MIN_SPEND_FEE_SAT).unwrap(), MIN_SPEND_FEE_SAT);
+        assert_eq!(
+            cpfp_child_fee(0, parent_vsize, 1, MIN_SPEND_FEE_SAT).unwrap(),
+            MIN_SPEND_FEE_SAT
+        );
         // The floor is honoured from the arg, not hardcoded: with a floor of 1 the
         // natural fee (target × package vsize = 261) is returned unraised.
         assert_eq!(cpfp_child_fee(0, parent_vsize, 1, 1).unwrap(), pkg_vsize);

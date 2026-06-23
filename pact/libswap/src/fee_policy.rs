@@ -89,7 +89,9 @@ impl Default for FeeBumpPolicy {
 
 impl Default for FundingPolicy {
     fn default() -> Self {
-        Self { reservation_mult: 3 }
+        Self {
+            reservation_mult: 3,
+        }
     }
 }
 
@@ -246,8 +248,7 @@ mod tests {
         assert_eq!(p, FeeBumpPolicy::default());
 
         // A partial object overrides only what it names.
-        let p: FeeBumpPolicy =
-            serde_json::from_str(r#"{"max_feerate_sat_vb": 200}"#).unwrap();
+        let p: FeeBumpPolicy = serde_json::from_str(r#"{"max_feerate_sat_vb": 200}"#).unwrap();
         assert_eq!(p.max_feerate_sat_vb, 200);
         assert_eq!(p.funding.reservation_mult, 3); // untouched default
 

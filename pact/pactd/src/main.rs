@@ -1262,7 +1262,9 @@ async fn main() -> Result<()> {
                     if !readvertised {
                         readvertised = true;
                         match blocking(&scheduler, |e| e.readvertise_offers()).await {
-                            Ok(n) if n > 0 => tracing::info!(count = n, "re-advertised offers on boot"),
+                            Ok(n) if n > 0 => {
+                                tracing::info!(count = n, "re-advertised offers on boot")
+                            }
                             Ok(_) => {}
                             Err(err) => tracing::warn!("re-advertise on boot failed: {err:#}"),
                         }
