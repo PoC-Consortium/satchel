@@ -13,9 +13,10 @@ import { useApp } from "../AppContext";
 import { useNavigate } from "../ui/nav";
 import { useT } from "../i18n";
 import { C } from "../theme";
+import { EmptyState } from "../components/StatusViews";
 
 export default function PrivateCreateScreen() {
-  const { log } = useApp();
+  const { log, watchOnly } = useApp();
   const navigate = useNavigate();
   const t = useT();
   const [busy, setBusy] = useState(false);
@@ -55,6 +56,12 @@ export default function PrivateCreateScreen() {
     } catch {
       /* clipboard blocked — the box is selectable as a fallback */
     }
+  }
+
+  if (watchOnly) {
+    return (
+      <EmptyState title={t("watchOnly.postBlockedTitle")}>{t("watchOnly.postBlockedBody")}</EmptyState>
+    );
   }
 
   return (

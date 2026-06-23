@@ -67,6 +67,13 @@ pub struct Engine {
     /// Defaults reproduce the historical hardcoded consts, so behaviour is
     /// unchanged until an operator overrides it.
     pub fee_bump: crate::fee_policy::FeeBumpPolicy,
+    /// Watch-only mode: a viewer session (typically no coins) that browses the
+    /// board and may withdraw its OWN offers, but never posts/takes/funds, and
+    /// never manages another session's offer liveness (readvertise-on-boot and
+    /// delist-on-close become no-ops). Loaded from this merchant's store at
+    /// [`Engine::open`]; toggled at runtime via [`Engine::set_watch_only`]
+    /// (pactd `setwatchonly`), and reported by `getinfo`.
+    pub watch_only: bool,
 }
 
 fn chain_params(chain: &ChainRef) -> Result<&'static ChainParams> {
@@ -431,6 +438,8 @@ impl Engine {
         let store = Store::open(data_dir, passphrase)?;
         // A previously CLI/RPC-set policy survives restart; else the default.
         let fee_bump = store.fee_policy()?.unwrap_or_default();
+        // Watch-only is sticky across restarts so a viewer session boots into it.
+        let watch_only = store.watch_only()?;
         Ok(Self {
             store,
             coins,
@@ -439,6 +448,7 @@ impl Engine {
             nostr_relays: None,
             auto_fund: false,
             fee_bump,
+            watch_only,
         })
     }
 
@@ -449,6 +459,15 @@ impl Engine {
         let policy = policy.validated()?;
         self.store.set_fee_policy(&policy)?;
         self.fee_bump = policy;
+        Ok(())
+    }
+
+    /// Enter/leave watch-only mode for this merchant (pactd `setwatchonly`).
+    /// Persisted; reloaded on the next [`Engine::open`]. Leaving watch-only does
+    /// not configure coins — trading also needs live nodes, gated elsewhere.
+    pub fn set_watch_only(&mut self, on: bool) -> Result<()> {
+        self.store.set_watch_only(on)?;
+        self.watch_only = on;
         Ok(())
     }
 
@@ -3604,6 +3623,10 @@ impl Engine {
         ttl_secs: Option<u64>,
         protocol: Option<&str>,
     ) -> Result<String> {
+        ensure!(
+            !self.watch_only,
+            "watch-only mode: this session can't post offers (set up coins to trade)"
+        );
         self.ensure_network_allowed(network)?;
         validate_offer_offsets(network, t1_secs, t2_secs)?;
         let proto = resolve_offer_protocol(&give.0, &get.0, network, protocol)?;
@@ -3757,6 +3780,12 @@ impl Engine {
     /// ([`Self::revoke_board_offer`]), which records a local block and marks the
     /// offer revoked for good.
     pub fn delist_live_offers(&self) -> Result<usize> {
+        // A watch-only viewer must not de-list offers — they belong to another
+        // live session sharing this identity; closing this window shouldn't pull
+        // them off the board.
+        if self.watch_only {
+            return Ok(0);
+        }
         let live = self.store.my_offers_live()?;
         let n = live.len();
         for o in &live {
@@ -3785,6 +3814,11 @@ impl Engine {
     /// rolls the relay TTL. Offers past their final expiry are skipped (the next
     /// `refresh_offers` retires them). Returns how many were re-advertised.
     pub fn readvertise_offers(&self) -> Result<usize> {
+        // A watch-only viewer doesn't manage offer liveness on behalf of another
+        // session — leave its offers to whichever session owns them.
+        if self.watch_only {
+            return Ok(0);
+        }
         let now = local_now();
         let mut n = 0;
         for o in self.store.my_offers_live()? {
@@ -3809,6 +3843,10 @@ impl Engine {
     /// maker through the relay (echoing the maker's signed offer so they
     /// can rebuild terms statelessly).
     pub fn take_board_offer(&self, offer_id: &str) -> Result<()> {
+        ensure!(
+            !self.watch_only,
+            "watch-only mode: this session can't take offers (set up coins to trade)"
+        );
         let offer = self
             .boards()?
             .iter()
@@ -3903,6 +3941,10 @@ impl Engine {
         ttl_secs: Option<u64>,
         protocol: Option<&str>,
     ) -> Result<String> {
+        ensure!(
+            !self.watch_only,
+            "watch-only mode: this session can't create offers (set up coins to trade)"
+        );
         self.ensure_network_allowed(network)?;
         ensure!(give.0 != get.0, "give and get must be different coins");
         validate_offer_offsets(network, t1_secs, t2_secs)?;
@@ -3957,6 +3999,10 @@ impl Engine {
     /// instead of a board GET — the take body still echoes the maker's full
     /// signed offer, so the maker proceeds with zero local state.
     pub fn take_offer_slip(&self, slip: &str) -> Result<()> {
+        ensure!(
+            !self.watch_only,
+            "watch-only mode: this session can't take offers (set up coins to trade)"
+        );
         // decode_slip already rejects unknown prefix / bad base64 / non-offer /
         // bad signature, so the envelope here is a verified `offer`.
         let offer = pact_proto::slip::decode_slip(slip)?;
@@ -5440,6 +5486,48 @@ mod tests {
             .committed_give_for_coin(Network::Regtest, "btc")
             .unwrap();
         assert_eq!((btc_sum, btc_count), (999, 1));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn watch_only_blocks_trading_keeps_liveness_noop_and_persists() {
+        let (mut engine, dir) = engine_with("watch-only", None);
+        engine.set_watch_only(true).unwrap();
+        assert!(engine.watch_only);
+
+        // Posting / taking / private offers are refused up front (before any
+        // node/seed work) with a watch-only message.
+        let post = engine
+            .post_board_offer(
+                Network::Regtest,
+                ("btcx".into(), 100),
+                ("btc".into(), 100),
+                1,
+                1,
+                None,
+                None,
+            )
+            .unwrap_err()
+            .to_string();
+        assert!(post.contains("watch-only"), "{post}");
+        let take = engine.take_board_offer("anything").unwrap_err().to_string();
+        assert!(take.contains("watch-only"), "{take}");
+        let slip = engine
+            .take_offer_slip("pactoffer1:x")
+            .unwrap_err()
+            .to_string();
+        assert!(slip.contains("watch-only"), "{slip}");
+
+        // Offer-liveness hooks are no-ops: a viewer must not readvertise or
+        // de-list another session's offers.
+        assert_eq!(engine.readvertise_offers().unwrap(), 0);
+        assert_eq!(engine.delist_live_offers().unwrap(), 0);
+
+        // The mode is sticky across a reopen (engine boots straight into it).
+        drop(engine);
+        let reopened = Engine::open(&dir, None, BTreeMap::new()).unwrap();
+        assert!(reopened.watch_only);
 
         std::fs::remove_dir_all(&dir).ok();
     }

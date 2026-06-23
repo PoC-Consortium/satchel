@@ -131,6 +131,9 @@ export interface Info {
   identity?: string | null;
   seed_exists?: boolean;
   locked?: boolean;
+  /** Watch-only mode: a viewer session (no coins) that browses the board and
+   *  may withdraw its own offers, but can't post/take/fund. */
+  watch_only?: boolean;
 }
 
 /** A swap leg's chain ref (older builds used `asset` instead of `coin_id`). */

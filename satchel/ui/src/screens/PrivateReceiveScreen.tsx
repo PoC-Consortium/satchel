@@ -5,7 +5,7 @@
 // `takeoffer` — pactd re-decodes and verifies the signature authoritatively.
 // From there the swap is indistinguishable from a board take.
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Box, Button, Card, CardContent, TextField, Typography } from "@mui/material";
 import { errMsg, takeOffer } from "../api/tauri";
 import { useApp } from "../AppContext";
@@ -14,7 +14,7 @@ import { useTakeConfirm } from "../hooks/useTakeConfirm";
 import { decodeSlipForDisplay, looksLikeSlip } from "../format-slip";
 
 export default function PrivateReceiveScreen() {
-  const { log } = useApp();
+  const { log, watchOnly, symOf } = useApp();
   const t = useT();
   const confirmTake = useTakeConfirm();
   const [slip, setSlip] = useState("");
@@ -23,6 +23,9 @@ export default function PrivateReceiveScreen() {
   const [done, setDone] = useState(false);
 
   const valid = looksLikeSlip(slip);
+  // Decode for DISPLAY only (no signature check) — lets a watch-only viewer
+  // inspect a slip's terms even though taking it is blocked.
+  const preview = useMemo(() => (valid ? decodeSlipForDisplay(slip) : null), [valid, slip]);
 
   async function submit() {
     setErr(null);
@@ -73,12 +76,29 @@ export default function PrivateReceiveScreen() {
             placeholder={t("takeSlip.placeholder")}
             slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: 12 } } }}
           />
+          {/* Display-only decode of a pasted slip — its terms, before (and even
+              without) taking it. The signature is verified authoritatively by
+              the engine only on take. */}
+          {preview && (
+            <Box sx={{ fontSize: 13, bgcolor: "action.hover", borderRadius: 1, px: 1.25, py: 1 }}>
+              <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 0.25 }}>
+                {t("takeSlip.previewLabel")}
+              </Typography>
+              <Typography sx={{ fontFamily: "monospace", fontSize: 13 }}>
+                {preview.body.get_amount} {symOf(preview.body.get_asset)} → {preview.body.give_amount}{" "}
+                {symOf(preview.body.give_asset)}
+              </Typography>
+            </Box>
+          )}
           {err && (
             <Typography sx={{ color: "error.main", fontSize: 13, whiteSpace: "pre-wrap" }}>{err}</Typography>
           )}
           {done && <Typography sx={{ color: "primary.main", fontSize: 13 }}>{t("private.received")}</Typography>}
+          {watchOnly && (
+            <Typography sx={{ color: "text.secondary", fontSize: 13 }}>{t("watchOnly.takeBlockedBody")}</Typography>
+          )}
           <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-            <Button variant="contained" disabled={!valid || busy} onClick={() => void submit()}>
+            <Button variant="contained" disabled={!valid || busy || watchOnly} onClick={() => void submit()}>
               {t("takeSlip.take")}
             </Button>
           </Box>

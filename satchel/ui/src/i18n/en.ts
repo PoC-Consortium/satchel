@@ -113,6 +113,7 @@ export const en = {
     placeholder: "pactoffer1:…",
     take: "Review & take",
     invalid: "That doesn't look like a slip — it should start with pactoffer1:.",
+    previewLabel: "This slip offers",
   },
   // PRIVATE nav group (off-market slips) — screen titles + intros. The form,
   // slip output, my-slips list and take flow reuse makeOffer.*/takeSlip.* copy.
@@ -163,6 +164,21 @@ export const en = {
     regtest: "RegTest",
     signet: "Signet",
     notRealFunds: "Not real funds — this is the {network} network",
+  },
+  // Watch-only mode: a viewer session with no coins. Browse the board and
+  // withdraw your own offers, but no posting / taking / funding.
+  watchOnly: {
+    badge: "Watch only",
+    badgeTip:
+      "Watch-only mode — browse the board and withdraw your own offers, but you can't post, take, or fund. Set up coins in Settings to trade.",
+    coinWizardButton: "Browse in watch-only mode",
+    coinWizardHint:
+      "Skip coin setup and just browse the board (read-only). You can still withdraw your own offers — handy for pulling offers left up by another session. Switch it off any time in Settings.",
+    postBlockedTitle: "Watch-only mode",
+    postBlockedBody:
+      "This is a watch-only session, so it can't post offers. Set up at least two coins in Settings → Coins to trade.",
+    takeBlockedBody: "Watch-only mode — you can review this offer, but taking it needs coins set up.",
+    takeBlockedTip: "Watch-only mode — set up coins in Settings to take offers.",
   },
   merchants: {
     title: "Your merchants",
@@ -267,6 +283,10 @@ export const en = {
     themeHint: "Choose how Satchel looks. System follows your OS setting.",
     language: "Language",
     languageHint: "More languages land as translations are contributed.",
+    mode: "Mode",
+    watchOnly: "Watch-only mode",
+    watchOnlyHint:
+      "Browse the board without setting up coins. You can still withdraw your own offers, but can't post, take, or fund. Turn off to trade (you'll need at least two coins connected).",
     network: "Network",
     boards: "Corkboards",
     boardsDesc:
@@ -405,6 +425,9 @@ export const en = {
     noCoins: "No coins set up yet",
     noCoinsBody: "Connect a coin in Settings → Coins and its wallet appears here.",
     goToCoins: "Go to Coins",
+    watchOnlyTitle: "No wallets in watch-only mode",
+    watchOnlyBody:
+      "This is a watch-only session with no coins connected, so there are no wallets to show. Turn off watch-only in Settings and connect a coin to fund swaps.",
     walletName: "wallet · {wallet}",
     walletScopedHint: "Every RPC for this coin is scoped to this node wallet.",
     walletDefault: "default wallet (not scoped)",
