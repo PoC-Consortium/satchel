@@ -29,19 +29,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # `label` is the human-readable <OS>-<Arch> tag baked into the published
+        # asset names (see "Tidy asset names" below) — Phoenix-PoCX's scheme,
+        # e.g. Satchel-0.1.0-Windows-x64-Setup.exe.
         include:
           - os: windows-latest
             triple: x86_64-pc-windows-msvc
+            label: Windows-x64
           - os: ubuntu-22.04
             triple: x86_64-unknown-linux-gnu
+            label: Linux-x64
           - os: macos-latest
             triple: aarch64-apple-darwin
+            label: macOS-AppleSilicon
           # macos-13 (Intel) was retired Dec 2025 — its jobs never get a runner
           # and stall until cancelled. macos-15-intel is GitHub's last x86_64
           # image (available until ~Aug 2027). Migrate to universal-apple-darwin
           # before then.
           - os: macos-15-intel
             triple: x86_64-apple-darwin
+            label: macOS-Intel
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -97,6 +104,7 @@ jobs:
       # `npm run build` in satchel/ui) and uploads the installers to a draft
       # release for this tag on this repo.
       - name: Build + publish Satchel
+        id: build
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -110,3 +118,54 @@ jobs:
           # releases/latest, so the in-app update check never offers an RC.
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: --target ${{ matrix.triple }}
+
+      # Tauri's bundler emits inconsistent asset names (Satchel_0.1.0_x64-setup.exe,
+      # Satchel-0.1.0-1.x86_64.rpm, Satchel_aarch64.app.tar.gz — mixed separators,
+      # arch labels, and a versionless .app.tar.gz). There's no bundler-wide name
+      # template in Tauri v2, so we rename in place on the draft release to the
+      # Phoenix-PoCX scheme: Satchel-<version>-<OS>-<Arch>[-Setup].<ext>.
+      #
+      # Renames only THIS job's freshly-built artifacts (from the build step's
+      # artifactPaths), so parallel matrix jobs never touch each other's assets.
+      # The in-app updater compares tag_name only — it doesn't read asset names —
+      # so renaming is safe for auto-update. bash 3.2-safe (macOS): no assoc arrays.
+      - name: Tidy asset names
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LABEL: ${{ matrix.label }}
+          ARTIFACTS: ${{ steps.build.outputs.artifactPaths }}
+        run: |
+          set -euo pipefail
+          tag="${{ github.ref_name }}"
+          ver="$(jq -r .version satchel/tauri.conf.json)"
+          # The draft release isn't returned by the get-by-tag endpoint; find it
+          # in the (draft-inclusive) list. Take the newest match for this tag.
+          rid="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+                   --jq "[.[] | select(.tag_name==\"$tag\")][0].id")"
+          assets="$(gh api "repos/$GITHUB_REPOSITORY/releases/$rid/assets?per_page=100")"
+
+          echo "$ARTIFACTS" | jq -r '.[]' | while read -r art; do
+            orig="$(basename "$art")"
+            # Carry a trailing .sig (updater signature) through unchanged.
+            sig=""; name="$orig"
+            case "$name" in *.sig) sig=".sig"; name="${name%.sig}";; esac
+            case "$name" in
+              *-setup.exe)  clean="Satchel-${ver}-${LABEL}-Setup.exe" ;;
+              *.msi)        clean="Satchel-${ver}-${LABEL}.msi" ;;
+              *.AppImage)   clean="Satchel-${ver}-${LABEL}.AppImage" ;;
+              *.deb)        clean="Satchel-${ver}-${LABEL}.deb" ;;
+              *.rpm)        clean="Satchel-${ver}-${LABEL}.rpm" ;;
+              *.dmg)        clean="Satchel-${ver}-${LABEL}.dmg" ;;
+              *.app.tar.gz) clean="Satchel-${ver}-${LABEL}.app.tar.gz" ;;
+              *) echo "::warning::no rename rule for $orig — left as-is"; continue ;;
+            esac
+            clean="${clean}${sig}"
+            if [ "$clean" = "$orig" ]; then continue; fi
+            aid="$(echo "$assets" | jq -r --arg n "$orig" '.[] | select(.name==$n) | .id')"
+            if [ -z "$aid" ] || [ "$aid" = "null" ]; then
+              echo "::warning::asset $orig not found on release $tag"; continue
+            fi
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/assets/$aid" -f name="$clean" --jq '.name' \
+              | sed "s/^/renamed $orig -> /"
+          done
