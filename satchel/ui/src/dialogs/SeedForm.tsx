@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Autocomplete,
   Box,
   Button,
   Checkbox,
-  Chip,
   createFilterOptions,
   DialogActions,
   DialogContent,
@@ -13,11 +12,13 @@ import {
   FormControlLabel,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import ChoiceCard from "../components/ChoiceCard";
 import { errMsg, rpc } from "../api/tauri";
-import { BIP39_WORDS, isBip39Word } from "../bip39";
+import { BIP39_WORDS, isBip39Word, isValidMnemonic } from "../bip39";
 import { useApp } from "../AppContext";
 import { useT } from "../i18n";
 import { C } from "../theme";
@@ -29,7 +30,8 @@ const filterWords = createFilterOptions<string>({ matchFrom: "start", limit: 8 }
 // Provision the (already active) merchant's seed, Phoenix-style and stepwise:
 //   choose (create | import)
 //   create:  reveal mnemonic (+ "written down") -> verify 3 random words -> passphrase
-//   import:  enter phrase -> passphrase
+//   import:  enter phrase (numbered word grid, like the reveal grid but editable;
+//            per-word autocomplete + typo flagging + checksum gate) -> passphrase
 // The passphrase step is the OPTIONAL at-rest encryption (not a BIP39 word).
 // For create we generate the mnemonic WITHOUT persisting (generateseed) so it
 // can be confirmed first; both paths commit via importseed once the passphrase
@@ -73,7 +75,11 @@ export default function SeedForm({
     if (presetMode === "create") void startCreate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [mnemonic, setMnemonic] = useState(""); // generated (create) or pasted (import)
+  const [mnemonic, setMnemonic] = useState(""); // generated (create) or typed (import)
+  // Import path: a fixed-length grid of word slots (12 or 24), the source of
+  // truth for the imported phrase. `mnemonic` is kept in sync from these.
+  const [wordCount, setWordCount] = useState(12);
+  const [entryWords, setEntryWords] = useState<string[]>(() => Array(12).fill(""));
   const [ack, setAck] = useState(false);
   const [verifyIdx, setVerifyIdx] = useState<number[]>([]);
   const [verifyIn, setVerifyIn] = useState<string[]>(["", "", ""]);
@@ -93,8 +99,22 @@ export default function SeedForm({
   }, []);
 
   const words = mnemonic.trim() ? mnemonic.trim().split(/\s+/) : [];
-  // Import path: words as lowercase chips for the Autocomplete value.
-  const importWords = mnemonic.trim() ? mnemonic.trim().toLowerCase().split(/\s+/) : [];
+
+  // Import: commit a new set of word slots and mirror them into `mnemonic`
+  // (the value `commit()` persists). Empty trailing slots are dropped from the
+  // phrase; the checksum gate below still requires every slot filled.
+  function setEntry(next: string[]) {
+    setEntryWords(next);
+    setMnemonic(next.map((w) => w.trim().toLowerCase()).filter(Boolean).join(" "));
+  }
+
+  // Switch between a 12- and 24-word phrase, preserving any words already typed.
+  function changeCount(n: number) {
+    setWordCount(n);
+    const next = entryWords.slice(0, n);
+    while (next.length < n) next.push("");
+    setEntry(next);
+  }
 
   // create → generate a fresh phrase (NOT persisted yet) and reveal it.
   async function startCreate() {
@@ -257,62 +277,46 @@ export default function SeedForm({
 
   // ---- step: enter an existing phrase (import) ----
   if (step === "enter") {
+    const slots = entryWords.map((w) => w.trim().toLowerCase());
+    const allFilled = slots.every(Boolean) && slots.length === wordCount;
+    const hasUnknown = slots.some((w) => w && !isBip39Word(w));
+    // The same gate pactd's importseed applies — a complete, checksum-valid
+    // phrase — so "Continue" never advances a phrase the backend would reject.
+    const checksumOk = allFilled && !hasUnknown && isValidMnemonic(slots.join(" "));
+    // Status line: unknown words first (the actionable typo), then incomplete,
+    // then a checksum miss, then the all-clear.
+    const status = hasUnknown
+      ? { msg: t("seed.checkUnknown"), color: "error.main" }
+      : !allFilled
+        ? { msg: t("seed.checkIncomplete", { n: wordCount }), color: "text.secondary" }
+        : !checksumOk
+          ? { msg: t("seed.checkBadChecksum"), color: "error.main" }
+          : { msg: t("seed.checkOk"), color: "success.main" };
     return (
       <>
         <DialogTitle>{t("seed.enterTitle")}</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 1.5 }}>{t("seed.enterBody")}</DialogContentText>
-          <Autocomplete
-            multiple
-            freeSolo
-            autoHighlight
-            options={BIP39_WORDS as string[]}
-            filterOptions={filterWords}
-            value={importWords}
-            onChange={(_, v) =>
-              setMnemonic((v as string[]).map((w) => w.trim().toLowerCase()).filter(Boolean).join(" "))
-            }
-            renderTags={(value, getTagProps) =>
-              value.map((opt, i) => {
-                const { key, ...tagProps } = getTagProps({ index: i });
-                // Colour words not in the BIP39 list red so typos stand out.
-                return (
-                  <Chip
-                    key={key}
-                    {...tagProps}
-                    label={opt}
-                    size="small"
-                    variant="outlined"
-                    color={isBip39Word(opt) ? "default" : "error"}
-                    sx={{ fontFamily: C.mono }}
-                  />
-                );
-              })
-            }
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label={t("seed.recoveryLabel")}
-                placeholder={importWords.length ? "" : t("seed.importPlaceholder")}
-                autoFocus
-                onPaste={(e) => {
-                  const text = e.clipboardData.getData("text");
-                  // Paste of a whole space-separated phrase → split into chips.
-                  if (/\s/.test(text.trim())) {
-                    e.preventDefault();
-                    const add = text.trim().toLowerCase().split(/\s+/).filter(Boolean);
-                    setMnemonic([...importWords, ...add].join(" "));
-                  }
-                }}
-              />
-            )}
-          />
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={wordCount}
+            onChange={(_, v: number | null) => v && changeCount(v)}
+            sx={{ mb: 0.5 }}
+          >
+            <ToggleButton value={12}>{t("seed.wordCount", { n: 12 })}</ToggleButton>
+            <ToggleButton value={24}>{t("seed.wordCount", { n: 24 })}</ToggleButton>
+          </ToggleButtonGroup>
+          <WordEntryGrid words={entryWords} onChange={setEntry} />
+          <Typography sx={{ color: status.color, fontSize: 12.5, mt: 1, minHeight: 18 }}>
+            {status.msg}
+          </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button color="inherit" onClick={() => (presetMode ? onBack?.() : setStep("choose"))} sx={{ mr: "auto" }}>
             {t("wizard.back")}
           </Button>
-          <Button variant="contained" disabled={!mnemonic.trim()} onClick={() => setStep("passphrase")}>
+          <Button variant="contained" disabled={!checksumOk} onClick={() => setStep("passphrase")}>
             {t("wizard.continue")}
           </Button>
         </DialogActions>
@@ -389,6 +393,145 @@ function WordGrid({ words }: { words: string[] }) {
           {i + 1}.&nbsp;{w}
         </span>
       ))}
+    </Box>
+  );
+}
+
+// The editable twin of WordGrid: the same numbered, dashed, 3-column mono grid,
+// but each cell is a per-word BIP39 autocomplete (Phoenix-style). Words are
+// flagged red when they're not in the wordlist; typing a space (or picking a
+// suggestion) commits the word and jumps to the next slot; pasting a whole
+// phrase fills from the focused slot onward.
+function WordEntryGrid({
+  words,
+  onChange,
+}: {
+  words: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const t = useT();
+  const refs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const focusCell = (i: number) => refs.current[i]?.focus();
+
+  const setWord = (i: number, val: string) => {
+    const next = words.slice();
+    next[i] = val;
+    onChange(next);
+  };
+
+  // Spread `parts` across slots starting at `start` (paste / multi-word input).
+  const fillFrom = (start: number, parts: string[]) => {
+    const next = words.slice();
+    let last = start;
+    for (let k = 0; k < parts.length && start + k < next.length; k++) {
+      next[start + k] = parts[k].trim().toLowerCase();
+      last = start + k;
+    }
+    onChange(next);
+    focusCell(Math.min(last + 1, next.length - 1));
+  };
+
+  return (
+    <Box
+      sx={{
+        bgcolor: "background.default",
+        border: `1px dashed ${C.accent}`,
+        borderRadius: 2,
+        p: 2,
+        my: 1.5,
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        columnGap: 2,
+        rowGap: 1.25,
+      }}
+    >
+      {words.map((w, i) => {
+        const typed = w.trim().toLowerCase();
+        const wrong = !!typed && !isBip39Word(typed);
+        return (
+          <Autocomplete
+            key={i}
+            freeSolo
+            autoHighlight
+            selectOnFocus
+            handleHomeEndKeys
+            options={BIP39_WORDS as string[]}
+            filterOptions={filterWords}
+            inputValue={w}
+            onInputChange={(_, val, reason) => {
+              if (reason === "input" && /\s/.test(val)) {
+                // Space (or an inline multi-word burst) commits + advances.
+                const parts = val.trim().split(/\s+/).filter(Boolean);
+                if (parts.length > 1) {
+                  fillFrom(i, parts);
+                } else {
+                  setWord(i, parts[0] ?? "");
+                  focusCell(i + 1);
+                }
+              } else {
+                setWord(i, val);
+              }
+            }}
+            onChange={(_, val) => {
+              // Picked a suggestion → normalise and jump to the next slot.
+              if (typeof val === "string") {
+                setWord(i, val.trim().toLowerCase());
+                focusCell(i + 1);
+              }
+            }}
+            // Hide the per-cell clear/popup icons — too busy in a 12/24 grid.
+            sx={{ "& .MuiAutocomplete-endAdornment": { display: "none" } }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                variant="standard"
+                error={wrong}
+                inputRef={(el: HTMLInputElement | null) => {
+                  refs.current[i] = el;
+                }}
+                autoFocus={i === 0}
+                onPaste={(e) => {
+                  const text = e.clipboardData.getData("text");
+                  if (/\s/.test(text.trim())) {
+                    e.preventDefault();
+                    fillFrom(i, text.trim().split(/\s+/).filter(Boolean));
+                  }
+                }}
+                slotProps={{
+                  input: {
+                    ...params.InputProps,
+                    startAdornment: (
+                      <Box
+                        component="span"
+                        sx={{
+                          color: "text.secondary",
+                          fontFamily: C.mono,
+                          fontSize: 12,
+                          mr: 0.75,
+                          minWidth: 18,
+                          textAlign: "right",
+                          userSelect: "none",
+                        }}
+                      >
+                        {i + 1}.
+                      </Box>
+                    ),
+                  },
+                  htmlInput: {
+                    ...params.inputProps,
+                    "aria-label": t("seed.wordAria", { n: i + 1 }),
+                    autoCapitalize: "none",
+                    autoCorrect: "off",
+                    spellCheck: false,
+                    style: { fontFamily: C.mono, fontSize: 14 },
+                  },
+                }}
+              />
+            )}
+          />
+        );
+      })}
     </Box>
   );
 }
