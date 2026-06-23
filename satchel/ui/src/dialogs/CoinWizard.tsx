@@ -29,7 +29,7 @@ const MIN_COINS = 2;
 // one opens the structured CoinSetup pre-filled from its template. A template
 // whose coin the engine doesn't know is shown as unsupported.
 export default function CoinWizard({ onDone }: { onDone: () => void | Promise<void> }) {
-  const { coins, refreshCoins } = useApp();
+  const { coins, refreshCoins, setWatchOnly } = useApp();
   const t = useT();
   const [templates, setTemplates] = useState<CoinTemplate[]>([]);
   const [icons, setIcons] = useState<Record<string, string>>({});
@@ -109,7 +109,15 @@ export default function CoinWizard({ onDone }: { onDone: () => void | Promise<vo
           ))}
         </Stack>
       </DialogContent>
-      <Box sx={{ display: "flex", px: 3, pb: 2, pt: 1 }}>
+      <Box sx={{ display: "flex", alignItems: "center", px: 3, pb: 2, pt: 1, gap: 1 }}>
+        {/* Escape hatch: skip coin setup and browse the board read-only. Useful
+            for recovery (withdraw offers stranded by a lost session) or just
+            looking around. Enters the engine-owned watch-only mode + re-boots. */}
+        <Tooltip title={t("watchOnly.coinWizardHint")}>
+          <Button variant="text" color="inherit" onClick={() => void setWatchOnly(true)}>
+            {t("watchOnly.coinWizardButton")}
+          </Button>
+        </Tooltip>
         <Box sx={{ flex: 1 }} />
         <Button
           variant="contained"

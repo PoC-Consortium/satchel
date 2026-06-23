@@ -62,6 +62,14 @@ interface AppCtx {
   identity: string | null;
   network: string | null;
 
+  /** Watch-only mode: a viewer session (no coins) that browses the board and
+   *  may withdraw its own offers, but can't post/take/fund. Sourced from
+   *  `getinfo`; toggled via `setWatchOnly`. */
+  watchOnly: boolean;
+  /** Enter/leave watch-only mode (pactd `setwatchonly`), then re-boot so every
+   *  gate re-evaluates. */
+  setWatchOnly: (on: boolean) => Promise<void>;
+
   swaps: Swap[];
   refreshSwaps: () => Promise<void>;
 
@@ -110,6 +118,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [info, setInfo] = useState<Info | null>(null);
   const [identity, setIdentity] = useState<string | null>(null);
   const [network, setNetwork] = useState<string | null>(null);
+  const [watchOnly, setWatchOnlyState] = useState(false);
   const [swaps, setSwaps] = useState<Swap[]>([]);
   const [coins, setCoins] = useState<CoinInfo[]>([]);
   const [coinIcons, setCoinIcons] = useState<Record<string, string | null>>({});
@@ -261,6 +270,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // identity cache to keep in sync anymore (this supersedes C1).
     log(`connected to pactd ${gi.version ?? "?"} (${gi.protocol ?? "?"})`);
 
+    // Watch-only is a viewer session with no coins: skip the coin gate entirely
+    // and go straight to the (read-only) trading UI. The mode is engine-owned
+    // (getinfo) so it survives restarts and gates post/take/fund authoritatively.
+    setWatchOnlyState(!!gi.watch_only);
+    if (gi.watch_only) {
+      // Still load coins so the wallet/header render honestly (typically none).
+      try {
+        const cl = await rpc<{ coins: CoinInfo[] }>("listcoins");
+        setCoins(cl.coins);
+        cl.coins.forEach((c) => setSymbol(c.id, c.symbol));
+      } catch (e) {
+        log("listcoins: " + errMsg(e));
+      }
+      setPhase("ready");
+      void refreshSwaps();
+      return;
+    }
+
     // Coin gate: trading needs ≥2 coins with a live node. A fresh install (or
     // one whose nodes are all down) lands on the coin-setup step instead of the
     // trading UI. Probe live so a configured-but-down coin doesn't pass.
@@ -283,6 +310,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void refreshSwaps();
     void refreshCoins();
   }, [log, refreshSwaps, refreshCoins, setConn, setSymbol]);
+
+  // Enter/leave watch-only mode: flip it engine-side (persisted), then re-boot
+  // so the coin gate / trading gates all re-evaluate against the new mode.
+  const setWatchOnly = useCallback(
+    async (on: boolean) => {
+      try {
+        await rpc("setwatchonly", [on]);
+        await boot();
+      } catch (e) {
+        log("watch-only: " + errMsg(e));
+      }
+    },
+    [boot, log],
+  );
 
   // Initial boot.
   useEffect(() => {
@@ -328,6 +369,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     info,
     identity,
     network,
+    watchOnly,
+    setWatchOnly,
     swaps,
     refreshSwaps,
     coins,

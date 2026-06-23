@@ -7,6 +7,7 @@ import {
   IconButton,
   MenuItem,
   Select,
+  Switch,
   Tab,
   Tabs,
   TextField,
@@ -74,15 +75,29 @@ export default function SettingsScreen() {
 
 function GeneralTab() {
   const t = useT();
+  const { watchOnly, setWatchOnly } = useApp();
   return (
-    <Section title={t("settings.appearance")}>
-      <Row label={t("settings.theme")} hint={t("settings.themeHint")}>
-        <ThemeToggle />
-      </Row>
-      <Row label={t("settings.language")} hint={t("settings.languageHint")}>
-        <LanguageSelect />
-      </Row>
-    </Section>
+    <>
+      <Section title={t("settings.appearance")}>
+        <Row label={t("settings.theme")} hint={t("settings.themeHint")}>
+          <ThemeToggle />
+        </Row>
+        <Row label={t("settings.language")} hint={t("settings.languageHint")}>
+          <LanguageSelect />
+        </Row>
+      </Section>
+      <Box sx={{ mt: 2.5 }}>
+        <Section title={t("settings.mode")}>
+          <Row label={t("settings.watchOnly")} hint={t("settings.watchOnlyHint")}>
+            <Switch
+              checked={watchOnly}
+              onChange={(_, on) => void setWatchOnly(on)}
+              inputProps={{ "aria-label": t("settings.watchOnly") }}
+            />
+          </Row>
+        </Section>
+      </Box>
+    </>
   );
 }
 

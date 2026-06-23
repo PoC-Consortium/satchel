@@ -20,7 +20,7 @@ interface Bal {
 // receive here — Satchel swaps, it is not a general wallet; move funds with your
 // own wallet/core UI, and swap proceeds sweep to your wallet automatically.
 export default function WalletScreen() {
-  const { setConn, setSymbol } = useApp();
+  const { setConn, setSymbol, watchOnly } = useApp();
   const navigate = useNavigate();
   const t = useT();
 
@@ -74,6 +74,8 @@ export default function WalletScreen() {
 
       {notConnected ? (
         <EmptyState title={t("wallets.notConnected")}>{t("wallets.notConnectedBody")}</EmptyState>
+      ) : coins && coins.length === 0 && watchOnly ? (
+        <EmptyState title={t("wallets.watchOnlyTitle")}>{t("wallets.watchOnlyBody")}</EmptyState>
       ) : coins && coins.length === 0 ? (
         <EmptyState
           title={t("wallets.noCoins")}

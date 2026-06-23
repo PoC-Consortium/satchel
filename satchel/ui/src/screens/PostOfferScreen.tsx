@@ -11,9 +11,10 @@ import { errMsg, rpc } from "../api/tauri";
 import { useApp } from "../AppContext";
 import { useNavigate } from "../ui/nav";
 import { useT } from "../i18n";
+import { EmptyState } from "../components/StatusViews";
 
 export default function PostOfferScreen() {
-  const { log } = useApp();
+  const { log, watchOnly } = useApp();
   const navigate = useNavigate();
   const t = useT();
   const [busy, setBusy] = useState(false);
@@ -44,6 +45,12 @@ export default function PostOfferScreen() {
     },
     [log, navigate],
   );
+
+  if (watchOnly) {
+    return (
+      <EmptyState title={t("watchOnly.postBlockedTitle")}>{t("watchOnly.postBlockedBody")}</EmptyState>
+    );
+  }
 
   return (
     <Box sx={{ maxWidth: 460, mx: "auto", textAlign: "center" }}>

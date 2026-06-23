@@ -291,6 +291,17 @@ impl Params {
             .and_then(|v| v.as_str())
             .map(str::to_string)
     }
+    fn bool(&self, i: usize, name: &str) -> Result<bool> {
+        let v = self.get(i, name)?;
+        // Accept a JSON bool or a "true"/"false"/"1"/"0" string (CLI sends strings).
+        v.as_bool()
+            .or_else(|| match v.as_str()? {
+                "true" | "1" => Some(true),
+                "false" | "0" => Some(false),
+                _ => None,
+            })
+            .with_context(|| format!("param '{name}' must be a bool"))
+    }
     fn envelope(&self, i: usize, name: &str) -> Result<Envelope> {
         serde_json::from_value(self.get(i, name)?.clone())
             .with_context(|| format!("param '{name}' is not an envelope"))
@@ -379,7 +390,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             // Tolerate a missing/locked seed: a fresh merchant (first run) or
             // a locked encrypted one has no identity to show yet. The UI uses
             // seed_exists/locked to drive the wizard / unlock prompt.
-            let (status, identity, coins) = blocking(app, |e| {
+            let (status, identity, coins, watch_only) = blocking(app, |e| {
                 let status = e.store.wallet_status()?;
                 let identity = if status.seed_exists && !status.locked {
                     e.store
@@ -390,7 +401,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 } else {
                     None
                 };
-                Ok((status, identity, e.configured_coins()))
+                Ok((status, identity, e.configured_coins(), e.watch_only))
             })
             .await?;
             Ok(json!({
@@ -403,6 +414,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 "encrypted": status.encrypted,
                 "locked": status.locked,
                 "coins": coins,
+                "watch_only": watch_only,
             }))
         }
         "walletstatus" => {
@@ -448,6 +460,16 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             })
             .await?;
             Ok(fee_policy_json(&policy))
+        }
+        // Enter/leave watch-only mode for the active merchant (per-merchant, in
+        // pactd's store; persisted, applied live). A watch-only session browses
+        // the board and may withdraw its own offers, but never posts/takes/funds
+        // and never manages offer liveness for another session. `getinfo` reports
+        // the current value.
+        "setwatchonly" => {
+            let on = p.bool(0, "on")?;
+            blocking_mut(app, move |e| e.set_watch_only(on)).await?;
+            Ok(json!({ "watch_only": on }))
         }
         "listcoins" => {
             // Shipped registry + which are configured + a live connection

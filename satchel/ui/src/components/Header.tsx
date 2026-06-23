@@ -28,6 +28,7 @@ import { useT } from "../i18n";
 // now; new bundles slot in here as i18n grows.
 const LANGUAGES = [{ code: "en", name: "English" }];
 import NetworkStamp from "./NetworkStamp";
+import WatchOnlyStamp from "./WatchOnlyStamp";
 import StatusIndicators from "./StatusIndicators";
 import Identicon from "./Identicon";
 
@@ -105,18 +106,24 @@ export default function Header({
 
       <StatusIndicators onLiveSwaps={onLiveSwaps} />
 
-      {/* Network stamp, absolutely centered in the bar (phoenix banner style).
-          NetworkStamp renders nothing on mainnet, so this is empty there. */}
+      {/* Stamps, absolutely centered in the bar (phoenix banner style). The
+          watch-only stamp sits on top; the network stamp below it (each renders
+          nothing when inapplicable, so this is empty on mainnet + non-watch-only). */}
       <Box
         sx={{
           position: "absolute",
           left: "50%",
           top: "50%",
           transform: "translate(-50%, -50%)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 0.5,
           pointerEvents: "none",
           "& > *": { pointerEvents: "auto" },
         }}
       >
+        <WatchOnlyStamp />
         <NetworkStamp network={network} />
       </Box>
 
