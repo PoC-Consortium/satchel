@@ -468,9 +468,17 @@ fn probe_adoptable(listen: &str, data_dir: &Path) -> Option<String> {
     if cookie.is_empty() {
         return None;
     }
-    // Confirm the cookie actually authenticates against THIS daemon (a benign,
-    // always-available RPC) — proves it's our pactd, not a stranger on the port.
-    pactd_call(&format!("http://{listen}"), &cookie, "getinfo", &json!([])).ok()?;
+    // Confirm the cookie authenticates against THIS daemon AND it is serving the
+    // network we expect. Both matter: the auth proves it's our pactd (not a
+    // stranger on the port), and the network match stops us adopting a DIFFERENT
+    // network's engine when a stale/colliding `listen` points at it (e.g. a
+    // regtest install whose satchel.json still says mainnet's 9737). Adopting the
+    // wrong daemon — or, worse, silently running with no auth — breaks every RPC.
+    let info = pactd_call(&format!("http://{listen}"), &cookie, "getinfo", &json!([])).ok()?;
+    let net = info.get("network").and_then(|v| v.as_str())?;
+    if net != active_network() {
+        return None;
+    }
     Some(cookie)
 }
 
@@ -1211,14 +1219,32 @@ fn main() {
                 clear_running_pactd(&config_dir);
             }
 
-            if health_ok(&listen) {
-                // Adopt: a pactd is already listening (not ours to kill).
-                if let Ok(cookie) = std::fs::read_to_string(data_dir.join(".cookie")) {
-                    *app.state::<RpcState>().0.lock().unwrap() = RpcConn {
-                        url: format!("http://{listen}"),
-                        auth: cookie.trim().to_string(),
-                    };
-                }
+            // Adopt a pactd already listening on our port ONLY if it's ours: the
+            // right network, with a cookie that authenticates (probe_adoptable
+            // checks both). This is the same guard the C6 re-adopt uses.
+            if let Some(cookie) = probe_adoptable(&listen, &data_dir) {
+                // Not ours to kill — leave ManagedPactd None (treated like adopt/
+                // external until the user explicitly stops it).
+                *app.state::<RpcState>().0.lock().unwrap() = RpcConn {
+                    url: format!("http://{listen}"),
+                    auth: cookie,
+                };
+            } else if health_ok(&listen) {
+                // Something is on the port but it is NOT our engine (wrong network,
+                // or no readable cookie). Refuse rather than (a) silently starting
+                // with empty auth — every RPC then fails with "pactd is not running
+                // yet" — or (b) latching onto a different network's daemon. We also
+                // can't spawn our own on a taken port, so this is a hard, clearly
+                // actionable misconfiguration (typically a stale/colliding `listen`).
+                return Err(format!(
+                    "configured listen {listen} is already serving a different engine \
+                     (not this {} install) — another network's Satchel/pactd is using \
+                     that port. Set a distinct `listen` in satchel.json (regtest uses \
+                     9739, testnet 9738, mainnet 9737), or stop the other instance, \
+                     then relaunch.",
+                    active_network()
+                )
+                .into());
             } else {
                 // Managed: launch the one pactd. It reloads its active merchant
                 // (if any) from its own manifest, or comes up merchant-less for
