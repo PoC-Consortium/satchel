@@ -19,6 +19,7 @@ import { errMsg, selectMerchant } from "../api/tauri";
 import { useApp } from "../AppContext";
 import { useT } from "../i18n";
 import Identicon from "../components/Identicon";
+import DialogLanguageMenu from "../components/DialogLanguageMenu";
 import { shortId } from "../identity";
 import { C } from "../theme";
 import type { Merchant } from "../api/types";
@@ -83,7 +84,12 @@ export default function MerchantManager({
       maxWidth="sm"
       fullWidth
       disableEscapeKeyDown={firstRun}
+      slotProps={{ paper: { sx: { position: "relative" } } }}
     >
+      {/* First-run only: a language switcher in the welcome dialog's corner, so
+          a new user can pick their language before stepping through setup (the
+          header's picker is behind this dialog's backdrop). */}
+      {firstRun && <DialogLanguageMenu />}
       <DialogTitle>{firstRun ? t("merchants.welcomeTitle") : t("merchants.title")}</DialogTitle>
       <DialogContent>
         <DialogContentText sx={{ mb: 2 }}>
