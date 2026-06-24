@@ -38,7 +38,7 @@ export default function PrivateCreateScreen() {
       try {
         const r = await makePrivateOffer(give, want, t1, t2, protocol, ttlSecs);
         setSlip(r.slip);
-        log("created a private offer slip — send it to your friend");
+        log(t("log.createdSlip"));
       } catch (e) {
         setErr(errMsg(e));
       }

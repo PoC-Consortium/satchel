@@ -36,7 +36,7 @@ export default function PostOfferScreen() {
         // lets us set the ttl without forcing a protocol (opt_str ignores null).
         const params = [give, want, t1, t2, protocol ?? null, ttlSecs ?? null];
         const r = await rpc<{ offer_id: string }>("boardpostoffer", params);
-        log(`posted offer ${r.offer_id} — withdraw any time; nothing is locked`);
+        log(t("log.postedOffer", { id: r.offer_id }));
         navigate("board");
       } catch (e) {
         setErr(errMsg(e));

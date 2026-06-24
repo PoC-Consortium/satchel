@@ -44,7 +44,7 @@ export default function PrivateReceiveScreen() {
       // pactd is the authority: it re-decodes, verifies the BIP340 signature,
       // checks expiry + pair support, then relays the take to the maker.
       await takeOffer(slip);
-      log(`took private offer ${decoded.swap_id} — it now appears in your active swaps`);
+      log(t("log.tookPrivateOffer", { id: decoded.swap_id }));
       setSlip("");
       setDone(true);
       setBusy(false);

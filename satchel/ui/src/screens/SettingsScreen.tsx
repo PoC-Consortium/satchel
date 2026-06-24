@@ -149,7 +149,7 @@ function NetworkTab() {
       // Relays first so the default transport is live even if a board URL trips.
       await saveNostrRelays(relays.join(","));
       await saveBoard(boards.join(","));
-      log("noticeboard updated");
+      log(t("log.noticeboardUpdated"));
       setStatus(t("settings.netSaved"));
       await load();
     } catch (e) {
@@ -378,7 +378,7 @@ function FeesTab() {
         pol.committed_mult,
         pol.step_pct,
       ]);
-      log("fee policy updated");
+      log(t("log.feePolicyUpdated"));
       setStatus(t("settings.feeSaved"));
       await load();
     } catch (e) {

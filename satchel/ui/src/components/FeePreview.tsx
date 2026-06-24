@@ -71,6 +71,7 @@ export default function FeePreview({
 }
 
 function FeeSideRows({ side, symbol }: { side: FeeSide; symbol: string }) {
+  const t = useT();
   return (
     <Box>
       <Typography sx={{ fontSize: 10.5, color: "text.secondary", letterSpacing: "0.04em" }}>
@@ -82,7 +83,7 @@ function FeeSideRows({ side, symbol }: { side: FeeSide; symbol: string }) {
           sx={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontFamily: C.mono }}
         >
           <span style={{ opacity: leg.name === "refund" ? 0.6 : 1 }}>
-            {leg.name === "refund" ? `${leg.name} (if it stalls)` : leg.name}
+            {leg.name === "refund" ? `${leg.name} ${t("fees.ifItStalls")}` : leg.name}
           </span>
           <span style={{ opacity: leg.name === "refund" ? 0.6 : 1 }}>
             {fmtFee(leg.fee_sat)} {symbol}

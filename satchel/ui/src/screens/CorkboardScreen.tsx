@@ -210,13 +210,13 @@ export default function CorkboardScreen() {
     setJustTook((s) => new Set(s).add(o.swap_id));
     try {
       await rpc("boardtake", [o.swap_id]);
-      log(`took offer ${o.swap_id} — it now appears in your active swaps below`);
+      log(t("log.tookOffer", { id: o.swap_id }));
       // Surface the pending take as an "initiating" pre-swap + flip this offer to
       // taken-by-us, without waiting for the next poll tick.
       void refreshSwaps();
       void loadOffers();
     } catch (e) {
-      log("take: " + errMsg(e));
+      log(t("log.takeError", { err: errMsg(e) }));
       setJustTook((s) => {
         const n = new Set(s);
         n.delete(o.swap_id);
@@ -228,9 +228,9 @@ export default function CorkboardScreen() {
   async function revoke(o: Offer) {
     try {
       await rpc("boardrevoke", [o.swap_id]);
-      log(`offer ${o.swap_id} withdrawn`);
+      log(t("log.offerWithdrawn", { id: o.swap_id }));
     } catch (e) {
-      log("withdraw: " + errMsg(e));
+      log(t("log.withdrawError", { err: errMsg(e) }));
     }
     void loadOffers();
   }
@@ -916,7 +916,7 @@ function OfferRow({
         </Box>
       </Tooltip>
 
-      <Tooltip title={`posted ${ago(b.created || 0)}`}>
+      <Tooltip title={t("format.posted", { age: ago(b.created || 0) })}>
         <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.625, fontSize: 12, color: freshColor, whiteSpace: "nowrap" }}>
           <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: f.cls === "expiring" ? C.bad : C.good }} />
           {f.label}

@@ -258,6 +258,8 @@ export const en = {
     you: "This is you",
     youShort: "you",
     unknown: "unknown identity",
+    // Short fingerprint fallback (identity.ts shortId) when no pubkey is known.
+    unknownShort: "unknown",
   },
   status: {
     notConnectedTitle: "Not connected to the engine",
@@ -534,6 +536,8 @@ export const en = {
     cancelTitle: "Cancel this swap?",
     cancelConfirm: "Cancel swap",
     cancelKeep: "Keep it",
+    // Abort reason recorded on the swap when cancelled from Satchel.
+    cancelReason: "cancelled in Satchel",
     cancelBody:
       "This abandons the swap before you've funded. Nothing of yours is locked yet, so you lose nothing — the offer just won't complete.",
     refundTitle: "Pull your funds back?",
@@ -570,6 +574,7 @@ export const en = {
     provisionalNote: "This pactd build doesn't expose fee estimation yet.",
     summary: "A swap is 2 on-chain transactions you pay for: funding on the give-chain, redeem on the receive-chain.",
     fallbackTip: "A node was unreachable, so a conservative default fee rate was used — treat these as a guess.",
+    ifItStalls: "(if it stalls)",
   },
   funds: {
     insufficient:
@@ -601,6 +606,80 @@ export const en = {
     count: "{count} lines",
     collapse: "Collapse log",
     expand: "Expand log",
+    // Activity-log lines emitted by the frontend. `{err}` carries a raw engine
+    // message (itself not translated — it comes from pactd over the wire).
+    noTauri: "not running inside Satchel — this UI needs the Tauri bridge",
+    startupError: "startup: {err}",
+    notConnected: "not connected: {err}",
+    connected: "connected to pactd {version} ({protocol})",
+    listcoinsError: "listcoins: {err}",
+    watchOnlyError: "watch-only: {err}",
+    switchedMerchant: "switched to merchant {id}",
+    switchMerchantError: "switch merchant: {err}",
+    loadMerchantError: "load merchant: {err}",
+    merchantCreated: "merchant {id} created",
+    merchantReady: "merchant ready",
+    actionOk: "{action} {id}: ok",
+    actionError: "{action} {id}: {err}",
+    diagCopied: "diagnostics for {id} copied ({count} log lines) — paste to the devs",
+    dumpError: "dump {id}: {err}",
+    coinDisconnected: "{coin} disconnected",
+    removeCoinError: "remove coin: {err}",
+    tookOffer: "took offer {id} — it now appears in your active swaps below",
+    takeError: "take: {err}",
+    offerWithdrawn: "offer {id} withdrawn",
+    withdrawError: "withdraw: {err}",
+    postedOffer: "posted offer {id} — withdraw any time; nothing is locked",
+    createdSlip: "created a private offer slip — send it to your friend",
+    tookPrivateOffer: "took private offer {id} — it now appears in your active swaps",
+    cancelledPrivateOffer: "cancelled private offer {id}",
+    cancelError: "cancel: {err}",
+    noticeboardUpdated: "noticeboard updated",
+    feePolicyUpdated: "fee policy updated",
+  },
+  // Relative-time + freshness prose from format.ts (rendered via the tr() mirror,
+  // since those are pure non-component helpers). Unit letters stay inside the
+  // template so a translation owns the whole phrase.
+  format: {
+    ageUnknown: "age unknown",
+    justNow: "just now",
+    minutesAgo: "{n}m ago",
+    hoursAgo: "{n}h ago",
+    daysAgo: "{n}d ago",
+    expiryNow: "now",
+    expirySoon: "soon",
+    inMinutes: "in ~{n}m",
+    inHours: "in ~{n}h",
+    inDays: "in ~{n}d",
+    posted: "posted {age}",
+    expires: "expires {time}",
+  },
+  // Plain-language swap story per (role, state) — the honest "who is exposed
+  // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
+  // are local refund times. Rendered via tr() (narrate() is a pure helper).
+  narrate: {
+    initiating:
+      "Take sent — waiting for the maker to start the swap. Nothing is locked yet; it cancels on its own if they don't respond.",
+    created: "Offer sent — waiting for the other side to agree. Nothing is committed.",
+    acceptedMaker: "Terms agreed. Next: lock your {a}. Until you fund, you can still cancel freely.",
+    acceptedTaker: "Terms agreed. The other side locks their {a} first — you never send first.",
+    noncesExchanged:
+      "Setting up the private swap — exchanging signing material. Nothing is locked yet.",
+    signedMaker:
+      "Both sides signed. Your daemon locks the {a}, then claims the {b} automatically. If anything stalls, your {a} returns at {t1}.",
+    signedTaker:
+      "Both sides signed. Your daemon locks the {b} and claims the {a} the moment the other side moves. Safety net: refund at {t2}.",
+    fundedAMaker:
+      "Your {a} is locked. Waiting for the other side to lock their {b}. If they never do, your {a} returns automatically at {t1}.",
+    fundedATaker:
+      "Their {a} is locked and verified. Next: lock your {b}. Safety net: automatic refund at {t2} if anything stalls.",
+    fundedBMaker: "Both locked. Your daemon claims the {b} as soon as it is safely confirmed.",
+    fundedBTaker: "Both locked. Your daemon will claim the {a} the moment the other side takes their {b}.",
+    redeemedB:
+      "You claimed the {b} — waiting for it to confirm. Your locked {a} stays protected until this is final.",
+    completed: "Swap complete — the {coin} is in your wallet.",
+    refunded: "The swap did not complete, so your {coin} came back automatically. Nothing lost but fees.",
+    aborted: "Cancelled before any money moved.",
   },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
@@ -613,7 +692,9 @@ export const en = {
     keepRunningExplain:
       "Closing the window keeps the engine running in the background, so it finishes the swap headless. You can reopen Satchel any time to check on it.",
     forceQuitWarn: "Force-quitting now stops the engine and can lose funds.",
-    typeToConfirm: "To force-quit anyway, type QUIT below.",
+    // {word} is the confirm word below; a translation may localize both together.
+    typeToConfirm: "To force-quit anyway, type {word} below.",
+    confirmWord: "QUIT",
     keepRunning: "Keep running, close window",
     keepWithdraw: "Keep running + withdraw offers",
     keepLeaveOffers: "Keep running, leave offers up",

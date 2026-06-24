@@ -72,10 +72,10 @@ export default function Header({
     try {
       await selectMerchant(mid);
       await boot();
-      log(`switched to merchant ${mid}`);
+      log(t("log.switchedMerchant", { id: mid }));
     } catch (e) {
       // Fund-safety gate (live swap on the current merchant) surfaces here.
-      log("switch merchant: " + errMsg(e));
+      log(t("log.switchMerchantError", { err: errMsg(e) }));
     }
   }
 
