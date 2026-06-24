@@ -14,15 +14,13 @@ import MenuIcon from "@mui/icons-material/Menu";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import StorefrontIcon from "@mui/icons-material/Storefront";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
-import LanguageOutlinedIcon from "@mui/icons-material/LanguageOutlined";
 import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-import CheckIcon from "@mui/icons-material/Check";
 import { errMsg, selectMerchant } from "../api/tauri";
 import { useApp } from "../AppContext";
 import { useDialogs } from "../ui/dialogs";
-import { usePrefs } from "../prefs";
-import { useT, LANGUAGES } from "../i18n";
+import { useT } from "../i18n";
+import LanguageMenu from "./LanguageMenu";
 import NetworkStamp from "./NetworkStamp";
 import WatchOnlyStamp from "./WatchOnlyStamp";
 import StatusIndicators from "./StatusIndicators";
@@ -44,7 +42,6 @@ export default function Header({
 }) {
   const { activeMerchant, activeId, merchants, identity, network, boot, log } = useApp();
   const { openMerchants } = useDialogs();
-  const { prefs, update } = usePrefs();
   const t = useT();
 
   // UI-6: the merchant chip opens a phoenix-style wallet menu. Anchor to the
@@ -54,10 +51,6 @@ export default function Header({
   const [open, setOpen] = useState(false);
   const openMenu = () => setOpen(true);
   const closeMenu = () => setOpen(false);
-
-  // Language selector (UI-8): globe icon → menu, phoenix-style.
-  const langRef = useRef<HTMLButtonElement>(null);
-  const [langOpen, setLangOpen] = useState(false);
 
   const label = activeMerchant?.label ?? (activeId ? activeId : t("header.noMerchant"));
   const id = activeMerchant?.identity ?? identity ?? null;
@@ -200,34 +193,7 @@ export default function Header({
         </Tooltip>
 
         {/* UI-8: language selector (phoenix parity), next to settings. */}
-        <Tooltip title={t("header.language")}>
-          <IconButton ref={langRef} onClick={() => setLangOpen(true)} sx={{ color: "text.secondary" }}>
-            <LanguageOutlinedIcon />
-          </IconButton>
-        </Tooltip>
-        <Menu
-          anchorEl={langRef.current}
-          open={langOpen}
-          onClose={() => setLangOpen(false)}
-          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-          transformOrigin={{ vertical: "top", horizontal: "right" }}
-        >
-          {LANGUAGES.map((l) => (
-            <MenuItem
-              key={l.code}
-              selected={prefs.language === l.code}
-              onClick={() => {
-                update({ language: l.code });
-                setLangOpen(false);
-              }}
-            >
-              <ListItemIcon>
-                {prefs.language === l.code ? <CheckIcon fontSize="small" color="primary" /> : null}
-              </ListItemIcon>
-              <ListItemText>{l.nativeName}</ListItemText>
-            </MenuItem>
-          ))}
-        </Menu>
+        <LanguageMenu />
       </Box>
     </Box>
   );
