@@ -1,15 +1,31 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 import { en } from "./en";
-import { de } from "./de";
-import { fr } from "./fr";
-import { es } from "./es";
-import { es419 } from "./es419";
-import { ptBR } from "./ptBR";
+import { bg } from "./bg";
+import { ca } from "./ca";
 import { cs } from "./cs";
-import { sk } from "./sk";
+import { de } from "./de";
+import { el } from "./el";
+import { es } from "./es";
+import { fi } from "./fi";
+import { fr } from "./fr";
+import { gl } from "./gl";
+import { hi } from "./hi";
+import { hr } from "./hr";
 import { id } from "./id";
-import { sw } from "./sw";
-import { vi } from "./vi";
+import { it } from "./it";
+import { ja } from "./ja";
+import { lt } from "./lt";
+import { nl } from "./nl";
+import { pl } from "./pl";
+import { ptBR } from "./ptBR";
+import { ro } from "./ro";
+import { ru } from "./ru";
+import { sk } from "./sk";
+import { sr } from "./sr";
+// Aliased: `tr` is taken by this module's own translate-mirror export below.
+import { tr as trBundle } from "./tr";
+import { uk } from "./uk";
+import { zhCn } from "./zhCn";
 import { usePrefs } from "../prefs";
 
 // A deliberately small i18n layer (mirrors phoenix's I18nService + LANGUAGES +
@@ -26,36 +42,67 @@ export interface Language {
   nativeName: string;
 }
 
-// The full set of shipped languages — mirrors the locales Phoenix-PoCX offers.
-// `code` is what's persisted in satchel.json; `nativeName` is what the picker
-// shows. To add a language: drop a bundle of the same shape next to en.ts,
-// import it, then add an entry here and in BUNDLES.
+// The full set of shipped languages — a 1:1 match of the locales phoenix-pocx
+// offers (its web-wallet src/assets/locales + languages.ts), same codes, names,
+// nativeNames, and order. `code` is what's persisted in satchel.json;
+// `nativeName` is what the picker shows. To add a language: drop a bundle of the
+// same shape next to en.ts, import it, then add an entry here and in BUNDLES.
 export const LANGUAGES: Language[] = [
   { code: "en", name: "English", nativeName: "English" },
+  { code: "bg", name: "Bulgarian", nativeName: "Български" },
+  { code: "ca", name: "Catalan", nativeName: "Català" },
   { code: "cs", name: "Czech", nativeName: "Čeština" },
-  { code: "de", name: "German", nativeName: "Deutsch" },
-  { code: "es", name: "Spanish", nativeName: "Español" },
-  { code: "es-419", name: "Spanish (Latin America)", nativeName: "Español (Latinoamérica)" },
+  { code: "de-de", name: "German", nativeName: "Deutsch" },
+  { code: "el", name: "Greek", nativeName: "Ελληνικά" },
+  { code: "es-es", name: "Spanish", nativeName: "Español" },
+  { code: "fi", name: "Finnish", nativeName: "Suomi" },
   { code: "fr", name: "French", nativeName: "Français" },
+  { code: "gl", name: "Galician", nativeName: "Galego" },
+  { code: "hi", name: "Hindi", nativeName: "हिंदी" },
+  { code: "hr", name: "Croatian", nativeName: "Hrvatski" },
   { code: "id", name: "Indonesian", nativeName: "Bahasa Indonesia" },
-  { code: "pt-BR", name: "Portuguese (Brazil)", nativeName: "Português (Brasil)" },
-  { code: "sk", name: "Slovak", nativeName: "Slovenčina" },
-  { code: "sw", name: "Swahili", nativeName: "Kiswahili" },
-  { code: "vi", name: "Vietnamese", nativeName: "Tiếng Việt" },
+  { code: "it", name: "Italian", nativeName: "Italiano" },
+  { code: "ja", name: "Japanese", nativeName: "日本語" },
+  { code: "lt", name: "Lithuanian", nativeName: "Lietuviškai" },
+  { code: "nl", name: "Dutch", nativeName: "Nederlands" },
+  { code: "pl", name: "Polish", nativeName: "Polski" },
+  { code: "pt-br", name: "Portuguese (Brazil)", nativeName: "Português (Brasil)" },
+  { code: "ro", name: "Romanian", nativeName: "Română" },
+  { code: "ru", name: "Russian", nativeName: "Русский" },
+  { code: "sk", name: "Slovak", nativeName: "Slovensky" },
+  { code: "sr", name: "Serbian", nativeName: "Српски" },
+  { code: "tr", name: "Turkish", nativeName: "Türk" },
+  { code: "uk", name: "Ukrainian", nativeName: "Yкраiнска" },
+  { code: "zh-cn", name: "Chinese (Simplified)", nativeName: "中文 (simplified)" },
 ];
 
 const BUNDLES: Record<string, unknown> = {
   en,
+  bg,
+  ca,
   cs,
-  de,
-  es,
-  "es-419": es419,
+  "de-de": de,
+  el,
+  "es-es": es,
+  fi,
   fr,
+  gl,
+  hi,
+  hr,
   id,
-  "pt-BR": ptBR,
+  it,
+  ja,
+  lt,
+  nl,
+  pl,
+  "pt-br": ptBR,
+  ro,
+  ru,
   sk,
-  sw,
-  vi,
+  sr,
+  tr: trBundle,
+  uk,
+  "zh-cn": zhCn,
 };
 
 function lookup(bundle: unknown, key: string): string | undefined {

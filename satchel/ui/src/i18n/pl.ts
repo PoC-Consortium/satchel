@@ -1,0 +1,716 @@
+// The Polish (Polski) string bundle. Mirrors en.ts key-for-key; only values are translated.
+import type { Bundle } from "./en";
+
+export const pl: Bundle = {
+  app: {
+    name: "Satchel",
+    tagline: "swapy bez zaufania",
+  },
+  // In-app update notifications (sidebar version badge + dialog).
+  update: {
+    title: "Dostępna aktualizacja",
+    upToDate: "Masz najnowszą wersję",
+    current: "Zainstalowana",
+    latest: "Najnowsza",
+    notesTitle: "Informacje o wydaniu",
+    get: "Pobierz aktualizację",
+    dismiss: "Odrzuć",
+    close: "Zamknij",
+    badgeTooltip: "Dostępna aktualizacja — kliknij, aby zobaczyć szczegóły",
+    versionTooltip: "Kliknij, aby sprawdzić aktualizacje",
+  },
+  // Risk disclaimer (first-run welcome + Settings → About).
+  disclaimer: {
+    title: "Samodzielne przechowywanie — Twoje klucze, Twoja odpowiedzialność",
+    body: "Satchel wykonuje niepowiernicze swapy atomowe: tylko Ty trzymasz swoje klucze, a seed sprzedawcy przechowuje gorące klucze tranzytowe na czas trwania swapa. Protokoły swapów (v1 HTLC oraz v2 Taproot/MuSig2) zostały zweryfikowane i działają na mainnecie. Licencja MIT, dostarczane „tak jak jest”, bez gwarancji — wykonaj kopię zapasową frazy odzyskiwania i korzystaj na własne ryzyko.",
+  },
+  nav: {
+    public: "Publiczne",
+    corkboard: "Corkboard",
+    postOffer: "Wystaw ofertę",
+    private: "Prywatne",
+    privateCreate: "Utwórz slip",
+    privateReceive: "Przyjmij slip",
+    privateSlips: "Moje slipy",
+    swaps: "Swapy",
+    relays: "Relaye",
+    wallets: "Portfele",
+    settings: "Ustawienia",
+    coins: "Monety",
+  },
+  makeOffer: {
+    title: "Wystaw ofertę",
+    intro:
+      "Wystaw podpisaną ofertę na Corkboard. Nic nie zostaje zablokowane — to tylko ogłoszenie; możesz je wycofać w każdej chwili, a swap rozpoczyna się dopiero, gdy ktoś go przyjmie i obie strony wniosą środki.",
+    give: "Oddajesz",
+    want: "Otrzymujesz",
+    // Canonical pair + direction: pick the pair, choose Sell/Buy the base, enter
+    // the base amount and a quote-per-base price (invariant to direction).
+    pair: "Para",
+    noPairs: "Brak par do handlu — podłącz co najmniej dwie monety w Ustawienia → Monety.",
+    sell: "Sprzedaj {sym}",
+    buy: "Kup {sym}",
+    amount: "Ilość",
+    youGive: "Oddajesz",
+    youGet: "Otrzymujesz",
+    price: "Cena",
+    priceUnit: "{unit} za {base}",
+    pricePlaceholder: "cena jednostkowa",
+    balance: "Saldo: {amt} {sym}",
+    balanceLoading: "Saldo: …",
+    noCoins: "Nie skonfigurowano monet",
+    sameCoin: "Oddawana i otrzymywana muszą być różnymi monetami.",
+    legDown: "Węzeł jednej z tych monet jest niedostępny — uruchom go (lub sprawdź Ustawienia → Monety) przed wystawieniem.",
+    // Swap-protocol pin (only offered when a pair+network supports more than
+    // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
+    protocol: "Typ swapa",
+    protoStandard: "Standardowy (HTLC)",
+    // Titles for the review/confirm dialog shown before posting (see OfferForm).
+    reviewOfferTitle: "Sprawdź swoją ofertę",
+    reviewSlipTitle: "Sprawdź swój slip",
+    term: "Timelock bezpieczeństwa",
+    termShort: "Krótki",
+    termMedium: "Średni",
+    termLong: "Długi",
+    termHint: {
+      short: "Krótki — środki najszybciej wracają automatycznie, jeśli transakcja utknie (~12 h / 6 h), z najmniejszym marginesem bezpieczeństwa.",
+      medium: "Średni — zrównoważone okno zwrotu (~24 h / 12 h).",
+      long: "Długi (najbezpieczniejszy) — najszerszy margines bezpieczeństwa; automatyczny zwrot po ~36 h / 18 h, jeśli transakcja utknie.",
+    },
+    validFor: "Ważna przez (minuty)",
+    validForMins: "{mins} min",
+    validForHint:
+      "Jak długo oferta pozostaje na liście. Gdy jesteś online, jest automatycznie odświeżana; po tym czasie wygasa. Zamknięcie aplikacji ją wycofuje.",
+    note: "Oferta o stałym rozmiarze — nic nie jest blokowane, dopóki ktoś jej nie przyjmie. Kwoty są on-chain; opłaty sieciowe płacisz dodatkowo, a Corkboard nie pobiera żadnych. Timelock to okno automatycznego zwrotu, gdy swap utknie.",
+    post: "Wystaw ofertę",
+    makeSlip: "Utwórz slip",
+    slipTitle: "Twój prywatny slip ofertowy",
+    slipExplainer:
+      "Wyślij to znajomemu. Wkleja go do Satchel, aby przyjąć. Nic nie jest blokowane; wygasa za {ttl}.",
+    copy: "Kopiuj",
+    copied: "Skopiowano",
+    makeAnother: "Utwórz kolejny",
+    myPrivateTitle: "Moje prywatne oferty",
+    myPrivateEmpty: "Brak aktywnych ofert prywatnych.",
+    privateExpires: "wygasa {when}",
+    privateExpired: "wygasła",
+    cancel: "Anuluj",
+    cancelTip: "Przestań honorować ten slip — znajomy, który nadal go ma, nie będzie mógł go już przyjąć.",
+  },
+  takeSlip: {
+    open: "Wklej slip",
+    title: "Przyjmij prywatną ofertę",
+    intro:
+      "Znajomy wysłał Ci prywatny slip ofertowy (zaczyna się od pactoffer1:). Wklej go tutaj, aby sprawdzić i przyjąć — dokładnie tak jak ofertę z tablicy.",
+    placeholder: "pactoffer1:…",
+    take: "Sprawdź i przyjmij",
+    invalid: "To nie wygląda na slip — powinien zaczynać się od pactoffer1:.",
+    previewLabel: "Ten slip oferuje",
+  },
+  // PRIVATE nav group (off-market slips) — screen titles + intros. The form,
+  // slip output, my-slips list and take flow reuse makeOffer.*/takeSlip.* copy.
+  private: {
+    createTitle: "Utwórz prywatną ofertę",
+    createIntro:
+      "Zbuduj podpisaną ofertę i przekaż ją znajomemu jako slip przez swój własny czat. Nic nie jest nigdzie wystawiane — i nic nie jest blokowane, dopóki oboje nie wniesiecie środków.",
+    slipsIntro:
+      "Slipy, które utworzyłeś. Każdy posiadacz slipa może go przyjąć, dopóki nie wygaśnie; anuluj go, aby przestać go honorować wcześniej.",
+    slipsEmptyBody: "Utwórz prywatną ofertę, aby otrzymać slip, który możesz wysłać znajomemu.",
+    receiveTitle: "Przyjmij prywatną ofertę",
+    received: "Przyjęto — śledź w zakładce Swapy.",
+  },
+  // Shared take-confirmation dialog (board take + slip take).
+  takeConfirm: {
+    title: "Przyjąć tę ofertę?",
+    confirm: "Przyjmij ofertę",
+    counterparty: "Kontrahent",
+    youGive: "Oddajesz",
+    youReceive: "Otrzymujesz",
+    safetyRefund: "Zwrot bezpieczeństwa",
+    offerAge: "Wiek oferty",
+    makerFundsFirst:
+      "Maker blokuje swoje {sym} jako pierwszy — Ty nigdy nie wysyłasz pierwszy. Nadal możesz anulować, zanim wniesiesz swoją stronę, a silnik automatycznie zwróci środki po timelocku bezpieczeństwa, jeśli swap utknie.",
+  },
+  header: {
+    activeMerchant: "Aktywny sprzedawca — kliknij, aby przełączyć lub zarządzać",
+    manageMerchants: "Zarządzaj sprzedawcami…",
+    noMerchant: "brak sprzedawcy",
+    openMenu: "Otwórz menu",
+    collapseMenu: "zwiń menu",
+    settings: "Ustawienia",
+    language: "Język",
+    pactConnected: "Silnik połączony",
+    pactUnreachable: "Silnik nieosiągalny",
+    liveSwapsOne: "1 swap w toku — kliknij, aby zobaczyć",
+    liveSwapsMany: "{count} swapów w toku — kliknij, aby zobaczyć",
+    liveSwapsNone: "Brak swapów w toku",
+    coinOk: "{name} — połączono · czubek {tip}",
+    coinUnconfigured: "{name} — nie skonfigurowano",
+    coinError: "{name} — {status}",
+    relaysOk: "Relaye Nostr — {up}/{total} połączonych",
+    relaysDown: "Relaye Nostr — żaden z {total} nie połączony",
+  },
+  network: {
+    mainnet: "MainNet",
+    testnet: "TestNet",
+    regtest: "RegTest",
+    signet: "Signet",
+    notRealFunds: "To nie są prawdziwe środki — to sieć {network}",
+  },
+  // Watch-only mode: a viewer session with no coins. Browse the board and
+  // withdraw your own offers, but no posting / taking / funding.
+  watchOnly: {
+    badge: "Tylko podgląd",
+    badgeTip:
+      "Tryb tylko do podglądu — przeglądaj tablicę i wycofuj własne oferty, ale nie możesz wystawiać, przyjmować ani wnosić środków. Skonfiguruj monety w Ustawieniach, aby handlować.",
+    coinWizardButton: "Przeglądaj w trybie tylko do podglądu",
+    coinWizardHint:
+      "Pomiń konfigurację monet i po prostu przeglądaj tablicę (tylko do odczytu). Nadal możesz wycofywać własne oferty — przydatne do ściągania ofert pozostawionych przez inną sesję. Wyłącz w dowolnej chwili w Ustawieniach.",
+    postBlockedTitle: "Tryb tylko do podglądu",
+    postBlockedBody:
+      "To sesja tylko do podglądu, więc nie można wystawiać ofert. Skonfiguruj co najmniej dwie monety w Ustawienia → Monety, aby handlować.",
+    takeBlockedBody: "Tryb tylko do podglądu — możesz sprawdzić tę ofertę, ale jej przyjęcie wymaga skonfigurowanych monet.",
+    takeBlockedTip: "Tryb tylko do podglądu — skonfiguruj monety w Ustawieniach, aby przyjmować oferty.",
+  },
+  merchants: {
+    title: "Twoi sprzedawcy",
+    intro:
+      "Sprzedawca to jedna tożsamość handlowa — z własnym seedem i historią swapów. Handel pod innym sprzedawcą utrzymuje konteksty niepowiązanymi (tożsamość jednorazowa). Twoje główne monety są w Twoim własnym portfelu, nie tutaj.",
+    // First-run welcome (empty merchant manager).
+    welcomeTitle: "Witaj w Satchel",
+    welcomeIntro:
+      "Satchel handluje pod „sprzedawcą” — jedną tożsamością handlową z własnym seedem. Nie masz jeszcze żadnego: utwórz nowy lub zaimportuj istniejącą frazę odzyskiwania, aby zacząć.",
+    importMerchant: "Zaimportuj sprzedawcę",
+    none: "Brak sprzedawców.",
+    active: "aktywny",
+    switch: "przełącz",
+    newMerchant: "Nowy sprzedawca",
+    thisMerchant: "ten sprzedawca",
+    nameLabel: "Nazwa sprzedawcy",
+    namePlaceholder: "np. Główny",
+    introFirst:
+      "Skonfiguruj swoją pierwszą tożsamość handlową („sprzedawcę”). Przechowuje ona tylko gorące klucze tranzytowe dla swapów w toku — Twoje główne monety pozostają w Twoim własnym portfelu.",
+    introNew: "Nowy sprzedawca to świeża, osobna tożsamość z własnym seedem i historią swapów.",
+    // UI-5 merchant selector (phoenix wallet-selector parity).
+    createNew: "Utwórz nowego",
+    import: "Importuj",
+    load: "Wczytaj sprzedawcę",
+    loaded: "wczytany",
+    locked: "zablokowany",
+    lockedTip: "Zaszyfrowany seed — odblokuj swoim hasłem przy wczytywaniu.",
+    close: "Zamknij",
+    idLabel: "folder",
+    switching: "Przełączanie sprzedawcy…",
+    switchingBody: "Ponowne uruchamianie silnika dla tego folderu.",
+  },
+  // Seed create/import (SeedForm) + counterparty + status.
+  seed: {
+    intro: "Utwórz zupełnie nowy seed lub zaimportuj taki, który już masz.",
+    createNew: "Utwórz nowy",
+    createDesc: "Wygeneruj świeży seed. Wykonujesz kopię zapasową frazy odzyskiwania.",
+    import: "Importuj",
+    importDesc: "Przywróć z istniejącej frazy 12/24-wyrazowej.",
+    recoveryLabel: "Fraza odzyskiwania",
+    importPlaceholder: "słowo1 słowo2 słowo3 …",
+    encrypt: "Zaszyfruj",
+    encryptDesc:
+      "Hasło chroni seed w spoczynku. Wpisujesz je raz na sesję — Satchel nigdy go nie przechowuje. Uwaga: automatyczny zwrot bez nadzoru wstrzymuje się po restarcie, dopóki go ponownie nie wpiszesz.",
+    noPassphrase: "Bez hasła (zalecane)",
+    noPassphraseDesc:
+      "Automatyczny zwrot działa po restartach bez konieczności wpisywania czegokolwiek — to tylko gorący seed tranzytowy. Koszt: dostęp do pliku/hosta ujawnia klucze tranzytowe i tożsamość tego sprzedawcy.",
+    passphraseLabel: "Hasło",
+    passphrasePlaceholder: "wybierz hasło",
+    createTitle: "Utwórz seed",
+    importTitle: "Importuj seed",
+    secureTitle: "Zabezpiecz {label}",
+    revealTitle: "Zapisz swoją frazę odzyskiwania",
+    revealBody:
+      "Każdy, kto ma te słowa, kontroluje gorące klucze tego sprzedawcy. Satchel nie przechowuje kopii — przechowuj ją offline. Za chwilę potwierdzisz kilka słów.",
+    ackLabel: "Zapisałem swoją frazę odzyskiwania.",
+    // Multi-step onboarding (create/import -> secret -> confirm -> passphrase).
+    chooseTitle: "Skonfiguruj {label}",
+    enterTitle: "Wpisz swoją frazę odzyskiwania",
+    enterBody:
+      "Wpisuj każde słowo — uzupełniają się automatycznie w trakcie pisania — lub wklej całą frazę. Sprawdzamy ją, zanim przejdziesz dalej.",
+    wordCount: "{n} słów",
+    wordAria: "Słowo {n}",
+    checkIncomplete: "Wpisz wszystkie {n} słów.",
+    checkUnknown: "Niektóre słowa nie są na liście słów BIP39 — sprawdź podświetlone.",
+    checkBadChecksum: "Suma kontrolna się nie zgadza — sprawdź ponownie słowa i ich kolejność.",
+    checkOk: "Fraza odzyskiwania wygląda poprawnie.",
+    verifyTitle: "Potwierdź kopię zapasową",
+    verifyBody: "Wpisz słowa na tych pozycjach, aby potwierdzić, że zapisałeś frazę.",
+    verifyWord: "Słowo #{n}",
+    verifyMismatch: "Te nie pasują do Twojej frazy — sprawdź kopię zapasową.",
+    passphraseTitle: "Zabezpiecz seed",
+    passphraseBody:
+      "Opcjonalnie zaszyfruj zapisany seed hasłem. Możesz to pominąć — zobacz kompromis poniżej.",
+  },
+  counterparty: {
+    you: "To Ty",
+    youShort: "Ty",
+    unknown: "nieznana tożsamość",
+    // Short fingerprint fallback (identity.ts shortId) when no pubkey is known.
+    unknownShort: "nieznany",
+  },
+  status: {
+    notConnectedTitle: "Brak połączenia z silnikiem",
+    disconnectedBody:
+      "Satchel nie może połączyć się z silnikiem. Być może wciąż się uruchamia lub połączenia węzłów aktywnego sprzedawcy są niedostępne. Spróbuj ponownie lub przełącz sprzedawcę za pomocą selektora u góry.",
+    openInSatchel: "Otwórz to w Satchel",
+    noTauriBody:
+      "To interfejs Satchel — potrzebuje mostka Tauri, aby połączyć się z silnikiem. Uruchom aplikację desktopową (cargo tauri dev) zamiast przeglądarki.",
+  },
+  settings: {
+    title: "Ustawienia",
+    subtitle: "Preferencje obejmujące całą tę instalację aplikacji.",
+    // UI-3 Settings tabs.
+    tabGeneral: "Ogólne",
+    tabCoins: "Monety",
+    tabNetwork: "Sieć",
+    tabAbout: "O programie",
+    appearance: "Wygląd",
+    theme: "Motyw",
+    themeDark: "Ciemny",
+    themeLight: "Jasny",
+    themeSystem: "Systemowy",
+    themeHint: "Wybierz, jak wygląda Satchel. Systemowy podąża za ustawieniem Twojego systemu operacyjnego.",
+    language: "Język",
+    languageHint: "Kolejne języki pojawiają się w miarę dodawania tłumaczeń.",
+    mode: "Tryb",
+    watchOnly: "Tryb tylko do podglądu",
+    watchOnlyHint:
+      "Przeglądaj tablicę bez konfigurowania monet. Nadal możesz wycofywać własne oferty, ale nie możesz wystawiać, przyjmować ani wnosić środków. Wyłącz, aby handlować (potrzebne będą co najmniej dwie połączone monety).",
+    network: "Sieć",
+    boards: "Corkboardy",
+    boardsDesc:
+      "Opcjonalne samodzielnie hostowane tablice HTTP. Dodaj te, którym ufasz; pozostaw puste, aby polegać na Nostr.",
+    boardsNone: "Nie skonfigurowano",
+    nostrRelays: "Relaye Nostr",
+    nostrRelaysDesc:
+      "Relaye przenoszą tablicę ogłoszeń przez zdecentralizowaną sieć — żaden operator nie może odczytać ani dopasować Twoich ofert. Domyślnie skonfigurowany zestaw; edytuj dowolnie.",
+    nostrRelaysOff: "Wyłączone — transport Nostr wyłączony",
+    addUrl: "Dodaj",
+    removeUrl: "Usuń",
+    relayInvalid: "Wpisz adres URL relaya ws:// lub wss://",
+    boardInvalid: "Wpisz adres URL tablicy http:// lub https://",
+    netSave: "Zapisz i połącz ponownie",
+    netSaving: "Zapisywanie i ponowne łączenie…",
+    netSaved: "Zapisano",
+    // Fees tab — fee-bump policy (per active merchant).
+    tabFees: "Opłaty",
+    fees: "Podbijanie opłat",
+    feesScope: "Te ustawienia dotyczą aktywnego sprzedawcy.",
+    feesIntro:
+      "Kompromisy bezpieczeństwo/koszt dla podbicia opłat, nie jest to wymagana konfiguracja. Nowe wartości obowiązują dla przyszłych podbić; swapy już sfinansowane zachowują politykę, pod którą zostały sfinansowane.",
+    feeMax: "Maks. feerate (sat/vB)",
+    feeMaxHint:
+      "Górny limit dla każdego podbicia opłaty. Domyślnie 500, to także twardy maksimum systemu. Obniż, aby ograniczyć koszty.",
+    feeReservation: "Rezerwa na podbicie finansowania (×)",
+    feeReservationHint:
+      "Saldo, które kontrola środków odkłada jako zapas na podbicie. Wyższe ratuje większe skoki opłat, ale blokuje więcej salda i odrzuca więcej swapów. Domyślnie 3.",
+    feeCommitted: "Nadwyżka na wykup (×)",
+    feeCommittedHint:
+      "Ile dodatkowo opłata za wykup v2 jest opłacana z góry, aby potwierdziła się nawet przy zamkniętym Satchel. Dotyczy tylko nowych swapów. Domyślnie 2.",
+    feeStep: "Krok eskalacji RBF (%)",
+    feeStepHint: "Jak agresywnie rośnie opłata utkniętego wydatku przy każdym przejściu schedulera. Domyślnie 50.",
+    feeSave: "Zapisz",
+    feeSaving: "Zapisywanie…",
+    feeSaved: "Zapisano",
+    feeReset: "Przywróć domyślne",
+    coins: "Monety i węzły",
+    coinsHint: "Połącz każdą monetę z własnym węzłem. Blok genesis jest sprawdzany przed zapisaniem czegokolwiek.",
+    about: "O programie",
+    version: "Wersja {version}",
+    updateUpToDate: "Aktualne",
+    updateCheckPlaceholder: "Sprawdzanie aktualizacji pojawi się w późniejszym wydaniu.",
+    trustModel: "Gdzie są Twoje klucze",
+    trustModelBody:
+      "Sekrety są w silniku, nigdy w Satchel. Seed sprzedawcy znajduje się w folderze danych silnika (zaszyfrowany lub jawny — Twój wybór); Satchel nie przechowuje żadnego seeda ani hasła. Seed jest gorący z założenia (tylko klucze tranzytowe) — przelej znaczące zyski do własnego zimnego portfela.",
+  },
+  coins: {
+    intro:
+      "Połącz każdą monetę z własnym węzłem. Pierwszy adres URL to portfel Twojego węzła — finansuje on Twoje strony swapa i odbiera zyski. Przed zapisaniem czegokolwiek Satchel sprawdza blok genesis węzła, aby środki nigdy nie trafiły do niewłaściwego łańcucha. Połączenia są wspólne dla wszystkich Twoich sprzedawców.",
+    networkBadge: "Konfiguracja dla sieci {network}",
+    needMerchant:
+      "Najpierw połącz sprzedawcę — konfiguracja monet wymaga działającego silnika. Użyj selektora sprzedawcy w prawym górnym rogu.",
+    pairsTitle: "Pary handlowe",
+    pairsHint:
+      "Pary wynikają z tego, co potrafi każda moneta — nie ma stałej listy. Para otwiera się, gdy obie jej monety są połączone.",
+    noPairs: "Brak dostępnych par.",
+    notSetUp: "Nie skonfigurowano",
+    connectedTip: "Połączono · czubek {tip}",
+    connError: "Błąd połączenia",
+    setUp: "Skonfiguruj",
+    editConnection: "Edytuj połączenie",
+    remove: "usuń",
+    disconnectTip: "Odłącz tę monetę",
+    disconnectTitle: "Odłączyć {coin}?",
+    disconnectBody: "Swapy, które jej potrzebują, nie będą dostępne, dopóki nie połączysz ponownie.",
+    ready: "Gotowe do handlu",
+    connectMissing: "Połącz {coins}",
+    notBuildable: "Jeszcze nie do zbudowania",
+    // Swap-protocol chips on a pair (pact-htlc-v1 HTLC vs pact-htlc-v2 adaptor).
+    protoPrivate: "Prywatny (Taproot)",
+    protoPrivateTip: "Prywatny swap (adapter Taproot/MuSig2) — wygląda na łańcuchu jak zwykła płatność",
+    protoHtlcTip: "Klasyczny swap HTLC",
+    // Coin-setup backend choices (CoinSetup).
+    backendCoreTitle: "Portfel Core RPC",
+    backendCoreDesc: "Własny portfel Twojego węzła finansuje swap i odbiera zyski.",
+    backendHardwareTitle: "Sprzęt",
+    backendHardwareDesc: "Podpisywanie Ledger / PSBT dla strony finansowania.",
+    backendLater: "później",
+    // CoinSetup dialog.
+    setupTitle: "Połącz {coin}",
+    setupIntro:
+      "Wskaż Satchel swój własny węzeł {sym}. Nic nie jest zapisywane, dopóki węzeł nie przejdzie kontroli bloku genesis — Twoje środki dotykają wyłącznie prawdziwego łańcucha {sym}.",
+    backendUrlLabel: "Adres(y) URL backendu węzła",
+    backendUrlHint:
+      "Pierwszy URL = własny portfel Twojego węzła (finansuje swapy, odbiera zyski). Dodaj serwery Electrum (tcp://host:port) po przecinkach, aby uzyskać dodatkowe, niezależne widoki łańcucha.",
+    fundingWallet: "Portfel finansujący",
+    confirmationsLabel: "Potwierdzeń przed finalizacją",
+    confirmationsHint:
+      "Jak głęboko finansowanie lub wykup na tym łańcuchu musi być, zanim swap na nim zadziała — margines bezpieczeństwa na reorg. Wyżej bezpieczniej, ale wolniej; pozostaw puste dla zalecanej wartości domyślnej ({default}).",
+    validateNode: "Zweryfikuj węzeł",
+    checking: "Sprawdzanie węzła…",
+    genesisOk: "Genesis zgodny — to właściwy łańcuch",
+    genesisDetail: "wysokość czubka {tip} · genesis {hash}…",
+    genesisBad: "Odrzucono — nie zapisuję",
+    errorShort: "błąd",
+    // Structured connection form (CoinSetup v2).
+    rpcHostLabel: "Host RPC",
+    rpcPortLabel: "Port RPC",
+    authMethodLabel: "Uwierzytelnianie",
+    authCookie: "Plik cookie",
+    authCookieDesc: "Automatyczny odczyt pliku .cookie węzła z jego katalogu danych (domyślnie, bez zapisanego hasła).",
+    authUserPass: "Użytkownik / hasło",
+    authUserPassDesc: "rpcuser / rpcpassword z konfiguracji Twojego węzła — wymagane dla zdalnego węzła.",
+    rpcUserLabel: "Nazwa użytkownika RPC",
+    rpcPasswordLabel: "Hasło RPC",
+    datadirLabel: "Katalog danych węzła",
+    cookiePathNote: "Cookie jest odczytywany z {path} w tym katalogu.",
+    walletLabel: "Nazwa portfela (opcjonalnie)",
+    walletPlaceholder: "portfel Twojego węzła",
+    needPort: "Najpierw wpisz port RPC.",
+    validateFirst: "Zweryfikuj węzeł przed zapisaniem.",
+    savingReconnecting: "Zapisywanie i ponowne łączenie…",
+    connected: "{coin} połączono",
+    // Template picker (a coins.toml coin the engine version doesn't support).
+    unsupportedByEngine: "Nieobsługiwane",
+    unsupportedByEngineTip:
+      "Ta moneta jest zdefiniowana w coins.toml, ale nie wbudowana w tę wersję silnika, więc nie można nią handlować.",
+  },
+  coinWizard: {
+    title: "Połącz swoje monety",
+    intro:
+      "Wybierz co najmniej dwie monety i wskaż każdej własny węzeł. Swap potrzebuje dwóch łańcuchów, więc handel odblokowuje się, gdy dwa węzły są połączone i aktywne. Możesz później dodać lub zmienić monety w Ustawieniach.",
+    progress: "{count} z {min} połączonych monet",
+    continue: "Kontynuuj",
+    live: "Aktywny",
+    nodeDown: "Węzeł niedostępny",
+  },
+  wallets: {
+    intro:
+      "To są portfele Twoich własnych węzłów (tych, których silnik używa do finansowania swapów i odbierania zysków) — Twoje klucze, Twoja maszyna. Satchel nigdy nie przechowuje Twoich monet.",
+    hotSeedNudge:
+      "To portfel wydatkowy na gorącym seedzie, nie skarbiec — przelej znaczące salda do własnego zimnego/core portfela.",
+    notConnected: "Brak połączenia",
+    notConnectedBody: "Najpierw połącz sprzedawcę — widok portfela wymaga działającego silnika.",
+    noCoins: "Nie skonfigurowano jeszcze monet",
+    noCoinsBody: "Połącz monetę w Ustawienia → Monety, a jej portfel pojawi się tutaj.",
+    goToCoins: "Przejdź do Monet",
+    watchOnlyTitle: "Brak portfeli w trybie tylko do podglądu",
+    watchOnlyBody:
+      "To sesja tylko do podglądu bez połączonych monet, więc nie ma portfeli do pokazania. Wyłącz tryb tylko do podglądu w Ustawieniach i połącz monetę, aby finansować swapy.",
+    walletName: "portfel · {wallet}",
+    walletScopedHint: "Każde RPC dla tej monety jest ograniczone do tego portfela węzła.",
+    walletDefault: "domyślny portfel (bez zakresu)",
+    walletDefaultHint:
+      "Nie ustawiono portfela dla tej monety, więc RPC używają domyślnego portfela węzła. Ustaw go w Ustawienia → Monety, aby ograniczyć każde wywołanie do konkretnego portfela.",
+    balanceLabel: "saldo {symbol}",
+    receive: "Odbierz",
+    send: "Wyślij",
+    sendTo: "Wyślij na adres",
+    amount: "Ilość",
+    sendTitle: "Wysłać {amount} {sym}?",
+    sendConfirmBody: "Do {to}\n\nTo wydaje z portfela Twojego własnego węzła i nie można tego cofnąć.",
+  },
+  corkboard: {
+    noBoardTitle: "Brak połączonego Corkboardu",
+    noBoardBody:
+      "Corkboard to wspólna tablica ogłoszeń, na której makerzy przypinają oferty. Nigdy nie kojarzy transakcji ani nie przechowuje monet — wskaż Satchel taki, któremu ufasz, aby przeglądać i wystawiać.",
+    noPairs: "Brak dostępnych par",
+    board: "Corkboard",
+    boardSettings: "Skonfiguruj w Ustawieniach",
+    filterAll: "Wszystkie",
+    filterMine: "Moje",
+    offered: "{symbol} oferowane",
+    noOffers: "Brak ofert, które możesz teraz przyjąć",
+    noOffersBody:
+      "Oferty pojawiają się tutaj, gdy tylko maker wystawi je dla pary, którą skonfigurowałeś. Możesz też wystawić własną.",
+    hiddenOffers:
+      "Jeszcze {count} ofert(a) dla par, których nie połączyłeś. Skonfiguruj obie monety, aby nimi handlować:",
+    yourOffer: "Twoja oferta",
+    offerStaged: "wystawianie…",
+    offerStagedTip:
+      "Wystawiona z tego urządzenia i oczekująca na potwierdzenie zwrotne z relaya. Jest ogłaszana; staje się aktywna, gdy relay ją powtórzy.",
+    take: "Przyjmij ofertę",
+    legDown: "Węzeł jednej z monet tej pary jest niedostępny — uruchom go (lub sprawdź Ustawienia → Monety) przed przyjęciem.",
+    withdraw: "Wycofaj",
+    withdrawTip: "Wycofaj natychmiast — oferta nigdy nie blokuje środków",
+    safetyRefund: "zwrot bezpieczeństwa",
+    safetyRefundTip:
+      "Jeśli swap utknie, obie strony otrzymują automatyczny zwrot — strona takera odblokowuje się pierwsza, Twoja nieco później. Nikt nie zostaje uwięziony.",
+    activeTitle: "Twoje aktywne swapy",
+    states: {
+      open: "otwarta",
+      takenByUs: "przyjęta przez Ciebie",
+      revoked: "wycofana",
+      expired: "wygasła",
+    },
+    // Two-sided order-book view of the Corkboard. Bids = makers giving the
+    // quote coin to get the base; asks = the reverse. The ladder is a way to
+    // READ the board — it never matches or prioritises (load-bearing).
+    book: {
+      bids: "Kupno",
+      asks: "Sprzedaż",
+      bidsHint: "chcą {base} · płacąc {quote}",
+      asksHint: "sprzedają {base} · za {quote}",
+      price: "Cena",
+      size: "Rozmiar",
+      noBids: "Brak ofert kupna",
+      noAsks: "Brak ofert sprzedaży",
+      spread: "Spread {pct}",
+      spreadOneSided: "Jednostronny",
+      crossed: "skrzyżowany",
+      crossedTip: "Najwyższe kupno ≥ najniższa sprzedaż. Tablica nigdy nie kojarzy automatycznie, więc te nakładające się oferty po prostu wiszą — przyjmij dowolną stronę.",
+      mid: "środek {price}",
+      levelOffers: "{count} ofert(a) po tej cenie — wybierz jedną do przyjęcia",
+      depthTip: "Łącznie {sym} oferowane po tej cenie w {count} ogłoszeniach.",
+      takerNote: "Przyjmując ją, oddajesz {give} i otrzymujesz {get}.",
+      selectLevel: "Wybierz poziom cenowy powyżej, aby zobaczyć tamtejsze oferty.",
+      paneHeader: "{size} {base} @ {price} {unit}",
+      denomTip: "Jednostka wyświetlania dla kwot {coin}",
+      showMore: "Pokaż {count} więcej",
+      showLess: "Pokaż najlepsze {count}",
+    },
+  },
+  relays: {
+    title: "Relaye",
+    subtitle: "Aktualna łączność z Twoimi relayami Nostr — siecią, przez którą podróżują Twoje oferty i przyjęcia. Dodaj lub usuń relaye w Ustawienia → Sieć.",
+    connectedCount: "{up} / {total} połączonych",
+    refresh: "Odśwież",
+    ms: "{ms} ms",
+    up: "działa",
+    down: "nie działa",
+    statsTip: "{success}/{attempts} udanych połączeń · ↓{down} ↑{up}",
+    none: "Nie skonfigurowano relayów",
+    noneBody: "Dodaj relay Nostr w Ustawienia → Sieć, aby publikować i odbierać oferty przez sieć.",
+    goToNetwork: "Przejdź do Ustawień",
+    notConnected: "Brak połączenia",
+    notConnectedBody: "Widok relayów wymaga działającego silnika — najpierw połącz sprzedawcę.",
+  },
+  swaps: {
+    title: "Swapy",
+    hint: "Twoja pełna księga — swapy w toku na górze, zakończone transakcje poniżej. Na aktywnych swapach możesz też działać z poziomu Corkboardu.",
+    activeTitle: "W toku",
+    historyTitle: "Historia",
+    none: "Brak swapów — przyjmij ofertę na Corkboardzie.",
+    // Active-swaps dock action buttons + the refund-time label.
+    cancel: "anuluj",
+    refund: "zwróć",
+    dump: "zrzuć logi",
+    dumpHint: "Skopiuj pozbawiony sekretów pakiet diagnostyczny (stan + linie logów) dla tego swapa, do wklejenia deweloperom.",
+    dumpCopied: "Diagnostyka skopiowana — wklej deweloperom.",
+    dumpFailed: "Nie udało się skopiować pakietu diagnostycznego.",
+    refundAt: "zwrot {when}",
+    // Confirm dialogs for acting on a live swap (ActiveSwaps).
+    cancelTitle: "Anulować ten swap?",
+    cancelConfirm: "Anuluj swap",
+    cancelKeep: "Zostaw",
+    // Abort reason recorded on the swap when cancelled from Satchel.
+    cancelReason: "anulowano w Satchel",
+    cancelBody:
+      "To porzuca swap, zanim wniosłeś środki. Nic Twojego nie jest jeszcze zablokowane, więc nic nie tracisz — oferta po prostu się nie sfinalizuje.",
+    refundTitle: "Wycofać swoje środki?",
+    refundConfirm: "Zwróć",
+    refundBody:
+      "Timelock bezpieczeństwa minął, więc możesz odzyskać zablokowane środki. To rozgłasza Twój zwrot teraz; silnik robi to również automatycznie po upływie terminu.",
+    col: {
+      swap: "swap",
+      role: "rola",
+      state: "stan",
+      amounts: "oddaje → otrzymuje",
+      when: "kiedy",
+      finalTx: "końcowa tx",
+    },
+    // Expandable per-leg on-chain detail (the audit trail). We show both
+    // funding txs + OUR settlement; never the counterparty's settlement or the
+    // swap secret.
+    audit: {
+      toggle: "Pokaż szczegóły on-chain",
+      title: "Szczegóły on-chain",
+      youLocked: "zablokowałeś",
+      theyLocked: "oni zablokowali",
+      funding: "Finansowanie",
+      received: "Otrzymano",
+      refunded: "Zwrócono",
+      pending: "jeszcze nie on-chain",
+      copy: "Kopiuj id transakcji",
+      copied: "Id transakcji skopiowane",
+    },
+  },
+  fees: {
+    title: "Podgląd kosztu sieci",
+    estimated: "szacowany",
+    provisionalNote: "Ta wersja pactd nie udostępnia jeszcze szacowania opłat.",
+    summary: "Swap to 2 transakcje on-chain, za które płacisz: finansowanie na łańcuchu oddawanym, wykup na łańcuchu otrzymywanym.",
+    fallbackTip: "Węzeł był nieosiągalny, więc użyto zachowawczej domyślnej stawki opłaty — traktuj te wartości jako oszacowanie.",
+    ifItStalls: "(jeśli utknie)",
+  },
+  funds: {
+    insufficient:
+      "Za mało {sym}, aby sfinansować ten swap — potrzeba ~{need} {sym} (kwota + opłata za finansowanie), portfel ma {have} {sym}.",
+  },
+  wizard: {
+    welcome: "Witaj w Satchel",
+    connectTitle: "Połącz silnik Pact",
+    connectIntro:
+      "Satchel to cienki klient silnika Pact — rdzenia, który przechowuje Twoje klucze i prowadzi swapy. Wybierz, jak się z nim połączyć.",
+    managed: "Uruchom wbudowany silnik Pact",
+    managedDesc: "Satchel uruchamia i nadzoruje własny silnik Pact. Zalecane.",
+    external: "Połącz z zewnętrznym silnikiem Pact",
+    externalDesc: "Wskaż silnik Pact, który już uruchamiasz (ustaw SATCHEL_PACTD_URL + cookie przed uruchomieniem).",
+    externalNote:
+      "Tryb zewnętrzny wybierany jest za pomocą zmiennych środowiskowych przed uruchomieniem Satchel. Uruchom ponownie z ustawionym SATCHEL_PACTD_URL, aby go użyć.",
+    coinsTitle: "Dodaj swoje monety",
+    coinsIntro:
+      "Po utworzeniu sprzedawcy połącz każdą monetę z własnym węzłem w Ustawienia → Monety. Wybierz monetę i backend (publiczny Electrum dla zerowej konfiguracji lub własny węzeł); genesis jest sprawdzany względem tej sieci przed zapisaniem czegokolwiek.",
+    coinsTemplatesSoon: "Szablony monet jednym kliknięciem pojawią się tutaj w późniejszym wydaniu.",
+    back: "Wstecz",
+    continue: "Kontynuuj",
+    finish: "Zakończ konfigurację",
+  },
+  // UI-4 docked activity log.
+  log: {
+    title: "Aktywność",
+    empty: "— dziennik aktywności —",
+    count: "{count} linii",
+    collapse: "Zwiń dziennik",
+    expand: "Rozwiń dziennik",
+    // Activity-log lines emitted by the frontend. `{err}` carries a raw engine
+    // message (itself not translated — it comes from pactd over the wire).
+    noTauri: "nie działa wewnątrz Satchel — ten interfejs potrzebuje mostka Tauri",
+    startupError: "uruchamianie: {err}",
+    notConnected: "brak połączenia: {err}",
+    connected: "połączono z pactd {version} ({protocol})",
+    listcoinsError: "listcoins: {err}",
+    watchOnlyError: "tylko podgląd: {err}",
+    switchedMerchant: "przełączono na sprzedawcę {id}",
+    switchMerchantError: "przełączenie sprzedawcy: {err}",
+    loadMerchantError: "wczytanie sprzedawcy: {err}",
+    merchantCreated: "sprzedawca {id} utworzony",
+    merchantReady: "sprzedawca gotowy",
+    actionOk: "{action} {id}: ok",
+    actionError: "{action} {id}: {err}",
+    diagCopied: "diagnostyka dla {id} skopiowana ({count} linii logów) — wklej deweloperom",
+    dumpError: "zrzut {id}: {err}",
+    coinDisconnected: "{coin} odłączono",
+    removeCoinError: "usunięcie monety: {err}",
+    tookOffer: "przyjęto ofertę {id} — pojawia się teraz w Twoich aktywnych swapach poniżej",
+    takeError: "przyjęcie: {err}",
+    offerWithdrawn: "oferta {id} wycofana",
+    withdrawError: "wycofanie: {err}",
+    postedOffer: "wystawiono ofertę {id} — wycofaj w każdej chwili; nic nie jest blokowane",
+    createdSlip: "utworzono prywatny slip ofertowy — wyślij go znajomemu",
+    tookPrivateOffer: "przyjęto prywatną ofertę {id} — pojawia się teraz w Twoich aktywnych swapach",
+    cancelledPrivateOffer: "anulowano prywatną ofertę {id}",
+    cancelError: "anulowanie: {err}",
+    noticeboardUpdated: "tablica ogłoszeń zaktualizowana",
+    feePolicyUpdated: "polityka opłat zaktualizowana",
+  },
+  // Relative-time + freshness prose from format.ts (rendered via the tr() mirror,
+  // since those are pure non-component helpers). Unit letters stay inside the
+  // template so a translation owns the whole phrase.
+  format: {
+    ageUnknown: "nieznany wiek",
+    justNow: "przed chwilą",
+    minutesAgo: "{n} min temu",
+    hoursAgo: "{n} godz. temu",
+    daysAgo: "{n} dni temu",
+    expiryNow: "teraz",
+    expirySoon: "wkrótce",
+    inMinutes: "za ~{n} min",
+    inHours: "za ~{n} godz.",
+    inDays: "za ~{n} dni",
+    posted: "wystawiono {age}",
+    expires: "wygasa {time}",
+  },
+  // Plain-language swap story per (role, state) — the honest "who is exposed
+  // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
+  // are local refund times. Rendered via tr() (narrate() is a pure helper).
+  narrate: {
+    initiating:
+      "Przyjęcie wysłane — czekanie, aż maker rozpocznie swap. Nic nie jest jeszcze zablokowane; anuluje się samo, jeśli nie odpowie.",
+    created: "Oferta wysłana — czekanie, aż druga strona się zgodzi. Nic nie jest zobowiązane.",
+    acceptedMaker: "Warunki uzgodnione. Dalej: zablokuj swoje {a}. Dopóki nie wniesiesz środków, możesz swobodnie anulować.",
+    acceptedTaker: "Warunki uzgodnione. Druga strona blokuje swoje {a} jako pierwsza — Ty nigdy nie wysyłasz pierwszy.",
+    noncesExchanged:
+      "Konfigurowanie prywatnego swapa — wymiana materiału do podpisywania. Nic nie jest jeszcze zablokowane.",
+    signedMaker:
+      "Obie strony podpisały. Twój daemon blokuje {a}, a następnie automatycznie odbiera {b}. Jeśli cokolwiek utknie, Twoje {a} wracają o {t1}.",
+    signedTaker:
+      "Obie strony podpisały. Twój daemon blokuje {b} i odbiera {a}, gdy tylko druga strona zadziała. Siatka bezpieczeństwa: zwrot o {t2}.",
+    fundedAMaker:
+      "Twoje {a} są zablokowane. Czekanie, aż druga strona zablokuje swoje {b}. Jeśli tego nie zrobi, Twoje {a} wracają automatycznie o {t1}.",
+    fundedATaker:
+      "Ich {a} są zablokowane i zweryfikowane. Dalej: zablokuj swoje {b}. Siatka bezpieczeństwa: automatyczny zwrot o {t2}, jeśli cokolwiek utknie.",
+    fundedBMaker: "Obie strony zablokowane. Twój daemon odbiera {b}, gdy tylko zostanie bezpiecznie potwierdzone.",
+    fundedBTaker: "Obie strony zablokowane. Twój daemon odbierze {a} w momencie, gdy druga strona odbierze swoje {b}.",
+    redeemedB:
+      "Odebrałeś {b} — czekanie na potwierdzenie. Twoje zablokowane {a} pozostają chronione, dopóki to nie będzie ostateczne.",
+    completed: "Swap zakończony — {coin} są w Twoim portfelu.",
+    refunded: "Swap się nie sfinalizował, więc Twoje {coin} wróciły automatycznie. Nic nie stracone poza opłatami.",
+    aborted: "Anulowano, zanim jakiekolwiek pieniądze się przemieściły.",
+  },
+  exit: {
+    // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
+    // running" detaches it (it keeps watching timelocks + servicing offers).
+    liveTitle: "Swap jest w toku",
+    liveBodyOne:
+      "1 swap jest w trakcie. Rządzą nim timelocki on-chain — silnik musi działać dalej, aby wykupić lub zwrócić przed terminem.",
+    liveBodyMany:
+      "{count} swapów jest w trakcie. Rządzą nimi timelocki on-chain — silnik musi działać dalej, aby wykupić lub zwrócić przed terminem.",
+    keepRunningExplain:
+      "Zamknięcie okna pozostawia silnik działający w tle, więc dokończy swap bez interfejsu. Możesz w każdej chwili ponownie otworzyć Satchel, aby go sprawdzić.",
+    forceQuitWarn: "Wymuszenie zamknięcia teraz zatrzymuje silnik i może spowodować utratę środków.",
+    // {word} is the confirm word below; a translation may localize both together.
+    typeToConfirm: "Aby mimo to wymusić zamknięcie, wpisz poniżej {word}.",
+    confirmWord: "QUIT",
+    keepRunning: "Działaj dalej, zamknij okno",
+    keepWithdraw: "Działaj dalej + wycofaj oferty",
+    keepLeaveOffers: "Działaj dalej, zostaw oferty",
+    forceQuit: "Wymuś zamknięcie",
+    offersTitle: "Masz wystawione oferty",
+    offersBodyOne:
+      "1 Twoja oferta jest nadal na Corkboardzie. Oferty nic nie blokują, ale pozostawienie jej oznacza, że kontrahenci mogą ją przyjąć, gdy Satchel jest zamknięty — silnik obsłuży przyjęcie.",
+    offersBodyMany:
+      "{count} Twoich ofert jest nadal na Corkboardzie. Oferty nic nie blokują, ale pozostawienie ich oznacza, że kontrahenci mogą je przyjąć, gdy Satchel jest zamknięty — silnik obsłuży przyjęcia.",
+    withdrawExit: "Wycofaj wszystkie i wyjdź",
+  },
+  unlock: {
+    title: "Odblokuj sprzedawcę",
+    body:
+      "Seed tego sprzedawcy jest zaszyfrowany. Wpisz jego hasło, aby odblokować go na tę sesję — Satchel trzyma je tylko w pamięci i zapomina przy wyjściu.",
+    switchMerchant: "Przełącz sprzedawcę",
+    unlock: "Odblokuj",
+  },
+  common: {
+    cancel: "Anuluj",
+    confirm: "Potwierdź",
+    save: "Zapisz",
+    done: "Gotowe",
+    later: "Później",
+    retry: "Ponów połączenie",
+  },
+};
