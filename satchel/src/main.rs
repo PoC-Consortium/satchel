@@ -265,6 +265,18 @@ fn net_config_dir(base: &Path) -> PathBuf {
     }
 }
 
+/// Base config dir, with an opt-in override: when `SATCHEL_DATA_DIR` is set it
+/// replaces the OS app-data location entirely. This isolates throwaway
+/// instances — e.g. the watch-only playground (tools/playground-watchonly.ps1)
+/// runs a mainnet viewer in its own dir so it never touches the real install's
+/// seed, merchants or config. Unset → the normal app-local-data dir.
+fn base_data_dir(default: PathBuf) -> PathBuf {
+    match std::env::var("SATCHEL_DATA_DIR") {
+        Ok(d) if !d.trim().is_empty() => PathBuf::from(d),
+        _ => default,
+    }
+}
+
 /// Default managed-pactd listen address, offset per network (like Core's
 /// 8332/18332/18443) so the three instances don't fight over one port.
 fn default_listen() -> &'static str {
@@ -1153,7 +1165,7 @@ fn main() {
                 // Local app data, NOT Roaming: this dir holds the wallet seed +
                 // merchants, which must never roam to a domain server / other
                 // machine. Also matches the node's %LOCALAPPDATA% datadir.
-                let config_dir = net_config_dir(&app.path().app_local_data_dir()?);
+                let config_dir = net_config_dir(&base_data_dir(app.path().app_local_data_dir()?));
                 app.manage(AppState {
                     config: Mutex::new(load_or_create_config(&config_dir)?),
                     config_dir,
@@ -1177,7 +1189,7 @@ fn main() {
             // Local app data, NOT Roaming: this dir holds the wallet seed +
             // merchants, which must never roam to a domain server / other
             // machine. Also matches the node's %LOCALAPPDATA% datadir.
-            let config_dir = net_config_dir(&app.path().app_local_data_dir()?);
+            let config_dir = net_config_dir(&base_data_dir(app.path().app_local_data_dir()?));
             let config = load_or_create_config(&config_dir)?;
             let listen = config.listen.clone();
             let data_dir = pactd_data_dir(&config_dir);
