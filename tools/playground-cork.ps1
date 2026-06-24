@@ -10,7 +10,8 @@
       (Bob = buy side, Carol = sell side) posting a two-sided book. On a
       PoCX<->BTC pair off-mainnet every board offer defaults to pact-htlc-v2,
       so the whole book is v2.
-    * Satchel launched as managed "Alice" (owns its own pactd on :9737),
+    * Satchel launched as managed "Alice" (owns its own regtest pactd on :9739,
+      NOT the mainnet :9737 — kept distinct so teardown never hits a live daemon),
       funded on BOTH coins, with a factory-new data dir so a stale relay
       cursor never makes Alice miss the fresh board's offers.
 
@@ -51,9 +52,13 @@ $NetData = Join-Path $AppData "regtest"
 $LogDir  = Join-Path $Repo ".playground"
 $PidFile = Join-Path $LogDir "pids.txt"
 
-# Managed pactd (:9737), Bob/Carol pactd (:19737/8) + adaptor spares (:19739/40),
+# Managed pactd (:9739 — Satchel offsets the listen port per network: regtest
+# 9739, testnet 9738, MAINNET 9737. We launch with SATCHEL_NETWORK=regtest, so
+# OUR pactd is 9739. NEVER list 9737/9738 here — those are the user's mainnet /
+# testnet pactd, and the port teardown would kill their live daemon.)
+# Bob/Carol pactd (:19737/8) + adaptor spares (:19739/40),
 # PoCX/BTC/LTC regtest RPC (:19443/:19543/:19643), Corkboard (:19790), Vite (:5173).
-$Ports = 9737, 19737, 19738, 19739, 19740, 19443, 19543, 19643, 19790, 5173
+$Ports = 9739, 19737, 19738, 19739, 19740, 19443, 19543, 19643, 19790, 5173
 
 # Force-kill a process tree by PID. Routes through `cmd /c ... 2>nul` so the
 # native stderr ("process not found" for an already-dead PID) is swallowed by
@@ -138,7 +143,7 @@ $satchelJson = @"
   "coins": $coinsJson,
   "board_urls": ["http://127.0.0.1:19790"],
   "nostr_relays": [],
-  "listen": "127.0.0.1:9737",
+  "listen": "127.0.0.1:9739",
   "auto_fund": true,
   "tick_secs": 5,
   "ui": { "theme": "system", "language": "en", "nav_open": true }
