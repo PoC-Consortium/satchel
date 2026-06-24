@@ -51,10 +51,14 @@ $NetData = Join-Path $AppData "regtest"
 $LogDir  = Join-Path $Repo ".playground"
 $PidFile = Join-Path $LogDir "pids.txt"
 
-# Managed pactd (:9737), Bob/Carol pactd (:19737/8) + spares (:19739/40),
+# Managed pactd (:9739 — Satchel offsets the listen port per network: regtest
+# 9739, testnet 9738, MAINNET 9737. We launch with SATCHEL_NETWORK=regtest, so
+# OUR pactd is 9739. NEVER list 9737/9738 here — those are the user's mainnet /
+# testnet pactd, and the port teardown would kill their live daemon.)
+# Bob/Carol pactd (:19737/8) + spares (:19739/40),
 # PoCX/BTC/LTC regtest RPC (:19443/:19543/:19643), local Nostr relay (:19788),
 # stale corkboard (:19790, in case the other playground left one), Vite (:5173).
-$Ports = 9737, 19737, 19738, 19739, 19740, 19443, 19543, 19643, 19788, 19790, 5173
+$Ports = 9739, 19737, 19738, 19739, 19740, 19443, 19543, 19643, 19788, 19790, 5173
 
 function Kill-Tree([int]$procId) {
     if ($procId -gt 0) { & cmd /c "taskkill /T /F /PID $procId >nul 2>nul" }
@@ -134,7 +138,7 @@ $satchelJson = @"
   "coins": $coinsJson,
   "board_urls": [],
   "nostr_relays": ["ws://127.0.0.1:19788"],
-  "listen": "127.0.0.1:9737",
+  "listen": "127.0.0.1:9739",
   "auto_fund": true,
   "tick_secs": 2,
   "ui": { "theme": "system", "language": "en", "nav_open": true }
