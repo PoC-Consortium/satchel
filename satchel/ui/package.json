@@ -1,7 +1,7 @@
 {
   "name": "satchel-ui",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.0-rc2",
   "type": "module",
   "description": "Satchel's frontend — React + Vite + TypeScript + MUI. Thin client of pactd's JSON-RPC (via the Tauri `pactd_rpc` bridge) and Satchel's list_*/save_* commands. No swap logic here, ever.",
   "scripts": {
