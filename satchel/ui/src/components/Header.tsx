@@ -22,11 +22,7 @@ import { errMsg, selectMerchant } from "../api/tauri";
 import { useApp } from "../AppContext";
 import { useDialogs } from "../ui/dialogs";
 import { usePrefs } from "../prefs";
-import { useT } from "../i18n";
-
-// Languages offered in the toolbar selector (phoenix parity). English-only for
-// now; new bundles slot in here as i18n grows.
-const LANGUAGES = [{ code: "en", name: "English" }];
+import { useT, LANGUAGES } from "../i18n";
 import NetworkStamp from "./NetworkStamp";
 import WatchOnlyStamp from "./WatchOnlyStamp";
 import StatusIndicators from "./StatusIndicators";
@@ -228,7 +224,7 @@ export default function Header({
               <ListItemIcon>
                 {prefs.language === l.code ? <CheckIcon fontSize="small" color="primary" /> : null}
               </ListItemIcon>
-              <ListItemText>{l.name}</ListItemText>
+              <ListItemText>{l.nativeName}</ListItemText>
             </MenuItem>
           ))}
         </Menu>

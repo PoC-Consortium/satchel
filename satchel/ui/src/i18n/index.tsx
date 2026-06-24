@@ -1,5 +1,15 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 import { en } from "./en";
+import { de } from "./de";
+import { fr } from "./fr";
+import { es } from "./es";
+import { es419 } from "./es419";
+import { ptBR } from "./ptBR";
+import { cs } from "./cs";
+import { sk } from "./sk";
+import { id } from "./id";
+import { sw } from "./sw";
+import { vi } from "./vi";
 import { usePrefs } from "../prefs";
 
 // A deliberately small i18n layer (mirrors phoenix's I18nService + LANGUAGES +
@@ -16,9 +26,37 @@ export interface Language {
   nativeName: string;
 }
 
-export const LANGUAGES: Language[] = [{ code: "en", name: "English", nativeName: "English" }];
+// The full set of shipped languages — mirrors the locales Phoenix-PoCX offers.
+// `code` is what's persisted in satchel.json; `nativeName` is what the picker
+// shows. To add a language: drop a bundle of the same shape next to en.ts,
+// import it, then add an entry here and in BUNDLES.
+export const LANGUAGES: Language[] = [
+  { code: "en", name: "English", nativeName: "English" },
+  { code: "cs", name: "Czech", nativeName: "Čeština" },
+  { code: "de", name: "German", nativeName: "Deutsch" },
+  { code: "es", name: "Spanish", nativeName: "Español" },
+  { code: "es-419", name: "Spanish (Latin America)", nativeName: "Español (Latinoamérica)" },
+  { code: "fr", name: "French", nativeName: "Français" },
+  { code: "id", name: "Indonesian", nativeName: "Bahasa Indonesia" },
+  { code: "pt-BR", name: "Portuguese (Brazil)", nativeName: "Português (Brasil)" },
+  { code: "sk", name: "Slovak", nativeName: "Slovenčina" },
+  { code: "sw", name: "Swahili", nativeName: "Kiswahili" },
+  { code: "vi", name: "Vietnamese", nativeName: "Tiếng Việt" },
+];
 
-const BUNDLES: Record<string, unknown> = { en };
+const BUNDLES: Record<string, unknown> = {
+  en,
+  cs,
+  de,
+  es,
+  "es-419": es419,
+  fr,
+  id,
+  "pt-BR": ptBR,
+  sk,
+  sw,
+  vi,
+};
 
 function lookup(bundle: unknown, key: string): string | undefined {
   let cur: unknown = bundle;

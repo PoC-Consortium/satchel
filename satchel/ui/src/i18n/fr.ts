@@ -1,0 +1,716 @@
+// The French (Français) string bundle. Mirrors en.ts key-for-key; only values are translated.
+import type { Bundle } from "./en";
+
+export const fr: Bundle = {
+  app: {
+    name: "Satchel",
+    tagline: "swaps sans confiance",
+  },
+  // In-app update notifications (sidebar version badge + dialog).
+  update: {
+    title: "Mise à jour disponible",
+    upToDate: "Vous êtes à jour",
+    current: "Installée",
+    latest: "Dernière",
+    notesTitle: "Notes de version",
+    get: "Obtenir la mise à jour",
+    dismiss: "Ignorer",
+    close: "Fermer",
+    badgeTooltip: "Mise à jour disponible — cliquez pour les détails",
+    versionTooltip: "Cliquez pour vérifier les mises à jour",
+  },
+  // Risk disclaimer (first-run welcome + Settings → About).
+  disclaimer: {
+    title: "Autoconservation — vos clés, votre responsabilité",
+    body: "Satchel effectue des swaps atomiques non dépositaires : vous seul détenez vos clés, et la seed d'un merchant détient des clés de transit chaudes pendant qu'un swap est en cours. Les protocoles de swap (v1 HTLC et v2 Taproot/MuSig2) sont audités et en service sur le mainnet. Sous licence MIT et fourni en l'état, sans aucune garantie — sauvegardez votre phrase de récupération et utilisez à vos propres risques.",
+  },
+  nav: {
+    public: "Public",
+    corkboard: "Corkboard",
+    postOffer: "Publier une offre",
+    private: "Privé",
+    privateCreate: "Créer un slip",
+    privateReceive: "Prendre un slip",
+    privateSlips: "Mes slips",
+    swaps: "Swaps",
+    relays: "Relays",
+    wallets: "Portefeuilles",
+    settings: "Paramètres",
+    coins: "Coins",
+  },
+  makeOffer: {
+    title: "Publier une offre",
+    intro:
+      "Publiez une offre signée sur le Corkboard. Rien n'est verrouillé — ce n'est qu'une annonce ; retirez-la à tout moment, et un swap ne démarre que lorsque quelqu'un la prend et que les deux parties financent.",
+    give: "Vous donnez",
+    want: "Vous recevez",
+    // Canonical pair + direction: pick the pair, choose Sell/Buy the base, enter
+    // the base amount and a quote-per-base price (invariant to direction).
+    pair: "Paire",
+    noPairs: "Aucune paire échangeable — connectez au moins deux coins dans Paramètres → Coins.",
+    sell: "Vendre {sym}",
+    buy: "Acheter {sym}",
+    amount: "Montant",
+    youGive: "Vous donnez",
+    youGet: "Vous obtenez",
+    price: "Prix",
+    priceUnit: "{unit} par {base}",
+    pricePlaceholder: "prix unitaire",
+    balance: "Solde : {amt} {sym}",
+    balanceLoading: "Solde : …",
+    noCoins: "Aucun coin configuré",
+    sameCoin: "Le coin donné et le coin reçu doivent être différents.",
+    legDown: "Le nœud de l'un de ces coins est hors service — démarrez-le (ou vérifiez Paramètres → Coins) avant de publier.",
+    // Swap-protocol pin (only offered when a pair+network supports more than
+    // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
+    protocol: "Type de swap",
+    protoStandard: "Standard (HTLC)",
+    // Titles for the review/confirm dialog shown before posting (see OfferForm).
+    reviewOfferTitle: "Vérifiez votre offre",
+    reviewSlipTitle: "Vérifiez votre slip",
+    term: "Timelock de sécurité",
+    termShort: "Court",
+    termMedium: "Moyen",
+    termLong: "Long",
+    termHint: {
+      short: "Court — les fonds sont auto-remboursés le plus vite si l'échange se bloque (~12h / 6h), avec la marge de sécurité la plus faible.",
+      medium: "Moyen — fenêtre de remboursement équilibrée (~24h / 12h).",
+      long: "Long (le plus sûr) — marge de sécurité la plus large ; auto-remboursement après ~36h / 18h si l'échange se bloque.",
+    },
+    validFor: "Valable pendant (minutes)",
+    validForMins: "{mins} min",
+    validForHint:
+      "Durée pendant laquelle l'offre reste listée. Tant que vous êtes en ligne, elle est rafraîchie automatiquement ; après cela, elle expire. Fermer l'application la retire.",
+    note: "Offre à taille fixe — rien n'est verrouillé tant que personne ne la prend. Les montants sont on-chain ; vous payez les frais de réseau en plus et le Corkboard ne prélève rien. Le timelock est la fenêtre d'auto-remboursement si un swap se bloque.",
+    post: "Publier l'offre",
+    makeSlip: "Créer un slip",
+    slipTitle: "Votre slip d'offre privée",
+    slipExplainer:
+      "Envoyez ceci à votre ami. Il le colle dans Satchel pour le prendre. Rien n'est verrouillé ; il expire dans {ttl}.",
+    copy: "Copier",
+    copied: "Copié",
+    makeAnother: "En créer un autre",
+    myPrivateTitle: "Mes offres privées",
+    myPrivateEmpty: "Aucune offre privée en cours.",
+    privateExpires: "expire {when}",
+    privateExpired: "expiré",
+    cancel: "Annuler",
+    cancelTip: "Cesser d'honorer ce slip — un ami qui le détient encore ne pourra plus le prendre.",
+  },
+  takeSlip: {
+    open: "Coller un slip",
+    title: "Prendre une offre privée",
+    intro:
+      "Un ami vous a envoyé un slip d'offre privée (il commence par pactoffer1:). Collez-le ici pour le vérifier et le prendre — exactement comme une offre du board.",
+    placeholder: "pactoffer1:…",
+    take: "Vérifier et prendre",
+    invalid: "Cela ne ressemble pas à un slip — il devrait commencer par pactoffer1:.",
+    previewLabel: "Ce slip propose",
+  },
+  // PRIVATE nav group (off-market slips) — screen titles + intros. The form,
+  // slip output, my-slips list and take flow reuse makeOffer.*/takeSlip.* copy.
+  private: {
+    createTitle: "Créer une offre privée",
+    createIntro:
+      "Construisez une offre signée et remettez-la à un ami sous forme de slip via votre propre messagerie. Rien n'est listé nulle part — et rien n'est verrouillé tant que vous n'avez pas tous les deux financé.",
+    slipsIntro:
+      "Les slips que vous avez créés. Quiconque détient un slip peut le prendre jusqu'à son expiration ; annulez-en un pour cesser de l'honorer avant cela.",
+    slipsEmptyBody: "Créez une offre privée pour obtenir un slip que vous pouvez envoyer à un ami.",
+    receiveTitle: "Prendre une offre privée",
+    received: "Pris — suivez-le dans Swaps.",
+  },
+  // Shared take-confirmation dialog (board take + slip take).
+  takeConfirm: {
+    title: "Prendre cette offre ?",
+    confirm: "Prendre l'offre",
+    counterparty: "Contrepartie",
+    youGive: "Vous donnez",
+    youReceive: "Vous recevez",
+    safetyRefund: "Remboursement de sécurité",
+    offerAge: "Ancienneté de l'offre",
+    makerFundsFirst:
+      "Le maker verrouille ses {sym} en premier — vous n'envoyez jamais en premier. Vous pouvez encore annuler avant de financer votre côté, et le moteur rembourse automatiquement après le timelock de sécurité si le swap se bloque.",
+  },
+  header: {
+    activeMerchant: "Merchant actif — cliquez pour changer ou gérer",
+    manageMerchants: "Gérer les merchants…",
+    noMerchant: "aucun merchant",
+    openMenu: "Ouvrir le menu",
+    collapseMenu: "réduire le menu",
+    settings: "Paramètres",
+    language: "Langue",
+    pactConnected: "Moteur connecté",
+    pactUnreachable: "Moteur injoignable",
+    liveSwapsOne: "1 swap en cours — cliquez pour voir",
+    liveSwapsMany: "{count} swaps en cours — cliquez pour voir",
+    liveSwapsNone: "Aucun swap en cours",
+    coinOk: "{name} — connecté · tip {tip}",
+    coinUnconfigured: "{name} — non configuré",
+    coinError: "{name} — {status}",
+    relaysOk: "Relays Nostr — {up}/{total} connectés",
+    relaysDown: "Relays Nostr — aucun des {total} connectés",
+  },
+  network: {
+    mainnet: "MainNet",
+    testnet: "TestNet",
+    regtest: "RegTest",
+    signet: "Signet",
+    notRealFunds: "Pas de fonds réels — c'est le réseau {network}",
+  },
+  // Watch-only mode: a viewer session with no coins. Browse the board and
+  // withdraw your own offers, but no posting / taking / funding.
+  watchOnly: {
+    badge: "Lecture seule",
+    badgeTip:
+      "Mode lecture seule — parcourez le board et retirez vos propres offres, mais vous ne pouvez pas publier, prendre ni financer. Configurez des coins dans Paramètres pour trader.",
+    coinWizardButton: "Parcourir en lecture seule",
+    coinWizardHint:
+      "Ignorez la configuration des coins et parcourez simplement le board (lecture seule). Vous pouvez tout de même retirer vos propres offres — pratique pour retirer des offres laissées par une autre session. Désactivez-le à tout moment dans Paramètres.",
+    postBlockedTitle: "Mode lecture seule",
+    postBlockedBody:
+      "Ceci est une session en lecture seule, elle ne peut donc pas publier d'offres. Configurez au moins deux coins dans Paramètres → Coins pour trader.",
+    takeBlockedBody: "Mode lecture seule — vous pouvez consulter cette offre, mais la prendre nécessite des coins configurés.",
+    takeBlockedTip: "Mode lecture seule — configurez des coins dans Paramètres pour prendre des offres.",
+  },
+  merchants: {
+    title: "Vos merchants",
+    intro:
+      "Un merchant est une identité de trading — avec sa propre seed et son propre historique de swaps. Trader sous un merchant différent garde les contextes non reliables (une identité jetable). Vos coins principaux résident dans votre propre portefeuille, pas ici.",
+    // First-run welcome (empty merchant manager).
+    welcomeTitle: "Bienvenue sur Satchel",
+    welcomeIntro:
+      "Satchel trade sous un « merchant » — une identité de trading avec sa propre seed. Vous n'en avez encore aucune : créez-en une nouvelle, ou importez une phrase de récupération existante pour démarrer.",
+    importMerchant: "Importer un merchant",
+    none: "Aucun merchant pour l'instant.",
+    active: "actif",
+    switch: "changer",
+    newMerchant: "Nouveau merchant",
+    thisMerchant: "ce merchant",
+    nameLabel: "Nom du merchant",
+    namePlaceholder: "ex. Principal",
+    introFirst:
+      "Configurez votre première identité de trading (un « merchant »). Elle ne détient que des clés de transit chaudes pour les swaps en cours — vos coins principaux restent dans votre propre portefeuille.",
+    introNew: "Un nouveau merchant est une identité fraîche et distincte, avec sa propre seed et son propre historique de swaps.",
+    // UI-5 merchant selector (phoenix wallet-selector parity).
+    createNew: "Créer un nouveau",
+    import: "Importer",
+    load: "Charger le merchant",
+    loaded: "chargé",
+    locked: "verrouillé",
+    lockedTip: "Seed chiffrée — déverrouillez-la avec votre phrase secrète lors du chargement.",
+    close: "Fermer",
+    idLabel: "dossier",
+    switching: "Changement de merchant…",
+    switchingBody: "Relancement du moteur sur ce dossier.",
+  },
+  // Seed create/import (SeedForm) + counterparty + status.
+  seed: {
+    intro: "Créez une seed toute neuve, ou importez-en une que vous avez déjà.",
+    createNew: "Créer une nouvelle",
+    createDesc: "Générez une seed fraîche. Vous sauvegardez la phrase de récupération.",
+    import: "Importer",
+    importDesc: "Restaurez à partir d'une phrase de 12/24 mots existante.",
+    recoveryLabel: "Phrase de récupération",
+    importPlaceholder: "mot1 mot2 mot3 …",
+    encrypt: "Chiffrer",
+    encryptDesc:
+      "Une phrase secrète protège la seed au repos. Vous la saisissez une fois par session — Satchel ne la stocke jamais. Note : l'auto-remboursement sans surveillance est suspendu après un redémarrage jusqu'à ce que vous la ressaisissiez.",
+    noPassphrase: "Aucune phrase secrète (recommandé)",
+    noPassphraseDesc:
+      "L'auto-remboursement continue de fonctionner après les redémarrages sans rien à saisir — ce n'est qu'une seed de transit chaude. Coût : l'accès au fichier/à l'hôte expose les clés de transit et l'identité de ce merchant.",
+    passphraseLabel: "Phrase secrète",
+    passphrasePlaceholder: "choisissez une phrase secrète",
+    createTitle: "Créer la seed",
+    importTitle: "Importer la seed",
+    secureTitle: "Sécuriser {label}",
+    revealTitle: "Notez votre phrase de récupération",
+    revealBody:
+      "Quiconque possède ces mots contrôle les clés chaudes de ce merchant. Satchel n'en garde aucune copie — conservez-la hors ligne. Vous confirmerez quelques mots ensuite.",
+    ackLabel: "J'ai noté ma phrase de récupération.",
+    // Multi-step onboarding (create/import -> secret -> confirm -> passphrase).
+    chooseTitle: "Configurer {label}",
+    enterTitle: "Importez votre phrase de récupération",
+    enterBody:
+      "Tapez chaque mot — ils se complètent automatiquement à mesure — ou collez la phrase entière. Nous la vérifions avant que vous continuiez.",
+    wordCount: "{n} mots",
+    wordAria: "Mot {n}",
+    checkIncomplete: "Saisissez les {n} mots.",
+    checkUnknown: "Certains mots ne figurent pas dans la liste de mots BIP39 — vérifiez ceux qui sont surlignés.",
+    checkBadChecksum: "La somme de contrôle ne correspond pas — revérifiez vos mots et leur ordre.",
+    checkOk: "La phrase de récupération semble valide.",
+    verifyTitle: "Confirmez votre sauvegarde",
+    verifyBody: "Tapez les mots à ces positions pour confirmer que vous avez bien noté la phrase.",
+    verifyWord: "Mot n°{n}",
+    verifyMismatch: "Ceux-ci ne correspondent pas à votre phrase — vérifiez votre sauvegarde.",
+    passphraseTitle: "Protégez la seed",
+    passphraseBody:
+      "Chiffrez éventuellement la seed stockée avec une phrase secrète. Vous pouvez l'ignorer — voyez le compromis ci-dessous.",
+  },
+  counterparty: {
+    you: "C'est vous",
+    youShort: "vous",
+    unknown: "identité inconnue",
+    // Short fingerprint fallback (identity.ts shortId) when no pubkey is known.
+    unknownShort: "inconnu",
+  },
+  status: {
+    notConnectedTitle: "Non connecté au moteur",
+    disconnectedBody:
+      "Satchel ne peut pas joindre le moteur. Il est peut-être encore en cours de démarrage, ou les connexions de nœud du merchant actif sont peut-être hors service. Réessayez, ou changez de merchant depuis le sélecteur en haut.",
+    openInSatchel: "Ouvrir ceci dans Satchel",
+    noTauriBody:
+      "Ceci est l'interface de Satchel — elle a besoin du pont Tauri pour joindre le moteur. Lancez l'application de bureau (cargo tauri dev) plutôt qu'un navigateur.",
+  },
+  settings: {
+    title: "Paramètres",
+    subtitle: "Préférences globales pour cette installation.",
+    // UI-3 Settings tabs.
+    tabGeneral: "Général",
+    tabCoins: "Coins",
+    tabNetwork: "Réseau",
+    tabAbout: "À propos",
+    appearance: "Apparence",
+    theme: "Thème",
+    themeDark: "Sombre",
+    themeLight: "Clair",
+    themeSystem: "Système",
+    themeHint: "Choisissez l'apparence de Satchel. Système suit le réglage de votre OS.",
+    language: "Langue",
+    languageHint: "D'autres langues arrivent à mesure que des traductions sont contribuées.",
+    mode: "Mode",
+    watchOnly: "Mode lecture seule",
+    watchOnlyHint:
+      "Parcourez le board sans configurer de coins. Vous pouvez tout de même retirer vos propres offres, mais ne pouvez pas publier, prendre ni financer. Désactivez-le pour trader (vous aurez besoin d'au moins deux coins connectés).",
+    network: "Réseau",
+    boards: "Corkboards",
+    boardsDesc:
+      "Boards HTTP auto-hébergés optionnels. Ajoutez ceux en qui vous avez confiance ; laissez vide pour vous appuyer sur Nostr.",
+    boardsNone: "Aucun configuré",
+    nostrRelays: "Relays Nostr",
+    nostrRelaysDesc:
+      "Les relays transportent le tableau d'affichage sur un réseau décentralisé — aucun opérateur ne peut lire ou apparier vos offres. Préconfigurés avec un ensemble par défaut ; modifiez à volonté.",
+    nostrRelaysOff: "Désactivé — transport Nostr désactivé",
+    addUrl: "Ajouter",
+    removeUrl: "Retirer",
+    relayInvalid: "Saisissez une URL de relay ws:// ou wss://",
+    boardInvalid: "Saisissez une URL de board http:// ou https://",
+    netSave: "Enregistrer et reconnecter",
+    netSaving: "Enregistrement et reconnexion…",
+    netSaved: "Enregistré",
+    // Fees tab — fee-bump policy (per active merchant).
+    tabFees: "Frais",
+    fees: "Augmentation des frais",
+    feesScope: "Ces paramètres s'appliquent au merchant actif.",
+    feesIntro:
+      "Compromis sécurité/coût pour les augmentations de frais, pas une configuration requise. Les nouvelles valeurs s'appliquent aux futures augmentations ; les swaps déjà financés conservent la politique sous laquelle ils ont été financés.",
+    feeMax: "Feerate max (sat/vB)",
+    feeMaxHint:
+      "Plafond pour chaque augmentation de frais. Par défaut 500, qui est aussi le maximum système absolu. Abaissez-le pour limiter les coûts.",
+    feeReservation: "Réserve d'augmentation au financement (×)",
+    feeReservationHint:
+      "Solde que le contrôle de fonds met de côté comme marge d'augmentation. Plus élevé sauve de plus gros pics de frais mais immobilise plus de solde et rejette plus de swaps. Par défaut 3.",
+    feeCommitted: "Surprovisionnement du redeem (×)",
+    feeCommittedHint:
+      "Combien les frais de redeem v2 sont surpayés à l'avance pour qu'il confirme même quand Satchel est fermé. S'applique uniquement aux nouveaux swaps. Par défaut 2.",
+    feeStep: "Pas d'escalade RBF (%)",
+    feeStepHint: "À quelle agressivité les frais d'une dépense bloquée grimpent à chaque passage du planificateur. Par défaut 50.",
+    feeSave: "Enregistrer",
+    feeSaving: "Enregistrement…",
+    feeSaved: "Enregistré",
+    feeReset: "Réinitialiser aux valeurs par défaut",
+    coins: "Coins et nœuds",
+    coinsHint: "Connectez chaque coin à votre propre nœud. Le genesis est vérifié avant que quoi que ce soit ne soit enregistré.",
+    about: "À propos",
+    version: "Version {version}",
+    updateUpToDate: "À jour",
+    updateCheckPlaceholder: "La vérification des mises à jour arrive dans une version ultérieure.",
+    trustModel: "Où résident vos clés",
+    trustModelBody:
+      "Les secrets résident dans le moteur, jamais dans Satchel. La seed du merchant se trouve dans le dossier de données du moteur (chiffrée ou en clair — à votre choix) ; Satchel ne stocke aucune seed ni phrase secrète. La seed est chaude par conception (clés de transit uniquement) — balayez les gains conséquents vers votre propre portefeuille froid.",
+  },
+  coins: {
+    intro:
+      "Connectez chaque coin à votre propre nœud. La première URL est le portefeuille de votre nœud — il finance vos jambes de swap et reçoit les gains. Avant tout enregistrement, Satchel vérifie le bloc genesis du nœud afin que les fonds ne puissent jamais être envoyés sur la mauvaise chaîne. Les connexions sont partagées entre tous vos merchants.",
+    networkBadge: "Configuration pour le réseau {network}",
+    needMerchant:
+      "Connectez d'abord un merchant — la configuration des coins nécessite que le moteur tourne. Utilisez le sélecteur de merchant en haut à droite.",
+    pairsTitle: "Paires de trading",
+    pairsHint:
+      "Les paires sont dérivées de ce que chaque coin peut faire — il n'y a pas de liste fixe. Une paire s'ouvre une fois ses deux coins connectés.",
+    noPairs: "Aucune paire disponible.",
+    notSetUp: "Non configuré",
+    connectedTip: "Connecté · tip {tip}",
+    connError: "Erreur de connexion",
+    setUp: "Configurer",
+    editConnection: "Modifier la connexion",
+    remove: "retirer",
+    disconnectTip: "Déconnecter ce coin",
+    disconnectTitle: "Déconnecter {coin} ?",
+    disconnectBody: "Les swaps qui en ont besoin ne seront pas disponibles jusqu'à reconnexion.",
+    ready: "Prêt à trader",
+    connectMissing: "Connecter {coins}",
+    notBuildable: "Pas encore réalisable",
+    // Swap-protocol chips on a pair (pact-htlc-v1 HTLC vs pact-htlc-v2 adaptor).
+    protoPrivate: "Privé (Taproot)",
+    protoPrivateTip: "Swap privé (adaptateur Taproot/MuSig2) — ressemble à un paiement ordinaire on-chain",
+    protoHtlcTip: "Swap HTLC classique",
+    // Coin-setup backend choices (CoinSetup).
+    backendCoreTitle: "Portefeuille RPC du Core",
+    backendCoreDesc: "Le portefeuille de votre nœud finance le swap et reçoit les gains.",
+    backendHardwareTitle: "Matériel",
+    backendHardwareDesc: "Signature Ledger / PSBT pour la jambe de financement.",
+    backendLater: "plus tard",
+    // CoinSetup dialog.
+    setupTitle: "Connecter {coin}",
+    setupIntro:
+      "Pointez Satchel vers votre propre nœud {sym}. Rien n'est enregistré tant que le nœud n'a pas passé un contrôle de bloc genesis — vos fonds ne touchent jamais que la vraie chaîne {sym}.",
+    backendUrlLabel: "URL(s) du backend de nœud",
+    backendUrlHint:
+      "Première URL = le portefeuille de votre nœud (finance les swaps, reçoit les gains). Ajoutez des serveurs Electrum (tcp://host:port) après des virgules pour des vues de chaîne supplémentaires et indépendantes.",
+    fundingWallet: "Portefeuille de financement",
+    confirmationsLabel: "Confirmations avant finalisation",
+    confirmationsHint:
+      "À quelle profondeur un financement ou un redeem sur cette chaîne doit se trouver avant qu'un swap n'agisse dessus — la marge de sécurité contre les réorgs. Plus élevé est plus sûr mais plus lent ; laissez vide pour la valeur par défaut recommandée ({default}).",
+    validateNode: "Valider le nœud",
+    checking: "Vérification du nœud…",
+    genesisOk: "Genesis correspond — c'est la bonne chaîne",
+    genesisDetail: "hauteur tip {tip} · genesis {hash}…",
+    genesisBad: "Rejeté — pas d'enregistrement",
+    errorShort: "erreur",
+    // Structured connection form (CoinSetup v2).
+    rpcHostLabel: "Hôte RPC",
+    rpcPortLabel: "Port RPC",
+    authMethodLabel: "Authentification",
+    authCookie: "Fichier cookie",
+    authCookieDesc: "Lecture auto du .cookie du nœud depuis son répertoire de données (par défaut, aucun mot de passe stocké).",
+    authUserPass: "Utilisateur / mot de passe",
+    authUserPassDesc: "Les rpcuser / rpcpassword de la config de votre nœud — nécessaires pour un nœud distant.",
+    rpcUserLabel: "Nom d'utilisateur RPC",
+    rpcPasswordLabel: "Mot de passe RPC",
+    datadirLabel: "Répertoire de données du nœud",
+    cookiePathNote: "Le cookie est lu depuis {path} sous ce répertoire.",
+    walletLabel: "Nom du portefeuille (optionnel)",
+    walletPlaceholder: "le portefeuille de votre nœud",
+    needPort: "Saisissez d'abord le port RPC.",
+    validateFirst: "Validez le nœud avant d'enregistrer.",
+    savingReconnecting: "Enregistrement et reconnexion…",
+    connected: "{coin} connecté",
+    // Template picker (a coins.toml coin the engine version doesn't support).
+    unsupportedByEngine: "Non pris en charge",
+    unsupportedByEngineTip:
+      "Ce coin est défini dans coins.toml mais n'est pas intégré dans cette version du moteur, il ne peut donc pas être tradé.",
+  },
+  coinWizard: {
+    title: "Connectez vos coins",
+    intro:
+      "Choisissez au moins deux coins et pointez chacun vers votre propre nœud. Un swap a besoin de deux chaînes, donc le trading se débloque une fois que deux nœuds sont connectés et en service. Vous pourrez ajouter ou changer des coins plus tard dans Paramètres.",
+    progress: "{count} sur {min} coins connectés",
+    continue: "Continuer",
+    live: "En service",
+    nodeDown: "Nœud hors service",
+  },
+  wallets: {
+    intro:
+      "Ce sont les portefeuilles de vos propres nœuds (ceux que le moteur utilise pour financer les swaps et recevoir les gains) — vos clés, votre machine. Satchel ne détient jamais vos coins.",
+    hotSeedNudge:
+      "Ceci est un portefeuille de dépense sur une seed chaude, pas un coffre — balayez les soldes conséquents vers votre propre portefeuille froid/core.",
+    notConnected: "Non connecté",
+    notConnectedBody: "Connectez d'abord un merchant — la vue portefeuille nécessite que le moteur tourne.",
+    noCoins: "Aucun coin configuré pour l'instant",
+    noCoinsBody: "Connectez un coin dans Paramètres → Coins et son portefeuille apparaîtra ici.",
+    goToCoins: "Aller aux Coins",
+    watchOnlyTitle: "Aucun portefeuille en mode lecture seule",
+    watchOnlyBody:
+      "Ceci est une session en lecture seule sans coins connectés, il n'y a donc aucun portefeuille à afficher. Désactivez la lecture seule dans Paramètres et connectez un coin pour financer des swaps.",
+    walletName: "portefeuille · {wallet}",
+    walletScopedHint: "Chaque RPC pour ce coin est limité à ce portefeuille de nœud.",
+    walletDefault: "portefeuille par défaut (non limité)",
+    walletDefaultHint:
+      "Aucun portefeuille défini pour ce coin, donc les RPC utilisent le portefeuille par défaut du nœud. Définissez-en un dans Paramètres → Coins pour limiter chaque appel à un portefeuille spécifique.",
+    balanceLabel: "Solde {symbol}",
+    receive: "Recevoir",
+    send: "Envoyer",
+    sendTo: "Envoyer à l'adresse",
+    amount: "Montant",
+    sendTitle: "Envoyer {amount} {sym} ?",
+    sendConfirmBody: "Vers {to}\n\nCeci dépense depuis le portefeuille de votre propre nœud et ne peut pas être annulé.",
+  },
+  corkboard: {
+    noBoardTitle: "Aucun Corkboard connecté",
+    noBoardBody:
+      "Un Corkboard est un tableau d'affichage partagé où les makers épinglent leurs offres. Il n'apparie jamais les échanges et ne détient pas de coins — pointez Satchel vers un Corkboard en qui vous avez confiance pour parcourir et publier.",
+    noPairs: "Aucune paire disponible",
+    board: "Corkboard",
+    boardSettings: "Configurer dans Paramètres",
+    filterAll: "Toutes",
+    filterMine: "Les miennes",
+    offered: "{symbol} proposés",
+    noOffers: "Aucune offre que vous puissiez prendre pour le moment",
+    noOffersBody:
+      "Les offres apparaissent ici dès qu'un maker en publie une pour une paire que vous avez configurée. Vous pouvez aussi publier les vôtres.",
+    hiddenOffers:
+      "{count} offre(s) de plus pour des paires que vous n'avez pas connectées. Configurez les deux coins pour les trader :",
+    yourOffer: "votre offre",
+    offerStaged: "publication…",
+    offerStagedTip:
+      "Publiée depuis cet appareil et en attente de confirmation par un relay. Elle est en cours de diffusion ; elle devient active dès qu'un relay la renvoie.",
+    take: "Prendre l'offre",
+    legDown: "Le nœud de l'un des coins de cette paire est hors service — démarrez-le (ou vérifiez Paramètres → Coins) avant de prendre.",
+    withdraw: "Retirer",
+    withdrawTip: "Retirez instantanément — une offre ne verrouille jamais de fonds",
+    safetyRefund: "remboursement de sécurité",
+    safetyRefundTip:
+      "Si le swap se bloque, les deux côtés sont auto-remboursés — la jambe du taker se déverrouille en premier, la vôtre un peu plus tard. Personne ne reste coincé.",
+    activeTitle: "Vos swaps actifs",
+    states: {
+      open: "ouverte",
+      takenByUs: "prise par vous",
+      revoked: "retirée",
+      expired: "expirée",
+    },
+    // Two-sided order-book view of the Corkboard. Bids = makers giving the
+    // quote coin to get the base; asks = the reverse. The ladder is a way to
+    // READ the board — it never matches or prioritises (load-bearing).
+    book: {
+      bids: "Achats",
+      asks: "Ventes",
+      bidsHint: "veulent {base} · paient {quote}",
+      asksHint: "vendent {base} · contre {quote}",
+      price: "Prix",
+      size: "Taille",
+      noBids: "Aucun achat",
+      noAsks: "Aucune vente",
+      spread: "Écart {pct}",
+      spreadOneSided: "Unilatéral",
+      crossed: "croisé",
+      crossedTip: "Meilleur achat ≥ meilleure vente. Le board n'apparie jamais automatiquement, donc ces offres qui se chevauchent restent là — prenez l'un ou l'autre côté.",
+      mid: "milieu {price}",
+      levelOffers: "{count} offre(s) à ce prix — choisissez-en une à prendre",
+      depthTip: "Total {sym} proposés à ce prix sur {count} annonce(s).",
+      takerNote: "En la prenant, vous donnez {give} et recevez {get}.",
+      selectLevel: "Choisissez un niveau de prix ci-dessus pour voir les offres correspondantes.",
+      paneHeader: "{size} {base} @ {price} {unit}",
+      denomTip: "Unité d'affichage pour les montants {coin}",
+      showMore: "Afficher {count} de plus",
+      showLess: "Afficher les {count} premiers",
+    },
+  },
+  relays: {
+    title: "Relays",
+    subtitle: "Connectivité en direct à vos relays Nostr — le réseau par lequel transitent vos offres et vos prises. Ajoutez ou retirez des relays dans Paramètres → Réseau.",
+    connectedCount: "{up} / {total} connectés",
+    refresh: "Rafraîchir",
+    ms: "{ms} ms",
+    up: "actif",
+    down: "inactif",
+    statsTip: "{success}/{attempts} connexions réussies · ↓{down} ↑{up}",
+    none: "Aucun relay configuré",
+    noneBody: "Ajoutez un relay Nostr dans Paramètres → Réseau pour publier et recevoir des offres sur le réseau.",
+    goToNetwork: "Aller aux Paramètres",
+    notConnected: "Non connecté",
+    notConnectedBody: "La vue des relays nécessite que le moteur tourne — connectez d'abord un merchant.",
+  },
+  swaps: {
+    title: "Swaps",
+    hint: "Votre registre complet — les swaps en cours en haut, les échanges terminés en dessous. Vous pouvez aussi agir sur les swaps actifs depuis le Corkboard.",
+    activeTitle: "En cours",
+    historyTitle: "Historique",
+    none: "Aucun swap pour l'instant — prenez une offre sur le Corkboard.",
+    // Active-swaps dock action buttons + the refund-time label.
+    cancel: "annuler",
+    refund: "rembourser",
+    dump: "exporter les logs",
+    dumpHint: "Copiez un lot de diagnostics sans secrets (état + lignes de log) pour ce swap, à coller aux développeurs.",
+    dumpCopied: "Diagnostics copiés — collez-les aux développeurs.",
+    dumpFailed: "Impossible de copier le lot de diagnostics.",
+    refundAt: "remboursement {when}",
+    // Confirm dialogs for acting on a live swap (ActiveSwaps).
+    cancelTitle: "Annuler ce swap ?",
+    cancelConfirm: "Annuler le swap",
+    cancelKeep: "Le garder",
+    // Abort reason recorded on the swap when cancelled from Satchel.
+    cancelReason: "annulé dans Satchel",
+    cancelBody:
+      "Ceci abandonne le swap avant que vous n'ayez financé. Rien de vous n'est encore verrouillé, vous ne perdez donc rien — l'offre ne se finalisera simplement pas.",
+    refundTitle: "Récupérer vos fonds ?",
+    refundConfirm: "Rembourser",
+    refundBody:
+      "Le timelock de sécurité est dépassé, vous pouvez donc récupérer les fonds que vous avez verrouillés. Ceci diffuse votre remboursement maintenant ; le moteur le fait aussi automatiquement après l'échéance.",
+    col: {
+      swap: "swap",
+      role: "rôle",
+      state: "état",
+      amounts: "donne → reçoit",
+      when: "quand",
+      finalTx: "tx finale",
+    },
+    // Expandable per-leg on-chain detail (the audit trail). We show both
+    // funding txs + OUR settlement; never the counterparty's settlement or the
+    // swap secret.
+    audit: {
+      toggle: "Afficher le détail on-chain",
+      title: "Détail on-chain",
+      youLocked: "vous avez verrouillé",
+      theyLocked: "ils ont verrouillé",
+      funding: "Financement",
+      received: "Reçu",
+      refunded: "Remboursé",
+      pending: "pas encore on-chain",
+      copy: "Copier l'identifiant de transaction",
+      copied: "Identifiant de transaction copié",
+    },
+  },
+  fees: {
+    title: "Aperçu du coût réseau",
+    estimated: "estimé",
+    provisionalNote: "Ce build de pactd n'expose pas encore l'estimation des frais.",
+    summary: "Un swap est composé de 2 transactions on-chain que vous payez : le financement sur la chaîne donnée, le redeem sur la chaîne reçue.",
+    fallbackTip: "Un nœud était injoignable, donc un feerate par défaut prudent a été utilisé — traitez-les comme une estimation.",
+    ifItStalls: "(en cas de blocage)",
+  },
+  funds: {
+    insufficient:
+      "Pas assez de {sym} pour financer ce swap — il faut ~{need} {sym} (montant + frais de financement), le portefeuille a {have} {sym}.",
+  },
+  wizard: {
+    welcome: "Bienvenue sur Satchel",
+    connectTitle: "Connecter le moteur Pact",
+    connectIntro:
+      "Satchel est un client léger du moteur Pact — le cœur qui détient vos clés et exécute les swaps. Choisissez comment le joindre.",
+    managed: "Lancer le moteur Pact intégré",
+    managedDesc: "Satchel lance et supervise son propre moteur Pact. Recommandé.",
+    external: "Se connecter à un moteur Pact externe",
+    externalDesc: "Pointez vers un moteur Pact que vous exécutez déjà (définissez SATCHEL_PACTD_URL + cookie avant le lancement).",
+    externalNote:
+      "Le mode externe se sélectionne via des variables d'environnement avant de lancer Satchel. Relancez avec SATCHEL_PACTD_URL défini pour l'utiliser.",
+    coinsTitle: "Ajoutez vos coins",
+    coinsIntro:
+      "Une fois votre merchant créé, connectez chaque coin à votre propre nœud dans Paramètres → Coins. Choisissez un coin et un backend (Electrum public pour zéro configuration, ou votre propre nœud) ; le genesis est vérifié par rapport à ce réseau avant tout enregistrement.",
+    coinsTemplatesSoon: "Les modèles de coins en un clic arrivent ici dans une version ultérieure.",
+    back: "Retour",
+    continue: "Continuer",
+    finish: "Terminer la configuration",
+  },
+  // UI-4 docked activity log.
+  log: {
+    title: "Activité",
+    empty: "— journal d'activité —",
+    count: "{count} lignes",
+    collapse: "Réduire le journal",
+    expand: "Développer le journal",
+    // Activity-log lines emitted by the frontend. `{err}` carries a raw engine
+    // message (itself not translated — it comes from pactd over the wire).
+    noTauri: "ne s'exécute pas dans Satchel — cette interface a besoin du pont Tauri",
+    startupError: "démarrage : {err}",
+    notConnected: "non connecté : {err}",
+    connected: "connecté à pactd {version} ({protocol})",
+    listcoinsError: "listcoins : {err}",
+    watchOnlyError: "lecture seule : {err}",
+    switchedMerchant: "basculé sur le merchant {id}",
+    switchMerchantError: "changement de merchant : {err}",
+    loadMerchantError: "chargement du merchant : {err}",
+    merchantCreated: "merchant {id} créé",
+    merchantReady: "merchant prêt",
+    actionOk: "{action} {id} : ok",
+    actionError: "{action} {id} : {err}",
+    diagCopied: "diagnostics pour {id} copiés ({count} lignes de log) — collez-les aux devs",
+    dumpError: "export {id} : {err}",
+    coinDisconnected: "{coin} déconnecté",
+    removeCoinError: "retrait du coin : {err}",
+    tookOffer: "offre {id} prise — elle apparaît maintenant dans vos swaps actifs ci-dessous",
+    takeError: "prise : {err}",
+    offerWithdrawn: "offre {id} retirée",
+    withdrawError: "retrait : {err}",
+    postedOffer: "offre {id} publiée — retirez-la à tout moment ; rien n'est verrouillé",
+    createdSlip: "slip d'offre privée créé — envoyez-le à votre ami",
+    tookPrivateOffer: "offre privée {id} prise — elle apparaît maintenant dans vos swaps actifs",
+    cancelledPrivateOffer: "offre privée {id} annulée",
+    cancelError: "annulation : {err}",
+    noticeboardUpdated: "tableau d'affichage mis à jour",
+    feePolicyUpdated: "politique de frais mise à jour",
+  },
+  // Relative-time + freshness prose from format.ts (rendered via the tr() mirror,
+  // since those are pure non-component helpers). Unit letters stay inside the
+  // template so a translation owns the whole phrase.
+  format: {
+    ageUnknown: "ancienneté inconnue",
+    justNow: "à l'instant",
+    minutesAgo: "il y a {n} min",
+    hoursAgo: "il y a {n} h",
+    daysAgo: "il y a {n} j",
+    expiryNow: "maintenant",
+    expirySoon: "bientôt",
+    inMinutes: "dans ~{n} min",
+    inHours: "dans ~{n} h",
+    inDays: "dans ~{n} j",
+    posted: "publié {age}",
+    expires: "expire {time}",
+  },
+  // Plain-language swap story per (role, state) — the honest "who is exposed
+  // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
+  // are local refund times. Rendered via tr() (narrate() is a pure helper).
+  narrate: {
+    initiating:
+      "Prise envoyée — en attente que le maker démarre le swap. Rien n'est encore verrouillé ; cela s'annule tout seul s'il ne répond pas.",
+    created: "Offre envoyée — en attente que l'autre côté accepte. Rien n'est engagé.",
+    acceptedMaker: "Conditions acceptées. Ensuite : verrouillez vos {a}. Tant que vous ne financez pas, vous pouvez encore annuler librement.",
+    acceptedTaker: "Conditions acceptées. L'autre côté verrouille ses {a} en premier — vous n'envoyez jamais en premier.",
+    noncesExchanged:
+      "Mise en place du swap privé — échange du matériel de signature. Rien n'est encore verrouillé.",
+    signedMaker:
+      "Les deux côtés ont signé. Votre daemon verrouille les {a}, puis réclame les {b} automatiquement. Si quelque chose se bloque, vos {a} reviennent à {t1}.",
+    signedTaker:
+      "Les deux côtés ont signé. Votre daemon verrouille les {b} et réclame les {a} dès que l'autre côté bouge. Filet de sécurité : remboursement à {t2}.",
+    fundedAMaker:
+      "Vos {a} sont verrouillés. En attente que l'autre côté verrouille ses {b}. S'il ne le fait jamais, vos {a} reviennent automatiquement à {t1}.",
+    fundedATaker:
+      "Leurs {a} sont verrouillés et vérifiés. Ensuite : verrouillez vos {b}. Filet de sécurité : remboursement automatique à {t2} si quelque chose se bloque.",
+    fundedBMaker: "Les deux verrouillés. Votre daemon réclame les {b} dès qu'ils sont confirmés en toute sécurité.",
+    fundedBTaker: "Les deux verrouillés. Votre daemon réclamera les {a} dès que l'autre côté prendra ses {b}.",
+    redeemedB:
+      "Vous avez réclamé les {b} — en attente de confirmation. Vos {a} verrouillés restent protégés jusqu'à ce que ce soit final.",
+    completed: "Swap terminé — les {coin} sont dans votre portefeuille.",
+    refunded: "Le swap ne s'est pas terminé, donc vos {coin} sont revenus automatiquement. Rien de perdu sauf les frais.",
+    aborted: "Annulé avant tout mouvement d'argent.",
+  },
+  exit: {
+    // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
+    // running" detaches it (it keeps watching timelocks + servicing offers).
+    liveTitle: "Un swap est en cours",
+    liveBodyOne:
+      "1 swap est en plein vol. Il est régi par des timelocks on-chain — le moteur doit continuer à tourner pour redeem ou rembourser avant l'échéance.",
+    liveBodyMany:
+      "{count} swaps sont en plein vol. Ils sont régis par des timelocks on-chain — le moteur doit continuer à tourner pour redeem ou rembourser avant l'échéance.",
+    keepRunningExplain:
+      "Fermer la fenêtre laisse le moteur tourner en arrière-plan, afin qu'il finalise le swap sans interface. Vous pouvez rouvrir Satchel à tout moment pour le vérifier.",
+    forceQuitWarn: "Forcer la fermeture maintenant arrête le moteur et peut faire perdre des fonds.",
+    // {word} is the confirm word below; a translation may localize both together.
+    typeToConfirm: "Pour forcer la fermeture malgré tout, tapez {word} ci-dessous.",
+    confirmWord: "QUIT",
+    keepRunning: "Continuer à tourner, fermer la fenêtre",
+    keepWithdraw: "Continuer à tourner + retirer les offres",
+    keepLeaveOffers: "Continuer à tourner, laisser les offres",
+    forceQuit: "Forcer la fermeture",
+    offersTitle: "Vous avez des offres publiées",
+    offersBodyOne:
+      "1 de vos offres est encore sur le Corkboard. Les offres ne verrouillent rien, mais la laisser signifie que des contreparties peuvent encore la prendre pendant que Satchel est fermé — le moteur traitera la prise.",
+    offersBodyMany:
+      "{count} de vos offres sont encore sur le Corkboard. Les offres ne verrouillent rien, mais les laisser signifie que des contreparties peuvent encore les prendre pendant que Satchel est fermé — le moteur traitera les prises.",
+    withdrawExit: "Tout retirer et quitter",
+  },
+  unlock: {
+    title: "Déverrouiller le merchant",
+    body:
+      "La seed de ce merchant est chiffrée. Saisissez sa phrase secrète pour le déverrouiller pour cette session — Satchel ne la garde qu'en mémoire et l'oublie en quittant.",
+    switchMerchant: "Changer de merchant",
+    unlock: "Déverrouiller",
+  },
+  common: {
+    cancel: "Annuler",
+    confirm: "Confirmer",
+    save: "Enregistrer",
+    done: "Terminé",
+    later: "Plus tard",
+    retry: "Réessayer la connexion",
+  },
+};
