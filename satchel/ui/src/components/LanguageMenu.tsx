@@ -1,34 +1,72 @@
 import { useRef, useState } from "react";
-import { IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Tooltip } from "@mui/material";
+import {
+  Box,
+  Button,
+  IconButton,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
+  Tooltip,
+} from "@mui/material";
 import LanguageOutlinedIcon from "@mui/icons-material/LanguageOutlined";
 import CheckIcon from "@mui/icons-material/Check";
 import { LANGUAGES, useI18n, useT } from "../i18n";
 
-// The language picker (a globe button + native-name menu), shared by the header
-// toolbar and the first-run floating switcher. Lives in one place so both
-// surfaces offer the full shipped LANGUAGES list and stay in lockstep.
+// phoenix-pocx breakpoint: the toolbar shows the language NAME on wide screens
+// and collapses to a bare globe icon below 1280px. We mirror that exactly.
+const WIDE = "@media (min-width:1280px)";
+
+// The language picker. Two presentations share one menu:
+//  - default (header toolbar): responsive — current language's nativeName as
+//    text on ≥1280px, a globe icon below (phoenix parity).
+//  - iconOnly (onboarding dialog corner): always a compact globe icon.
+// The dropdown is height-capped and scrolls — there are 26 languages.
 //
-// `menuZIndex` lifts the dropdown above onboarding dialogs (MUI modal = 1300):
-// during first-run the header sits behind a dialog backdrop, so the floating
-// instance renders the menu on top of it.
+// `menuZIndex` lifts the dropdown above a dialog backdrop (MUI modal = 1300)
+// when the control lives inside an onboarding dialog.
 export default function LanguageMenu({
-  color = "text.secondary",
+  iconOnly = false,
   menuZIndex,
 }: {
-  color?: string;
+  iconOnly?: boolean;
   menuZIndex?: number;
 }) {
   const t = useT();
   const { lang, setLang } = useI18n();
   const ref = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
+  const current = LANGUAGES.find((l) => l.code === lang) ?? LANGUAGES[0];
 
   return (
     <>
       <Tooltip title={t("header.language")}>
-        <IconButton ref={ref} onClick={() => setOpen(true)} sx={{ color }}>
-          <LanguageOutlinedIcon />
-        </IconButton>
+        {iconOnly ? (
+          <IconButton ref={ref} onClick={() => setOpen(true)} sx={{ color: "text.secondary" }}>
+            <LanguageOutlinedIcon />
+          </IconButton>
+        ) : (
+          <Button
+            ref={ref}
+            onClick={() => setOpen(true)}
+            sx={{
+              color: "text.secondary",
+              textTransform: "none",
+              fontWeight: 500,
+              minWidth: 0,
+              px: 1,
+              [WIDE]: { px: 1.25 },
+            }}
+          >
+            <Box component="span" sx={{ display: "none", [WIDE]: { display: "inline" } }}>
+              {current.nativeName}
+            </Box>
+            <LanguageOutlinedIcon
+              fontSize="small"
+              sx={{ display: "inline-flex", [WIDE]: { display: "none" } }}
+            />
+          </Button>
+        )}
       </Tooltip>
       <Menu
         anchorEl={ref.current}
@@ -37,6 +75,9 @@ export default function LanguageMenu({
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}
         sx={menuZIndex ? { zIndex: menuZIndex } : undefined}
+        // Cap the height so the 26-language list scrolls instead of running off
+        // the screen (≈ 9 rows + scrollbar).
+        slotProps={{ paper: { sx: { maxHeight: 340 } } }}
       >
         {LANGUAGES.map((l) => (
           <MenuItem
