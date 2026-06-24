@@ -1,0 +1,716 @@
+// The Lithuanian (Lietuviškai) string bundle. Mirrors en.ts key-for-key; only values are translated.
+import type { Bundle } from "./en";
+
+export const lt: Bundle = {
+  app: {
+    name: "Satchel",
+    tagline: "be pasitikėjimo mainai",
+  },
+  // In-app update notifications (sidebar version badge + dialog).
+  update: {
+    title: "Yra atnaujinimas",
+    upToDate: "Turite naujausią versiją",
+    current: "Įdiegta",
+    latest: "Naujausia",
+    notesTitle: "Leidimo aprašas",
+    get: "Gauti atnaujinimą",
+    dismiss: "Atmesti",
+    close: "Uždaryti",
+    badgeTooltip: "Yra atnaujinimas — spustelėkite, kad pamatytumėte išsamiau",
+    versionTooltip: "Spustelėkite, kad patikrintumėte atnaujinimus",
+  },
+  // Risk disclaimer (first-run welcome + Settings → About).
+  disclaimer: {
+    title: "Savarankiška saugykla — jūsų raktai, jūsų atsakomybė",
+    body: "Satchel atlieka nekustodinius atominius mainus: tik jūs valdote savo raktus, o prekiautojo sėkla laiko karštuosius tranzito raktus, kol mainai vyksta. Mainų protokolai (v1 HTLC ir v2 Taproot/MuSig2) yra peržiūrėti ir veikia mainnet tinkle. Pateikiama pagal MIT licenciją tokia, kokia yra, be jokios garantijos — pasidarykite atsarginę atkūrimo frazės kopiją ir naudokitės savo rizika.",
+  },
+  nav: {
+    public: "Vieša",
+    corkboard: "Corkboard",
+    postOffer: "Skelbti pasiūlymą",
+    private: "Privatu",
+    privateCreate: "Sukurti lapelį",
+    privateReceive: "Priimti lapelį",
+    privateSlips: "Mano lapeliai",
+    swaps: "Mainai",
+    relays: "Relės",
+    wallets: "Piniginės",
+    settings: "Nustatymai",
+    coins: "Monetos",
+  },
+  makeOffer: {
+    title: "Skelbti pasiūlymą",
+    intro:
+      "Paskelbkite pasirašytą pasiūlymą Corkboard lentoje. Niekas neužrakinama — tai tik skelbimas; galite atšaukti bet kada, o mainai prasideda tik tada, kai kas nors juos priima ir abi pusės finansuoja.",
+    give: "Jūs duodate",
+    want: "Jūs gaunate",
+    // Canonical pair + direction: pick the pair, choose Sell/Buy the base, enter
+    // the base amount and a quote-per-base price (invariant to direction).
+    pair: "Pora",
+    noPairs: "Nėra prekiaujamų porų — prijunkite bent dvi monetas skiltyje Nustatymai → Monetos.",
+    sell: "Parduoti {sym}",
+    buy: "Pirkti {sym}",
+    amount: "Suma",
+    youGive: "Jūs duodate",
+    youGet: "Jūs gaunate",
+    price: "Kaina",
+    priceUnit: "{unit} už {base}",
+    pricePlaceholder: "vieneto kaina",
+    balance: "Likutis: {amt} {sym}",
+    balanceLoading: "Likutis: …",
+    noCoins: "Monetų nesukonfigūruota",
+    sameCoin: "Duodama ir gaunama monetos turi skirtis.",
+    legDown: "Vienos iš šių monetų mazgas neveikia — paleiskite jį (arba patikrinkite Nustatymai → Monetos) prieš skelbdami.",
+    // Swap-protocol pin (only offered when a pair+network supports more than
+    // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
+    protocol: "Mainų tipas",
+    protoStandard: "Standartiniai (HTLC)",
+    // Titles for the review/confirm dialog shown before posting (see OfferForm).
+    reviewOfferTitle: "Peržiūrėkite savo pasiūlymą",
+    reviewSlipTitle: "Peržiūrėkite savo lapelį",
+    term: "Saugumo laiko užraktas",
+    termShort: "Trumpas",
+    termMedium: "Vidutinis",
+    termLong: "Ilgas",
+    termHint: {
+      short: "Trumpas — lėšos automatiškai grąžinamos greičiausiai, jei sandoris užstringa (~12 val. / 6 val.), su mažiausia saugumo atsarga.",
+      medium: "Vidutinis — subalansuotas grąžinimo langas (~24 val. / 12 val.).",
+      long: "Ilgas (saugiausias) — didžiausia saugumo atsarga; automatinis grąžinimas po ~36 val. / 18 val., jei sandoris užstringa.",
+    },
+    validFor: "Galioja (minutėmis)",
+    validForMins: "{mins} min.",
+    validForHint:
+      "Kiek laiko pasiūlymas išlieka skelbimuose. Kol esate prisijungę, jis automatiškai atnaujinamas; po to baigia galioti. Uždarius programą jis pašalinamas.",
+    note: "Fiksuoto dydžio pasiūlymas — niekas neužrakinama, kol kas nors jo nepriima. Sumos yra grandinėje; tinklo mokesčius mokate papildomai, o Corkboard nieko neima. Laiko užraktas — tai automatinio grąžinimo langas, jei mainai užstringa.",
+    post: "Skelbti pasiūlymą",
+    makeSlip: "Sukurti lapelį",
+    slipTitle: "Jūsų privataus pasiūlymo lapelis",
+    slipExplainer:
+      "Nusiųskite tai savo draugui. Jis įklijuoja į Satchel, kad priimtų. Niekas neužrakinama; galioja iki {ttl}.",
+    copy: "Kopijuoti",
+    copied: "Nukopijuota",
+    makeAnother: "Sukurti kitą",
+    myPrivateTitle: "Mano privatūs pasiūlymai",
+    myPrivateEmpty: "Neįvykdytų privačių pasiūlymų nėra.",
+    privateExpires: "baigia galioti {when}",
+    privateExpired: "nebegalioja",
+    cancel: "Atšaukti",
+    cancelTip: "Nustoti laikytis šio lapelio — draugas, kuris jį vis dar turi, nebegalės jo priimti.",
+  },
+  takeSlip: {
+    open: "Įklijuoti lapelį",
+    title: "Priimti privatų pasiūlymą",
+    intro:
+      "Draugas atsiuntė jums privataus pasiūlymo lapelį (jis prasideda pactoffer1:). Įklijuokite jį čia, kad peržiūrėtumėte ir priimtumėte — visai kaip pasiūlymą iš lentos.",
+    placeholder: "pactoffer1:…",
+    take: "Peržiūrėti ir priimti",
+    invalid: "Tai nepanašu į lapelį — jis turėtų prasidėti pactoffer1:.",
+    previewLabel: "Šis lapelis siūlo",
+  },
+  // PRIVATE nav group (off-market slips) — screen titles + intros. The form,
+  // slip output, my-slips list and take flow reuse makeOffer.*/takeSlip.* copy.
+  private: {
+    createTitle: "Sukurti privatų pasiūlymą",
+    createIntro:
+      "Sukurkite pasirašytą pasiūlymą ir perduokite jį draugui kaip lapelį per savo paties pokalbį. Niekas niekur neskelbiama — ir niekas neužrakinama, kol abu nefinansuojate.",
+    slipsIntro:
+      "Jūsų sukurti lapeliai. Bet kas, turintis lapelį, gali jį priimti, kol jis galioja; atšaukite vieną, kad nustotumėte jo laikytis anksčiau.",
+    slipsEmptyBody: "Sukurkite privatų pasiūlymą, kad gautumėte lapelį, kurį galite nusiųsti draugui.",
+    receiveTitle: "Priimti privatų pasiūlymą",
+    received: "Priimta — sekite skiltyje Mainai.",
+  },
+  // Shared take-confirmation dialog (board take + slip take).
+  takeConfirm: {
+    title: "Priimti šį pasiūlymą?",
+    confirm: "Priimti pasiūlymą",
+    counterparty: "Kontrahentas",
+    youGive: "Jūs duodate",
+    youReceive: "Jūs gaunate",
+    safetyRefund: "Saugumo grąžinimas",
+    offerAge: "Pasiūlymo amžius",
+    makerFundsFirst:
+      "Sudarytojas pirmas užrakina savo {sym} — jūs niekada nesiunčiate pirmi. Vis tiek galite atšaukti prieš finansuodami savo pusę, o variklis automatiškai grąžina lėšas po saugumo laiko užrakto, jei mainai užstringa.",
+  },
+  header: {
+    activeMerchant: "Aktyvus prekiautojas — spustelėkite, kad perjungtumėte arba valdytumėte",
+    manageMerchants: "Valdyti prekiautojus…",
+    noMerchant: "nėra prekiautojo",
+    openMenu: "Atidaryti meniu",
+    collapseMenu: "suskleisti meniu",
+    settings: "Nustatymai",
+    language: "Kalba",
+    pactConnected: "Variklis prijungtas",
+    pactUnreachable: "Variklis nepasiekiamas",
+    liveSwapsOne: "1 vykstantys mainai — spustelėkite, kad peržiūrėtumėte",
+    liveSwapsMany: "{count} vykstančių mainų — spustelėkite, kad peržiūrėtumėte",
+    liveSwapsNone: "Vykstančių mainų nėra",
+    coinOk: "{name} — prijungta · viršūnė {tip}",
+    coinUnconfigured: "{name} — nesukonfigūruota",
+    coinError: "{name} — {status}",
+    relaysOk: "Nostr relės — prijungta {up}/{total}",
+    relaysDown: "Nostr relės — neprijungta nė viena iš {total}",
+  },
+  network: {
+    mainnet: "MainNet",
+    testnet: "TestNet",
+    regtest: "RegTest",
+    signet: "Signet",
+    notRealFunds: "Ne tikros lėšos — tai {network} tinklas",
+  },
+  // Watch-only mode: a viewer session with no coins. Browse the board and
+  // withdraw your own offers, but no posting / taking / funding.
+  watchOnly: {
+    badge: "Tik stebėjimas",
+    badgeTip:
+      "Tik stebėjimo režimas — naršykite lentoje ir pašalinkite savo pasiūlymus, bet negalite skelbti, priimti ar finansuoti. Norėdami prekiauti, sukonfigūruokite monetas skiltyje Nustatymai.",
+    coinWizardButton: "Naršyti tik stebėjimo režimu",
+    coinWizardHint:
+      "Praleiskite monetų konfigūravimą ir tiesiog naršykite lentoje (tik skaitymui). Vis tiek galite pašalinti savo pasiūlymus — patogu pašalinti pasiūlymus, paliktus kitos sesijos. Galite išjungti bet kada skiltyje Nustatymai.",
+    postBlockedTitle: "Tik stebėjimo režimas",
+    postBlockedBody:
+      "Tai tik stebėjimo sesija, todėl negalima skelbti pasiūlymų. Norėdami prekiauti, sukonfigūruokite bent dvi monetas skiltyje Nustatymai → Monetos.",
+    takeBlockedBody: "Tik stebėjimo režimas — galite peržiūrėti šį pasiūlymą, bet norint jį priimti reikia sukonfigūruotų monetų.",
+    takeBlockedTip: "Tik stebėjimo režimas — norėdami priimti pasiūlymus, sukonfigūruokite monetas skiltyje Nustatymai.",
+  },
+  merchants: {
+    title: "Jūsų prekiautojai",
+    intro:
+      "Prekiautojas — tai viena prekybos tapatybė su savo sėkla ir mainų istorija. Prekiaujant per kitą prekiautoją kontekstai lieka nesusiejami (vienkartinė tapatybė). Pagrindinės jūsų monetos laikomos jūsų pačių piniginėje, ne čia.",
+    // First-run welcome (empty merchant manager).
+    welcomeTitle: "Sveiki atvykę į Satchel",
+    welcomeIntro:
+      "Satchel prekiauja per „prekiautoją“ — vieną prekybos tapatybę su savo sėkla. Kol kas jų neturite: sukurkite naują arba importuokite esamą atkūrimo frazę, kad pradėtumėte.",
+    importMerchant: "Importuoti prekiautoją",
+    none: "Prekiautojų dar nėra.",
+    active: "aktyvus",
+    switch: "perjungti",
+    newMerchant: "Naujas prekiautojas",
+    thisMerchant: "šis prekiautojas",
+    nameLabel: "Prekiautojo pavadinimas",
+    namePlaceholder: "pvz., Pagrindinis",
+    introFirst:
+      "Sukonfigūruokite savo pirmą prekybos tapatybę („prekiautoją“). Ji laiko tik karštuosius tranzito raktus vykstantiems mainams — pagrindinės jūsų monetos lieka jūsų pačių piniginėje.",
+    introNew: "Naujas prekiautojas yra nauja, atskira tapatybė su savo sėkla ir mainų istorija.",
+    // UI-5 merchant selector (phoenix wallet-selector parity).
+    createNew: "Sukurti naują",
+    import: "Importuoti",
+    load: "Įkelti prekiautoją",
+    loaded: "įkelta",
+    locked: "užrakinta",
+    lockedTip: "Užšifruota sėkla — atrakinkite slaptafraze, kai ją įkeliate.",
+    close: "Uždaryti",
+    idLabel: "aplankas",
+    switching: "Perjungiamas prekiautojas…",
+    switchingBody: "Iš naujo paleidžiamas variklis su tuo aplanku.",
+  },
+  // Seed create/import (SeedForm) + counterparty + status.
+  seed: {
+    intro: "Sukurkite visiškai naują sėklą arba importuokite jau turimą.",
+    createNew: "Sukurti naują",
+    createDesc: "Sugeneruokite naują sėklą. Atsarginę atkūrimo frazės kopiją darote patys.",
+    import: "Importuoti",
+    importDesc: "Atkurkite iš esamos 12/24 žodžių frazės.",
+    recoveryLabel: "Atkūrimo frazė",
+    importPlaceholder: "žodis1 žodis2 žodis3 …",
+    encrypt: "Užšifruoti",
+    encryptDesc:
+      "Slaptafrazė apsaugo sėklą saugykloje. Ją įvedate kartą per sesiją — Satchel jos niekada nesaugo. Pastaba: automatinis grąžinimas be priežiūros sustabdomas po paleidimo iš naujo, kol jos vėl neįvesite.",
+    noPassphrase: "Be slaptafrazės (rekomenduojama)",
+    noPassphraseDesc:
+      "Automatinis grąžinimas veikia ir per pakartotinius paleidimus nieko nereikia įvesti — tai tik karšta tranzito sėkla. Kaina: prieiga prie failo/kompiuterio atskleidžia šio prekiautojo tranzito raktus ir tapatybę.",
+    passphraseLabel: "Slaptafrazė",
+    passphrasePlaceholder: "pasirinkite slaptafrazę",
+    createTitle: "Sukurti sėklą",
+    importTitle: "Importuoti sėklą",
+    secureTitle: "Apsaugoti {label}",
+    revealTitle: "Užsirašykite atkūrimo frazę",
+    revealBody:
+      "Bet kas, turintis šiuos žodžius, valdo šio prekiautojo karštuosius raktus. Satchel nelaiko jokios kopijos — saugokite ją neprisijungę. Toliau patvirtinsite kelis žodžius.",
+    ackLabel: "Užsirašiau savo atkūrimo frazę.",
+    // Multi-step onboarding (create/import -> secret -> confirm -> passphrase).
+    chooseTitle: "Sukonfigūruoti {label}",
+    enterTitle: "Įveskite savo atkūrimo frazę",
+    enterBody:
+      "Įveskite kiekvieną žodį — jie automatiškai užbaigiami jums rašant — arba įklijuokite visą frazę. Prieš tęsiant ją patikriname.",
+    wordCount: "{n} žodžių",
+    wordAria: "Žodis {n}",
+    checkIncomplete: "Įveskite visus {n} žodžius.",
+    checkUnknown: "Kai kurių žodžių nėra BIP39 žodžių sąraše — patikrinkite paryškintus.",
+    checkBadChecksum: "Kontrolinė suma nesutampa — patikrinkite žodžius ir jų tvarką.",
+    checkOk: "Atkūrimo frazė atrodo galiojanti.",
+    verifyTitle: "Patvirtinkite atsarginę kopiją",
+    verifyBody: "Įveskite žodžius šiose pozicijose, kad patvirtintumėte, jog užsirašėte frazę.",
+    verifyWord: "Žodis #{n}",
+    verifyMismatch: "Tie nesutampa su jūsų fraze — patikrinkite atsarginę kopiją.",
+    passphraseTitle: "Apsaugokite sėklą",
+    passphraseBody:
+      "Pasirinktinai užšifruokite saugomą sėklą slaptafraze. Galite tai praleisti — žr. kompromisą žemiau.",
+  },
+  counterparty: {
+    you: "Tai jūs",
+    youShort: "jūs",
+    unknown: "nežinoma tapatybė",
+    // Short fingerprint fallback (identity.ts shortId) when no pubkey is known.
+    unknownShort: "nežinoma",
+  },
+  status: {
+    notConnectedTitle: "Neprijungta prie variklio",
+    disconnectedBody:
+      "Satchel nepasiekia variklio. Jis dar gali būti paleidžiamas arba aktyvaus prekiautojo mazgo ryšiai gali neveikti. Bandykite dar kartą arba perjunkite prekiautoją iš parinkiklio viršuje.",
+    openInSatchel: "Atidaryti tai per Satchel",
+    noTauriBody:
+      "Tai Satchel sąsaja — jai reikia Tauri tilto, kad pasiektų variklį. Paleiskite darbalaukio programą (cargo tauri dev), o ne naršyklę.",
+  },
+  settings: {
+    title: "Nustatymai",
+    subtitle: "Visos programos nuostatos šiam įdiegimui.",
+    // UI-3 Settings tabs.
+    tabGeneral: "Bendra",
+    tabCoins: "Monetos",
+    tabNetwork: "Tinklas",
+    tabAbout: "Apie",
+    appearance: "Išvaizda",
+    theme: "Tema",
+    themeDark: "Tamsi",
+    themeLight: "Šviesi",
+    themeSystem: "Sisteminė",
+    themeHint: "Pasirinkite, kaip atrodo Satchel. Sisteminė seka jūsų OS nustatymą.",
+    language: "Kalba",
+    languageHint: "Daugiau kalbų atsiras, kai bus prisidėta vertimų.",
+    mode: "Režimas",
+    watchOnly: "Tik stebėjimo režimas",
+    watchOnlyHint:
+      "Naršykite lentoje nekonfigūruodami monetų. Vis tiek galite pašalinti savo pasiūlymus, bet negalite skelbti, priimti ar finansuoti. Išjunkite, kad prekiautumėte (reikės bent dviejų prijungtų monetų).",
+    network: "Tinklas",
+    boards: "Corkboard lentos",
+    boardsDesc:
+      "Pasirinktinos savarankiškai talpinamos HTTP lentos. Pridėkite tas, kuriomis pasitikite; palikite tuščią, kad remtumėtės Nostr.",
+    boardsNone: "Nesukonfigūruota nė viena",
+    nostrRelays: "Nostr relės",
+    nostrRelaysDesc:
+      "Relės perduoda skelbimų lentą per decentralizuotą tinklą — joks operatorius negali skaityti ar suderinti jūsų pasiūlymų. Iš anksto sukonfigūruota su numatytuoju rinkiniu; redaguokite laisvai.",
+    nostrRelaysOff: "Išjungta — Nostr perdavimas išjungtas",
+    addUrl: "Pridėti",
+    removeUrl: "Pašalinti",
+    relayInvalid: "Įveskite ws:// arba wss:// relės URL",
+    boardInvalid: "Įveskite http:// arba https:// lentos URL",
+    netSave: "Įrašyti ir prisijungti iš naujo",
+    netSaving: "Įrašoma ir prisijungiama iš naujo…",
+    netSaved: "Įrašyta",
+    // Fees tab — fee-bump policy (per active merchant).
+    tabFees: "Mokesčiai",
+    fees: "Mokesčio didinimas",
+    feesScope: "Šie nustatymai taikomi aktyviam prekiautojui.",
+    feesIntro:
+      "Saugumo / kainos kompromisai mokesčių didinimui, ne privaloma konfigūracija. Naujos reikšmės taikomos būsimam didinimui; jau finansuoti mainai išlaiko politiką, su kuria buvo finansuoti.",
+    feeMax: "Maks. mokesčio norma (sat/vB)",
+    feeMaxHint:
+      "Kiekvieno mokesčio didinimo riba. Numatytoji 500, taip pat ir griežta sistemos maksimali. Sumažinkite, kad apribotumėte išlaidas.",
+    feeReservation: "Finansavimo didinimo rezervas (×)",
+    feeReservationHint:
+      "Likutis, kurį lėšų patikra atideda kaip didinimo atsargą. Didesnis padeda atremti didesnius mokesčio šuolius, bet užima daugiau likučio ir atmeta daugiau mainų. Numatytoji 3.",
+    feeCommitted: "Atpirkimo perteklinis aprūpinimas (×)",
+    feeCommittedHint:
+      "Kiek papildomai iš anksto apmokamas v2 atpirkimo mokestis, kad jis patvirtinamas net uždarius Satchel. Taikoma tik naujiems mainams. Numatytoji 2.",
+    feeStep: "RBF eskalavimo žingsnis (%)",
+    feeStepHint: "Kaip agresyviai užstrigusio išleidimo mokestis kyla kiekvieną planuoklio praėjimą. Numatytoji 50.",
+    feeSave: "Įrašyti",
+    feeSaving: "Įrašoma…",
+    feeSaved: "Įrašyta",
+    feeReset: "Atstatyti numatytąsias",
+    coins: "Monetos ir mazgai",
+    coinsHint: "Prijunkite kiekvieną monetą prie savo mazgo. Prieš ką nors įrašant patikrinamas genezės blokas.",
+    about: "Apie",
+    version: "Versija {version}",
+    updateUpToDate: "Naujausia versija",
+    updateCheckPlaceholder: "Atnaujinimų tikrinimas atsiras vėlesniame leidime.",
+    trustModel: "Kur saugomi jūsų raktai",
+    trustModelBody:
+      "Paslaptys laikomos variklyje, niekada Satchel programoje. Prekiautojo sėkla yra variklio duomenų aplanke (užšifruota arba atviru tekstu — jūsų pasirinkimas); Satchel nesaugo nei sėklos, nei slaptafrazės. Sėkla yra karšta pagal sumanymą (tik tranzito raktai) — didesnes pajamas perveskite į savo pačių šaltą piniginę.",
+  },
+  coins: {
+    intro:
+      "Prijunkite kiekvieną monetą prie savo mazgo. Pirmasis URL yra jūsų mazgo paties piniginė — ji finansuoja jūsų mainų atkarpas ir gauna pajamas. Prieš ką nors įrašant Satchel patikrina mazgo genezės bloką, kad lėšos niekada nebūtų išsiųstos į netinkamą grandinę. Ryšiai bendrinami tarp visų jūsų prekiautojų.",
+    networkBadge: "Konfigūruojama {network} tinklui",
+    needMerchant:
+      "Pirmiausia prijunkite prekiautoją — monetų konfigūravimui reikia veikiančio variklio. Naudokite prekiautojo parinkiklį viršuje dešinėje.",
+    pairsTitle: "Prekybos poros",
+    pairsHint:
+      "Poros sudaromos pagal tai, ką gali kiekviena moneta — fiksuoto sąrašo nėra. Pora atsiveria, kai prijungiamos abi jos monetos.",
+    noPairs: "Porų nėra.",
+    notSetUp: "Nesukonfigūruota",
+    connectedTip: "Prijungta · viršūnė {tip}",
+    connError: "Ryšio klaida",
+    setUp: "Sukonfigūruoti",
+    editConnection: "Redaguoti ryšį",
+    remove: "pašalinti",
+    disconnectTip: "Atjungti šią monetą",
+    disconnectTitle: "Atjungti {coin}?",
+    disconnectBody: "Mainai, kuriems jos reikia, nebus prieinami, kol neprijungsite iš naujo.",
+    ready: "Pasirengta prekiauti",
+    connectMissing: "Prijunkite {coins}",
+    notBuildable: "Dar negalima sudaryti",
+    // Swap-protocol chips on a pair (pact-htlc-v1 HTLC vs pact-htlc-v2 adaptor).
+    protoPrivate: "Privatūs (Taproot)",
+    protoPrivateTip: "Privatūs mainai (Taproot/MuSig2 adapteris) — grandinėje atrodo kaip įprastas mokėjimas",
+    protoHtlcTip: "Klasikiniai HTLC mainai",
+    // Coin-setup backend choices (CoinSetup).
+    backendCoreTitle: "Core RPC piniginė",
+    backendCoreDesc: "Jūsų mazgo paties piniginė finansuoja mainus ir gauna pajamas.",
+    backendHardwareTitle: "Aparatūra",
+    backendHardwareDesc: "Ledger / PSBT pasirašymas finansavimo atkarpai.",
+    backendLater: "vėliau",
+    // CoinSetup dialog.
+    setupTitle: "Prijungti {coin}",
+    setupIntro:
+      "Nukreipkite Satchel į savo paties {sym} mazgą. Niekas neįrašoma, kol mazgas nepraeina genezės bloko patikros — jūsų lėšos visada liečia tik tikrą {sym} grandinę.",
+    backendUrlLabel: "Mazgo galinis URL (-ai)",
+    backendUrlHint:
+      "Pirmasis URL = jūsų mazgo paties piniginė (finansuoja mainus, gauna pajamas). Po kablelio pridėkite Electrum serverius (tcp://host:port) papildomiems, nepriklausomiems grandinės vaizdams.",
+    fundingWallet: "Finansavimo piniginė",
+    confirmationsLabel: "Patvirtinimų prieš galutinį",
+    confirmationsHint:
+      "Kaip giliai finansavimas ar atpirkimas šioje grandinėje turi būti, kol mainai į jį reaguoja — reorganizacijos saugumo atsarga. Didesnis saugiau, bet lėčiau; palikite tuščią rekomenduojamai numatytajai ({default}).",
+    validateNode: "Patikrinti mazgą",
+    checking: "Tikrinamas mazgas…",
+    genesisOk: "Genezė sutapo — tai tinkama grandinė",
+    genesisDetail: "viršūnės aukštis {tip} · genezė {hash}…",
+    genesisBad: "Atmesta — neįrašoma",
+    errorShort: "klaida",
+    // Structured connection form (CoinSetup v2).
+    rpcHostLabel: "RPC pagrindinis kompiuteris",
+    rpcPortLabel: "RPC prievadas",
+    authMethodLabel: "Autentifikavimas",
+    authCookie: "Slapuko failas",
+    authCookieDesc: "Automatiškai skaityti mazgo .cookie iš jo duomenų katalogo (numatytasis, slaptažodis nesaugomas).",
+    authUserPass: "Vartotojas / slaptažodis",
+    authUserPassDesc: "rpcuser / rpcpassword iš jūsų mazgo konfigūracijos — reikalingi nuotoliniam mazgui.",
+    rpcUserLabel: "RPC naudotojo vardas",
+    rpcPasswordLabel: "RPC slaptažodis",
+    datadirLabel: "Mazgo duomenų katalogas",
+    cookiePathNote: "Slapukas skaitomas iš {path} po šiuo katalogu.",
+    walletLabel: "Piniginės pavadinimas (pasirinktinai)",
+    walletPlaceholder: "jūsų mazgo piniginė",
+    needPort: "Pirmiausia įveskite RPC prievadą.",
+    validateFirst: "Prieš įrašydami patikrinkite mazgą.",
+    savingReconnecting: "Įrašoma ir prisijungiama iš naujo…",
+    connected: "{coin} prijungta",
+    // Template picker (a coins.toml coin the engine version doesn't support).
+    unsupportedByEngine: "Nepalaikoma",
+    unsupportedByEngineTip:
+      "Ši moneta apibrėžta coins.toml faile, bet neįtraukta į šią variklio versiją, todėl ja prekiauti negalima.",
+  },
+  coinWizard: {
+    title: "Prijunkite savo monetas",
+    intro:
+      "Pasirinkite bent dvi monetas ir kiekvieną nukreipkite į savo paties mazgą. Mainams reikia dviejų grandinių, todėl prekyba atsirakina, kai prijungiamos ir veikia dvi monetos. Vėliau monetas galite pridėti ar pakeisti skiltyje Nustatymai.",
+    progress: "Prijungta {count} iš {min} monetų",
+    continue: "Tęsti",
+    live: "Veikia",
+    nodeDown: "Mazgas neveikia",
+  },
+  wallets: {
+    intro:
+      "Tai jūsų pačių mazgų piniginės (tos, kurias variklis naudoja mainams finansuoti ir pajamoms gauti) — jūsų raktai, jūsų kompiuteris. Satchel niekada nelaiko jūsų monetų.",
+    hotSeedNudge:
+      "Tai išlaidų piniginė su karšta sėkla, ne saugykla — didesnius likučius perveskite į savo pačių šaltą / core piniginę.",
+    notConnected: "Neprijungta",
+    notConnectedBody: "Pirmiausia prijunkite prekiautoją — piniginės rodiniui reikia veikiančio variklio.",
+    noCoins: "Monetų dar nesukonfigūruota",
+    noCoinsBody: "Prijunkite monetą skiltyje Nustatymai → Monetos ir jos piniginė pasirodys čia.",
+    goToCoins: "Eiti į Monetas",
+    watchOnlyTitle: "Tik stebėjimo režimu piniginių nėra",
+    watchOnlyBody:
+      "Tai tik stebėjimo sesija be prijungtų monetų, todėl rodyti nėra jokių piniginių. Išjunkite tik stebėjimą skiltyje Nustatymai ir prijunkite monetą mainams finansuoti.",
+    walletName: "piniginė · {wallet}",
+    walletScopedHint: "Kiekvienas šios monetos RPC yra apribotas šiai mazgo piniginei.",
+    walletDefault: "numatytoji piniginė (neapribota)",
+    walletDefaultHint:
+      "Šiai monetai nenustatyta jokia piniginė, todėl RPC naudoja mazgo numatytąją piniginę. Nustatykite ją skiltyje Nustatymai → Monetos, kad kiekvienas iškvietimas būtų apribotas konkrečiai piniginei.",
+    balanceLabel: "{symbol} likutis",
+    receive: "Gauti",
+    send: "Siųsti",
+    sendTo: "Siųsti adresu",
+    amount: "Suma",
+    sendTitle: "Siųsti {amount} {sym}?",
+    sendConfirmBody: "Kam: {to}\n\nTai išleidžia iš jūsų pačių mazgo piniginės ir negali būti atšaukta.",
+  },
+  corkboard: {
+    noBoardTitle: "Neprijungta jokia Corkboard",
+    noBoardBody:
+      "Corkboard — tai bendra skelbimų lenta, kurioje sudarytojai prisega pasiūlymus. Ji niekada nesuderina sandorių ir nelaiko monetų — nukreipkite Satchel į tą, kuria pasitikite, kad naršytumėte ir skelbtumėte.",
+    noPairs: "Porų nėra",
+    board: "Corkboard",
+    boardSettings: "Konfigūruoti skiltyje Nustatymai",
+    filterAll: "Visi",
+    filterMine: "Mano",
+    offered: "siūloma {symbol}",
+    noOffers: "Šiuo metu nėra pasiūlymų, kuriuos galėtumėte priimti",
+    noOffersBody:
+      "Pasiūlymai pasirodo čia, kai tik sudarytojas paskelbia vieną poros, kurią sukonfigūravote. Taip pat galite paskelbti savo.",
+    hiddenOffers:
+      "Dar {count} pasiūlym. (-ų) poroms, kurių neprijungėte. Sukonfigūruokite abi monetas, kad jomis prekiautumėte:",
+    yourOffer: "jūsų pasiūlymas",
+    offerStaged: "skelbiama…",
+    offerStagedTip:
+      "Paskelbta iš šio įrenginio ir laukiama patvirtinimo iš relės. Jis skelbiamas; jis tampa veikiantis, kai relė jį atkartoja.",
+    take: "Priimti pasiūlymą",
+    legDown: "Vienos iš šios poros monetų mazgas neveikia — paleiskite jį (arba patikrinkite Nustatymai → Monetos) prieš priimdami.",
+    withdraw: "Pašalinti",
+    withdrawTip: "Pašalinkite akimirksniu — pasiūlymas niekada neužrakina lėšų",
+    safetyRefund: "saugumo grąžinimas",
+    safetyRefundTip:
+      "Jei mainai užstringa, abi pusės gauna automatinį grąžinimą — priimančiojo atkarpa atsirakina pirma, jūsiškė kiek vėliau. Niekas nelieka įstrigęs.",
+    activeTitle: "Jūsų aktyvūs mainai",
+    states: {
+      open: "atvira",
+      takenByUs: "jūsų priimta",
+      revoked: "pašalinta",
+      expired: "nebegalioja",
+    },
+    // Two-sided order-book view of the Corkboard. Bids = makers giving the
+    // quote coin to get the base; asks = the reverse. The ladder is a way to
+    // READ the board — it never matches or prioritises (load-bearing).
+    book: {
+      bids: "Pirkimo pavedimai",
+      asks: "Pardavimo pavedimai",
+      bidsHint: "nori {base} · moka {quote}",
+      asksHint: "parduoda {base} · už {quote}",
+      price: "Kaina",
+      size: "Dydis",
+      noBids: "Pirkimo pavedimų nėra",
+      noAsks: "Pardavimo pavedimų nėra",
+      spread: "Skirtumas {pct}",
+      spreadOneSided: "Vienpusis",
+      crossed: "susikirtę",
+      crossedTip: "Aukščiausias pirkimas ≥ aukščiausias pardavimas. Lenta niekada automatiškai nesuderina, todėl šie persidengiantys pasiūlymai tiesiog laukia — priimkite bet kurią pusę.",
+      mid: "vidurys {price}",
+      levelOffers: "{count} pasiūlym. (-ų) šia kaina — pasirinkite vieną, kad priimtumėte",
+      depthTip: "Iš viso {sym} siūloma šia kaina iš {count} skelbim. (-ų).",
+      takerNote: "Priimdami duodate {give} ir gaunate {get}.",
+      selectLevel: "Pasirinkite kainos lygį aukščiau, kad pamatytumėte ten esančius pasiūlymus.",
+      paneHeader: "{size} {base} @ {price} {unit}",
+      denomTip: "Rodymo vienetas {coin} sumoms",
+      showMore: "Rodyti dar {count}",
+      showLess: "Rodyti viršutinius {count}",
+    },
+  },
+  relays: {
+    title: "Relės",
+    subtitle: "Tiesioginis ryšys su jūsų Nostr relėmis — tinklu, per kurį keliauja jūsų pasiūlymai ir priėmimai. Pridėkite arba pašalinkite reles skiltyje Nustatymai → Tinklas.",
+    connectedCount: "prijungta {up} / {total}",
+    refresh: "Atnaujinti",
+    ms: "{ms} ms",
+    up: "veikia",
+    down: "neveikia",
+    statsTip: "{success}/{attempts} sėkmingų prisijungimų · ↓{down} ↑{up}",
+    none: "Relių nesukonfigūruota",
+    noneBody: "Pridėkite Nostr relę skiltyje Nustatymai → Tinklas, kad skelbtumėte ir gautumėte pasiūlymus per tinklą.",
+    goToNetwork: "Eiti į Nustatymus",
+    notConnected: "Neprijungta",
+    notConnectedBody: "Relių rodiniui reikia veikiančio variklio — pirmiausia prijunkite prekiautoją.",
+  },
+  swaps: {
+    title: "Mainai",
+    hint: "Jūsų visas žurnalas — vykstantys mainai viršuje, baigti sandoriai apačioje. Veiksmus su vykstančiais mainais taip pat galite atlikti iš Corkboard.",
+    activeTitle: "Vykstantys",
+    historyTitle: "Istorija",
+    none: "Mainų dar nėra — priimkite pasiūlymą Corkboard lentoje.",
+    // Active-swaps dock action buttons + the refund-time label.
+    cancel: "atšaukti",
+    refund: "grąžinti",
+    dump: "išgauti žurnalus",
+    dumpHint: "Nukopijuokite be paslapčių diagnostikos rinkinį (būsena + žurnalo eilutės) šiems mainams, kad įklijuotumėte kūrėjams.",
+    dumpCopied: "Diagnostika nukopijuota — įklijuokite kūrėjams.",
+    dumpFailed: "Nepavyko nukopijuoti diagnostikos rinkinio.",
+    refundAt: "grąžinimas {when}",
+    // Confirm dialogs for acting on a live swap (ActiveSwaps).
+    cancelTitle: "Atšaukti šiuos mainus?",
+    cancelConfirm: "Atšaukti mainus",
+    cancelKeep: "Palikti",
+    // Abort reason recorded on the swap when cancelled from Satchel.
+    cancelReason: "atšaukta Satchel programoje",
+    cancelBody:
+      "Tai atsisako mainų prieš jums finansuojant. Niekas jūsų dar neužrakinta, todėl nieko neprarandate — pasiūlymas tiesiog nebus įvykdytas.",
+    refundTitle: "Susigrąžinti savo lėšas?",
+    refundConfirm: "Grąžinti",
+    refundBody:
+      "Saugumo laiko užraktas praėjo, todėl galite atgauti užrakintas lėšas. Tai dabar transliuoja jūsų grąžinimą; variklis taip pat tai padaro automatiškai po termino.",
+    col: {
+      swap: "mainai",
+      role: "vaidmuo",
+      state: "būsena",
+      amounts: "duoda → gauna",
+      when: "kada",
+      finalTx: "galutinė tx",
+    },
+    // Expandable per-leg on-chain detail (the audit trail). We show both
+    // funding txs + OUR settlement; never the counterparty's settlement or the
+    // swap secret.
+    audit: {
+      toggle: "Rodyti grandinės detales",
+      title: "Grandinės detalės",
+      youLocked: "jūs užrakinote",
+      theyLocked: "jie užrakino",
+      funding: "Finansavimas",
+      received: "Gauta",
+      refunded: "Grąžinta",
+      pending: "dar ne grandinėje",
+      copy: "Kopijuoti operacijos ID",
+      copied: "Operacijos ID nukopijuotas",
+    },
+  },
+  fees: {
+    title: "Tinklo išlaidų peržiūra",
+    estimated: "apytiksliai",
+    provisionalNote: "Šis pactd variantas dar neteikia mokesčių įvertinimo.",
+    summary: "Mainai — tai 2 grandinės operacijos, už kurias mokate: finansavimas duodamoje grandinėje, atpirkimas gaunamoje grandinėje.",
+    fallbackTip: "Mazgas buvo nepasiekiamas, todėl naudota konservatyvi numatytoji mokesčio norma — laikykite tai spėjimu.",
+    ifItStalls: "(jei užstringa)",
+  },
+  funds: {
+    insufficient:
+      "Nepakanka {sym} šiems mainams finansuoti — reikia ~{need} {sym} (suma + finansavimo mokestis), piniginėje yra {have} {sym}.",
+  },
+  wizard: {
+    welcome: "Sveiki atvykę į Satchel",
+    connectTitle: "Prijunkite Pact variklį",
+    connectIntro:
+      "Satchel yra plonas Pact variklio klientas — branduolio, kuris laiko jūsų raktus ir vykdo mainus. Pasirinkite, kaip jį pasiekti.",
+    managed: "Paleisti įmontuotą Pact variklį",
+    managedDesc: "Satchel paleidžia ir prižiūri savo paties Pact variklį. Rekomenduojama.",
+    external: "Prijungti prie išorinio Pact variklio",
+    externalDesc: "Nukreipkite į jau veikiantį Pact variklį (prieš paleidžiant nustatykite SATCHEL_PACTD_URL + slapuką).",
+    externalNote:
+      "Išorinis režimas pasirenkamas per aplinkos kintamuosius prieš paleidžiant Satchel. Paleiskite iš naujo su nustatytu SATCHEL_PACTD_URL, kad jį naudotumėte.",
+    coinsTitle: "Pridėkite savo monetas",
+    coinsIntro:
+      "Sukūrus prekiautoją, prijunkite kiekvieną monetą prie savo mazgo skiltyje Nustatymai → Monetos. Pasirinkite monetą ir galinę dalį (viešą Electrum be konfigūracijos arba savo mazgą); prieš ką nors įrašant genezė tikrinama su šiuo tinklu.",
+    coinsTemplatesSoon: "Vieno paspaudimo monetų šablonai atsiras čia vėlesniame leidime.",
+    back: "Atgal",
+    continue: "Tęsti",
+    finish: "Baigti konfigūravimą",
+  },
+  // UI-4 docked activity log.
+  log: {
+    title: "Veikla",
+    empty: "— veiklos žurnalas —",
+    count: "{count} eilučių",
+    collapse: "Suskleisti žurnalą",
+    expand: "Išskleisti žurnalą",
+    // Activity-log lines emitted by the frontend. `{err}` carries a raw engine
+    // message (itself not translated — it comes from pactd over the wire).
+    noTauri: "nevykdoma Satchel viduje — šiai sąsajai reikia Tauri tilto",
+    startupError: "paleidimas: {err}",
+    notConnected: "neprijungta: {err}",
+    connected: "prisijungta prie pactd {version} ({protocol})",
+    listcoinsError: "listcoins: {err}",
+    watchOnlyError: "tik stebėjimas: {err}",
+    switchedMerchant: "perjungta į prekiautoją {id}",
+    switchMerchantError: "prekiautojo perjungimas: {err}",
+    loadMerchantError: "prekiautojo įkėlimas: {err}",
+    merchantCreated: "prekiautojas {id} sukurtas",
+    merchantReady: "prekiautojas paruoštas",
+    actionOk: "{action} {id}: gerai",
+    actionError: "{action} {id}: {err}",
+    diagCopied: "{id} diagnostika nukopijuota ({count} žurnalo eilučių) — įklijuokite kūrėjams",
+    dumpError: "išgavimas {id}: {err}",
+    coinDisconnected: "{coin} atjungta",
+    removeCoinError: "monetos pašalinimas: {err}",
+    tookOffer: "priimtas pasiūlymas {id} — jis dabar pasirodo jūsų aktyviuose mainuose žemiau",
+    takeError: "priėmimas: {err}",
+    offerWithdrawn: "pasiūlymas {id} pašalintas",
+    withdrawError: "pašalinimas: {err}",
+    postedOffer: "paskelbtas pasiūlymas {id} — pašalinkite bet kada; niekas neužrakinta",
+    createdSlip: "sukurtas privataus pasiūlymo lapelis — nusiųskite jį draugui",
+    tookPrivateOffer: "priimtas privatus pasiūlymas {id} — jis dabar pasirodo jūsų aktyviuose mainuose",
+    cancelledPrivateOffer: "atšauktas privatus pasiūlymas {id}",
+    cancelError: "atšaukimas: {err}",
+    noticeboardUpdated: "skelbimų lenta atnaujinta",
+    feePolicyUpdated: "mokesčių politika atnaujinta",
+  },
+  // Relative-time + freshness prose from format.ts (rendered via the tr() mirror,
+  // since those are pure non-component helpers). Unit letters stay inside the
+  // template so a translation owns the whole phrase.
+  format: {
+    ageUnknown: "amžius nežinomas",
+    justNow: "ką tik",
+    minutesAgo: "prieš {n} min.",
+    hoursAgo: "prieš {n} val.",
+    daysAgo: "prieš {n} d.",
+    expiryNow: "dabar",
+    expirySoon: "netrukus",
+    inMinutes: "po ~{n} min.",
+    inHours: "po ~{n} val.",
+    inDays: "po ~{n} d.",
+    posted: "paskelbta {age}",
+    expires: "baigia galioti {time}",
+  },
+  // Plain-language swap story per (role, state) — the honest "who is exposed
+  // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
+  // are local refund times. Rendered via tr() (narrate() is a pure helper).
+  narrate: {
+    initiating:
+      "Priėmimas išsiųstas — laukiama, kol sudarytojas pradės mainus. Niekas dar neužrakinta; jie atsišaukia savaime, jei jis neatsako.",
+    created: "Pasiūlymas išsiųstas — laukiama, kol kita pusė sutiks. Niekas neįsipareigota.",
+    acceptedMaker: "Sąlygos suderintos. Toliau: užrakinkite savo {a}. Kol nefinansuojate, vis dar galite laisvai atšaukti.",
+    acceptedTaker: "Sąlygos suderintos. Kita pusė pirma užrakina savo {a} — jūs niekada nesiunčiate pirmi.",
+    noncesExchanged:
+      "Ruošiami privatūs mainai — keičiamasi pasirašymo medžiaga. Niekas dar neužrakinta.",
+    signedMaker:
+      "Abi pusės pasirašė. Jūsų demonas užrakina {a}, tada automatiškai pasiima {b}. Jei kas užstringa, jūsų {a} grįžta {t1}.",
+    signedTaker:
+      "Abi pusės pasirašė. Jūsų demonas užrakina {b} ir pasiima {a}, kai tik kita pusė pajuda. Apsauga: grąžinimas {t2}.",
+    fundedAMaker:
+      "Jūsų {a} užrakinta. Laukiama, kol kita pusė užrakins savo {b}. Jei jie to niekada nepadarys, jūsų {a} grįžta automatiškai {t1}.",
+    fundedATaker:
+      "Jų {a} užrakinta ir patikrinta. Toliau: užrakinkite savo {b}. Apsauga: automatinis grąžinimas {t2}, jei kas užstringa.",
+    fundedBMaker: "Abu užrakinta. Jūsų demonas pasiima {b}, kai tik jis saugiai patvirtinamas.",
+    fundedBTaker: "Abu užrakinta. Jūsų demonas pasiims {a}, kai tik kita pusė pasiima savo {b}.",
+    redeemedB:
+      "Pasiėmėte {b} — laukiama, kol jis patvirtinamas. Jūsų užrakinta {a} lieka apsaugota, kol tai bus galutina.",
+    completed: "Mainai baigti — {coin} yra jūsų piniginėje.",
+    refunded: "Mainai nebuvo užbaigti, todėl jūsų {coin} grįžo automatiškai. Prarasti tik mokesčiai.",
+    aborted: "Atšaukta prieš judant pinigams.",
+  },
+  exit: {
+    // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
+    // running" detaches it (it keeps watching timelocks + servicing offers).
+    liveTitle: "Vyksta mainai",
+    liveBodyOne:
+      "1 mainai pusiaukelėje. Juos valdo grandinės laiko užraktai — variklis turi toliau veikti, kad atpirktų ar grąžintų prieš terminą.",
+    liveBodyMany:
+      "{count} mainų pusiaukelėje. Juos valdo grandinės laiko užraktai — variklis turi toliau veikti, kad atpirktų ar grąžintų prieš terminą.",
+    keepRunningExplain:
+      "Uždarius langą variklis lieka veikti fone, todėl jis užbaigia mainus be sąsajos. Galite vėl atidaryti Satchel bet kada, kad patikrintumėte.",
+    forceQuitWarn: "Priverstinis išjungimas dabar sustabdo variklį ir gali prarasti lėšas.",
+    // {word} is the confirm word below; a translation may localize both together.
+    typeToConfirm: "Norėdami vis tiek priverstinai išjungti, įveskite {word} žemiau.",
+    confirmWord: "QUIT",
+    keepRunning: "Palikti veikti, uždaryti langą",
+    keepWithdraw: "Palikti veikti + pašalinti pasiūlymus",
+    keepLeaveOffers: "Palikti veikti, palikti pasiūlymus",
+    forceQuit: "Priverstinai išjungti",
+    offersTitle: "Turite paskelbtų pasiūlymų",
+    offersBodyOne:
+      "1 jūsų pasiūlymas vis dar yra Corkboard lentoje. Pasiūlymai nieko neužrakina, bet palikus jį kontrahentai vis tiek gali jį priimti, kol Satchel uždaryta — variklis aptarnaus priėmimą.",
+    offersBodyMany:
+      "{count} jūsų pasiūlymų vis dar yra Corkboard lentoje. Pasiūlymai nieko neužrakina, bet palikus juos kontrahentai vis tiek gali juos priimti, kol Satchel uždaryta — variklis aptarnaus priėmimus.",
+    withdrawExit: "Pašalinti visus ir išeiti",
+  },
+  unlock: {
+    title: "Atrakinti prekiautoją",
+    body:
+      "Šio prekiautojo sėkla užšifruota. Įveskite jos slaptafrazę, kad atrakintumėte šiai sesijai — Satchel laiko ją tik atmintyje ir pamiršta išeidama.",
+    switchMerchant: "Perjungti prekiautoją",
+    unlock: "Atrakinti",
+  },
+  common: {
+    cancel: "Atšaukti",
+    confirm: "Patvirtinti",
+    save: "Įrašyti",
+    done: "Atlikta",
+    later: "Vėliau",
+    retry: "Bandyti prisijungti dar kartą",
+  },
+};

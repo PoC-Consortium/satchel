@@ -1,0 +1,716 @@
+// The Simplified Chinese (中文 simplified) string bundle. Mirrors en.ts key-for-key; only values are translated.
+import type { Bundle } from "./en";
+
+export const zhCn: Bundle = {
+  app: {
+    name: "Satchel",
+    tagline: "无需信任的原子交换",
+  },
+  // In-app update notifications (sidebar version badge + dialog).
+  update: {
+    title: "有可用更新",
+    upToDate: "已是最新版本",
+    current: "已安装",
+    latest: "最新",
+    notesTitle: "更新说明",
+    get: "获取更新",
+    dismiss: "忽略",
+    close: "关闭",
+    badgeTooltip: "有可用更新 — 点击查看详情",
+    versionTooltip: "点击检查更新",
+  },
+  // Risk disclaimer (first-run welcome + Settings → About).
+  disclaimer: {
+    title: "自主托管 — 你的密钥，你的责任",
+    body: "Satchel 执行非托管原子交换：只有你自己持有密钥，而在交换进行期间，商户的种子持有用于中转的热密钥。交换协议（v1 HTLC 与 v2 Taproot/MuSig2）已经过审核并在主网上线运行。本软件基于 MIT 许可证按现状提供，不附带任何担保 — 请备份好你的助记词，并自行承担使用风险。",
+  },
+  nav: {
+    public: "公开",
+    corkboard: "Corkboard",
+    postOffer: "发布报价",
+    private: "私下",
+    privateCreate: "创建凭条",
+    privateReceive: "接受凭条",
+    privateSlips: "我的凭条",
+    swaps: "交换",
+    relays: "中继",
+    wallets: "钱包",
+    settings: "设置",
+    coins: "币种",
+  },
+  makeOffer: {
+    title: "发布报价",
+    intro:
+      "向 Corkboard 发布一条已签名的报价。什么都不会被锁定 — 它只是一则广告；随时可撤回，只有当有人接受并且双方都注资后，交换才会开始。",
+    give: "你支付",
+    want: "你收到",
+    // Canonical pair + direction: pick the pair, choose Sell/Buy the base, enter
+    // the base amount and a quote-per-base price (invariant to direction).
+    pair: "交易对",
+    noPairs: "没有可交易的交易对 — 请在设置 → 币种中至少连接两种币。",
+    sell: "卖出 {sym}",
+    buy: "买入 {sym}",
+    amount: "数量",
+    youGive: "你支付",
+    youGet: "你得到",
+    price: "价格",
+    priceUnit: "每 {base} 折合 {unit}",
+    pricePlaceholder: "单价",
+    balance: "余额：{amt} {sym}",
+    balanceLoading: "余额：…",
+    noCoins: "尚未配置币种",
+    sameCoin: "支付与收到必须是不同的币种。",
+    legDown: "这两种币中有一个节点已下线 — 请在发布前启动它（或检查设置 → 币种）。",
+    // Swap-protocol pin (only offered when a pair+network supports more than
+    // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
+    protocol: "交换类型",
+    protoStandard: "标准（HTLC）",
+    // Titles for the review/confirm dialog shown before posting (see OfferForm).
+    reviewOfferTitle: "核对你的报价",
+    reviewSlipTitle: "核对你的凭条",
+    term: "安全时间锁",
+    termShort: "短",
+    termMedium: "中",
+    termLong: "长",
+    termHint: {
+      short: "短 — 若交易停滞，资金自动退款最快（约 12 小时 / 6 小时），安全余量最小。",
+      medium: "中 — 平衡的退款窗口（约 24 小时 / 12 小时）。",
+      long: "长（最安全）— 安全余量最大；若交易停滞，约 36 小时 / 18 小时后自动退款。",
+    },
+    validFor: "有效期（分钟）",
+    validForMins: "{mins} 分钟",
+    validForHint:
+      "报价挂出的时长。只要你在线，它会自动保持刷新；超过此时间后即过期。关闭应用会将其撤回。",
+    note: "固定数量的报价 — 在有人接受之前什么都不会被锁定。数量为链上金额；网络费用由你额外承担，Corkboard 不收取任何费用。时间锁是交换停滞时的自动退款窗口。",
+    post: "发布报价",
+    makeSlip: "创建凭条",
+    slipTitle: "你的私下报价凭条",
+    slipExplainer:
+      "把它发给你的朋友。他们将其粘贴进 Satchel 即可接受。什么都不会被锁定；它将在 {ttl} 后过期。",
+    copy: "复制",
+    copied: "已复制",
+    makeAnother: "再创建一个",
+    myPrivateTitle: "我的私下报价",
+    myPrivateEmpty: "没有未结的私下报价。",
+    privateExpires: "{when} 过期",
+    privateExpired: "已过期",
+    cancel: "取消",
+    cancelTip: "停止承认此凭条 — 仍持有它的朋友将无法再接受。",
+  },
+  takeSlip: {
+    open: "粘贴凭条",
+    title: "接受私下报价",
+    intro:
+      "朋友给你发来了一条私下报价凭条（以 pactoffer1: 开头）。把它粘贴到这里来核对并接受 — 就像接受牌板上的报价一样。",
+    placeholder: "pactoffer1:…",
+    take: "核对并接受",
+    invalid: "这看起来不像凭条 — 它应以 pactoffer1: 开头。",
+    previewLabel: "此凭条提供",
+  },
+  // PRIVATE nav group (off-market slips) — screen titles + intros. The form,
+  // slip output, my-slips list and take flow reuse makeOffer.*/takeSlip.* copy.
+  private: {
+    createTitle: "创建私下报价",
+    createIntro:
+      "构建一条已签名的报价，作为凭条通过你们自己的聊天工具交给朋友。它不会被列在任何地方 — 在你们双方都注资之前什么都不会被锁定。",
+    slipsIntro:
+      "你创建的凭条。任何持有凭条的人都可以在其过期前接受；在那之前取消某条凭条即可停止承认它。",
+    slipsEmptyBody: "创建一条私下报价，即可获得一张可发给朋友的凭条。",
+    receiveTitle: "接受私下报价",
+    received: "已接受 — 在交换页中跟进。",
+  },
+  // Shared take-confirmation dialog (board take + slip take).
+  takeConfirm: {
+    title: "接受此报价？",
+    confirm: "接受报价",
+    counterparty: "对手方",
+    youGive: "你支付",
+    youReceive: "你收到",
+    safetyRefund: "安全退款",
+    offerAge: "报价时长",
+    makerFundsFirst:
+      "做市方会先锁定他们的 {sym} — 你绝不会先支付。在你为自己一方注资之前仍可取消，若交换停滞，引擎会在安全时间锁过后自动退款。",
+  },
+  header: {
+    activeMerchant: "当前商户 — 点击切换或管理",
+    manageMerchants: "管理商户…",
+    noMerchant: "无商户",
+    openMenu: "打开菜单",
+    collapseMenu: "收起菜单",
+    settings: "设置",
+    language: "语言",
+    pactConnected: "引擎已连接",
+    pactUnreachable: "引擎无法连接",
+    liveSwapsOne: "1 笔交换进行中 — 点击查看",
+    liveSwapsMany: "{count} 笔交换进行中 — 点击查看",
+    liveSwapsNone: "没有进行中的交换",
+    coinOk: "{name} — 已连接 · 区块高度 {tip}",
+    coinUnconfigured: "{name} — 未设置",
+    coinError: "{name} — {status}",
+    relaysOk: "Nostr 中继 — 已连接 {up}/{total}",
+    relaysDown: "Nostr 中继 — {total} 个均未连接",
+  },
+  network: {
+    mainnet: "MainNet",
+    testnet: "TestNet",
+    regtest: "RegTest",
+    signet: "Signet",
+    notRealFunds: "非真实资金 — 这是 {network} 网络",
+  },
+  // Watch-only mode: a viewer session with no coins. Browse the board and
+  // withdraw your own offers, but no posting / taking / funding.
+  watchOnly: {
+    badge: "仅查看",
+    badgeTip:
+      "仅查看模式 — 你可以浏览牌板并撤回自己的报价，但无法发布、接受或注资。请在设置中配置币种以进行交易。",
+    coinWizardButton: "以仅查看模式浏览",
+    coinWizardHint:
+      "跳过币种设置，仅浏览牌板（只读）。你仍可撤回自己的报价 — 便于撤下另一次会话遗留的报价。可随时在设置中关闭。",
+    postBlockedTitle: "仅查看模式",
+    postBlockedBody:
+      "这是一个仅查看会话，因此无法发布报价。请在设置 → 币种中至少设置两种币以进行交易。",
+    takeBlockedBody: "仅查看模式 — 你可以核对此报价，但接受它需要先设置币种。",
+    takeBlockedTip: "仅查看模式 — 请在设置中设置币种以接受报价。",
+  },
+  merchants: {
+    title: "你的商户",
+    intro:
+      "商户是一个交易身份 — 拥有自己的种子和交换历史。在不同商户下交易可使各上下文之间无法关联（一次性身份）。你的主要资金存放在你自己的钱包中，而非这里。",
+    // First-run welcome (empty merchant manager).
+    welcomeTitle: "欢迎使用 Satchel",
+    welcomeIntro:
+      "Satchel 以“商户”身份进行交易 — 一个拥有自己种子的交易身份。你目前还没有：新建一个，或导入已有的助记词即可开始。",
+    importMerchant: "导入商户",
+    none: "尚无商户。",
+    active: "当前",
+    switch: "切换",
+    newMerchant: "新建商户",
+    thisMerchant: "此商户",
+    nameLabel: "商户名称",
+    namePlaceholder: "例如：主账户",
+    introFirst:
+      "设置你的第一个交易身份（一个“商户”）。它只持有用于进行中交换的中转热密钥 — 你的主要资金留在你自己的钱包里。",
+    introNew: "新商户是一个全新、独立的身份，拥有自己的种子和交换历史。",
+    // UI-5 merchant selector (phoenix wallet-selector parity).
+    createNew: "新建",
+    import: "导入",
+    load: "加载商户",
+    loaded: "已加载",
+    locked: "已锁定",
+    lockedTip: "加密的种子 — 加载时用你的口令解锁。",
+    close: "关闭",
+    idLabel: "文件夹",
+    switching: "正在切换商户…",
+    switchingBody: "正在针对该文件夹重启引擎。",
+  },
+  // Seed create/import (SeedForm) + counterparty + status.
+  seed: {
+    intro: "新建一个全新的种子，或导入你已有的种子。",
+    createNew: "新建",
+    createDesc: "生成一个全新的种子。由你来备份助记词。",
+    import: "导入",
+    importDesc: "从已有的 12/24 词助记词恢复。",
+    recoveryLabel: "助记词",
+    importPlaceholder: "word1 word2 word3 …",
+    encrypt: "加密",
+    encryptDesc:
+      "口令用于在静态时保护种子。每次会话输入一次 — Satchel 绝不存储它。注意：重启后，无人值守的自动退款会暂停，直到你重新输入口令。",
+    noPassphrase: "无口令（推荐）",
+    noPassphraseDesc:
+      "自动退款在重启后仍可正常运行且无需输入任何内容 — 这只是一个中转热种子。代价：文件/主机的访问者会暴露此商户的中转密钥和身份。",
+    passphraseLabel: "口令",
+    passphrasePlaceholder: "设置一个口令",
+    createTitle: "创建种子",
+    importTitle: "导入种子",
+    secureTitle: "保护 {label}",
+    revealTitle: "请写下你的助记词",
+    revealBody:
+      "任何拥有这些词的人都能控制此商户的热密钥。Satchel 不保留任何副本 — 请离线保存。接下来你需要确认其中几个词。",
+    ackLabel: "我已写下我的助记词。",
+    // Multi-step onboarding (create/import -> secret -> confirm -> passphrase).
+    chooseTitle: "设置 {label}",
+    enterTitle: "导入你的助记词",
+    enterBody:
+      "逐词输入 — 输入时会自动补全 — 或粘贴整段助记词。我们会在你继续前进行校验。",
+    wordCount: "{n} 个词",
+    wordAria: "第 {n} 个词",
+    checkIncomplete: "请输入全部 {n} 个词。",
+    checkUnknown: "有些词不在 BIP39 词表中 — 请检查高亮的部分。",
+    checkBadChecksum: "校验和不匹配 — 请重新检查词及其顺序。",
+    checkOk: "助记词看起来有效。",
+    verifyTitle: "确认你的备份",
+    verifyBody: "请输入这些位置上的词，以确认你已写下助记词。",
+    verifyWord: "第 #{n} 个词",
+    verifyMismatch: "这些与你的助记词不符 — 请检查你的备份。",
+    passphraseTitle: "保护种子",
+    passphraseBody:
+      "可选择用口令加密存储的种子。你可以跳过 — 请参阅下方的权衡说明。",
+  },
+  counterparty: {
+    you: "这是你",
+    youShort: "你",
+    unknown: "未知身份",
+    // Short fingerprint fallback (identity.ts shortId) when no pubkey is known.
+    unknownShort: "未知",
+  },
+  status: {
+    notConnectedTitle: "未连接到引擎",
+    disconnectedBody:
+      "Satchel 无法连接到引擎。它可能仍在启动，或当前商户的节点连接已下线。请重试，或从顶部的选择器切换商户。",
+    openInSatchel: "在 Satchel 中打开",
+    noTauriBody:
+      "这是 Satchel 的界面 — 它需要 Tauri 桥接才能连接引擎。请启动桌面应用（cargo tauri dev），而不是在浏览器中运行。",
+  },
+  settings: {
+    title: "设置",
+    subtitle: "本次安装的全局应用偏好。",
+    // UI-3 Settings tabs.
+    tabGeneral: "常规",
+    tabCoins: "币种",
+    tabNetwork: "网络",
+    tabAbout: "关于",
+    appearance: "外观",
+    theme: "主题",
+    themeDark: "深色",
+    themeLight: "浅色",
+    themeSystem: "跟随系统",
+    themeHint: "选择 Satchel 的外观。“跟随系统”会遵循你的操作系统设置。",
+    language: "语言",
+    languageHint: "随着翻译的贡献，会陆续加入更多语言。",
+    mode: "模式",
+    watchOnly: "仅查看模式",
+    watchOnlyHint:
+      "无需设置币种即可浏览牌板。你仍可撤回自己的报价，但无法发布、接受或注资。关闭后即可交易（你需要至少连接两种币）。",
+    network: "网络",
+    boards: "Corkboard 牌板",
+    boardsDesc:
+      "可选的自托管 HTTP 牌板。添加任何你信任的牌板；留空则仅依赖 Nostr。",
+    boardsNone: "未配置",
+    nostrRelays: "Nostr 中继",
+    nostrRelaysDesc:
+      "中继通过去中心化网络承载告示板 — 没有任何运营方能读取或撮合你的报价。已预置一组默认中继；可随意编辑。",
+    nostrRelaysOff: "关闭 — Nostr 传输已禁用",
+    addUrl: "添加",
+    removeUrl: "移除",
+    relayInvalid: "请输入 ws:// 或 wss:// 中继 URL",
+    boardInvalid: "请输入 http:// 或 https:// 牌板 URL",
+    netSave: "保存并重新连接",
+    netSaving: "正在保存并重新连接…",
+    netSaved: "已保存",
+    // Fees tab — fee-bump policy (per active merchant).
+    tabFees: "费用",
+    fees: "费用加价",
+    feesScope: "这些设置适用于当前商户。",
+    feesIntro:
+      "费用加价的安全/成本权衡，并非必需的设置。新值适用于今后的加价；已注资的交换会沿用其注资时所采用的策略。",
+    feeMax: "最高费率（sat/vB）",
+    feeMaxHint:
+      "每次费用加价的上限。默认 500，同时也是系统硬上限。调低它可控制成本。",
+    feeReservation: "注资加价预留（×）",
+    feeReservationHint:
+      "资金检查作为加价余量预留的份额。越高越能挽救更大的费用飙升，但会占用更多余额并拒绝更多交换。默认 3。",
+    feeCommitted: "赎回超额预付（×）",
+    feeCommittedHint:
+      "v2 赎回费用预付多少额外金额，以便即使 Satchel 已关闭也能确认。仅适用于新交换。默认 2。",
+    feeStep: "RBF 递增步长（%）",
+    feeStepHint: "每轮调度时，卡住的支出费用上调的激进程度。默认 50。",
+    feeSave: "保存",
+    feeSaving: "正在保存…",
+    feeSaved: "已保存",
+    feeReset: "重置为默认值",
+    coins: "币种与节点",
+    coinsHint: "将每种币连接到你自己的节点。在保存任何内容前会先检查创世区块。",
+    about: "关于",
+    version: "版本 {version}",
+    updateUpToDate: "已是最新",
+    updateCheckPlaceholder: "更新检查将在后续版本中提供。",
+    trustModel: "你的密钥存放在哪里",
+    trustModelBody:
+      "私密信息存放在引擎中，绝不在 Satchel 中。商户种子位于引擎的数据文件夹内（加密或明文 — 由你选择）；Satchel 不存储任何种子或口令。按设计，该种子是热的（仅中转密钥）— 请将可观的收益清扫到你自己的冷钱包。",
+  },
+  coins: {
+    intro:
+      "将每种币连接到你自己的节点。第一个 URL 是你节点自身的钱包 — 它为你的交换腿注资并接收收益。在保存任何内容之前，Satchel 会检查节点的创世区块，以确保资金绝不会被发往错误的链。连接在你的所有商户之间共享。",
+    networkBadge: "正在为 {network} 网络配置",
+    needMerchant:
+      "请先连接商户 — 币种设置需要引擎运行。请使用右上角的商户选择器。",
+    pairsTitle: "交易对",
+    pairsHint:
+      "交易对由每种币的能力推导而来 — 没有固定列表。当一个交易对的两种币都连接后，该交易对即开放。",
+    noPairs: "暂无可用交易对。",
+    notSetUp: "未设置",
+    connectedTip: "已连接 · 区块高度 {tip}",
+    connError: "连接错误",
+    setUp: "设置",
+    editConnection: "编辑连接",
+    remove: "移除",
+    disconnectTip: "断开此币种",
+    disconnectTitle: "断开 {coin}？",
+    disconnectBody: "在你重新连接前，需要它的交换将不可用。",
+    ready: "可以交易",
+    connectMissing: "连接 {coins}",
+    notBuildable: "暂时无法构建",
+    // Swap-protocol chips on a pair (pact-htlc-v1 HTLC vs pact-htlc-v2 adaptor).
+    protoPrivate: "私密（Taproot）",
+    protoPrivateTip: "私密交换（Taproot/MuSig2 适配器）— 在链上看起来就像一笔普通付款",
+    protoHtlcTip: "经典 HTLC 交换",
+    // Coin-setup backend choices (CoinSetup).
+    backendCoreTitle: "Core RPC 钱包",
+    backendCoreDesc: "你节点自身的钱包为交换注资并接收收益。",
+    backendHardwareTitle: "硬件",
+    backendHardwareDesc: "为注资腿提供 Ledger / PSBT 签名。",
+    backendLater: "稍后",
+    // CoinSetup dialog.
+    setupTitle: "连接 {coin}",
+    setupIntro:
+      "将 Satchel 指向你自己的 {sym} 节点。在节点通过创世区块检查之前不会保存任何内容 — 你的资金始终只会触及真正的 {sym} 链。",
+    backendUrlLabel: "节点后端 URL",
+    backendUrlHint:
+      "第一个 URL = 你节点自身的钱包（为交换注资、接收收益）。在逗号后追加 Electrum 服务器（tcp://host:port）可获得额外的、独立的链视图。",
+    fundingWallet: "注资钱包",
+    confirmationsLabel: "确认数（达到即视为最终）",
+    confirmationsHint:
+      "在此链上，一笔注资或赎回需要达到多深才会被交换据以行动 — 即重组安全余量。越高越安全但越慢；留空则使用推荐的默认值（{default}）。",
+    validateNode: "验证节点",
+    checking: "正在检查节点…",
+    genesisOk: "创世区块匹配 — 这是正确的链",
+    genesisDetail: "区块高度 {tip} · 创世 {hash}…",
+    genesisBad: "已拒绝 — 不保存",
+    errorShort: "错误",
+    // Structured connection form (CoinSetup v2).
+    rpcHostLabel: "RPC 主机",
+    rpcPortLabel: "RPC 端口",
+    authMethodLabel: "认证方式",
+    authCookie: "Cookie 文件",
+    authCookieDesc: "从节点的数据目录自动读取其 .cookie（默认方式，不存储密码）。",
+    authUserPass: "用户名 / 密码",
+    authUserPassDesc: "你节点配置中的 rpcuser / rpcpassword — 连接远程节点时需要。",
+    rpcUserLabel: "RPC 用户名",
+    rpcPasswordLabel: "RPC 密码",
+    datadirLabel: "节点数据目录",
+    cookiePathNote: "Cookie 将从此目录下的 {path} 读取。",
+    walletLabel: "钱包名称（可选）",
+    walletPlaceholder: "你节点的钱包",
+    needPort: "请先输入 RPC 端口。",
+    validateFirst: "请在保存前验证节点。",
+    savingReconnecting: "正在保存并重新连接…",
+    connected: "{coin} 已连接",
+    // Template picker (a coins.toml coin the engine version doesn't support).
+    unsupportedByEngine: "不支持",
+    unsupportedByEngineTip:
+      "此币种在 coins.toml 中已定义，但未编译进此版本的引擎，因此无法交易。",
+  },
+  coinWizard: {
+    title: "连接你的币种",
+    intro:
+      "至少选择两种币，并将每种各自指向你自己的节点。一笔交换需要两条链，因此当两个节点连接并上线后即可开始交易。你之后可在设置中添加或更改币种。",
+    progress: "已连接 {count} / {min} 种币",
+    continue: "继续",
+    live: "在线",
+    nodeDown: "节点下线",
+  },
+  wallets: {
+    intro:
+      "这些是你自己节点的钱包（引擎用来为交换注资并接收收益的那些）— 你的密钥，你的机器。Satchel 绝不持有你的资金。",
+    hotSeedNudge:
+      "这是热种子上的一个消费钱包，而非金库 — 请将可观的余额清扫到你自己的冷/核心钱包。",
+    notConnected: "未连接",
+    notConnectedBody: "请先连接商户 — 钱包视图需要引擎运行。",
+    noCoins: "尚未设置任何币种",
+    noCoinsBody: "在设置 → 币种中连接一种币，其钱包就会显示在这里。",
+    goToCoins: "前往币种",
+    watchOnlyTitle: "仅查看模式下没有钱包",
+    watchOnlyBody:
+      "这是一个未连接任何币种的仅查看会话，因此没有可显示的钱包。请在设置中关闭仅查看，并连接一种币以为交换注资。",
+    walletName: "钱包 · {wallet}",
+    walletScopedHint: "此币种的每次 RPC 都限定到该节点钱包。",
+    walletDefault: "默认钱包（未限定）",
+    walletDefaultHint:
+      "此币种未设置钱包，因此 RPC 使用节点的默认钱包。请在设置 → 币种中设置一个，以将每次调用限定到指定钱包。",
+    balanceLabel: "{symbol} 余额",
+    receive: "接收",
+    send: "发送",
+    sendTo: "发送到地址",
+    amount: "数量",
+    sendTitle: "发送 {amount} {sym}？",
+    sendConfirmBody: "发送至 {to}\n\n此操作从你自己节点的钱包支出，且无法撤销。",
+  },
+  corkboard: {
+    noBoardTitle: "未连接 Corkboard",
+    noBoardBody:
+      "Corkboard 是一块共享的公告板，做市方在上面张贴报价。它从不撮合交易，也不持有任何资金 — 请将 Satchel 指向一块你信任的牌板以浏览和发布。",
+    noPairs: "暂无可用交易对",
+    board: "Corkboard",
+    boardSettings: "在设置中配置",
+    filterAll: "全部",
+    filterMine: "我的",
+    offered: "提供 {symbol}",
+    noOffers: "目前没有你可以接受的报价",
+    noOffersBody:
+      "一旦有做市方为你已设置的交易对发布报价，它就会显示在这里。你也可以发布自己的报价。",
+    hiddenOffers:
+      "还有 {count} 条报价属于你尚未连接的交易对。设置好这两种币即可交易：",
+    yourOffer: "你的报价",
+    offerStaged: "发布中…",
+    offerStagedTip:
+      "已从本设备发布，正等待中继回传确认。它正在广告中；一旦有中继回显，它就会上线。",
+    take: "接受报价",
+    legDown: "此交易对中有一个节点已下线 — 请在接受前启动它（或检查设置 → 币种）。",
+    withdraw: "撤回",
+    withdrawTip: "立即撤回 — 报价从不锁定资金",
+    safetyRefund: "安全退款",
+    safetyRefundTip:
+      "若交换停滞，双方都会自动退款 — 接受方的腿先解锁，你的稍后。没人会被卡住。",
+    activeTitle: "你的进行中交换",
+    states: {
+      open: "开放",
+      takenByUs: "已被你接受",
+      revoked: "已撤回",
+      expired: "已过期",
+    },
+    // Two-sided order-book view of the Corkboard. Bids = makers giving the
+    // quote coin to get the base; asks = the reverse. The ladder is a way to
+    // READ the board — it never matches or prioritises (load-bearing).
+    book: {
+      bids: "买盘",
+      asks: "卖盘",
+      bidsHint: "想要 {base} · 支付 {quote}",
+      asksHint: "卖出 {base} · 换取 {quote}",
+      price: "价格",
+      size: "数量",
+      noBids: "无买盘",
+      noAsks: "无卖盘",
+      spread: "价差 {pct}",
+      spreadOneSided: "单边",
+      crossed: "交叉",
+      crossedTip: "最高买价 ≥ 最低卖价。牌板从不自动撮合，因此这些重叠的报价只是摆在那里 — 接受任一方即可。",
+      mid: "中间价 {price}",
+      levelOffers: "此价位有 {count} 条报价 — 挑一条接受",
+      depthTip: "在此价位、横跨 {count} 条告示，总计提供 {sym}。",
+      takerNote: "接受它，你支付 {give} 并收到 {get}。",
+      selectLevel: "请在上方选择一个价位，查看该处的报价。",
+      paneHeader: "{size} {base} @ {price} {unit}",
+      denomTip: "{coin} 金额的显示单位",
+      showMore: "再显示 {count} 条",
+      showLess: "仅显示前 {count} 条",
+    },
+  },
+  relays: {
+    title: "中继",
+    subtitle: "你的 Nostr 中继的实时连通性 — 你的报价和接受所传输的网络。在设置 → 网络中添加或移除中继。",
+    connectedCount: "已连接 {up} / {total}",
+    refresh: "刷新",
+    ms: "{ms} 毫秒",
+    up: "上行",
+    down: "下行",
+    statsTip: "{success}/{attempts} 次成功连接 · ↓{down} ↑{up}",
+    none: "未配置中继",
+    noneBody: "在设置 → 网络中添加一个 Nostr 中继，以便通过网络发布和接收报价。",
+    goToNetwork: "前往设置",
+    notConnected: "未连接",
+    notConnectedBody: "中继视图需要引擎运行 — 请先连接商户。",
+  },
+  swaps: {
+    title: "交换",
+    hint: "你的完整账本 — 进行中的交换在上方，已完成的交易在下方。你也可以从 Corkboard 对进行中的交换执行操作。",
+    activeTitle: "进行中",
+    historyTitle: "历史",
+    none: "尚无交换 — 去 Corkboard 接受一条报价吧。",
+    // Active-swaps dock action buttons + the refund-time label.
+    cancel: "取消",
+    refund: "退款",
+    dump: "导出日志",
+    dumpHint: "复制此交换的一份不含私密信息的诊断包（状态 + 日志行），以便粘贴给开发者。",
+    dumpCopied: "诊断信息已复制 — 粘贴给开发者。",
+    dumpFailed: "无法复制诊断包。",
+    refundAt: "{when} 退款",
+    // Confirm dialogs for acting on a live swap (ActiveSwaps).
+    cancelTitle: "取消此交换？",
+    cancelConfirm: "取消交换",
+    cancelKeep: "保留它",
+    // Abort reason recorded on the swap when cancelled from Satchel.
+    cancelReason: "在 Satchel 中取消",
+    cancelBody:
+      "这会在你注资之前放弃该交换。你的任何资金都尚未锁定，因此你不会损失任何东西 — 只是该报价不会完成。",
+    refundTitle: "取回你的资金？",
+    refundConfirm: "退款",
+    refundBody:
+      "安全时间锁已过，因此你可以取回你锁定的资金。这会立即广播你的退款；引擎也会在截止时间过后自动执行。",
+    col: {
+      swap: "交换",
+      role: "角色",
+      state: "状态",
+      amounts: "支付 → 收到",
+      when: "时间",
+      finalTx: "最终交易",
+    },
+    // Expandable per-leg on-chain detail (the audit trail). We show both
+    // funding txs + OUR settlement; never the counterparty's settlement or the
+    // swap secret.
+    audit: {
+      toggle: "显示链上详情",
+      title: "链上详情",
+      youLocked: "你锁定了",
+      theyLocked: "对方锁定了",
+      funding: "注资",
+      received: "已收到",
+      refunded: "已退款",
+      pending: "尚未上链",
+      copy: "复制交易 ID",
+      copied: "交易 ID 已复制",
+    },
+  },
+  fees: {
+    title: "网络成本预览",
+    estimated: "预估",
+    provisionalNote: "此 pactd 构建尚未提供费用估算。",
+    summary: "一笔交换包含 2 笔需由你支付的链上交易：在支付链上注资，在收款链上赎回。",
+    fallbackTip: "某个节点无法连接，因此采用了保守的默认费率 — 请将这些视为估计值。",
+    ifItStalls: "（若停滞）",
+  },
+  funds: {
+    insufficient:
+      "{sym} 不足以为此交换注资 — 需要约 {need} {sym}（金额 + 注资费用），钱包仅有 {have} {sym}。",
+  },
+  wizard: {
+    welcome: "欢迎使用 Satchel",
+    connectTitle: "连接 Pact 引擎",
+    connectIntro:
+      "Satchel 是 Pact 引擎的轻量客户端 — 引擎是持有你密钥并运行交换的核心。选择如何连接它。",
+    managed: "运行内置的 Pact 引擎",
+    managedDesc: "Satchel 会启动并管理它自己的 Pact 引擎。推荐。",
+    external: "连接到外部 Pact 引擎",
+    externalDesc: "指向你已经运行的 Pact 引擎（启动前设置 SATCHEL_PACTD_URL + cookie）。",
+    externalNote:
+      "外部模式在启动 Satchel 前通过环境变量选择。请在设置好 SATCHEL_PACTD_URL 后重新启动以使用它。",
+    coinsTitle: "添加你的币种",
+    coinsIntro:
+      "在创建商户后，于设置 → 币种中将每种币连接到你自己的节点。挑选一种币和一个后端（公共 Electrum 免设置，或你自己的节点）；在保存任何内容之前会针对此网络检查创世区块。",
+    coinsTemplatesSoon: "一键币种模板将在后续版本中加入这里。",
+    back: "返回",
+    continue: "继续",
+    finish: "完成设置",
+  },
+  // UI-4 docked activity log.
+  log: {
+    title: "活动",
+    empty: "— 活动日志 —",
+    count: "{count} 行",
+    collapse: "收起日志",
+    expand: "展开日志",
+    // Activity-log lines emitted by the frontend. `{err}` carries a raw engine
+    // message (itself not translated — it comes from pactd over the wire).
+    noTauri: "未在 Satchel 内运行 — 此界面需要 Tauri 桥接",
+    startupError: "启动：{err}",
+    notConnected: "未连接：{err}",
+    connected: "已连接到 pactd {version}（{protocol}）",
+    listcoinsError: "listcoins：{err}",
+    watchOnlyError: "仅查看：{err}",
+    switchedMerchant: "已切换到商户 {id}",
+    switchMerchantError: "切换商户：{err}",
+    loadMerchantError: "加载商户：{err}",
+    merchantCreated: "商户 {id} 已创建",
+    merchantReady: "商户就绪",
+    actionOk: "{action} {id}：成功",
+    actionError: "{action} {id}：{err}",
+    diagCopied: "{id} 的诊断信息已复制（{count} 行日志）— 粘贴给开发者",
+    dumpError: "导出 {id}：{err}",
+    coinDisconnected: "{coin} 已断开",
+    removeCoinError: "移除币种：{err}",
+    tookOffer: "已接受报价 {id} — 它现在出现在下方你的进行中交换里",
+    takeError: "接受：{err}",
+    offerWithdrawn: "报价 {id} 已撤回",
+    withdrawError: "撤回：{err}",
+    postedOffer: "已发布报价 {id} — 随时可撤回；什么都不会被锁定",
+    createdSlip: "已创建一条私下报价凭条 — 把它发给你的朋友",
+    tookPrivateOffer: "已接受私下报价 {id} — 它现在出现在你的进行中交换里",
+    cancelledPrivateOffer: "已取消私下报价 {id}",
+    cancelError: "取消：{err}",
+    noticeboardUpdated: "告示板已更新",
+    feePolicyUpdated: "费用策略已更新",
+  },
+  // Relative-time + freshness prose from format.ts (rendered via the tr() mirror,
+  // since those are pure non-component helpers). Unit letters stay inside the
+  // template so a translation owns the whole phrase.
+  format: {
+    ageUnknown: "时长未知",
+    justNow: "刚刚",
+    minutesAgo: "{n} 分钟前",
+    hoursAgo: "{n} 小时前",
+    daysAgo: "{n} 天前",
+    expiryNow: "现在",
+    expirySoon: "即将",
+    inMinutes: "约 {n} 分钟后",
+    inHours: "约 {n} 小时后",
+    inDays: "约 {n} 天后",
+    posted: "{age}发布",
+    expires: "{time}过期",
+  },
+  // Plain-language swap story per (role, state) — the honest "who is exposed
+  // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
+  // are local refund times. Rendered via tr() (narrate() is a pure helper).
+  narrate: {
+    initiating:
+      "接受请求已发出 — 正等待做市方启动交换。目前什么都没有被锁定；若对方不响应，它会自行取消。",
+    created: "报价已发出 — 正等待对方同意。没有任何承诺。",
+    acceptedMaker: "条款已达成。下一步：锁定你的 {a}。在你注资之前，仍可自由取消。",
+    acceptedTaker: "条款已达成。对方会先锁定他们的 {a} — 你绝不会先支付。",
+    noncesExchanged:
+      "正在搭建私密交换 — 交换签名材料。目前什么都没有被锁定。",
+    signedMaker:
+      "双方都已签名。你的守护进程会锁定 {a}，然后自动认领 {b}。若有任何停滞，你的 {a} 将于 {t1} 退回。",
+    signedTaker:
+      "双方都已签名。你的守护进程会锁定 {b}，并在对方一行动时立即认领 {a}。安全网：{t2} 退款。",
+    fundedAMaker:
+      "你的 {a} 已锁定。正等待对方锁定他们的 {b}。若他们始终不锁定，你的 {a} 将于 {t1} 自动退回。",
+    fundedATaker:
+      "对方的 {a} 已锁定并验证。下一步：锁定你的 {b}。安全网：若有任何停滞，{t2} 自动退款。",
+    fundedBMaker: "双方都已锁定。一旦 {b} 被安全确认，你的守护进程便会认领它。",
+    fundedBTaker: "双方都已锁定。一旦对方取走他们的 {b}，你的守护进程便会立即认领 {a}。",
+    redeemedB:
+      "你已认领 {b} — 正等待其确认。在此交易最终完成前，你锁定的 {a} 仍受保护。",
+    completed: "交换完成 — {coin} 已到你的钱包。",
+    refunded: "交换未能完成，因此你的 {coin} 已自动退回。除手续费外没有任何损失。",
+    aborted: "在任何资金转移之前已取消。",
+  },
+  exit: {
+    // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
+    // running" detaches it (it keeps watching timelocks + servicing offers).
+    liveTitle: "有一笔交换进行中",
+    liveBodyOne:
+      "有 1 笔交换正在进行中。它受链上时间锁约束 — 引擎必须持续运行，才能在截止时间前赎回或退款。",
+    liveBodyMany:
+      "有 {count} 笔交换正在进行中。它们受链上时间锁约束 — 引擎必须持续运行，才能在截止时间前赎回或退款。",
+    keepRunningExplain:
+      "关闭窗口会让引擎在后台继续运行，从而以无界面方式完成交换。你随时可以重新打开 Satchel 来查看。",
+    forceQuitWarn: "现在强制退出会停止引擎，并可能损失资金。",
+    // {word} is the confirm word below; a translation may localize both together.
+    typeToConfirm: "若仍要强制退出，请在下方输入 {word}。",
+    confirmWord: "QUIT",
+    keepRunning: "保持运行，关闭窗口",
+    keepWithdraw: "保持运行 + 撤回报价",
+    keepLeaveOffers: "保持运行，保留报价",
+    forceQuit: "强制退出",
+    offersTitle: "你有已发布的报价",
+    offersBodyOne:
+      "你的 1 条报价仍在 Corkboard 上。报价不锁定任何资金，但保留它意味着在 Satchel 关闭期间对手方仍可接受它 — 引擎会处理该接受。",
+    offersBodyMany:
+      "你的 {count} 条报价仍在 Corkboard 上。报价不锁定任何资金，但保留它们意味着在 Satchel 关闭期间对手方仍可接受 — 引擎会处理这些接受。",
+    withdrawExit: "全部撤回并退出",
+  },
+  unlock: {
+    title: "解锁商户",
+    body:
+      "此商户的种子已加密。请输入其口令以在本次会话中解锁 — Satchel 仅将其保存在内存中，并在退出时遗忘。",
+    switchMerchant: "切换商户",
+    unlock: "解锁",
+  },
+  common: {
+    cancel: "取消",
+    confirm: "确认",
+    save: "保存",
+    done: "完成",
+    later: "稍后",
+    retry: "重新连接",
+  },
+};

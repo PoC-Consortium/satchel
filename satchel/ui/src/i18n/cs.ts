@@ -1,0 +1,716 @@
+// The Czech (Čeština) string bundle. Mirrors en.ts key-for-key; only values are translated.
+import type { Bundle } from "./en";
+
+export const cs: Bundle = {
+  app: {
+    name: "Satchel",
+    tagline: "swapy bez důvěry",
+  },
+  // In-app update notifications (sidebar version badge + dialog).
+  update: {
+    title: "Dostupná aktualizace",
+    upToDate: "Máte nejnovější verzi",
+    current: "Nainstalováno",
+    latest: "Nejnovější",
+    notesTitle: "Poznámky k vydání",
+    get: "Stáhnout aktualizaci",
+    dismiss: "Zavřít",
+    close: "Zavřít",
+    badgeTooltip: "Dostupná aktualizace — klikněte pro podrobnosti",
+    versionTooltip: "Kliknutím zkontrolujete aktualizace",
+  },
+  // Risk disclaimer (first-run welcome + Settings → About).
+  disclaimer: {
+    title: "Vlastní úschova — vaše klíče, vaše odpovědnost",
+    body: "Satchel provádí nesvěřenské atomické swapy: své klíče držíte jen vy a seed merchanta drží horké tranzitní klíče, dokud swap probíhá. Swapové protokoly (v1 HTLC a v2 Taproot/MuSig2) jsou prověřené a běží na mainnetu. Licencováno pod MIT a poskytováno tak, jak je, bez jakékoliv záruky — zazálohujte si svou obnovovací frázi a používejte na vlastní riziko.",
+  },
+  nav: {
+    public: "Veřejné",
+    corkboard: "Corkboard",
+    postOffer: "Vystavit nabídku",
+    private: "Soukromé",
+    privateCreate: "Vytvořit lístek",
+    privateReceive: "Přijmout lístek",
+    privateSlips: "Mé lístky",
+    swaps: "Swapy",
+    relays: "Relaye",
+    wallets: "Peněženky",
+    settings: "Nastavení",
+    coins: "Mince",
+  },
+  makeOffer: {
+    title: "Vystavit nabídku",
+    intro:
+      "Vystavte podepsanou nabídku na Corkboard. Nic se neuzamyká — je to jen inzerát; můžete ho kdykoli stáhnout a swap začne až ve chvíli, kdy ho někdo přijme a obě strany pošlou financování.",
+    give: "Dáváte",
+    want: "Dostanete",
+    // Canonical pair + direction: pick the pair, choose Sell/Buy the base, enter
+    // the base amount and a quote-per-base price (invariant to direction).
+    pair: "Pár",
+    noPairs: "Žádné obchodovatelné páry — připojte alespoň dvě mince v Nastavení → Mince.",
+    sell: "Prodat {sym}",
+    buy: "Koupit {sym}",
+    amount: "Množství",
+    youGive: "Dáváte",
+    youGet: "Dostanete",
+    price: "Cena",
+    priceUnit: "{unit} za {base}",
+    pricePlaceholder: "jednotková cena",
+    balance: "Zůstatek: {amt} {sym}",
+    balanceLoading: "Zůstatek: …",
+    noCoins: "Žádné mince nejsou nakonfigurované",
+    sameCoin: "Co dáváte a co dostanete musí být různé mince.",
+    legDown: "Uzel jedné z těchto mincí je mimo provoz — spusťte ho (nebo zkontrolujte Nastavení → Mince) před vystavením.",
+    // Swap-protocol pin (only offered when a pair+network supports more than
+    // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
+    protocol: "Typ swapu",
+    protoStandard: "Standardní (HTLC)",
+    // Titles for the review/confirm dialog shown before posting (see OfferForm).
+    reviewOfferTitle: "Zkontrolujte svou nabídku",
+    reviewSlipTitle: "Zkontrolujte svůj lístek",
+    term: "Bezpečnostní timelock",
+    termShort: "Krátký",
+    termMedium: "Střední",
+    termLong: "Dlouhý",
+    termHint: {
+      short: "Krátký — prostředky se automaticky vrátí nejrychleji, pokud obchod uvázne (~12 h / 6 h), s nejmenší bezpečnostní rezervou.",
+      medium: "Střední — vyvážené okno pro vrácení (~24 h / 12 h).",
+      long: "Dlouhý (nejbezpečnější) — nejširší bezpečnostní rezerva; automatické vrácení po ~36 h / 18 h, pokud obchod uvázne.",
+    },
+    validFor: "Platnost (minuty)",
+    validForMins: "{mins} min",
+    validForHint:
+      "Jak dlouho zůstane nabídka vystavená. Dokud jste online, automaticky se udržuje aktuální; poté vyprší. Zavřením aplikace ji stáhnete.",
+    note: "Nabídka s pevnou velikostí — dokud ji někdo nepřijme, nic se neuzamyká. Částky jsou on-chain; navíc platíte síťové poplatky a Corkboard si neúčtuje nic. Timelock je okno pro automatické vrácení, pokud swap uvázne.",
+    post: "Vystavit nabídku",
+    makeSlip: "Vytvořit lístek",
+    slipTitle: "Váš soukromý nabídkový lístek",
+    slipExplainer:
+      "Pošlete ho svému příteli. On ho vloží do Satchelu, aby ho přijal. Nic se neuzamyká; vyprší za {ttl}.",
+    copy: "Kopírovat",
+    copied: "Zkopírováno",
+    makeAnother: "Vytvořit další",
+    myPrivateTitle: "Mé soukromé nabídky",
+    myPrivateEmpty: "Žádné nevyřízené soukromé nabídky.",
+    privateExpires: "vyprší {when}",
+    privateExpired: "vypršelo",
+    cancel: "Zrušit",
+    cancelTip: "Přestat tento lístek ctít — přítel, který ho stále drží, ho už nemůže přijmout.",
+  },
+  takeSlip: {
+    open: "Vložit lístek",
+    title: "Přijmout soukromou nabídku",
+    intro:
+      "Přítel vám poslal soukromý nabídkový lístek (začíná na pactoffer1:). Vložte ho sem, abyste ho zkontrolovali a přijali — přesně jako nabídku z nástěnky.",
+    placeholder: "pactoffer1:…",
+    take: "Zkontrolovat a přijmout",
+    invalid: "Tohle nevypadá jako lístek — měl by začínat na pactoffer1:.",
+    previewLabel: "Tento lístek nabízí",
+  },
+  // PRIVATE nav group (off-market slips) — screen titles + intros. The form,
+  // slip output, my-slips list and take flow reuse makeOffer.*/takeSlip.* copy.
+  private: {
+    createTitle: "Vytvořit soukromou nabídku",
+    createIntro:
+      "Vytvořte podepsanou nabídku a předejte ji příteli jako lístek přes vlastní chat. Nikde se nic nevystavuje — a dokud financování nepošlou obě strany, nic se neuzamyká.",
+    slipsIntro:
+      "Lístky, které jste vytvořili. Kdokoli, kdo drží lístek, ho může přijmout, dokud nevyprší; zrušením lístku ho přestanete ctít dříve.",
+    slipsEmptyBody: "Vytvořte soukromou nabídku, abyste získali lístek, který můžete poslat příteli.",
+    receiveTitle: "Přijmout soukromou nabídku",
+    received: "Přijato — sledujte ji ve Swapech.",
+  },
+  // Shared take-confirmation dialog (board take + slip take).
+  takeConfirm: {
+    title: "Přijmout tuto nabídku?",
+    confirm: "Přijmout nabídku",
+    counterparty: "Protistrana",
+    youGive: "Dáváte",
+    youReceive: "Dostanete",
+    safetyRefund: "Bezpečnostní vrácení",
+    offerAge: "Stáří nabídky",
+    makerFundsFirst:
+      "Maker uzamkne své {sym} jako první — vy nikdy neposíláte první. Než pošlete financování své strany, můžete stále zrušit, a engine automaticky vrátí prostředky po bezpečnostním timelocku, pokud swap uvázne.",
+  },
+  header: {
+    activeMerchant: "Aktivní merchant — kliknutím přepnete nebo spravujete",
+    manageMerchants: "Spravovat merchanty…",
+    noMerchant: "žádný merchant",
+    openMenu: "Otevřít menu",
+    collapseMenu: "sbalit menu",
+    settings: "Nastavení",
+    language: "Jazyk",
+    pactConnected: "Engine připojen",
+    pactUnreachable: "Engine nedostupný",
+    liveSwapsOne: "1 probíhající swap — kliknutím zobrazíte",
+    liveSwapsMany: "{count} probíhajících swapů — kliknutím zobrazíte",
+    liveSwapsNone: "Žádné probíhající swapy",
+    coinOk: "{name} — připojeno · tip {tip}",
+    coinUnconfigured: "{name} — nenastaveno",
+    coinError: "{name} — {status}",
+    relaysOk: "Nostr relaye — {up}/{total} připojeno",
+    relaysDown: "Nostr relaye — žádný z {total} připojen",
+  },
+  network: {
+    mainnet: "MainNet",
+    testnet: "TestNet",
+    regtest: "RegTest",
+    signet: "Signet",
+    notRealFunds: "Nejde o skutečné prostředky — toto je síť {network}",
+  },
+  // Watch-only mode: a viewer session with no coins. Browse the board and
+  // withdraw your own offers, but no posting / taking / funding.
+  watchOnly: {
+    badge: "Pouze sledování",
+    badgeTip:
+      "Režim pouze sledování — můžete procházet nástěnku a stahovat své vlastní nabídky, ale nemůžete vystavovat, přijímat ani financovat. Pro obchodování nastavte mince v Nastavení.",
+    coinWizardButton: "Procházet v režimu pouze sledování",
+    coinWizardHint:
+      "Přeskočte nastavení mincí a jen procházejte nástěnku (pouze pro čtení). Stále můžete stahovat své vlastní nabídky — užitečné pro stažení nabídek ponechaných jinou relací. Kdykoli to vypnete v Nastavení.",
+    postBlockedTitle: "Režim pouze sledování",
+    postBlockedBody:
+      "Toto je relace pouze pro sledování, takže nemůže vystavovat nabídky. Pro obchodování nastavte alespoň dvě mince v Nastavení → Mince.",
+    takeBlockedBody: "Režim pouze sledování — tuto nabídku si můžete prohlédnout, ale k jejímu přijetí jsou potřeba nastavené mince.",
+    takeBlockedTip: "Režim pouze sledování — pro přijímání nabídek nastavte mince v Nastavení.",
+  },
+  merchants: {
+    title: "Vaši merchanti",
+    intro:
+      "Merchant je jedna obchodní identita — vlastní seed a historie swapů. Obchodování pod jiným merchantem udržuje kontexty nepropojitelné (jednorázová identita). Vaše hlavní mince žijí ve vaší vlastní peněžence, ne tady.",
+    // First-run welcome (empty merchant manager).
+    welcomeTitle: "Vítejte v Satchelu",
+    welcomeIntro:
+      "Satchel obchoduje pod „merchantem“ — jednou obchodní identitou s vlastním seedem. Zatím žádného nemáte: vytvořte si nového, nebo importujte existující obnovovací frázi a začněte.",
+    importMerchant: "Importovat merchanta",
+    none: "Zatím žádní merchanti.",
+    active: "aktivní",
+    switch: "přepnout",
+    newMerchant: "Nový merchant",
+    thisMerchant: "tento merchant",
+    nameLabel: "Jméno merchanta",
+    namePlaceholder: "např. Hlavní",
+    introFirst:
+      "Nastavte si svou první obchodní identitu („merchanta“). Drží pouze horké tranzitní klíče pro probíhající swapy — vaše hlavní mince zůstávají ve vaší vlastní peněžence.",
+    introNew: "Nový merchant je čerstvá, oddělená identita s vlastním seedem a historií swapů.",
+    // UI-5 merchant selector (phoenix wallet-selector parity).
+    createNew: "Vytvořit nového",
+    import: "Importovat",
+    load: "Načíst merchanta",
+    loaded: "načteno",
+    locked: "zamčeno",
+    lockedTip: "Šifrovaný seed — při načítání odemkněte svou přístupovou frází.",
+    close: "Zavřít",
+    idLabel: "složka",
+    switching: "Přepínání merchanta…",
+    switchingBody: "Engine se znovu spouští proti té složce.",
+  },
+  // Seed create/import (SeedForm) + counterparty + status.
+  seed: {
+    intro: "Vytvořte zcela nový seed, nebo importujte ten, který už máte.",
+    createNew: "Vytvořit nový",
+    createDesc: "Vygenerovat čerstvý seed. Obnovovací frázi si zazálohujete vy.",
+    import: "Importovat",
+    importDesc: "Obnovit z existující 12/24slovné fráze.",
+    recoveryLabel: "Obnovovací fráze",
+    importPlaceholder: "slovo1 slovo2 slovo3 …",
+    encrypt: "Zašifrovat",
+    encryptDesc:
+      "Přístupová fráze chrání seed v klidu. Zadáváte ji jednou za relaci — Satchel ji nikdy neukládá. Pozn.: po restartu se bezobslužné automatické vracení pozastaví, dokud ji znovu nezadáte.",
+    noPassphrase: "Bez přístupové fráze (doporučeno)",
+    noPassphraseDesc:
+      "Automatické vracení funguje i po restartech bez nutnosti cokoli zadávat — jde jen o horký tranzitní seed. Cena: přístup k souboru/hostiteli odhalí tranzitní klíče a identitu tohoto merchanta.",
+    passphraseLabel: "Přístupová fráze",
+    passphrasePlaceholder: "zvolte přístupovou frázi",
+    createTitle: "Vytvořit seed",
+    importTitle: "Importovat seed",
+    secureTitle: "Zabezpečit {label}",
+    revealTitle: "Zapište si svou obnovovací frázi",
+    revealBody:
+      "Kdokoli s těmito slovy ovládá horké klíče tohoto merchanta. Satchel si nenechává žádnou kopii — uložte je offline. Dále potvrdíte několik slov.",
+    ackLabel: "Zapsal/a jsem si svou obnovovací frázi.",
+    // Multi-step onboarding (create/import -> secret -> confirm -> passphrase).
+    chooseTitle: "Nastavit {label}",
+    enterTitle: "Importujte svou obnovovací frázi",
+    enterBody:
+      "Pište každé slovo — během psaní se automaticky doplňují — nebo vložte celou frázi. Než budete pokračovat, zkontrolujeme ji.",
+    wordCount: "{n} slov",
+    wordAria: "Slovo {n}",
+    checkIncomplete: "Zadejte všech {n} slov.",
+    checkUnknown: "Některá slova nejsou v seznamu slov BIP39 — zkontrolujte zvýrazněná.",
+    checkBadChecksum: "Kontrolní součet nesouhlasí — znovu zkontrolujte svá slova a jejich pořadí.",
+    checkOk: "Obnovovací fráze vypadá platná.",
+    verifyTitle: "Potvrďte svou zálohu",
+    verifyBody: "Napište slova na těchto pozicích, abyste potvrdili, že jste si frázi zapsali.",
+    verifyWord: "Slovo č. {n}",
+    verifyMismatch: "Tato nesouhlasí s vaší frází — zkontrolujte svou zálohu.",
+    passphraseTitle: "Chraňte seed",
+    passphraseBody:
+      "Volitelně zašifrujte uložený seed přístupovou frází. Tento krok můžete přeskočit — viz kompromis níže.",
+  },
+  counterparty: {
+    you: "To jste vy",
+    youShort: "vy",
+    unknown: "neznámá identita",
+    // Short fingerprint fallback (identity.ts shortId) when no pubkey is known.
+    unknownShort: "neznámá",
+  },
+  status: {
+    notConnectedTitle: "Nepřipojeno k enginu",
+    disconnectedBody:
+      "Satchel se nemůže spojit s enginem. Možná se ještě spouští, nebo jsou připojení uzlů aktivního merchanta mimo provoz. Zkuste to znovu, nebo přepněte merchanta v selektoru nahoře.",
+    openInSatchel: "Otevřít toto v Satchelu",
+    noTauriBody:
+      "Toto je uživatelské rozhraní Satchelu — pro spojení s enginem potřebuje most Tauri. Spusťte desktopovou aplikaci (cargo tauri dev), nikoli prohlížeč.",
+  },
+  settings: {
+    title: "Nastavení",
+    subtitle: "Předvolby platné pro celou aplikaci v této instalaci.",
+    // UI-3 Settings tabs.
+    tabGeneral: "Obecné",
+    tabCoins: "Mince",
+    tabNetwork: "Síť",
+    tabAbout: "O aplikaci",
+    appearance: "Vzhled",
+    theme: "Motiv",
+    themeDark: "Tmavý",
+    themeLight: "Světlý",
+    themeSystem: "Systémový",
+    themeHint: "Zvolte, jak Satchel vypadá. Systémový se řídí nastavením vašeho OS.",
+    language: "Jazyk",
+    languageHint: "Další jazyky přibývají s přispěnými překlady.",
+    mode: "Režim",
+    watchOnly: "Režim pouze sledování",
+    watchOnlyHint:
+      "Procházejte nástěnku bez nastavování mincí. Stále můžete stahovat své vlastní nabídky, ale nemůžete vystavovat, přijímat ani financovat. Vypněte pro obchodování (budete potřebovat připojené alespoň dvě mince).",
+    network: "Síť",
+    boards: "Corkboardy",
+    boardsDesc:
+      "Volitelné HTTP nástěnky ve vlastním hostingu. Přidejte ty, kterým důvěřujete; nechte prázdné, pokud se chcete spolehnout na Nostr.",
+    boardsNone: "Žádné nakonfigurované",
+    nostrRelays: "Nostr relaye",
+    nostrRelaysDesc:
+      "Relaye přenášejí nástěnku přes decentralizovanou síť — žádný provozovatel nemůže číst ani párovat vaše nabídky. Předem zapojena výchozí sada; upravujte volně.",
+    nostrRelaysOff: "Vypnuto — transport přes Nostr zakázán",
+    addUrl: "Přidat",
+    removeUrl: "Odebrat",
+    relayInvalid: "Zadejte URL relaye ve tvaru ws:// nebo wss://",
+    boardInvalid: "Zadejte URL nástěnky ve tvaru http:// nebo https://",
+    netSave: "Uložit a znovu připojit",
+    netSaving: "Ukládání a opětovné připojování…",
+    netSaved: "Uloženo",
+    // Fees tab — fee-bump policy (per active merchant).
+    tabFees: "Poplatky",
+    fees: "Navyšování poplatků",
+    feesScope: "Tato nastavení platí pro aktivního merchanta.",
+    feesIntro:
+      "Kompromisy bezpečnost/cena pro navyšování poplatků, ne povinné nastavení. Nové hodnoty platí pro budoucí navýšení; již financované swapy si ponechávají politiku, pod kterou byly financovány.",
+    feeMax: "Max. feerate (sat/vB)",
+    feeMaxHint:
+      "Strop pro každé navýšení poplatku. Výchozí 500, zároveň pevné systémové maximum. Snížením omezíte náklady.",
+    feeReservation: "Rezerva pro navýšení financování (×)",
+    feeReservationHint:
+      "Zůstatek, který kontrola prostředků odloží stranou jako rezervu pro navýšení. Vyšší zachrání větší skoky poplatků, ale váže více zůstatku a odmítne více swapů. Výchozí 3.",
+    feeCommitted: "Předzásobení výplaty (×)",
+    feeCommittedHint:
+      "Kolik navíc se předplatí na poplatek za v2 výplatu, aby se potvrdila, i když je Satchel zavřený. Platí jen pro nové swapy. Výchozí 2.",
+    feeStep: "Krok eskalace RBF (%)",
+    feeStepHint: "Jak agresivně roste poplatek uvázlé útraty při každém průchodu plánovače. Výchozí 50.",
+    feeSave: "Uložit",
+    feeSaving: "Ukládání…",
+    feeSaved: "Uloženo",
+    feeReset: "Obnovit na výchozí",
+    coins: "Mince a uzly",
+    coinsHint: "Připojte každou minci ke svému vlastnímu uzlu. Před uložením čehokoli se kontroluje genesis.",
+    about: "O aplikaci",
+    version: "Verze {version}",
+    updateUpToDate: "Aktuální",
+    updateCheckPlaceholder: "Kontrola aktualizací přijde v pozdějším vydání.",
+    trustModel: "Kde žijí vaše klíče",
+    trustModelBody:
+      "Tajemství žijí v enginu, nikdy v Satchelu. Seed merchanta sídlí v datové složce enginu (šifrovaný, nebo v prostém textu — vaše volba); Satchel neukládá žádný seed ani přístupovou frázi. Seed je z principu horký (jen tranzitní klíče) — přesuňte výrazné výnosy do své vlastní studené peněženky.",
+  },
+  coins: {
+    intro:
+      "Připojte každou minci ke svému vlastnímu uzlu. První URL je vlastní peněženka vašeho uzlu — financuje vaše swapové části a přijímá výnosy. Než se cokoli uloží, Satchel zkontroluje genesis blok uzlu, aby prostředky nikdy nemohly být poslány do nesprávného řetězce. Připojení jsou sdílena mezi všemi vašimi merchanty.",
+    networkBadge: "Konfigurace pro síť {network}",
+    needMerchant:
+      "Nejprve připojte merchanta — nastavení mincí vyžaduje spuštěný engine. Použijte selektor merchanta vpravo nahoře.",
+    pairsTitle: "Obchodní páry",
+    pairsHint:
+      "Páry se odvozují z toho, co každá mince umí — neexistuje pevný seznam. Pár se otevře, jakmile jsou připojeny obě jeho mince.",
+    noPairs: "Žádné páry nejsou k dispozici.",
+    notSetUp: "Nenastaveno",
+    connectedTip: "Připojeno · tip {tip}",
+    connError: "Chyba připojení",
+    setUp: "Nastavit",
+    editConnection: "Upravit připojení",
+    remove: "odebrat",
+    disconnectTip: "Odpojit tuto minci",
+    disconnectTitle: "Odpojit {coin}?",
+    disconnectBody: "Swapy, které ji potřebují, nebudou dostupné, dokud ji znovu nepřipojíte.",
+    ready: "Připraveno k obchodování",
+    connectMissing: "Připojit {coins}",
+    notBuildable: "Zatím nesestavitelné",
+    // Swap-protocol chips on a pair (pact-htlc-v1 HTLC vs pact-htlc-v2 adaptor).
+    protoPrivate: "Soukromé (Taproot)",
+    protoPrivateTip: "Soukromý swap (adaptér Taproot/MuSig2) — na řetězci vypadá jako běžná platba",
+    protoHtlcTip: "Klasický swap HTLC",
+    // Coin-setup backend choices (CoinSetup).
+    backendCoreTitle: "Core RPC peněženka",
+    backendCoreDesc: "Vlastní peněženka vašeho uzlu financuje swap a přijímá výnosy.",
+    backendHardwareTitle: "Hardware",
+    backendHardwareDesc: "Podpis financovací části přes Ledger / PSBT.",
+    backendLater: "později",
+    // CoinSetup dialog.
+    setupTitle: "Připojit {coin}",
+    setupIntro:
+      "Nasměrujte Satchel na svůj vlastní uzel {sym}. Nic se neuloží, dokud uzel neprojde kontrolou genesis bloku — vaše prostředky se vždy dotknou jen skutečného řetězce {sym}.",
+    backendUrlLabel: "URL backendu uzlu",
+    backendUrlHint:
+      "První URL = vlastní peněženka vašeho uzlu (financuje swapy, přijímá výnosy). Za čárkami přidejte servery Electrum (tcp://host:port) pro další, nezávislé pohledy na řetězec.",
+    fundingWallet: "Financovací peněženka",
+    confirmationsLabel: "Potvrzení před finalizací",
+    confirmationsHint:
+      "Jak hluboko musí být financování nebo výplata na tomto řetězci, než na ni swap zareaguje — rezerva pro bezpečnost při reorganizaci. Vyšší je bezpečnější, ale pomalejší; nechte prázdné pro doporučenou výchozí hodnotu ({default}).",
+    validateNode: "Ověřit uzel",
+    checking: "Kontrola uzlu…",
+    genesisOk: "Genesis souhlasí — toto je správný řetězec",
+    genesisDetail: "výška tipu {tip} · genesis {hash}…",
+    genesisBad: "Odmítnuto — neukládá se",
+    errorShort: "chyba",
+    // Structured connection form (CoinSetup v2).
+    rpcHostLabel: "RPC host",
+    rpcPortLabel: "RPC port",
+    authMethodLabel: "Ověřování",
+    authCookie: "Soubor cookie",
+    authCookieDesc: "Automaticky načíst .cookie uzlu z jeho datového adresáře (výchozí, žádné uložené heslo).",
+    authUserPass: "Uživatel / heslo",
+    authUserPassDesc: "rpcuser / rpcpassword z konfigurace vašeho uzlu — potřebné pro vzdálený uzel.",
+    rpcUserLabel: "RPC uživatelské jméno",
+    rpcPasswordLabel: "RPC heslo",
+    datadirLabel: "Datový adresář uzlu",
+    cookiePathNote: "Cookie se čte z {path} pod tímto adresářem.",
+    walletLabel: "Jméno peněženky (volitelné)",
+    walletPlaceholder: "peněženka vašeho uzlu",
+    needPort: "Nejprve zadejte RPC port.",
+    validateFirst: "Před uložením ověřte uzel.",
+    savingReconnecting: "Ukládání a opětovné připojování…",
+    connected: "{coin} připojeno",
+    // Template picker (a coins.toml coin the engine version doesn't support).
+    unsupportedByEngine: "Nepodporováno",
+    unsupportedByEngineTip:
+      "Tato mince je definována v coins.toml, ale není zabudována v této verzi enginu, takže ji nelze obchodovat.",
+  },
+  coinWizard: {
+    title: "Připojte své mince",
+    intro:
+      "Vyberte alespoň dvě mince a každou nasměrujte na svůj vlastní uzel. Swap potřebuje dva řetězce, takže obchodování se odemkne, jakmile jsou připojeny a v provozu dva uzly. Mince můžete přidat nebo změnit později v Nastavení.",
+    progress: "Připojeno {count} z {min} mincí",
+    continue: "Pokračovat",
+    live: "V provozu",
+    nodeDown: "Uzel mimo provoz",
+  },
+  wallets: {
+    intro:
+      "Toto jsou peněženky vašich vlastních uzlů (těch, které engine používá k financování swapů a přijímání výnosů) — vaše klíče, váš počítač. Satchel nikdy nedrží vaše mince.",
+    hotSeedNudge:
+      "Toto je útratová peněženka na horkém seedu, ne trezor — přesuňte výrazné zůstatky do své vlastní studené/core peněženky.",
+    notConnected: "Nepřipojeno",
+    notConnectedBody: "Nejprve připojte merchanta — pohled na peněženku vyžaduje spuštěný engine.",
+    noCoins: "Zatím žádné nastavené mince",
+    noCoinsBody: "Připojte minci v Nastavení → Mince a její peněženka se objeví zde.",
+    goToCoins: "Přejít na Mince",
+    watchOnlyTitle: "V režimu pouze sledování žádné peněženky",
+    watchOnlyBody:
+      "Toto je relace pouze pro sledování bez připojených mincí, takže nejsou žádné peněženky k zobrazení. Vypněte režim pouze sledování v Nastavení a připojte minci pro financování swapů.",
+    walletName: "peněženka · {wallet}",
+    walletScopedHint: "Každé RPC pro tuto minci je vázáno na tuto peněženku uzlu.",
+    walletDefault: "výchozí peněženka (bez vazby)",
+    walletDefaultHint:
+      "Pro tuto minci není nastavena žádná peněženka, takže RPC používají výchozí peněženku uzlu. Nastavte ji v Nastavení → Mince, abyste vázali každé volání na konkrétní peněženku.",
+    balanceLabel: "zůstatek {symbol}",
+    receive: "Přijmout",
+    send: "Odeslat",
+    sendTo: "Odeslat na adresu",
+    amount: "Množství",
+    sendTitle: "Odeslat {amount} {sym}?",
+    sendConfirmBody: "Na {to}\n\nToto utrácí z peněženky vašeho vlastního uzlu a nelze to vrátit zpět.",
+  },
+  corkboard: {
+    noBoardTitle: "Žádný Corkboard připojen",
+    noBoardBody:
+      "Corkboard je sdílená nástěnka, kam makeři připínají nabídky. Nikdy nepáruje obchody ani nedrží mince — nasměrujte Satchel na takovou, které důvěřujete, pro procházení a vystavování.",
+    noPairs: "Žádné páry nejsou k dispozici",
+    board: "Corkboard",
+    boardSettings: "Nakonfigurovat v Nastavení",
+    filterAll: "Vše",
+    filterMine: "Moje",
+    offered: "nabízeno {symbol}",
+    noOffers: "Žádné nabídky, které byste teď mohli přijmout",
+    noOffersBody:
+      "Nabídky se zde objeví, jakmile maker vystaví nějakou pro pár, který máte nastavený. Můžete také vystavit vlastní.",
+    hiddenOffers:
+      "{count} dalších nabídek pro páry, které jste nepřipojili. Nastavte obě mince, abyste je mohli obchodovat:",
+    yourOffer: "vaše nabídka",
+    offerStaged: "vystavuje se…",
+    offerStagedTip:
+      "Vystaveno z tohoto zařízení a čeká na potvrzení zpět z relaye. Inzeruje se; jakmile ho relay zopakuje, stane se aktivním.",
+    take: "Přijmout nabídku",
+    legDown: "Uzel jedné z mincí tohoto páru je mimo provoz — spusťte ho (nebo zkontrolujte Nastavení → Mince) před přijetím.",
+    withdraw: "Stáhnout",
+    withdrawTip: "Stáhněte okamžitě — nabídka nikdy neuzamyká prostředky",
+    safetyRefund: "bezpečnostní vrácení",
+    safetyRefundTip:
+      "Pokud swap uvázne, oběma stranám se prostředky automaticky vrátí — část takera se odemkne první, vaše o něco později. Nikdo neuvázne.",
+    activeTitle: "Vaše aktivní swapy",
+    states: {
+      open: "otevřená",
+      takenByUs: "přijata vámi",
+      revoked: "stažena",
+      expired: "vypršela",
+    },
+    // Two-sided order-book view of the Corkboard. Bids = makers giving the
+    // quote coin to get the base; asks = the reverse. The ladder is a way to
+    // READ the board — it never matches or prioritises (load-bearing).
+    book: {
+      bids: "Poptávky",
+      asks: "Nabídky",
+      bidsHint: "chtějí {base} · platí {quote}",
+      asksHint: "prodávají {base} · za {quote}",
+      price: "Cena",
+      size: "Velikost",
+      noBids: "Žádné poptávky",
+      noAsks: "Žádné nabídky",
+      spread: "Rozpětí {pct}",
+      spreadOneSided: "Jednostranné",
+      crossed: "překřížené",
+      crossedTip: "Nejvyšší poptávka ≥ nejnižší nabídka. Nástěnka nikdy automaticky nepáruje, takže tyto překrývající se nabídky jen leží — přijměte kteroukoli stranu.",
+      mid: "střed {price}",
+      levelOffers: "{count} nabídek za tuto cenu — vyberte jednu k přijetí",
+      depthTip: "Celkem {sym} nabízeno za tuto cenu napříč {count} inzeráty.",
+      takerNote: "Při přijetí dáte {give} a dostanete {get}.",
+      selectLevel: "Vyberte cenovou hladinu výše, abyste viděli tamní nabídky.",
+      paneHeader: "{size} {base} @ {price} {unit}",
+      denomTip: "Zobrazovaná jednotka pro částky {coin}",
+      showMore: "Zobrazit dalších {count}",
+      showLess: "Zobrazit nejvyšších {count}",
+    },
+  },
+  relays: {
+    title: "Relaye",
+    subtitle: "Živá konektivita k vašim Nostr relayím — síti, kterou cestují vaše nabídky a přijetí. Relaye přidávejte nebo odebírejte v Nastavení → Síť.",
+    connectedCount: "{up} / {total} připojeno",
+    refresh: "Obnovit",
+    ms: "{ms} ms",
+    up: "v provozu",
+    down: "mimo provoz",
+    statsTip: "{success}/{attempts} úspěšných připojení · ↓{down} ↑{up}",
+    none: "Žádné nakonfigurované relaye",
+    noneBody: "Přidejte Nostr relay v Nastavení → Síť, abyste mohli publikovat a přijímat nabídky přes síť.",
+    goToNetwork: "Přejít na Nastavení",
+    notConnected: "Nepřipojeno",
+    notConnectedBody: "Pohled na relaye vyžaduje spuštěný engine — nejprve připojte merchanta.",
+  },
+  swaps: {
+    title: "Swapy",
+    hint: "Vaše kompletní účetní kniha — probíhající swapy nahoře, dokončené obchody níže. Na živé swapy můžete také reagovat z Corkboardu.",
+    activeTitle: "Probíhající",
+    historyTitle: "Historie",
+    none: "Zatím žádné swapy — přijměte nabídku na Corkboardu.",
+    // Active-swaps dock action buttons + the refund-time label.
+    cancel: "zrušit",
+    refund: "vrátit",
+    dump: "vypsat logy",
+    dumpHint: "Zkopírovat diagnostický balíček bez tajemství (stav + řádky logu) pro tento swap, k vložení vývojářům.",
+    dumpCopied: "Diagnostika zkopírována — vložte vývojářům.",
+    dumpFailed: "Diagnostický balíček se nepodařilo zkopírovat.",
+    refundAt: "vrácení {when}",
+    // Confirm dialogs for acting on a live swap (ActiveSwaps).
+    cancelTitle: "Zrušit tento swap?",
+    cancelConfirm: "Zrušit swap",
+    cancelKeep: "Ponechat",
+    // Abort reason recorded on the swap when cancelled from Satchel.
+    cancelReason: "zrušeno v Satchelu",
+    cancelBody:
+      "Toto opouští swap dříve, než jste poslali financování. Nic z vašeho ještě není uzamčeno, takže nic neztrácíte — nabídka se jen nedokončí.",
+    refundTitle: "Stáhnout své prostředky zpět?",
+    refundConfirm: "Vrátit",
+    refundBody:
+      "Bezpečnostní timelock uplynul, takže můžete získat zpět prostředky, které jste uzamkli. Toto nyní vysílá vaše vrácení; engine ho také provede automaticky po uplynutí lhůty.",
+    col: {
+      swap: "swap",
+      role: "role",
+      state: "stav",
+      amounts: "dává → dostává",
+      when: "kdy",
+      finalTx: "finální tx",
+    },
+    // Expandable per-leg on-chain detail (the audit trail). We show both
+    // funding txs + OUR settlement; never the counterparty's settlement or the
+    // swap secret.
+    audit: {
+      toggle: "Zobrazit on-chain detail",
+      title: "On-chain detail",
+      youLocked: "uzamkli jste",
+      theyLocked: "uzamkli oni",
+      funding: "Financování",
+      received: "Přijato",
+      refunded: "Vráceno",
+      pending: "zatím není on-chain",
+      copy: "Kopírovat ID transakce",
+      copied: "ID transakce zkopírováno",
+    },
+  },
+  fees: {
+    title: "Náhled síťových nákladů",
+    estimated: "odhadováno",
+    provisionalNote: "Tento build pactd zatím nezpřístupňuje odhad poplatků.",
+    summary: "Swap jsou 2 on-chain transakce, které platíte: financování na řetězci, který dáváte, výplata na řetězci, který dostáváte.",
+    fallbackTip: "Uzel byl nedostupný, takže byla použita konzervativní výchozí sazba poplatku — berte to jako odhad.",
+    ifItStalls: "(pokud uvázne)",
+  },
+  funds: {
+    insufficient:
+      "Nedostatek {sym} na financování tohoto swapu — potřeba ~{need} {sym} (množství + poplatek za financování), peněženka má {have} {sym}.",
+  },
+  wizard: {
+    welcome: "Vítejte v Satchelu",
+    connectTitle: "Připojit engine Pact",
+    connectIntro:
+      "Satchel je tenký klient enginu Pact — jádra, které drží vaše klíče a provádí swapy. Zvolte, jak se k němu připojit.",
+    managed: "Spustit vestavěný engine Pact",
+    managedDesc: "Satchel spustí a dohlíží na svůj vlastní engine Pact. Doporučeno.",
+    external: "Připojit se k externímu enginu Pact",
+    externalDesc: "Nasměrovat na engine Pact, který už provozujete (před spuštěním nastavte SATCHEL_PACTD_URL + cookie).",
+    externalNote:
+      "Externí režim se volí přes proměnné prostředí před spuštěním Satchelu. Pro jeho použití restartujte s nastaveným SATCHEL_PACTD_URL.",
+    coinsTitle: "Přidejte své mince",
+    coinsIntro:
+      "Po vytvoření merchanta připojte každou minci ke svému vlastnímu uzlu v Nastavení → Mince. Vyberte minci a backend (veřejný Electrum bez nutnosti nastavení, nebo váš vlastní uzel); genesis se kontroluje proti této síti, než se cokoli uloží.",
+    coinsTemplatesSoon: "Šablony mincí na jedno kliknutí přibydou zde v pozdějším vydání.",
+    back: "Zpět",
+    continue: "Pokračovat",
+    finish: "Dokončit nastavení",
+  },
+  // UI-4 docked activity log.
+  log: {
+    title: "Aktivita",
+    empty: "— log aktivity —",
+    count: "{count} řádků",
+    collapse: "Sbalit log",
+    expand: "Rozbalit log",
+    // Activity-log lines emitted by the frontend. `{err}` carries a raw engine
+    // message (itself not translated — it comes from pactd over the wire).
+    noTauri: "neběží uvnitř Satchelu — toto UI potřebuje most Tauri",
+    startupError: "spuštění: {err}",
+    notConnected: "nepřipojeno: {err}",
+    connected: "připojeno k pactd {version} ({protocol})",
+    listcoinsError: "listcoins: {err}",
+    watchOnlyError: "pouze sledování: {err}",
+    switchedMerchant: "přepnuto na merchanta {id}",
+    switchMerchantError: "přepnutí merchanta: {err}",
+    loadMerchantError: "načtení merchanta: {err}",
+    merchantCreated: "merchant {id} vytvořen",
+    merchantReady: "merchant připraven",
+    actionOk: "{action} {id}: ok",
+    actionError: "{action} {id}: {err}",
+    diagCopied: "diagnostika pro {id} zkopírována ({count} řádků logu) — vložte vývojářům",
+    dumpError: "výpis {id}: {err}",
+    coinDisconnected: "{coin} odpojeno",
+    removeCoinError: "odebrání mince: {err}",
+    tookOffer: "přijata nabídka {id} — nyní se objevuje ve vašich aktivních swapech níže",
+    takeError: "přijetí: {err}",
+    offerWithdrawn: "nabídka {id} stažena",
+    withdrawError: "stažení: {err}",
+    postedOffer: "vystavena nabídka {id} — kdykoli ji stáhněte; nic není uzamčeno",
+    createdSlip: "vytvořen soukromý nabídkový lístek — pošlete ho svému příteli",
+    tookPrivateOffer: "přijata soukromá nabídka {id} — nyní se objevuje ve vašich aktivních swapech",
+    cancelledPrivateOffer: "zrušena soukromá nabídka {id}",
+    cancelError: "zrušení: {err}",
+    noticeboardUpdated: "nástěnka aktualizována",
+    feePolicyUpdated: "politika poplatků aktualizována",
+  },
+  // Relative-time + freshness prose from format.ts (rendered via the tr() mirror,
+  // since those are pure non-component helpers). Unit letters stay inside the
+  // template so a translation owns the whole phrase.
+  format: {
+    ageUnknown: "stáří neznámé",
+    justNow: "právě teď",
+    minutesAgo: "před {n} min",
+    hoursAgo: "před {n} h",
+    daysAgo: "před {n} dny",
+    expiryNow: "teď",
+    expirySoon: "brzy",
+    inMinutes: "za ~{n} min",
+    inHours: "za ~{n} h",
+    inDays: "za ~{n} dní",
+    posted: "vystaveno {age}",
+    expires: "vyprší {time}",
+  },
+  // Plain-language swap story per (role, state) — the honest "who is exposed
+  // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
+  // are local refund times. Rendered via tr() (narrate() is a pure helper).
+  narrate: {
+    initiating:
+      "Přijetí odesláno — čeká se, až maker zahájí swap. Zatím není nic uzamčeno; pokud neodpoví, swap se sám zruší.",
+    created: "Nabídka odeslána — čeká se, až druhá strana souhlasí. Nic není závazné.",
+    acceptedMaker: "Podmínky odsouhlaseny. Dále: uzamkněte své {a}. Dokud nepošlete financování, můžete stále volně zrušit.",
+    acceptedTaker: "Podmínky odsouhlaseny. Druhá strana uzamkne své {a} jako první — vy nikdy neposíláte první.",
+    noncesExchanged:
+      "Nastavování soukromého swapu — výměna podpisového materiálu. Zatím není nic uzamčeno.",
+    signedMaker:
+      "Obě strany podepsaly. Váš daemon uzamkne {a} a poté automaticky nárokuje {b}. Pokud cokoli uvázne, vaše {a} se vrátí v {t1}.",
+    signedTaker:
+      "Obě strany podepsaly. Váš daemon uzamkne {b} a nárokuje {a} ve chvíli, kdy se druhá strana pohne. Záchranná síť: vrácení v {t2}.",
+    fundedAMaker:
+      "Vaše {a} jsou uzamčena. Čeká se, až druhá strana uzamkne svá {b}. Pokud to nikdy neudělají, vaše {a} se automaticky vrátí v {t1}.",
+    fundedATaker:
+      "Jejich {a} jsou uzamčena a ověřena. Dále: uzamkněte své {b}. Záchranná síť: automatické vrácení v {t2}, pokud cokoli uvázne.",
+    fundedBMaker: "Obojí uzamčeno. Váš daemon nárokuje {b}, jakmile to bude bezpečně potvrzeno.",
+    fundedBTaker: "Obojí uzamčeno. Váš daemon nárokuje {a} ve chvíli, kdy druhá strana převezme svá {b}.",
+    redeemedB:
+      "Nárokovali jste {b} — čeká se na potvrzení. Vaše uzamčená {a} zůstávají chráněna, dokud nebude toto finální.",
+    completed: "Swap dokončen — {coin} je ve vaší peněžence.",
+    refunded: "Swap se nedokončil, takže se vaše {coin} automaticky vrátila. Nic ztraceno kromě poplatků.",
+    aborted: "Zrušeno dříve, než se pohnuly jakékoli peníze.",
+  },
+  exit: {
+    // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
+    // running" detaches it (it keeps watching timelocks + servicing offers).
+    liveTitle: "Probíhá swap",
+    liveBodyOne:
+      "Probíhá 1 swap. Řídí se on-chain timelocky — engine musí dál běžet, aby stihl výplatu nebo vrácení před uplynutím lhůty.",
+    liveBodyMany:
+      "Probíhá {count} swapů. Řídí se on-chain timelocky — engine musí dál běžet, aby stihl výplatu nebo vrácení před uplynutím lhůty.",
+    keepRunningExplain:
+      "Zavřením okna zůstane engine spuštěný na pozadí, takže swap dokončí bez rozhraní. Satchel můžete kdykoli znovu otevřít a zkontrolovat ho.",
+    forceQuitWarn: "Vynucené ukončení nyní zastaví engine a může vést ke ztrátě prostředků.",
+    // {word} is the confirm word below; a translation may localize both together.
+    typeToConfirm: "Pro přesto vynucené ukončení napište níže {word}.",
+    confirmWord: "QUIT",
+    keepRunning: "Nechat běžet, zavřít okno",
+    keepWithdraw: "Nechat běžet + stáhnout nabídky",
+    keepLeaveOffers: "Nechat běžet, ponechat nabídky",
+    forceQuit: "Vynutit ukončení",
+    offersTitle: "Máte vystavené nabídky",
+    offersBodyOne:
+      "1 vaše nabídka je stále na Corkboardu. Nabídky nic neuzamykají, ale jejím ponecháním ji protistrany mohou stále přijmout, i když je Satchel zavřený — engine přijetí obslouží.",
+    offersBodyMany:
+      "{count} vašich nabídek je stále na Corkboardu. Nabídky nic neuzamykají, ale jejich ponecháním je protistrany mohou stále přijmout, i když je Satchel zavřený — engine přijetí obslouží.",
+    withdrawExit: "Stáhnout vše a ukončit",
+  },
+  unlock: {
+    title: "Odemknout merchanta",
+    body:
+      "Seed tohoto merchanta je šifrovaný. Zadejte jeho přístupovou frázi, abyste ho pro tuto relaci odemkli — Satchel ji drží pouze v paměti a při ukončení ji zapomene.",
+    switchMerchant: "Přepnout merchanta",
+    unlock: "Odemknout",
+  },
+  common: {
+    cancel: "Zrušit",
+    confirm: "Potvrdit",
+    save: "Uložit",
+    done: "Hotovo",
+    later: "Později",
+    retry: "Zkusit připojení znovu",
+  },
+};

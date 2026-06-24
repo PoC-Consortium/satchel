@@ -10,6 +10,7 @@ import { ConfirmProvider } from "./ui/ConfirmProvider";
 import { DialogsCtx, type DialogOpeners } from "./ui/dialogs";
 import { NavCtx } from "./ui/nav";
 import Header from "./components/Header";
+import LanguageMenu from "./components/LanguageMenu";
 import Sidebar, { type Route } from "./components/Sidebar";
 import ActiveSwaps from "./components/ActiveSwaps";
 import LogPanel from "./components/LogPanel";
@@ -63,6 +64,17 @@ export default function App() {
   const showSeedGate = app.phase === "seed" && modal === null;
   const showUnlockGate = app.phase === "unlock" && modal === null;
   const showCoinGate = app.phase === "coins" && modal === null;
+
+  // The header (and its language picker) sits behind these onboarding dialogs'
+  // backdrops, so it can't be reached until setup finishes. Float a language
+  // switcher above the backdrop during every pre-ready gate — phoenix lets you
+  // set your language before onboarding; this gives the same freedom rather
+  // than forcing a user through setup in a language they may not read.
+  const onboardingGate =
+    app.phase === "wizard" ||
+    app.phase === "seed" ||
+    app.phase === "unlock" ||
+    app.phase === "coins";
 
   function screen() {
     if (app.phase === "no-tauri") return <NoTauri />;
@@ -153,6 +165,21 @@ export default function App() {
                 closeModal();
               }}
             />
+          )}
+
+          {/* First-run language escape hatch: lifted above the dialog backdrop
+              (MUI modal = 1300) so it stays clickable while a gate is open. */}
+          {onboardingGate && (
+            <Box
+              sx={{
+                position: "fixed",
+                top: 8,
+                right: 12,
+                zIndex: (th) => th.zIndex.modal + 100,
+              }}
+            >
+              <LanguageMenu menuZIndex={1500} />
+            </Box>
           )}
 
           <ExitGate />

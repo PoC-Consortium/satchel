@@ -1,0 +1,716 @@
+// The Galician (Galego) string bundle. Mirrors en.ts key-for-key; only values are translated.
+import type { Bundle } from "./en";
+
+export const gl: Bundle = {
+  app: {
+    name: "Satchel",
+    tagline: "intercambios sen confianza",
+  },
+  // In-app update notifications (sidebar version badge + dialog).
+  update: {
+    title: "Actualización dispoñible",
+    upToDate: "Estás ao día",
+    current: "Instalada",
+    latest: "Última",
+    notesTitle: "Notas da versión",
+    get: "Obter a actualización",
+    dismiss: "Descartar",
+    close: "Pechar",
+    badgeTooltip: "Actualización dispoñible — fai clic para os detalles",
+    versionTooltip: "Fai clic para buscar actualizacións",
+  },
+  // Risk disclaimer (first-run welcome + Settings → About).
+  disclaimer: {
+    title: "Autocustodia — as túas claves, a túa responsabilidade",
+    body: "Satchel realiza intercambios atómicos non custodiados: só ti tes as túas claves, e a semente dun comerciante garda claves de tránsito en quente mentres un intercambio está en curso. Os protocolos de intercambio (v1 HTLC e v2 Taproot/MuSig2) están revisados e activos en mainnet. Con licenza MIT e fornecido tal cal, sen garantía — fai unha copia de seguranza da túa frase de recuperación e úsao baixo a túa propia responsabilidade.",
+  },
+  nav: {
+    public: "Público",
+    corkboard: "Corkboard",
+    postOffer: "Publicar unha oferta",
+    private: "Privado",
+    privateCreate: "Crear vale",
+    privateReceive: "Tomar un vale",
+    privateSlips: "Os meus vales",
+    swaps: "Intercambios",
+    relays: "Relés",
+    wallets: "Carteiras",
+    settings: "Axustes",
+    coins: "Moedas",
+  },
+  makeOffer: {
+    title: "Publicar unha oferta",
+    intro:
+      "Publica unha oferta asinada no Corkboard. Non se bloquea nada — é só un anuncio; retírao cando queiras, e un intercambio só comeza cando alguén o toma e ambas as partes financian.",
+    give: "Ti dás",
+    want: "Ti recibes",
+    // Canonical pair + direction: pick the pair, choose Sell/Buy the base, enter
+    // the base amount and a quote-per-base price (invariant to direction).
+    pair: "Par",
+    noPairs: "Non hai pares negociables — conecta polo menos dúas moedas en Axustes → Moedas.",
+    sell: "Vender {sym}",
+    buy: "Comprar {sym}",
+    amount: "Cantidade",
+    youGive: "Ti dás",
+    youGet: "Ti recibes",
+    price: "Prezo",
+    priceUnit: "{unit} por {base}",
+    pricePlaceholder: "prezo unitario",
+    balance: "Saldo: {amt} {sym}",
+    balanceLoading: "Saldo: …",
+    noCoins: "Non hai moedas configuradas",
+    sameCoin: "O que dás e o que recibes deben ser moedas distintas.",
+    legDown: "Un dos nodos destas moedas está caído — inícialo (ou revisa Axustes → Moedas) antes de publicar.",
+    // Swap-protocol pin (only offered when a pair+network supports more than
+    // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
+    protocol: "Tipo de intercambio",
+    protoStandard: "Estándar (HTLC)",
+    // Titles for the review/confirm dialog shown before posting (see OfferForm).
+    reviewOfferTitle: "Revisa a túa oferta",
+    reviewSlipTitle: "Revisa o teu vale",
+    term: "Bloqueo temporal de seguranza",
+    termShort: "Curto",
+    termMedium: "Medio",
+    termLong: "Longo",
+    termHint: {
+      short: "Curto — os fondos reembólsanse automaticamente máis rápido se a operación se atasca (~12 h / 6 h), coa marxe de seguranza máis pequena.",
+      medium: "Medio — xanela de reembolso equilibrada (~24 h / 12 h).",
+      long: "Longo (o máis seguro) — a marxe de seguranza máis ampla; reembolso automático tras ~36 h / 18 h se a operación se atasca.",
+    },
+    validFor: "Válido durante (minutos)",
+    validForMins: "{mins} min",
+    validForHint:
+      "Canto tempo permanece listada a oferta. Mentres estás en liña mantense actualizada automaticamente; despois disto caduca. Pechar a aplicación retírao.",
+    note: "Oferta de tamaño fixo — non se bloquea nada ata que alguén a tome. As cantidades son en cadea; pagas as comisións de rede á parte e o Corkboard non cobra nada. O bloqueo temporal é a xanela de reembolso automático se un intercambio se atasca.",
+    post: "Publicar oferta",
+    makeSlip: "Crear vale",
+    slipTitle: "O teu vale de oferta privada",
+    slipExplainer:
+      "Envíallo ao teu amigo. Pégano en Satchel para tomalo. Non se bloquea nada; caduca en {ttl}.",
+    copy: "Copiar",
+    copied: "Copiado",
+    makeAnother: "Crear outro",
+    myPrivateTitle: "As miñas ofertas privadas",
+    myPrivateEmpty: "Non hai ofertas privadas pendentes.",
+    privateExpires: "caduca {when}",
+    privateExpired: "caducada",
+    cancel: "Cancelar",
+    cancelTip: "Deixa de honrar este vale — un amigo que aínda o teña xa non poderá tomalo.",
+  },
+  takeSlip: {
+    open: "Pegar un vale",
+    title: "Tomar unha oferta privada",
+    intro:
+      "Un amigo enviouche un vale de oferta privada (comeza por pactoffer1:). Pégao aquí para revisalo e tomalo — exactamente coma unha oferta do taboleiro.",
+    placeholder: "pactoffer1:…",
+    take: "Revisar e tomar",
+    invalid: "Iso non parece un vale — debería comezar por pactoffer1:.",
+    previewLabel: "Este vale ofrece",
+  },
+  // PRIVATE nav group (off-market slips) — screen titles + intros. The form,
+  // slip output, my-slips list and take flow reuse makeOffer.*/takeSlip.* copy.
+  private: {
+    createTitle: "Crear unha oferta privada",
+    createIntro:
+      "Constrúe unha oferta asinada e dásella a un amigo coma un vale pola túa propia conversa. Non se lista en ningures — e non se bloquea nada ata que ambos financiades.",
+    slipsIntro:
+      "Vales que creaches. Calquera que teña un vale pode tomalo ata que caduque; cancela un para deixar de honralo antes diso.",
+    slipsEmptyBody: "Crea unha oferta privada para obter un vale que poidas enviar a un amigo.",
+    receiveTitle: "Tomar unha oferta privada",
+    received: "Tomada — séguea en Intercambios.",
+  },
+  // Shared take-confirmation dialog (board take + slip take).
+  takeConfirm: {
+    title: "Tomar esta oferta?",
+    confirm: "Tomar oferta",
+    counterparty: "Contraparte",
+    youGive: "Ti dás",
+    youReceive: "Ti recibes",
+    safetyRefund: "Reembolso de seguranza",
+    offerAge: "Antigüidade da oferta",
+    makerFundsFirst:
+      "O maker bloquea os seus {sym} primeiro — ti nunca envías primeiro. Aínda podes cancelar antes de financiar a túa parte, e o motor reembolsa automaticamente tras o bloqueo temporal de seguranza se o intercambio se atasca.",
+  },
+  header: {
+    activeMerchant: "Comerciante activo — fai clic para cambiar ou xestionar",
+    manageMerchants: "Xestionar comerciantes…",
+    noMerchant: "sen comerciante",
+    openMenu: "Abrir menú",
+    collapseMenu: "contraer menú",
+    settings: "Axustes",
+    language: "Idioma",
+    pactConnected: "Motor conectado",
+    pactUnreachable: "Motor inalcanzable",
+    liveSwapsOne: "1 intercambio en curso — fai clic para ver",
+    liveSwapsMany: "{count} intercambios en curso — fai clic para ver",
+    liveSwapsNone: "Non hai intercambios en curso",
+    coinOk: "{name} — conectada · tip {tip}",
+    coinUnconfigured: "{name} — sen configurar",
+    coinError: "{name} — {status}",
+    relaysOk: "Relés Nostr — {up}/{total} conectados",
+    relaysDown: "Relés Nostr — ningún de {total} conectado",
+  },
+  network: {
+    mainnet: "MainNet",
+    testnet: "TestNet",
+    regtest: "RegTest",
+    signet: "Signet",
+    notRealFunds: "Non son fondos reais — esta é a rede {network}",
+  },
+  // Watch-only mode: a viewer session with no coins. Browse the board and
+  // withdraw your own offers, but no posting / taking / funding.
+  watchOnly: {
+    badge: "Só visualización",
+    badgeTip:
+      "Modo só visualización — navega polo taboleiro e retira as túas propias ofertas, pero non podes publicar, tomar nin financiar. Configura moedas en Axustes para negociar.",
+    coinWizardButton: "Navegar en modo só visualización",
+    coinWizardHint:
+      "Omite a configuración de moedas e só navega polo taboleiro (só lectura). Aínda podes retirar as túas propias ofertas — útil para retirar ofertas deixadas por outra sesión. Desactívao cando queiras en Axustes.",
+    postBlockedTitle: "Modo só visualización",
+    postBlockedBody:
+      "Esta é unha sesión só de visualización, polo que non pode publicar ofertas. Configura polo menos dúas moedas en Axustes → Moedas para negociar.",
+    takeBlockedBody: "Modo só visualización — podes revisar esta oferta, pero tomala precisa ter moedas configuradas.",
+    takeBlockedTip: "Modo só visualización — configura moedas en Axustes para tomar ofertas.",
+  },
+  merchants: {
+    title: "Os teus comerciantes",
+    intro:
+      "Un comerciante é unha identidade de negociación — coa súa propia semente e historial de intercambios. Negociar baixo un comerciante distinto mantén os contextos sen vinculación (unha identidade de usar e tirar). As túas moedas principais viven na túa propia carteira, non aquí.",
+    // First-run welcome (empty merchant manager).
+    welcomeTitle: "Benvido/a a Satchel",
+    welcomeIntro:
+      "Satchel negocia baixo un «comerciante» — unha identidade de negociación coa súa propia semente. Aínda non tes ningún: crea un novo, ou importa unha frase de recuperación existente para comezar.",
+    importMerchant: "Importar un comerciante",
+    none: "Aínda non hai comerciantes.",
+    active: "activo",
+    switch: "cambiar",
+    newMerchant: "Novo comerciante",
+    thisMerchant: "este comerciante",
+    nameLabel: "Nome do comerciante",
+    namePlaceholder: "p. ex. Principal",
+    introFirst:
+      "Configura a túa primeira identidade de negociación (un «comerciante»). Só garda claves de tránsito en quente para intercambios en curso — as túas moedas principais quedan na túa propia carteira.",
+    introNew: "Un novo comerciante é unha identidade nova e separada, coa súa propia semente e historial de intercambios.",
+    // UI-5 merchant selector (phoenix wallet-selector parity).
+    createNew: "Crear novo",
+    import: "Importar",
+    load: "Cargar comerciante",
+    loaded: "cargado",
+    locked: "bloqueado",
+    lockedTip: "Semente cifrada — desbloquéaa coa túa frase de paso ao cargala.",
+    close: "Pechar",
+    idLabel: "cartafol",
+    switching: "Cambiando de comerciante…",
+    switchingBody: "Reiniciando o motor contra ese cartafol.",
+  },
+  // Seed create/import (SeedForm) + counterparty + status.
+  seed: {
+    intro: "Crea unha semente totalmente nova, ou importa unha que xa teñas.",
+    createNew: "Crear nova",
+    createDesc: "Xera unha semente nova. Ti fas a copia de seguranza da frase de recuperación.",
+    import: "Importar",
+    importDesc: "Restaura desde unha frase existente de 12/24 palabras.",
+    recoveryLabel: "Frase de recuperación",
+    importPlaceholder: "palabra1 palabra2 palabra3 …",
+    encrypt: "Cifrar",
+    encryptDesc:
+      "Unha frase de paso protexe a semente en repouso. Introdúcela unha vez por sesión — Satchel nunca a garda. Nota: o reembolso automático sen supervisión páusase tras un reinicio ata que a volvas introducir.",
+    noPassphrase: "Sen frase de paso (recomendado)",
+    noPassphraseDesc:
+      "O reembolso automático segue funcionando a través de reinicios sen nada que introducir — isto é só unha semente de tránsito en quente. Custo: o acceso ao ficheiro/host expón as claves de tránsito e a identidade deste comerciante.",
+    passphraseLabel: "Frase de paso",
+    passphrasePlaceholder: "escolle unha frase de paso",
+    createTitle: "Crear semente",
+    importTitle: "Importar semente",
+    secureTitle: "Asegurar {label}",
+    revealTitle: "Anota a túa frase de recuperación",
+    revealBody:
+      "Calquera con estas palabras controla as claves en quente deste comerciante. Satchel non garda ningunha copia — gárdaa sen conexión. A continuación confirmarás algunhas palabras.",
+    ackLabel: "Anotei a miña frase de recuperación.",
+    // Multi-step onboarding (create/import -> secret -> confirm -> passphrase).
+    chooseTitle: "Configurar {label}",
+    enterTitle: "Importa a túa frase de recuperación",
+    enterBody:
+      "Escribe cada palabra — autocompletanse a medida que avanzas — ou pega a frase enteira. Compróbase antes de continuar.",
+    wordCount: "{n} palabras",
+    wordAria: "Palabra {n}",
+    checkIncomplete: "Introduce as {n} palabras.",
+    checkUnknown: "Algunhas palabras non están na lista de palabras BIP39 — revisa as resaltadas.",
+    checkBadChecksum: "A suma de verificación non coincide — revisa as palabras e a súa orde.",
+    checkOk: "A frase de recuperación parece válida.",
+    verifyTitle: "Confirma a túa copia de seguranza",
+    verifyBody: "Escribe as palabras nestas posicións para confirmar que anotaches a frase.",
+    verifyWord: "Palabra n.º {n}",
+    verifyMismatch: "Esas non coinciden coa túa frase — revisa a túa copia de seguranza.",
+    passphraseTitle: "Protexe a semente",
+    passphraseBody:
+      "Opcionalmente cifra a semente gardada cunha frase de paso. Podes omitir isto — consulta a contrapartida embaixo.",
+  },
+  counterparty: {
+    you: "Este es ti",
+    youShort: "ti",
+    unknown: "identidade descoñecida",
+    // Short fingerprint fallback (identity.ts shortId) when no pubkey is known.
+    unknownShort: "descoñecida",
+  },
+  status: {
+    notConnectedTitle: "Sen conexión ao motor",
+    disconnectedBody:
+      "Satchel non pode alcanzar o motor. Quizais aínda estea iniciándose, ou as conexións de nodo do comerciante activo poden estar caídas. Reintenta, ou cambia de comerciante desde o selector de arriba.",
+    openInSatchel: "Abrir isto en Satchel",
+    noTauriBody:
+      "Esta é a interface de Satchel — precisa a ponte Tauri para alcanzar o motor. Inicia a aplicación de escritorio (cargo tauri dev) en lugar dun navegador.",
+  },
+  settings: {
+    title: "Axustes",
+    subtitle: "Preferencias globais da aplicación para esta instalación.",
+    // UI-3 Settings tabs.
+    tabGeneral: "Xeral",
+    tabCoins: "Moedas",
+    tabNetwork: "Rede",
+    tabAbout: "Acerca de",
+    appearance: "Aparencia",
+    theme: "Tema",
+    themeDark: "Escuro",
+    themeLight: "Claro",
+    themeSystem: "Sistema",
+    themeHint: "Escolle como se ve Satchel. Sistema segue a configuración do teu SO.",
+    language: "Idioma",
+    languageHint: "Engádense máis idiomas a medida que se contribúen traducións.",
+    mode: "Modo",
+    watchOnly: "Modo só visualización",
+    watchOnlyHint:
+      "Navega polo taboleiro sen configurar moedas. Aínda podes retirar as túas propias ofertas, pero non podes publicar, tomar nin financiar. Desactívao para negociar (precisarás polo menos dúas moedas conectadas).",
+    network: "Rede",
+    boards: "Corkboards",
+    boardsDesc:
+      "Taboleiros HTTP autoaloxados opcionais. Engade os que confíes; déixao baleiro para depender de Nostr.",
+    boardsNone: "Ningún configurado",
+    nostrRelays: "Relés Nostr",
+    nostrRelaysDesc:
+      "Os relés transportan o taboleiro de anuncios sobre unha rede descentralizada — ningún operador pode ler nin emparellar as túas ofertas. Vén precableado cun conxunto predeterminado; edítao libremente.",
+    nostrRelaysOff: "Desactivado — transporte Nostr deshabilitado",
+    addUrl: "Engadir",
+    removeUrl: "Eliminar",
+    relayInvalid: "Introduce un URL de relé ws:// ou wss://",
+    boardInvalid: "Introduce un URL de taboleiro http:// ou https://",
+    netSave: "Gardar e reconectar",
+    netSaving: "Gardando e reconectando…",
+    netSaved: "Gardado",
+    // Fees tab — fee-bump policy (per active merchant).
+    tabFees: "Comisións",
+    fees: "Aumento de comisión",
+    feesScope: "Estes axustes aplícanse ao comerciante activo.",
+    feesIntro:
+      "Compensacións de seguranza/custo para aumentos de comisión, non é configuración obrigatoria. Os novos valores aplícanse a futuros aumentos; os intercambios xa financiados conservan a política coa que se financiaron.",
+    feeMax: "Taxa máxima (sat/vB)",
+    feeMaxHint:
+      "Tope para cada aumento de comisión. Predeterminado 500, tamén o máximo absoluto do sistema. Báixao para limitar custos.",
+    feeReservation: "Reserva para aumento de financiamento (×)",
+    feeReservationHint:
+      "Saldo que a comprobación de fondos aparta como marxe para aumentos. Maior rescata picos de comisión máis grandes pero inmobiliza máis saldo e rexeita máis intercambios. Predeterminado 3.",
+    feeCommitted: "Sobreaprovisionamento de redención (×)",
+    feeCommittedHint:
+      "Canto extra se prepaga a comisión de redención v2 para que confirme mesmo cando Satchel está pechado. Aplícase só a novos intercambios. Predeterminado 2.",
+    feeStep: "Paso de escalada RBF (%)",
+    feeStepHint: "Con que agresividade sobe a comisión dun gasto atascado en cada pasada do planificador. Predeterminado 50.",
+    feeSave: "Gardar",
+    feeSaving: "Gardando…",
+    feeSaved: "Gardado",
+    feeReset: "Restablecer aos valores predeterminados",
+    coins: "Moedas e nodos",
+    coinsHint: "Conecta cada moeda ao teu propio nodo. Compróbase o xénese antes de gardar nada.",
+    about: "Acerca de",
+    version: "Versión {version}",
+    updateUpToDate: "Ao día",
+    updateCheckPlaceholder: "A comprobación de actualizacións chegará nunha versión posterior.",
+    trustModel: "Onde viven as túas claves",
+    trustModelBody:
+      "Os segredos viven no motor, nunca en Satchel. A semente do comerciante reside no cartafol de datos do motor (cifrada ou en texto plano — ti escolles); Satchel non garda ningunha semente nin frase de paso. A semente é en quente por deseño (só claves de tránsito) — barre os beneficios cuantiosos á túa propia carteira fría.",
+  },
+  coins: {
+    intro:
+      "Conecta cada moeda ao teu propio nodo. O primeiro URL é a carteira do teu propio nodo — financia as patas dos teus intercambios e recibe os beneficios. Antes de gardar nada, Satchel comproba o bloque xénese do nodo para que os fondos nunca poidan enviarse á cadea equivocada. As conexións compártense entre todos os teus comerciantes.",
+    networkBadge: "Configurando para a rede {network}",
+    needMerchant:
+      "Conecta primeiro un comerciante — a configuración de moedas precisa o motor en execución. Usa o selector de comerciante na parte superior dereita.",
+    pairsTitle: "Pares de negociación",
+    pairsHint:
+      "Os pares derívanse do que cada moeda pode facer — non hai unha lista fixa. Un par ábrese unha vez que ambas as súas moedas están conectadas.",
+    noPairs: "Non hai pares dispoñibles.",
+    notSetUp: "Sen configurar",
+    connectedTip: "Conectada · tip {tip}",
+    connError: "Erro de conexión",
+    setUp: "Configurar",
+    editConnection: "Editar conexión",
+    remove: "eliminar",
+    disconnectTip: "Desconectar esta moeda",
+    disconnectTitle: "Desconectar {coin}?",
+    disconnectBody: "Os intercambios que a necesiten non estarán dispoñibles ata que a reconectes.",
+    ready: "Listo para negociar",
+    connectMissing: "Conectar {coins}",
+    notBuildable: "Aínda non construíble",
+    // Swap-protocol chips on a pair (pact-htlc-v1 HTLC vs pact-htlc-v2 adaptor).
+    protoPrivate: "Privado (Taproot)",
+    protoPrivateTip: "Intercambio privado (adaptador Taproot/MuSig2) — parece un pagamento corrente en cadea",
+    protoHtlcTip: "Intercambio HTLC clásico",
+    // Coin-setup backend choices (CoinSetup).
+    backendCoreTitle: "Carteira Core RPC",
+    backendCoreDesc: "A carteira do teu propio nodo financia o intercambio e recibe os beneficios.",
+    backendHardwareTitle: "Hardware",
+    backendHardwareDesc: "Sinatura Ledger / PSBT para a pata de financiamento.",
+    backendLater: "máis tarde",
+    // CoinSetup dialog.
+    setupTitle: "Conectar {coin}",
+    setupIntro:
+      "Apunta Satchel ao teu propio nodo {sym}. Non se garda nada ata que o nodo pase a comprobación do bloque xénese — os teus fondos só tocan sempre a cadea real de {sym}.",
+    backendUrlLabel: "URL(s) do backend do nodo",
+    backendUrlHint:
+      "Primeiro URL = a carteira do teu propio nodo (financia intercambios, recibe beneficios). Engade servidores Electrum (tcp://host:porto) despois de comas para vistas da cadea adicionais e independentes.",
+    fundingWallet: "Carteira de financiamento",
+    confirmationsLabel: "Confirmacións antes de finalizar",
+    confirmationsHint:
+      "Cantas confirmacións debe ter un financiamento ou unha redención nesta cadea antes de que un intercambio actúe sobre el — a marxe de seguranza fronte a reorganizacións. Maior é máis seguro pero máis lento; déixao en branco para o predeterminado recomendado ({default}).",
+    validateNode: "Validar nodo",
+    checking: "Comprobando o nodo…",
+    genesisOk: "Xénese coincidente — esta é a cadea correcta",
+    genesisDetail: "altura tip {tip} · xénese {hash}…",
+    genesisBad: "Rexeitado — non se garda",
+    errorShort: "erro",
+    // Structured connection form (CoinSetup v2).
+    rpcHostLabel: "Host RPC",
+    rpcPortLabel: "Porto RPC",
+    authMethodLabel: "Autenticación",
+    authCookie: "Ficheiro cookie",
+    authCookieDesc: "Lese automaticamente o .cookie do nodo desde o seu directorio de datos (o predeterminado, sen gardar contrasinal).",
+    authUserPass: "Usuario / contrasinal",
+    authUserPassDesc: "O rpcuser / rpcpassword da configuración do teu nodo — necesario para un nodo remoto.",
+    rpcUserLabel: "Nome de usuario RPC",
+    rpcPasswordLabel: "Contrasinal RPC",
+    datadirLabel: "Directorio de datos do nodo",
+    cookiePathNote: "A cookie lese desde {path} baixo este directorio.",
+    walletLabel: "Nome da carteira (opcional)",
+    walletPlaceholder: "a carteira do teu nodo",
+    needPort: "Introduce primeiro o porto RPC.",
+    validateFirst: "Valida o nodo antes de gardar.",
+    savingReconnecting: "Gardando e reconectando…",
+    connected: "{coin} conectada",
+    // Template picker (a coins.toml coin the engine version doesn't support).
+    unsupportedByEngine: "Non admitida",
+    unsupportedByEngineTip:
+      "Esta moeda está definida en coins.toml pero non está incorporada nesta versión do motor, polo que non se pode negociar.",
+  },
+  coinWizard: {
+    title: "Conecta as túas moedas",
+    intro:
+      "Escolle polo menos dúas moedas e apunta cada unha ao teu propio nodo. Un intercambio precisa dúas cadeas, así que a negociación desbloquéase unha vez que dous nodos estean conectados e activos. Podes engadir ou cambiar moedas máis tarde en Axustes.",
+    progress: "{count} de {min} moedas conectadas",
+    continue: "Continuar",
+    live: "Activa",
+    nodeDown: "Nodo caído",
+  },
+  wallets: {
+    intro:
+      "Estas son as carteiras dos teus propios nodos (as que o motor usa para financiar intercambios e recibir beneficios) — as túas claves, a túa máquina. Satchel nunca garda as túas moedas.",
+    hotSeedNudge:
+      "Esta é unha carteira de gasto sobre unha semente en quente, non unha caixa forte — barre os saldos cuantiosos á túa propia carteira fría/core.",
+    notConnected: "Sen conexión",
+    notConnectedBody: "Conecta primeiro un comerciante — a vista da carteira precisa o motor en execución.",
+    noCoins: "Aínda non hai moedas configuradas",
+    noCoinsBody: "Conecta unha moeda en Axustes → Moedas e a súa carteira aparecerá aquí.",
+    goToCoins: "Ir a Moedas",
+    watchOnlyTitle: "Non hai carteiras no modo só visualización",
+    watchOnlyBody:
+      "Esta é unha sesión só de visualización sen moedas conectadas, polo que non hai carteiras que mostrar. Desactiva o modo só visualización en Axustes e conecta unha moeda para financiar intercambios.",
+    walletName: "carteira · {wallet}",
+    walletScopedHint: "Toda RPC para esta moeda está acoutada a esta carteira do nodo.",
+    walletDefault: "carteira predeterminada (sen acoutar)",
+    walletDefaultHint:
+      "Non hai carteira definida para esta moeda, polo que as RPC usan a carteira predeterminada do nodo. Define unha en Axustes → Moedas para acoutar cada chamada a unha carteira concreta.",
+    balanceLabel: "saldo de {symbol}",
+    receive: "Recibir",
+    send: "Enviar",
+    sendTo: "Enviar ao enderezo",
+    amount: "Cantidade",
+    sendTitle: "Enviar {amount} {sym}?",
+    sendConfirmBody: "A {to}\n\nIsto gástase da carteira do teu propio nodo e non se pode desfacer.",
+  },
+  corkboard: {
+    noBoardTitle: "Non hai ningún Corkboard conectado",
+    noBoardBody:
+      "Un Corkboard é un taboleiro de anuncios compartido onde os makers fixan ofertas. Nunca empareolla operacións nin garda moedas — apunta Satchel a un no que confíes para navegar e publicar.",
+    noPairs: "Non hai pares dispoñibles",
+    board: "Corkboard",
+    boardSettings: "Configurar en Axustes",
+    filterAll: "Todas",
+    filterMine: "Miñas",
+    offered: "{symbol} ofrecido",
+    noOffers: "Non hai ofertas que poidas tomar agora mesmo",
+    noOffersBody:
+      "As ofertas aparecen aquí en canto un maker publica unha para un par que configuraches. Tamén podes publicar a túa propia.",
+    hiddenOffers:
+      "{count} oferta(s) máis para pares que non conectaches. Configura ambas as moedas para negocialas:",
+    yourOffer: "a túa oferta",
+    offerStaged: "publicando…",
+    offerStagedTip:
+      "Publicada desde este dispositivo e agardando a confirmación de volta dun relé. Está anunciándose; ponse activa unha vez que un relé a refacte.",
+    take: "Tomar oferta",
+    legDown: "Un dos nodos deste par está caído — inícialo (ou revisa Axustes → Moedas) antes de tomar.",
+    withdraw: "Retirar",
+    withdrawTip: "Retira ao instante — unha oferta nunca bloquea fondos",
+    safetyRefund: "reembolso de seguranza",
+    safetyRefundTip:
+      "Se o intercambio se atasca, ambas as partes reembólsanse automaticamente — a pata do taker desbloquéase primeiro, a túa un pouco despois. Ninguén queda atascado.",
+    activeTitle: "Os teus intercambios activos",
+    states: {
+      open: "aberta",
+      takenByUs: "tomada por ti",
+      revoked: "retirada",
+      expired: "caducada",
+    },
+    // Two-sided order-book view of the Corkboard. Bids = makers giving the
+    // quote coin to get the base; asks = the reverse. The ladder is a way to
+    // READ the board — it never matches or prioritises (load-bearing).
+    book: {
+      bids: "Demandas",
+      asks: "Ofertas",
+      bidsHint: "quere {base} · paga {quote}",
+      asksHint: "vende {base} · por {quote}",
+      price: "Prezo",
+      size: "Tamaño",
+      noBids: "Non hai demandas",
+      noAsks: "Non hai ofertas",
+      spread: "Diferencial {pct}",
+      spreadOneSided: "Unilateral",
+      crossed: "cruzado",
+      crossedTip: "Demanda máxima ≥ oferta mínima. O taboleiro nunca empareolla automaticamente, polo que estas ofertas solapadas simplemente quedan aí — toma calquera lado.",
+      mid: "medio {price}",
+      levelOffers: "{count} oferta(s) a este prezo — escolle unha para tomar",
+      depthTip: "Total de {sym} en oferta a este prezo en {count} anuncio(s).",
+      takerNote: "Ao tomala, dás {give} e recibes {get}.",
+      selectLevel: "Escolle un nivel de prezo de arriba para ver as ofertas que hai aí.",
+      paneHeader: "{size} {base} @ {price} {unit}",
+      denomTip: "Unidade de visualización para as cantidades de {coin}",
+      showMore: "Mostrar {count} máis",
+      showLess: "Mostrar as {count} principais",
+    },
+  },
+  relays: {
+    title: "Relés",
+    subtitle: "Conectividade en vivo cos teus relés Nostr — a rede pola que viaxan as túas ofertas e tomas. Engade ou elimina relés en Axustes → Rede.",
+    connectedCount: "{up} / {total} conectados",
+    refresh: "Actualizar",
+    ms: "{ms} ms",
+    up: "activo",
+    down: "caído",
+    statsTip: "{success}/{attempts} conexións con éxito · ↓{down} ↑{up}",
+    none: "Non hai relés configurados",
+    noneBody: "Engade un relé Nostr en Axustes → Rede para publicar e recibir ofertas pola rede.",
+    goToNetwork: "Ir a Axustes",
+    notConnected: "Sen conexión",
+    notConnectedBody: "A vista de relés precisa o motor en execución — conecta primeiro un comerciante.",
+  },
+  swaps: {
+    title: "Intercambios",
+    hint: "O teu rexistro completo — intercambios en curso arriba, operacións rematadas embaixo. Tamén podes actuar sobre intercambios activos desde o Corkboard.",
+    activeTitle: "En curso",
+    historyTitle: "Historial",
+    none: "Aínda non hai intercambios — toma unha oferta no Corkboard.",
+    // Active-swaps dock action buttons + the refund-time label.
+    cancel: "cancelar",
+    refund: "reembolsar",
+    dump: "exportar rexistros",
+    dumpHint: "Copia un paquete de diagnóstico sen segredos (estado + liñas de rexistro) deste intercambio, para pegar aos desenvolvedores.",
+    dumpCopied: "Diagnóstico copiado — pégao aos desenvolvedores.",
+    dumpFailed: "Non se puido copiar o paquete de diagnóstico.",
+    refundAt: "reembolso {when}",
+    // Confirm dialogs for acting on a live swap (ActiveSwaps).
+    cancelTitle: "Cancelar este intercambio?",
+    cancelConfirm: "Cancelar intercambio",
+    cancelKeep: "Mantelo",
+    // Abort reason recorded on the swap when cancelled from Satchel.
+    cancelReason: "cancelado en Satchel",
+    cancelBody:
+      "Isto abandona o intercambio antes de que financiaras. Aínda non se bloqueou nada teu, así que non perdes nada — simplemente a oferta non se completará.",
+    refundTitle: "Recuperar os teus fondos?",
+    refundConfirm: "Reembolsar",
+    refundBody:
+      "O bloqueo temporal de seguranza xa pasou, así que podes recuperar os fondos que bloqueaches. Isto emite o teu reembolso agora; o motor tamén o fai automaticamente tras o prazo.",
+    col: {
+      swap: "intercambio",
+      role: "rol",
+      state: "estado",
+      amounts: "dás → recibes",
+      when: "cando",
+      finalTx: "tx final",
+    },
+    // Expandable per-leg on-chain detail (the audit trail). We show both
+    // funding txs + OUR settlement; never the counterparty's settlement or the
+    // swap secret.
+    audit: {
+      toggle: "Mostrar detalle en cadea",
+      title: "Detalle en cadea",
+      youLocked: "ti bloqueaches",
+      theyLocked: "eles bloquearon",
+      funding: "Financiamento",
+      received: "Recibido",
+      refunded: "Reembolsado",
+      pending: "aínda non en cadea",
+      copy: "Copiar id da transacción",
+      copied: "Id da transacción copiado",
+    },
+  },
+  fees: {
+    title: "Vista previa do custo de rede",
+    estimated: "estimado",
+    provisionalNote: "Esta build de pactd aínda non expón a estimación de comisións.",
+    summary: "Un intercambio son 2 transaccións en cadea que ti pagas: financiamento na cadea de orixe, redención na cadea de destino.",
+    fallbackTip: "Un nodo estaba inalcanzable, así que se usou unha taxa de comisión predeterminada conservadora — trátaas como unha estimación.",
+    ifItStalls: "(se se atasca)",
+  },
+  funds: {
+    insufficient:
+      "Non hai {sym} dabondo para financiar este intercambio — precísanse ~{need} {sym} (cantidade + comisión de financiamento), a carteira ten {have} {sym}.",
+  },
+  wizard: {
+    welcome: "Benvido/a a Satchel",
+    connectTitle: "Conecta o motor Pact",
+    connectIntro:
+      "Satchel é un cliente lixeiro do motor Pact — o núcleo que garda as túas claves e executa os intercambios. Escolle como alcanzalo.",
+    managed: "Executar o motor Pact integrado",
+    managedDesc: "Satchel inicia e supervisa o seu propio motor Pact. Recomendado.",
+    external: "Conectar a un motor Pact externo",
+    externalDesc: "Apunta a un motor Pact que xa executes (define SATCHEL_PACTD_URL + cookie antes de iniciar).",
+    externalNote:
+      "O modo externo selecciónase mediante variables de contorno antes de iniciar Satchel. Reinicia con SATCHEL_PACTD_URL definido para usalo.",
+    coinsTitle: "Engade as túas moedas",
+    coinsIntro:
+      "Despois de crear o teu comerciante, conecta cada moeda ao teu propio nodo en Axustes → Moedas. Escolle unha moeda e un backend (Electrum público para cero configuración, ou o teu propio nodo); o xénese compróbase contra esta rede antes de gardar nada.",
+    coinsTemplatesSoon: "As plantillas de moedas dun só clic chegarán aquí nunha versión posterior.",
+    back: "Atrás",
+    continue: "Continuar",
+    finish: "Rematar configuración",
+  },
+  // UI-4 docked activity log.
+  log: {
+    title: "Actividade",
+    empty: "— rexistro de actividade —",
+    count: "{count} liñas",
+    collapse: "Contraer rexistro",
+    expand: "Expandir rexistro",
+    // Activity-log lines emitted by the frontend. `{err}` carries a raw engine
+    // message (itself not translated — it comes from pactd over the wire).
+    noTauri: "non se está executando dentro de Satchel — esta interface precisa a ponte Tauri",
+    startupError: "inicio: {err}",
+    notConnected: "sen conexión: {err}",
+    connected: "conectado a pactd {version} ({protocol})",
+    listcoinsError: "listcoins: {err}",
+    watchOnlyError: "só visualización: {err}",
+    switchedMerchant: "cambiouse ao comerciante {id}",
+    switchMerchantError: "cambiar comerciante: {err}",
+    loadMerchantError: "cargar comerciante: {err}",
+    merchantCreated: "comerciante {id} creado",
+    merchantReady: "comerciante listo",
+    actionOk: "{action} {id}: ok",
+    actionError: "{action} {id}: {err}",
+    diagCopied: "diagnóstico de {id} copiado ({count} liñas de rexistro) — pégao aos desenvolvedores",
+    dumpError: "exportar {id}: {err}",
+    coinDisconnected: "{coin} desconectada",
+    removeCoinError: "eliminar moeda: {err}",
+    tookOffer: "tomouse a oferta {id} — agora aparece nos teus intercambios activos embaixo",
+    takeError: "tomar: {err}",
+    offerWithdrawn: "oferta {id} retirada",
+    withdrawError: "retirar: {err}",
+    postedOffer: "publicouse a oferta {id} — retíraa cando queiras; non se bloquea nada",
+    createdSlip: "creouse un vale de oferta privada — envíallo ao teu amigo",
+    tookPrivateOffer: "tomouse a oferta privada {id} — agora aparece nos teus intercambios activos",
+    cancelledPrivateOffer: "cancelouse a oferta privada {id}",
+    cancelError: "cancelar: {err}",
+    noticeboardUpdated: "taboleiro de anuncios actualizado",
+    feePolicyUpdated: "política de comisións actualizada",
+  },
+  // Relative-time + freshness prose from format.ts (rendered via the tr() mirror,
+  // since those are pure non-component helpers). Unit letters stay inside the
+  // template so a translation owns the whole phrase.
+  format: {
+    ageUnknown: "antigüidade descoñecida",
+    justNow: "agora mesmo",
+    minutesAgo: "hai {n} min",
+    hoursAgo: "hai {n} h",
+    daysAgo: "hai {n} d",
+    expiryNow: "agora",
+    expirySoon: "pronto",
+    inMinutes: "en ~{n} min",
+    inHours: "en ~{n} h",
+    inDays: "en ~{n} d",
+    posted: "publicada {age}",
+    expires: "caduca {time}",
+  },
+  // Plain-language swap story per (role, state) — the honest "who is exposed
+  // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
+  // are local refund times. Rendered via tr() (narrate() is a pure helper).
+  narrate: {
+    initiating:
+      "Toma enviada — agardando a que o maker inicie o intercambio. Aínda non se bloqueou nada; cancélase por si soa se non responden.",
+    created: "Oferta enviada — agardando a que a outra parte acepte. Non hai nada comprometido.",
+    acceptedMaker: "Termos acordados. A continuación: bloquea os teus {a}. Ata que financies, aínda podes cancelar libremente.",
+    acceptedTaker: "Termos acordados. A outra parte bloquea os seus {a} primeiro — ti nunca envías primeiro.",
+    noncesExchanged:
+      "Configurando o intercambio privado — intercambiando material de sinatura. Aínda non se bloqueou nada.",
+    signedMaker:
+      "Ambas as partes asinaron. O teu daemon bloquea os {a}, despois reclama os {b} automaticamente. Se algo se atasca, os teus {a} retornan ás {t1}.",
+    signedTaker:
+      "Ambas as partes asinaron. O teu daemon bloquea os {b} e reclama os {a} no momento en que a outra parte se move. Rede de seguranza: reembolso ás {t2}.",
+    fundedAMaker:
+      "Os teus {a} están bloqueados. Agardando a que a outra parte bloquee os seus {b}. Se nunca o fan, os teus {a} retornan automaticamente ás {t1}.",
+    fundedATaker:
+      "Os seus {a} están bloqueados e verificados. A continuación: bloquea os teus {b}. Rede de seguranza: reembolso automático ás {t2} se algo se atasca.",
+    fundedBMaker: "Ambos bloqueados. O teu daemon reclama os {b} en canto estean confirmados con seguranza.",
+    fundedBTaker: "Ambos bloqueados. O teu daemon reclamará os {a} no momento en que a outra parte tome os seus {b}.",
+    redeemedB:
+      "Reclamaches os {b} — agardando a que confirmen. Os teus {a} bloqueados quedan protexidos ata que isto sexa definitivo.",
+    completed: "Intercambio completo — os {coin} están na túa carteira.",
+    refunded: "O intercambio non se completou, así que os teus {coin} retornaron automaticamente. Non se perdeu nada agás as comisións.",
+    aborted: "Cancelado antes de que se movese diñeiro.",
+  },
+  exit: {
+    // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
+    // running" detaches it (it keeps watching timelocks + servicing offers).
+    liveTitle: "Hai un intercambio en curso",
+    liveBodyOne:
+      "1 intercambio está a medio camiño. Réxese por bloqueos temporais en cadea — o motor debe seguir en execución para redimir ou reembolsar antes do prazo.",
+    liveBodyMany:
+      "{count} intercambios están a medio camiño. Réxense por bloqueos temporais en cadea — o motor debe seguir en execución para redimir ou reembolsar antes do prazo.",
+    keepRunningExplain:
+      "Pechar a xanela mantén o motor en execución en segundo plano, así que remata o intercambio sen interface. Podes reabrir Satchel cando queiras para comprobalo.",
+    forceQuitWarn: "Forzar a saída agora detén o motor e pode perder fondos.",
+    // {word} is the confirm word below; a translation may localize both together.
+    typeToConfirm: "Para forzar a saída de todas formas, escribe {word} embaixo.",
+    confirmWord: "QUIT",
+    keepRunning: "Manter en execución, pechar xanela",
+    keepWithdraw: "Manter en execución + retirar ofertas",
+    keepLeaveOffers: "Manter en execución, deixar as ofertas activas",
+    forceQuit: "Forzar saída",
+    offersTitle: "Tes ofertas publicadas",
+    offersBodyOne:
+      "1 oferta túa segue no Corkboard. As ofertas non bloquean nada, pero deixala activa significa que as contrapartes aínda poden tomala mentres Satchel está pechado — o motor xestionará a toma.",
+    offersBodyMany:
+      "{count} ofertas túas seguen no Corkboard. As ofertas non bloquean nada, pero deixalas activas significa que as contrapartes aínda poden tomalas mentres Satchel está pechado — o motor xestionará as tomas.",
+    withdrawExit: "Retirar todas e saír",
+  },
+  unlock: {
+    title: "Desbloquear comerciante",
+    body:
+      "A semente deste comerciante está cifrada. Introduce a súa frase de paso para desbloquealo nesta sesión — Satchel gárdaa só na memoria e esquéceaa ao saír.",
+    switchMerchant: "Cambiar comerciante",
+    unlock: "Desbloquear",
+  },
+  common: {
+    cancel: "Cancelar",
+    confirm: "Confirmar",
+    save: "Gardar",
+    done: "Feito",
+    later: "Máis tarde",
+    retry: "Reintentar conexión",
+  },
+};
