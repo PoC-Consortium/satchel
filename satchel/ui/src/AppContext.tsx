@@ -10,6 +10,7 @@ import {
 } from "react";
 import { errMsg, getCoinIcon, inTauri, listMerchants, rpc } from "./api/tauri";
 import { adaptorToSwap, pendingTakeToSwap, v1ToSwap } from "./format";
+import { tr } from "./i18n";
 import { COIN_ICON } from "./assets/coins";
 import type {
   AdaptorSwapRecord,
@@ -222,7 +223,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const boot = useCallback(async () => {
     if (!inTauri()) {
-      log("not running inside Satchel — this UI needs the Tauri bridge");
+      log(tr("log.noTauri"));
       setPhase("no-tauri");
       return;
     }
@@ -230,7 +231,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       m = await listMerchants();
     } catch (e) {
-      log("startup: " + errMsg(e));
+      log(tr("log.startupError", { err: errMsg(e) }));
     }
     setMerchants(m?.merchants ?? []);
     setActiveId(m?.active ?? null);
@@ -248,7 +249,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       setConn(false);
       setInfo(null);
-      log("not connected: " + errMsg(e));
+      log(tr("log.notConnected", { err: errMsg(e) }));
       setPhase("disconnected");
       return;
     }
@@ -268,7 +269,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // C10: pactd owns the merchant registry and backfills each merchant's
     // identity into its own manifest on load/seed-provision — no Satchel-side
     // identity cache to keep in sync anymore (this supersedes C1).
-    log(`connected to pactd ${gi.version ?? "?"} (${gi.protocol ?? "?"})`);
+    log(tr("log.connected", { version: gi.version ?? "?", protocol: gi.protocol ?? "?" }));
 
     // Watch-only is a viewer session with no coins: skip the coin gate entirely
     // and go straight to the (read-only) trading UI. The mode is engine-owned
@@ -281,7 +282,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCoins(cl.coins);
         cl.coins.forEach((c) => setSymbol(c.id, c.symbol));
       } catch (e) {
-        log("listcoins: " + errMsg(e));
+        log(tr("log.listcoinsError", { err: errMsg(e) }));
       }
       setPhase("ready");
       void refreshSwaps();
@@ -301,7 +302,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
     } catch (e) {
-      log("listcoins: " + errMsg(e));
+      log(tr("log.listcoinsError", { err: errMsg(e) }));
       setPhase("coins");
       return;
     }
@@ -319,7 +320,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await rpc("setwatchonly", [on]);
         await boot();
       } catch (e) {
-        log("watch-only: " + errMsg(e));
+        log(tr("log.watchOnlyError", { err: errMsg(e) }));
       }
     },
     [boot, log],

@@ -69,8 +69,31 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     [lang],
   );
 
+  // Keep the module-level mirror (`tr`) in lockstep with the active language so
+  // non-component code — pure helpers in format.ts / narrate.ts / identity.ts —
+  // translates against the same bundle without each call site threading `t`.
+  // Runs on every render (cheap); the provider sits above all consumers, so by
+  // the time any helper runs during a child render `_active` is already current.
+  _active = t;
+
   const value = useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+// Module-level mirror of the active translate function, for code that can't call
+// the `useT()` hook (non-component pure helpers). Defaults to the English bundle
+// so it's safe before the provider mounts and in tests. I18nProvider overwrites
+// it with the language-aware `t` on every render. Components should still prefer
+// `useT()` (it subscribes them to re-render on a language switch); reach for
+// `tr()` only from plain functions outside the React tree.
+let _active: Translate = (key, vars) => {
+  const hit = lookup(en, key);
+  return hit === undefined ? key : fill(hit, vars);
+};
+
+/** Translate from non-component code (format.ts, narrate.ts, …). Mirrors `t`. */
+export function tr(key: string, vars?: Record<string, string | number>): string {
+  return _active(key, vars);
 }
 
 export function useI18n(): I18nCtx {

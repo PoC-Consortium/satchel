@@ -39,9 +39,9 @@ export default function PrivateSlipsScreen() {
   async function cancel(offerId: string) {
     try {
       await cancelPrivateOffer(offerId);
-      log(`cancelled private offer ${offerId}`);
+      log(t("log.cancelledPrivateOffer", { id: offerId }));
     } catch (e) {
-      log("cancel: " + errMsg(e));
+      log(t("log.cancelError", { err: errMsg(e) }));
     }
     void refresh();
   }

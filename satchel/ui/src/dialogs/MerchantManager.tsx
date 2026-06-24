@@ -52,14 +52,14 @@ export default function MerchantManager({
     try {
       await selectMerchant(selected);
       await boot();
-      log(`switched to merchant ${selected}`);
+      log(t("log.switchedMerchant", { id: selected }));
       onClose?.();
     } catch (e) {
       // Most commonly the fund-safety gate: pactd refuses to switch away from a
       // merchant with a live swap. Surface the thrown message in-dialog.
       setSwitching(false);
       setError(errMsg(e));
-      log("load merchant: " + errMsg(e));
+      log(t("log.loadMerchantError", { err: errMsg(e) }));
     }
   }
 

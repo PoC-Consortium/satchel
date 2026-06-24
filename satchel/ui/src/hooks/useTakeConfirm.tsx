@@ -50,7 +50,7 @@ export function useTakeConfirm(): ConfirmTake {
       // and you receive what the maker OFFERS (give_*).
       const youGive = leg(b.get_amount, b.get_asset);
       const youGet = leg(b.give_amount, b.give_asset);
-      const posted = b.created ? `posted ${ago(b.created)}` : null;
+      const posted = b.created ? t("format.posted", { age: ago(b.created) }) : null;
 
       // The taker locks the coin they GIVE (the maker's get leg). Pre-flight the
       // funds so the summary warns + disables before the boardtake RPC does.

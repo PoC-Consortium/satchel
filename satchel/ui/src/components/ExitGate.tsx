@@ -131,7 +131,7 @@ export default function ExitGate() {
 
   // ---- live swap (with or without offers) ---------------------------------
   if (pending.kind === "live") {
-    const armed = confirmText.trim().toUpperCase() === "QUIT";
+    const armed = confirmText.trim().toUpperCase() === t("exit.confirmWord").toUpperCase();
     const hasOffers = pending.offers.length > 0;
     return (
       <Dialog open maxWidth="sm" fullWidth onClose={() => !busy && setPending(null)}>
@@ -144,12 +144,12 @@ export default function ExitGate() {
           </Alert>
           <DialogContentText sx={{ mb: 2 }}>{t("exit.keepRunningExplain")}</DialogContentText>
           <DialogContentText sx={{ mb: 1 }}>
-            <b>{t("exit.forceQuitWarn")}</b> {t("exit.typeToConfirm")}
+            <b>{t("exit.forceQuitWarn")}</b> {t("exit.typeToConfirm", { word: t("exit.confirmWord") })}
           </DialogContentText>
           <TextField
             value={confirmText}
             onChange={(e) => setConfirmText(e.target.value)}
-            placeholder="QUIT"
+            placeholder={t("exit.confirmWord")}
             size="small"
             fullWidth
             autoFocus

@@ -157,7 +157,7 @@ export default function SeedForm({
     setBusy(true);
     try {
       await rpc("importseed", [phrase, pass]);
-      log("merchant ready");
+      log(t("log.merchantReady"));
       await onDone();
     } catch (e) {
       setErr(errMsg(e));

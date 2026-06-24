@@ -12,6 +12,7 @@ import type {
   SwapState,
   V1SwapRecord,
 } from "./api/types";
+import { tr } from "./i18n";
 
 /** sats → bare decimal string, trailing zeros trimmed (keeps one after the dot). */
 export const fmtBare = (n: number): string =>
@@ -166,14 +167,14 @@ export function uptimeSince(unix: number | null | undefined): string {
 }
 
 export function ago(unix: number): string {
-  if (!unix) return "age unknown";
+  if (!unix) return tr("format.ageUnknown");
   const s = Math.max(0, Math.floor(Date.now() / 1000) - unix);
-  if (s < 60) return "just now";
+  if (s < 60) return tr("format.justNow");
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return tr("format.minutesAgo", { n: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+  if (h < 24) return tr("format.hoursAgo", { n: h });
+  return tr("format.daysAgo", { n: Math.floor(h / 24) });
 }
 
 /** Coarse time-UNTIL a future unix timestamp: "in ~3h" / "in ~45m" / "soon".
@@ -182,11 +183,11 @@ export function ago(unix: number): string {
 export function until(unix: number): string {
   if (!unix) return "—";
   const s = unix - Math.floor(Date.now() / 1000);
-  if (s <= 0) return "now";
-  if (s < 60) return "soon";
-  if (s < 3600) return `in ~${Math.round(s / 60)}m`;
-  if (s < 36 * 3600) return `in ~${Math.round(s / 3600)}h`;
-  return `in ~${Math.round(s / 86400)}d`;
+  if (s <= 0) return tr("format.expiryNow");
+  if (s < 60) return tr("format.expirySoon");
+  if (s < 3600) return tr("format.inMinutes", { n: Math.round(s / 60) });
+  if (s < 36 * 3600) return tr("format.inHours", { n: Math.round(s / 3600) });
+  return tr("format.inDays", { n: Math.round(s / 86400) });
 }
 
 /** Freshness: "" = fresh, "stale" = aging, "expiring" = within the hour. */
@@ -197,8 +198,8 @@ export function freshness(
   const now = Math.floor(Date.now() / 1000);
   // Always surface the exact time-to-expiry (e.g. "expires in ~42m"), not a
   // coarse "<1h" bucket — short-TTL offers live and die in minutes.
-  const exp = expiry ? ` · expires ${until(expiry)}` : "";
-  const label = `posted ${ago(created)}${exp}`;
+  const exp = expiry ? ` · ${tr("format.expires", { time: until(expiry) })}` : "";
+  const label = `${tr("format.posted", { age: ago(created) })}${exp}`;
   if (!created) return { cls: "stale", label };
   if (expiry && expiry - now <= 3600) return { cls: "expiring", label };
   if (now - created > 6 * 3600) return { cls: "stale", label };

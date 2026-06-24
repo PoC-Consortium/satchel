@@ -32,11 +32,11 @@ export default function ActiveSwaps() {
 
   async function act(action: string, id: string) {
     try {
-      const params = action === "abort" ? [id, "cancelled in Satchel"] : [id];
+      const params = action === "abort" ? [id, t("swaps.cancelReason")] : [id];
       await rpc(action, params);
-      log(`${action} ${id}: ok`);
+      log(t("log.actionOk", { action, id }));
     } catch (e) {
-      log(`${action} ${id}: ${errMsg(e)}`);
+      log(t("log.actionError", { action, id, err: errMsg(e) }));
     }
     void refreshSwaps();
   }
@@ -66,9 +66,9 @@ export default function ActiveSwaps() {
     try {
       const d = await dumpSwap(id);
       await navigator.clipboard.writeText(JSON.stringify(d, null, 2));
-      log(`diagnostics for ${id} copied (${d.log.length} log lines) — paste to the devs`);
+      log(t("log.diagCopied", { id, count: d.log.length }));
     } catch (e) {
-      log(`dump ${id}: ${errMsg(e)}`);
+      log(t("log.dumpError", { id, err: errMsg(e) }));
     }
   }
 

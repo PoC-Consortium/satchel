@@ -95,11 +95,11 @@ export default function CoinsScreen() {
     if (!ok) return;
     try {
       await removeCoin(coinId);
-      log(`${coinId} disconnected`);
+      log(t("log.coinDisconnected", { coin: coinId }));
       await load();
       void refreshCoins();
     } catch (e) {
-      log("remove coin: " + errMsg(e));
+      log(t("log.removeCoinError", { err: errMsg(e) }));
     }
   }
 

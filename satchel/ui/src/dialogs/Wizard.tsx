@@ -35,7 +35,7 @@ export default function Wizard({
   const t = useT();
   const [step, setStep] = useState<Step>("name");
   const [label, setLabel] = useState("");
-  const [createdLabel, setCreatedLabel] = useState("this merchant");
+  const [createdLabel, setCreatedLabel] = useState(t("merchants.thisMerchant"));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -44,7 +44,7 @@ export default function Wizard({
     setErr("");
     try {
       const m = await createMerchant(label.trim());
-      log(`merchant ${m.id} created`);
+      log(t("log.merchantCreated", { id: m.id }));
       setCreatedLabel(m.label);
       setStep("seed");
     } catch (e) {
