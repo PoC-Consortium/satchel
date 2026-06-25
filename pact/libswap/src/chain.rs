@@ -350,7 +350,10 @@ impl ChainBackend for CoreRpcBackend {
     }
 
     fn fee_rate_sat_per_vb(&self) -> Result<u64> {
-        const FALLBACK_SAT_PER_VB: u64 = 10;
+        // No estimate (empty/low-traffic mempool, or the node can't estimate) →
+        // the fee market is effectively empty, so the relay minimum suffices.
+        // The bump nurse covers the rare case where this later under-prices.
+        const FALLBACK_SAT_PER_VB: u64 = 1;
         const MAX_SAT_PER_VB: u64 = 500; // sanity cap against estimator glitches
         let rate = self
             .rpc
@@ -782,7 +785,10 @@ impl ChainBackend for ElectrumBackend {
     }
 
     fn fee_rate_sat_per_vb(&self) -> Result<u64> {
-        const FALLBACK_SAT_PER_VB: u64 = 10;
+        // No estimate (empty/low-traffic mempool, or the node can't estimate) →
+        // the fee market is effectively empty, so the relay minimum suffices.
+        // The bump nurse covers the rare case where this later under-prices.
+        const FALLBACK_SAT_PER_VB: u64 = 1;
         const MAX_SAT_PER_VB: u64 = 500;
         let rate = self
             .raw(

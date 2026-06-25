@@ -4584,7 +4584,7 @@ impl Engine {
     /// not fail just because one node is down.
     fn fee_rate_or_fallback(&self, network: Network, coin_id: &str) -> (u64, bool) {
         // Mirrors the per-backend fallback (chain.rs FALLBACK_SAT_PER_VB).
-        const FALLBACK_SAT_PER_VB: u64 = 10;
+        const FALLBACK_SAT_PER_VB: u64 = 1;
         let chain = ChainRef {
             coin_id: coin_id.to_string(),
             network,
@@ -5366,7 +5366,7 @@ mod tests {
         assert_eq!(give["coin_id"], "btcx");
         assert_eq!(get["coin_id"], "btc");
         // Fallback rate (chain.rs FALLBACK_SAT_PER_VB), flagged as a guess.
-        assert_eq!(give["fee_rate_sat_per_vb"], 10);
+        assert_eq!(give["fee_rate_sat_per_vb"], 1);
         assert_eq!(give["fee_rate_is_fallback"], true);
         assert_eq!(get["fee_rate_is_fallback"], true);
 
@@ -5382,8 +5382,8 @@ mod tests {
             assert!(leg["vbytes"].as_u64().unwrap() > 0);
             assert!(leg["fee_sat"].as_u64().unwrap() >= MIN_SPEND_FEE_SAT);
         }
-        // 10 sat/vB * 160 vB fund = 1600 sat (above the 1000 floor).
-        assert_eq!(give_legs[0]["fee_sat"], 10 * FUND_TX_VSIZE);
+        // 1 sat/vB * 160 vB fund = 160 sat, floored to the 1000-sat MIN_SPEND_FEE_SAT.
+        assert_eq!(give_legs[0]["fee_sat"], MIN_SPEND_FEE_SAT);
 
         std::fs::remove_dir_all(&dir).ok();
     }
