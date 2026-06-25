@@ -910,6 +910,7 @@ impl Engine {
             refund_tx_hex: None,
             final_txid: None,
             final_tx_hex: None,
+            last_action_height: 0,
         };
         // Structural check on our own offer before anything is persisted.
         ensure!(t2 < t1, "spec §7.1: T2 must be < T1");
@@ -998,6 +999,7 @@ impl Engine {
             refund_tx_hex: None,
             final_txid: None,
             final_tx_hex: None,
+            last_action_height: 0,
         };
         self.store.put(&record)?;
         let body = AcceptBody {
@@ -1117,6 +1119,7 @@ impl Engine {
             final_txid_b: None,
             final_tx_a_hex: None,
             final_tx_b_hex: None,
+            last_action_height: 0,
         };
         self.store.put_adaptor(&rec)?;
         let envelope = self.signed_envelope("init", &id, serde_json::to_value(&body)?)?;
@@ -1243,6 +1246,7 @@ impl Engine {
             final_txid_b: None,
             final_tx_a_hex: None,
             final_tx_b_hex: None,
+            last_action_height: 0,
         };
         self.store.put_adaptor(&rec)?;
         let envelope =

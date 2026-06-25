@@ -91,6 +91,22 @@ pub trait ChainBackend {
     /// fallback when the estimator has no data (fresh chains, regtest).
     fn fee_rate_sat_per_vb(&self) -> Result<u64>;
 
+    /// Whether `txid` is currently in this node's mempool. The bump loop uses
+    /// `!is_in_mempool` as the *only* trigger to re-broadcast an unchanged tx
+    /// (recover from eviction), so steady state stays silent. Defaults to
+    /// `true` (assume present → don't churn) for backends that can't see a
+    /// mempool; mempool-aware backends report real eviction.
+    fn is_in_mempool(&self, _txid: &str) -> Result<bool> {
+        Ok(true)
+    }
+
+    /// The node's `incrementalrelayfee` (sat/vB, rounded up, min 1) — the
+    /// minimum a BIP125 replacement must beat the replaced tx by (Rule 4).
+    /// Defaults to 1 sat/vB when the node can't report it.
+    fn incremental_relay_feerate(&self) -> Result<u64> {
+        Ok(1)
+    }
+
     /// Fresh receive address from the user's core wallet (sweep target).
     fn wallet_new_address(&self) -> Result<String>;
 
@@ -363,6 +379,22 @@ impl ChainBackend for CoreRpcBackend {
             .map(|btc_kvb| ((btc_kvb * 1e8) / 1000.0).ceil() as u64)
             .unwrap_or(FALLBACK_SAT_PER_VB);
         Ok(rate.clamp(1, MAX_SAT_PER_VB))
+    }
+
+    fn is_in_mempool(&self, txid: &str) -> Result<bool> {
+        // getmempoolentry succeeds iff the tx is in the mempool right now.
+        Ok(self.rpc.call("getmempoolentry", &[json!(txid)]).is_ok())
+    }
+
+    fn incremental_relay_feerate(&self) -> Result<u64> {
+        let rate = self
+            .rpc
+            .call("getmempoolinfo", &[])
+            .ok()
+            .and_then(|r| r["incrementalrelayfee"].as_f64()) // BTC per kvB
+            .map(|btc_kvb| ((btc_kvb * 1e8) / 1000.0).ceil() as u64)
+            .unwrap_or(1);
+        Ok(rate.max(1))
     }
 
     fn wallet_new_address(&self) -> Result<String> {
@@ -1022,6 +1054,19 @@ impl ChainBackend for MultiBackend {
             best = best.max(backend.fee_rate_sat_per_vb()?);
         }
         Ok(best)
+    }
+
+    fn is_in_mempool(&self, txid: &str) -> Result<bool> {
+        // Authoritative on the primary — the wallet node we broadcast through
+        // and must keep the tx anchored in. Chain-only watchers don't hold our
+        // mempool, so polling them would mask a real eviction on our own node.
+        self.primary().is_in_mempool(txid)
+    }
+
+    fn incremental_relay_feerate(&self) -> Result<u64> {
+        // The replacement is broadcast to all backends, but the primary is the
+        // node enforcing RBF acceptance for our wallet; its floor governs.
+        self.primary().incremental_relay_feerate()
     }
 
     fn wallet_new_address(&self) -> Result<String> {
