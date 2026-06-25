@@ -17,6 +17,16 @@ use serde::{Deserialize, Serialize};
 /// estimator can report. The operator may set any value in `1..=MAX_FEERATE_CEILING`.
 pub const MAX_FEERATE_CEILING: u64 = 500;
 
+/// Value-at-risk cap (percent of the amount being claimed/recovered) applied to
+/// every bump target — a bump's absolute fee never exceeds this share of the
+/// leg value. Eclair's rule: "it wouldn't make sense to pay more in fees than
+/// the amount we're trying to claim on-chain." Hardcoded (not a policy knob) on
+/// purpose: it is a safety invariant, not a tuning parameter — the market term
+/// in [`FeeBumpPolicy::target_feerate`] is what keeps real fees low; this is the
+/// last-resort insanity backstop. 100 = cap at the full claim (never blocks a
+/// legitimate confirmation; still stops paying more than the claim is worth).
+pub const FEE_CAP_PCT: u64 = 100;
+
 /// Upper bound on the RBF escalation step (percent), a pure sanity guard.
 const MAX_STEP_PCT: u64 = 1000;
 
@@ -37,15 +47,6 @@ pub struct FeeBumpPolicy {
     pub max_feerate_sat_vb: u64,
     /// Floor for any single-tx bump (sat). Default 1000 (was `MIN_SPEND_FEE_SAT`).
     pub min_fee_sat: u64,
-    /// Value-at-risk cap (percent): a bump's absolute fee never exceeds this
-    /// percentage of the amount being claimed/recovered on that leg. Eclair's
-    /// rule — "it wouldn't make sense to pay more in fees than the amount we're
-    /// trying to claim on-chain." This is the guardrail that was missing
-    /// entirely (we had only the absolute `max_feerate_sat_vb`); on its own it
-    /// bounds the post-mortem fee storm. Default 100 (cap at the full claim);
-    /// 1..=100. Distinct from `redeem.committed_mult` (a v2 *initial* feerate
-    /// over-provision, not a cap).
-    pub fee_cap_pct: u64,
     pub funding: FundingPolicy,
     pub redeem: RedeemPolicy,
     pub refund: RefundPolicy,
@@ -89,7 +90,6 @@ impl Default for FeeBumpPolicy {
         Self {
             max_feerate_sat_vb: MAX_FEERATE_CEILING,
             min_fee_sat: crate::swap::MIN_SPEND_FEE_SAT,
-            fee_cap_pct: 100,
             funding: FundingPolicy::default(),
             redeem: RedeemPolicy::default(),
             refund: RefundPolicy::default(),
@@ -126,10 +126,6 @@ impl FeeBumpPolicy {
     pub fn validated(self) -> Result<Self> {
         ensure!(self.min_fee_sat >= 1, "min_fee_sat must be >= 1");
         ensure!(
-            (1..=100).contains(&self.fee_cap_pct),
-            "fee_cap_pct must be 1..=100 (percent of the value being claimed)"
-        );
-        ensure!(
             (1..=MAX_FEERATE_CEILING).contains(&self.max_feerate_sat_vb),
             "max_feerate_sat_vb must be 1..={MAX_FEERATE_CEILING} sat/vB (the estimator's hard ceiling)"
         );
@@ -162,7 +158,7 @@ impl FeeBumpPolicy {
     /// market term bounds it from above by construction. `value_at_risk` is the
     /// leg amount (claim/recover); `vsize` the spend's virtual size.
     pub fn target_feerate(&self, market_sat_vb: u64, value_at_risk: u64, vsize: u64) -> u64 {
-        let value_cap = value_at_risk.saturating_mul(self.fee_cap_pct) / 100 / vsize.max(1);
+        let value_cap = value_at_risk.saturating_mul(FEE_CAP_PCT) / 100 / vsize.max(1);
         market_sat_vb
             .min(value_cap)
             .min(self.max_feerate_sat_vb)
@@ -202,42 +198,21 @@ mod tests {
         assert_eq!(p.redeem.committed_mult, 2);
         assert_eq!(p.redeem.step_pct, 50);
         assert_eq!(p.refund.step_pct, 50);
-        assert_eq!(p.fee_cap_pct, 100);
         // Default policy is valid.
         assert!(p.validated().is_ok());
     }
 
     #[test]
     fn target_feerate_tracks_market_and_caps() {
-        let p = FeeBumpPolicy::default(); // cap 100%, ceiling 500
+        let p = FeeBumpPolicy::default(); // ceiling 500, hardcoded FEE_CAP_PCT=100
                                           // Quiet market: target follows the market, never escalates past it.
         assert_eq!(p.target_feerate(1, 206_250, VSIZE), 1);
         assert_eq!(p.target_feerate(8, 206_250, VSIZE), 8);
-        // Value-at-risk cap bites for a small claim: 30_000 sat / 155 vB ≈ 193
-        // sat/vB, so a hot market is clamped to the claim, not 500.
+        // Value-at-risk cap (100% of claim) bites for a small claim: 30_000 sat /
+        // 155 vB ≈ 193 sat/vB, so a hot market is clamped to the claim, not 500.
         assert_eq!(p.target_feerate(400, 30_000, VSIZE), 30_000 / VSIZE);
         // Absolute ceiling still binds when the claim is large.
         assert_eq!(p.target_feerate(900, 10_000_000, VSIZE), 500);
-        // A 50% cap halves the value bound.
-        let tight = FeeBumpPolicy {
-            fee_cap_pct: 50,
-            ..Default::default()
-        };
-        assert_eq!(tight.target_feerate(400, 30_000, VSIZE), 30_000 / 2 / VSIZE);
-    }
-
-    #[test]
-    fn validated_rejects_bad_fee_cap_pct() {
-        let zero = FeeBumpPolicy {
-            fee_cap_pct: 0,
-            ..Default::default()
-        };
-        assert!(zero.validated().is_err());
-        let over = FeeBumpPolicy {
-            fee_cap_pct: 101,
-            ..Default::default()
-        };
-        assert!(over.validated().is_err());
     }
 
     #[test]
