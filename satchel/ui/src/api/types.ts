@@ -185,6 +185,28 @@ export interface Swap {
    *  from `listswaps`); `pact-htlc-v2` is set when we fold in `listadaptorswaps`
    *  so the ledger can badge the Taproot/MuSig2 ones. */
   protocol?: string;
+  /** Live progress snapshot (observability), folded in from the `swapprogress`
+   *  RPC by `swap_id`. Present only for active swaps with something watchable. */
+  progress?: SwapProgress;
+}
+
+/** Live per-swap progress from pactd `swapprogress` (rebuilt each scheduler
+ *  tick, served from memory). Observability only — never ledger truth. */
+export interface SwapProgress {
+  swap_id: string;
+  /** What the daemon is watching now. */
+  watching: "settlement" | "their_funding" | "ours_funding";
+  /** Confirmations of the watched tx so far (0 = in mempool / not yet seen). */
+  confs: number;
+  /** Confirmation depth required for this leg (n_a / n_b). */
+  needed: number;
+  /** Current feerate of our settlement tx (sat/vB); absent during funding waits. */
+  feerate_sat_vb?: number;
+  /** The latest scheduler action for this swap (e.g. "fee-bump", "auto-redeem"). */
+  last_action?: string;
+  last_detail?: string;
+  /** unix seconds when the snapshot was taken — used to grey out stale data. */
+  updated_at: number;
 }
 
 /** Raw `listswaps` record (libswap `SwapRecord`): the audit txid fields that

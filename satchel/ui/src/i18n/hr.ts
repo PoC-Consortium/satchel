@@ -671,6 +671,13 @@ export const hr: Bundle = {
     refunded: "Swap nije dovršen, pa vam se {coin} automatski vratio. Ništa izgubljeno osim naknada.",
     aborted: "Otkazano prije nego što je išta novca pokrenuto.",
   },
+  progress: {
+    settlement: "Potvrđivanje naplate",
+    theirFunding: "Čekanje na njihovo zaključavanje",
+    oursFunding: "Zaključavanje vaših sredstava",
+    feeBumped: "Naknada povećana",
+    reorg: "Otkrivena reorganizacija — ponovna provjera",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

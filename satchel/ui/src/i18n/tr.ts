@@ -671,6 +671,13 @@ export const tr: Bundle = {
     refunded: "Takas tamamlanmadı, bu yüzden {coin} miktarınız otomatik olarak geri döndü. Ücretler dışında hiçbir kayıp yok.",
     aborted: "Herhangi bir para hareket etmeden önce iptal edildi.",
   },
+  progress: {
+    settlement: "Tahsilat onaylanıyor",
+    theirFunding: "Onların kilidi bekleniyor",
+    oursFunding: "Fonlarınız kilitleniyor",
+    feeBumped: "Ücret artırıldı",
+    reorg: "Reorg algılandı — yeniden denetleniyor",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

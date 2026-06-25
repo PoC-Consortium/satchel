@@ -671,6 +671,13 @@ export const ru: Bundle = {
     refunded: "Своп не завершился, поэтому ваши {coin} вернулись автоматически. Потеряны только комиссии.",
     aborted: "Отменено до того, как деньги пришли в движение.",
   },
+  progress: {
+    settlement: "Подтверждение получения",
+    theirFunding: "Ожидание их блокировки",
+    oursFunding: "Блокировка ваших средств",
+    feeBumped: "Комиссия повышена",
+    reorg: "Обнаружена реорганизация — повторная проверка",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

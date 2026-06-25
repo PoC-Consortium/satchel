@@ -671,6 +671,13 @@ export const cs: Bundle = {
     refunded: "Swap se nedokončil, takže se vaše {coin} automaticky vrátila. Nic ztraceno kromě poplatků.",
     aborted: "Zrušeno dříve, než se pohnuly jakékoli peníze.",
   },
+  progress: {
+    settlement: "Potvrzování nároku",
+    theirFunding: "Čekání na jejich uzamčení",
+    oursFunding: "Uzamykání vašich prostředků",
+    feeBumped: "Poplatek navýšen",
+    reorg: "Zjištěna reorganizace — kontroluji znovu",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

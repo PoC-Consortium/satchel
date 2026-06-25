@@ -671,6 +671,13 @@ export const fi: Bundle = {
     refunded: "Swap ei valmistunut, joten {coin} palautui automaattisesti. Mitään ei menetetty paitsi maksut.",
     aborted: "Peruutettu ennen kuin mitään rahaa liikkui.",
   },
+  progress: {
+    settlement: "Lunastusta vahvistetaan",
+    theirFunding: "Odotetaan heidän lukitustaan",
+    oursFunding: "Lukitaan varojasi",
+    feeBumped: "Maksua korotettu",
+    reorg: "Reorg havaittu — tarkistetaan uudelleen",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

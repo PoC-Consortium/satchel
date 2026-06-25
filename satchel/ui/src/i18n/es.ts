@@ -671,6 +671,13 @@ export const es: Bundle = {
     refunded: "El swap no se completó, así que tus {coin} volvieron automáticamente. No se pierde nada salvo las comisiones.",
     aborted: "Cancelado antes de que se moviera ningún dinero.",
   },
+  progress: {
+    settlement: "Confirmando el cobro",
+    theirFunding: "Esperando su bloqueo",
+    oursFunding: "Bloqueando tus fondos",
+    feeBumped: "Comisión aumentada",
+    reorg: "Reorganización detectada — revisando",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

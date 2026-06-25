@@ -671,6 +671,13 @@ export const ptBR: Bundle = {
     refunded: "O swap não foi concluído, então seu {coin} voltou automaticamente. Nada perdido, exceto as taxas.",
     aborted: "Cancelado antes de qualquer dinheiro se mover.",
   },
+  progress: {
+    settlement: "Confirmando o resgate",
+    theirFunding: "Aguardando o bloqueio deles",
+    oursFunding: "Bloqueando seus fundos",
+    feeBumped: "Taxa aumentada",
+    reorg: "Reorg detectada — verificando novamente",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

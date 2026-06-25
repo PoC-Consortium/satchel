@@ -671,6 +671,13 @@ export const nl: Bundle = {
     refunded: "De swap is niet voltooid, dus je {coin} kwam automatisch terug. Niets verloren behalve fees.",
     aborted: "Geannuleerd voordat er geld bewoog.",
   },
+  progress: {
+    settlement: "Claim wordt bevestigd",
+    theirFunding: "Wachten op hun vergrendeling",
+    oursFunding: "Je geld wordt vergrendeld",
+    feeBumped: "Vergoeding verhoogd",
+    reorg: "Reorg gedetecteerd — opnieuw controleren",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

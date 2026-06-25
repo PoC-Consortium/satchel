@@ -610,6 +610,12 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         "listadaptorswaps" => Ok(serde_json::to_value(
             blocking(app, |e| e.store.list_adaptor()).await?,
         )?),
+        // Live per-swap progress (observability): confirmation depth + the latest
+        // scheduler action, refreshed each tick and served from memory (no node
+        // call per poll). The UI merges it into its swap rows by `swap_id`.
+        "swapprogress" => Ok(serde_json::to_value(
+            blocking(app, |e| Ok(e.swap_progress_snapshot())).await?,
+        )?),
         // Outstanding takes awaiting the maker's init (the UI's "initiating"
         // pre-swaps — no swap record exists yet).
         "listpendingtakes" => Ok(serde_json::to_value(
