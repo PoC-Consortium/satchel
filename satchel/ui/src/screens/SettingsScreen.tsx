@@ -332,7 +332,6 @@ type FeePolicy = {
   min_fee_sat: number;
   reservation_mult: number;
   committed_mult: number;
-  step_pct: number;
 };
 
 const FEE_DEFAULTS: FeePolicy = {
@@ -340,7 +339,6 @@ const FEE_DEFAULTS: FeePolicy = {
   min_fee_sat: 1000,
   reservation_mult: 3,
   committed_mult: 2,
-  step_pct: 50,
 };
 
 function FeesTab() {
@@ -369,14 +367,13 @@ function FeesTab() {
     setBusy(true);
     setStatus(t("settings.feeSaving"));
     try {
-      // Positional params: max, min, reservation, committed, step. min_fee_sat is
-      // not editable here but is round-tripped so it isn't reset.
+      // Positional params: max, min, reservation, committed. min_fee_sat is not
+      // editable here but is round-tripped so it isn't reset.
       await rpc("setfeepolicy", [
         pol.max_feerate_sat_vb,
         pol.min_fee_sat,
         pol.reservation_mult,
         pol.committed_mult,
-        pol.step_pct,
       ]);
       log(t("log.feePolicyUpdated"));
       setStatus(t("settings.feeSaved"));
@@ -408,7 +405,6 @@ function FeesTab() {
   const maxField = num("max_feerate_sat_vb", 1, 500);
   const reservationField = num("reservation_mult", 1, 100);
   const committedField = num("committed_mult", 1, 100);
-  const stepField = num("step_pct", 1, 1000);
 
   return (
     <Section title={t("settings.fees")}>
@@ -426,9 +422,6 @@ function FeesTab() {
       </Row>
       <Row label={t("settings.feeCommitted")} hint={t("settings.feeCommittedHint")}>
         {committedField}
-      </Row>
-      <Row label={t("settings.feeStep")} hint={t("settings.feeStepHint")}>
-        {stepField}
       </Row>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mt: 1.5 }}>
         <Button variant="contained" onClick={() => void save()} disabled={busy || !loaded}>

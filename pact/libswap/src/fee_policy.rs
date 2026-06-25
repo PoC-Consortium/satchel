@@ -17,6 +17,16 @@ use serde::{Deserialize, Serialize};
 /// estimator can report. The operator may set any value in `1..=MAX_FEERATE_CEILING`.
 pub const MAX_FEERATE_CEILING: u64 = 500;
 
+/// Value-at-risk cap (percent of the amount being claimed/recovered) applied to
+/// every bump target — a bump's absolute fee never exceeds this share of the
+/// leg value. Eclair's rule: "it wouldn't make sense to pay more in fees than
+/// the amount we're trying to claim on-chain." Hardcoded (not a policy knob) on
+/// purpose: it is a safety invariant, not a tuning parameter — the market term
+/// in [`FeeBumpPolicy::target_feerate`] is what keeps real fees low; this is the
+/// last-resort insanity backstop. 100 = cap at the full claim (never blocks a
+/// legitimate confirmation; still stops paying more than the claim is worth).
+pub const FEE_CAP_PCT: u64 = 100;
+
 /// Upper bound on the RBF escalation step (percent), a pure sanity guard.
 const MAX_STEP_PCT: u64 = 1000;
 
@@ -138,6 +148,23 @@ impl FeeBumpPolicy {
         Ok(self)
     }
 
+    /// The unified bump **target feerate** (sat/vB) for every nurse — the shape
+    /// the funding nurses already used, now applied everywhere. Track the live
+    /// market, capped by the value being claimed (`fee_cap_pct`) and the absolute
+    /// ceiling (`max_feerate_sat_vb`). Never below 1.
+    ///
+    /// This replaces the market-blind geometric [`Self::escalate`]: it can never
+    /// bid 159 sat/vB into a 1 sat/vB market the way `escalate` did, because the
+    /// market term bounds it from above by construction. `value_at_risk` is the
+    /// leg amount (claim/recover); `vsize` the spend's virtual size.
+    pub fn target_feerate(&self, market_sat_vb: u64, value_at_risk: u64, vsize: u64) -> u64 {
+        let value_cap = value_at_risk.saturating_mul(FEE_CAP_PCT) / 100 / vsize.max(1);
+        market_sat_vb
+            .min(value_cap)
+            .min(self.max_feerate_sat_vb)
+            .max(1)
+    }
+
     /// RBF escalation step, capped at the absolute ceiling for this tx `vsize`.
     /// Returns the new absolute fee (sat), or `None` when even the capped step
     /// can't clear the BIP125 Rule-4 floor (`old_fee` + the incremental relay fee,
@@ -173,6 +200,19 @@ mod tests {
         assert_eq!(p.refund.step_pct, 50);
         // Default policy is valid.
         assert!(p.validated().is_ok());
+    }
+
+    #[test]
+    fn target_feerate_tracks_market_and_caps() {
+        let p = FeeBumpPolicy::default(); // ceiling 500, hardcoded FEE_CAP_PCT=100
+                                          // Quiet market: target follows the market, never escalates past it.
+        assert_eq!(p.target_feerate(1, 206_250, VSIZE), 1);
+        assert_eq!(p.target_feerate(8, 206_250, VSIZE), 8);
+        // Value-at-risk cap (100% of claim) bites for a small claim: 30_000 sat /
+        // 155 vB ≈ 193 sat/vB, so a hot market is clamped to the claim, not 500.
+        assert_eq!(p.target_feerate(400, 30_000, VSIZE), 30_000 / VSIZE);
+        // Absolute ceiling still binds when the claim is large.
+        assert_eq!(p.target_feerate(900, 10_000_000, VSIZE), 500);
     }
 
     #[test]
