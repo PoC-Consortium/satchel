@@ -2062,11 +2062,12 @@ impl Engine {
             return Ok(None); // record predates tx-hex persistence — nothing to nurse
         };
         let backend = self.backend(chain)?;
-        let spk =
-            bitcoin::consensus::encode::deserialize::<bitcoin::Transaction>(&hex::decode(tx_hex)?)
-                .ok()
-                .map(|tx| tx.output[0].script_pubkey.clone());
-        if backend.tx_confirmations(txid, spk.as_ref())? >= u64::from(target_confs.max(1)) {
+        let tx: bitcoin::Transaction =
+            bitcoin::consensus::encode::deserialize(&hex::decode(tx_hex)?)
+                .context("corrupt final_tx_hex")?;
+        let spk = tx.output[0].script_pubkey.clone();
+        let confs = backend.tx_confirmations(txid, Some(&spk))?;
+        if confs >= u64::from(target_confs.max(1)) {
             // Confirmed deep enough — the spend is final.
             if complete_on_depth && rec.state != AdaptorState::Completed {
                 let mut updated = rec.clone();
@@ -2080,45 +2081,57 @@ impl Engine {
             }
             return Ok(None);
         }
-        if is_refund {
-            return self.adaptor_bump_refund(rec, &backend, tx_hex);
+        // Mined but shallow: a confirmed spend can't be RBF'd or usefully
+        // CPFP-accelerated — just wait for depth (no per-tick churn).
+        if confs >= 1 {
+            return Ok(None);
         }
-        // Cooperative redeem: its committed fee can't be RBF'd, so re-anchor the
-        // parent in the mempool (recover a dropped entry) and CPFP-bump it with a
-        // self-funded child spending its own wallet-owned sweep output (v2+). The
-        // child is built and signed unilaterally — the signed redeem stays
-        // byte-identical, so no fresh MuSig2 round and no counterparty needed.
-        let tx: bitcoin::Transaction =
-            bitcoin::consensus::encode::deserialize(&hex::decode(tx_hex)?)
-                .context("corrupt final_tx_hex")?;
-        let parent_txid = backend.broadcast(&tx)?;
+        // Step 0: act at most once per block (block-driven cadence).
+        let tip_height = backend.tip_height()?;
+        if tip_height == rec.last_action_height {
+            return Ok(None);
+        }
+        if is_refund {
+            return self.adaptor_bump_refund(rec, &backend, tx_hex, tip_height);
+        }
+        // Cooperative redeem: its committed fee can't be RBF'd (it's baked into
+        // the pre-signed adaptor signature), so re-anchor the parent only if it
+        // was evicted, and CPFP-bump it toward market with a self-funded child
+        // spending its own wallet-owned sweep output (v2+). Unilateral — the
+        // signed redeem stays byte-identical, no fresh MuSig2 round. Once per
+        // block; in steady state an unchanged market makes the child a no-op
+        // (CPFP returns None) or a self-rejecting same-fee replacement.
+        let parent_txid = tx.compute_txid().to_string();
+        if !backend.is_in_mempool(&parent_txid)? {
+            backend.broadcast(&tx)?;
+        }
         let amount = if chain.coin_id == rec.chain_b.coin_id {
             rec.amount_b
         } else {
             rec.amount_a
         };
-        let (action, detail) = match self.adaptor_cpfp_bump(&backend, &tx, amount) {
-            Ok(Some(child)) => (
-                "adaptor-cpfp",
-                format!("{parent_txid} (redeem) bumped by child {child}"),
-            ),
-            // No bump warranted (parent already pays the target / output too small).
-            Ok(None) => (
-                "adaptor-rebroadcast",
-                format!("{parent_txid} (redeem at/above target feerate)"),
-            ),
+        match self.adaptor_cpfp_bump(&backend, &tx, amount) {
+            Ok(Some(child)) => {
+                let mut updated = rec.clone();
+                updated.last_action_height = tip_height;
+                self.store.put_adaptor(&updated)?;
+                Ok(Some(TickEvent {
+                    swap_id: rec.swap_id.clone(),
+                    action: "adaptor-cpfp".into(),
+                    detail: format!("{parent_txid} (redeem) bumped by child {child}"),
+                }))
+            }
+            // No bump warranted (parent already pays the target / output too
+            // small) — silent until the next block or a market rise.
+            Ok(None) => Ok(None),
             // CPFP unavailable (e.g. redeem not swept to a wallet address). The
-            // parent is still re-anchored; surface it without failing the tick.
-            Err(e) => (
-                "adaptor-rebroadcast",
-                format!("{parent_txid} (CPFP unavailable: {e:#})"),
-            ),
-        };
-        Ok(Some(TickEvent {
-            swap_id: rec.swap_id.clone(),
-            action: action.into(),
-            detail,
-        }))
+            // parent is re-anchored if it was evicted; surface without failing.
+            Err(e) => Ok(Some(TickEvent {
+                swap_id: rec.swap_id.clone(),
+                action: "adaptor-rebroadcast".into(),
+                detail: format!("{parent_txid} (CPFP unavailable: {e:#})"),
+            })),
+        }
     }
 
     /// CPFP-bump a stuck cooperative redeem (v2+): broadcast a self-funded child
@@ -2323,10 +2336,12 @@ impl Engine {
         rec: &AdaptorSwapRecord,
         backend: &MultiBackend,
         old_tx_hex: &str,
+        tip_height: u64,
     ) -> Result<Option<TickEvent>> {
         let old_tx: bitcoin::Transaction =
             bitcoin::consensus::encode::deserialize(&hex::decode(old_tx_hex)?)
                 .context("corrupt refund tx hex")?;
+        let old_txid = old_tx.compute_txid().to_string();
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let seed = self.store.seed()?;
         let p = self.adaptor_params(rec)?;
@@ -2337,25 +2352,27 @@ impl Engine {
         };
         let destination = old_tx.output[0].script_pubkey.clone();
         let old_fee = amount.saturating_sub(old_tx.output[0].value.to_sat());
-        // Escalate per policy, capped at max_feerate. `None` = already at the
-        // ceiling (nothing relayable); the dust case is when a higher fee would
-        // push the output under dust. Both fall back to rebroadcasting the
-        // existing tx in case mempools dropped it.
-        let new_fee =
-            match self
-                .fee_bump
-                .escalate(old_fee, self.fee_bump.refund.step_pct, REFUND_TX_VSIZE)
-            {
-                Some(f) if amount > f + DUST_LIMIT_SAT => f,
-                _ => {
-                    let txid = backend.broadcast(&old_tx)?;
-                    return Ok(Some(TickEvent {
-                        swap_id: rec.swap_id.clone(),
-                        action: "adaptor-rebroadcast".into(),
-                        detail: txid.to_string(),
-                    }));
-                }
-            };
+        let old_feerate = old_fee / REFUND_TX_VSIZE.max(1);
+        // The v2 refund is a single-key RBF spend — same unified strategy as the
+        // v1 redeem/refund (was a market-blind escalate()): market-tracking,
+        // value-capped target, bump only when it clears BIP125 Rule 4, else
+        // re-anchor the same tx only if it was evicted.
+        let market = backend.fee_rate_sat_per_vb()?;
+        let target = self.fee_bump.target_feerate(market, amount, REFUND_TX_VSIZE);
+        let new_fee = target.saturating_mul(REFUND_TX_VSIZE);
+        let bump_floor = old_feerate.saturating_add(backend.incremental_relay_feerate()?);
+        let dustless = amount > new_fee + DUST_LIMIT_SAT;
+        if target < bump_floor || !dustless {
+            if backend.is_in_mempool(&old_txid)? {
+                return Ok(None);
+            }
+            let txid = backend.broadcast(&old_tx)?;
+            return Ok(Some(TickEvent {
+                swap_id: rec.swap_id.clone(),
+                action: "adaptor-rebroadcast".into(),
+                detail: txid.to_string(),
+            }));
+        }
         let outpoint = old_tx.input[0].previous_output;
         let refund_kp = seed
             .refund_secret_key(coin_of(chain)?, rec.swap_index)?
@@ -2382,11 +2399,14 @@ impl Engine {
                 updated.final_tx_b_hex = Some(hex);
             }
         }
+        updated.last_action_height = tip_height;
         self.store.put_adaptor(&updated)?;
         Ok(Some(TickEvent {
             swap_id: rec.swap_id.clone(),
             action: "adaptor-fee-bump".into(),
-            detail: format!("{txid} (refund fee {old_fee} -> {new_fee} sat)"),
+            detail: format!(
+                "{txid} (refund fee {old_fee} -> {new_fee} sat, {old_feerate} -> {target} sat/vB)"
+            ),
         }))
     }
 
