@@ -1811,8 +1811,13 @@ impl Engine {
         let dest = backend
             .params()
             .parse_address(&backend.wallet_new_address()?)?;
+        // A1: initial spend priced at the unified value-capped target.
         let fee = spend_fee_sat(
-            backend.fee_rate_sat_per_vb()?,
+            self.fee_bump.target_feerate(
+                backend.fee_rate_sat_per_vb()?,
+                amount,
+                crate::taproot::SCRIPTPATH_REFUND_VSIZE,
+            ),
             crate::taproot::SCRIPTPATH_REFUND_VSIZE,
         );
         let tx =
@@ -2619,7 +2624,14 @@ impl Engine {
         let destination = backend
             .params()
             .parse_address(&backend.wallet_new_address()?)?;
-        let fee = spend_fee_sat(backend.fee_rate_sat_per_vb()?, REFUND_TX_VSIZE);
+        // A1: price the initial spend at the unified target (market, capped by
+        // the value at risk + ceiling), not raw market floored at 1000 — so the
+        // first broadcast is competitive and the nurse is a rare safety net.
+        let fee = spend_fee_sat(
+            self.fee_bump
+                .target_feerate(backend.fee_rate_sat_per_vb()?, amount, REFUND_TX_VSIZE),
+            REFUND_TX_VSIZE,
+        );
         let refund_tx = build_refund_tx(&htlc, outpoint, amount, destination, fee, &key)?;
         rec.refund_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&refund_tx));
         self.store.put(&rec)?;
@@ -2687,7 +2699,15 @@ impl Engine {
                 let destination = backend
                     .params()
                     .parse_address(&backend.wallet_new_address()?)?;
-                let fee = spend_fee_sat(backend.fee_rate_sat_per_vb()?, REDEEM_TX_VSIZE);
+                // A1: initial spend priced at the unified value-capped target.
+                let fee = spend_fee_sat(
+                    self.fee_bump.target_feerate(
+                        backend.fee_rate_sat_per_vb()?,
+                        rec.amount_b,
+                        REDEEM_TX_VSIZE,
+                    ),
+                    REDEEM_TX_VSIZE,
+                );
                 let tx = build_redeem_tx(
                     &htlc,
                     outpoint,
@@ -2757,7 +2777,15 @@ impl Engine {
                 let destination = backend_a
                     .params()
                     .parse_address(&backend_a.wallet_new_address()?)?;
-                let fee = spend_fee_sat(backend_a.fee_rate_sat_per_vb()?, REDEEM_TX_VSIZE);
+                // A1: initial spend priced at the unified value-capped target.
+                let fee = spend_fee_sat(
+                    self.fee_bump.target_feerate(
+                        backend_a.fee_rate_sat_per_vb()?,
+                        rec.amount_a,
+                        REDEEM_TX_VSIZE,
+                    ),
+                    REDEEM_TX_VSIZE,
+                );
                 let tx = build_redeem_tx(
                     &htlc,
                     outpoint_a,
@@ -2853,7 +2881,15 @@ impl Engine {
                 let destination = backend
                     .params()
                     .parse_address(&backend.wallet_new_address()?)?;
-                let fee = spend_fee_sat(backend.fee_rate_sat_per_vb()?, REFUND_TX_VSIZE);
+                // A1: initial spend priced at the unified value-capped target.
+                let fee = spend_fee_sat(
+                    self.fee_bump.target_feerate(
+                        backend.fee_rate_sat_per_vb()?,
+                        amount,
+                        REFUND_TX_VSIZE,
+                    ),
+                    REFUND_TX_VSIZE,
+                );
                 build_refund_tx(&htlc, outpoint, amount, destination, fee, &key)?
             }
         };
@@ -3540,7 +3576,11 @@ impl Engine {
             let destination = backend
                 .params()
                 .parse_address(&backend.wallet_new_address()?)?;
-            let fee = spend_fee_sat(backend.fee_rate_sat_per_vb()?, REFUND_TX_VSIZE);
+            let fee = spend_fee_sat(
+                self.fee_bump
+                    .target_feerate(backend.fee_rate_sat_per_vb()?, amount, REFUND_TX_VSIZE),
+                REFUND_TX_VSIZE,
+            );
             let refund_tx = build_refund_tx(&htlc, new_outpoint, amount, destination, fee, &key)?;
             let mut updated = rec.clone();
             updated.refund_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&refund_tx));

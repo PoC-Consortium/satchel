@@ -53,10 +53,14 @@ SwapProgress {
 
 Notes:
 - `watching` / `needed` derive from `(role, state)` — the same mapping `narrate()` uses.
+  Three buckets only (`ours_funding | their_funding | settlement`); `confs == 0` covers both
+  "in mempool" and "not yet seen" — no finer distinction.
 - `confs` is the number the tick *already* fetched; we just keep it instead of discarding it.
 - `feerate_sat_vb` makes the post-mortem's fee activity visible; combined with `last_event`
-  (`fee-bump → 159 sat/vB at block H`) the user finally sees bumps in-app.
-- `last_event` is the existing `TickEvent { action, detail }`, plus a timestamp.
+  (`fee-bump → 159 sat/vB`) the user finally sees bumps in-app.
+- `last_event` is **only the latest** `TickEvent { action, detail }`, plus a timestamp — no
+  history.
+- Carried on **`listswaps`** (and `getswap`), so the row renders it without expanding.
 
 ---
 
@@ -81,21 +85,33 @@ The scheduler tick **already** calls `tx_confirmations` / `get_txout` and **alre
 
 ---
 
-## 4. UI rendering (Satchel Swaps screen)
+## 4. UI rendering
 
-Additive only — `narrate()` stays **verbatim** (load-bearing UX), with a compact progress line
-beneath it in the active-swap row:
+**Primary home: the Corkboard ActiveSwaps dock** (`ActiveSwaps.tsx`) — the trading view people
+actually watch during a swap. Its row is already horizontally full (chip · amounts · role ·
+ellipsized `narrate()` · refund-at · action buttons), so the progress goes on a **compact second
+line under the existing row**, not inline. The dock has the vertical room for it
+(`maxHeight: 34vh`, `overflowY: auto`) and renders nothing when no swap is in flight.
 
-- **Confirming:** `Redeem confirming · 2/6 · 159 sat/vB` (a small determinate progress bar on
-  `confs/needed`).
+**Also on the Swaps screen** (`SwapsScreen.tsx`): the same line under the always-visible
+`narrate()` in the `colSpan={6}` sub-row (~line 188–191), above the expand toggle. Same
+`SwapProgress` data, trivially reused.
+
+Both: **active swaps only**; `narrate()` stays **verbatim** (load-bearing UX) — this is a
+separate additive line, never a rewrite; sourced from `listswaps` (shows without expanding);
+the expandable audit (txids, Dump) is unchanged.
+
+Line content by situation:
+
+- **Confirming:** `Redeem confirming · 2/6 · 159 sat/vB`, with a small determinate progress bar
+  on `confs/needed`.
 - **Waiting on counterparty:** `Waiting for their BTC lock · 0/6`.
-- **Just bumped:** if `last_event.action == "fee-bump"` within the last tick →
+- **Just bumped:** if `last_event.action == "fee-bump"` on the most recent tick →
   `Fee-bumped to 159 sat/vB` (transient, accent colour).
 - **Trouble:** `reorg-alert` / stall events → a warning-coloured line, lifting what is today
   log-only into view.
-- Rough ETA (optional): `~(needed − confs) × chain_block_time` rendered as "≈40 min left".
 
-The expandable audit (txids, Dump) is unchanged; this only enriches the always-visible row.
+No ETA, no event history — only the live counts, current feerate, and the single latest event.
 
 ---
 
@@ -108,16 +124,6 @@ The expandable audit (txids, Dump) is unchanged; this only enriches the always-v
 - **Honest about staleness** — `updated_at` lets the UI grey out a snapshot older than ~2 ticks
   (e.g. daemon detached) rather than imply live data.
 
----
-
-## 6. Open questions
-
-- [ ] **`watching` granularity** — three buckets (ours/their funding, settlement) enough, or
-  also distinguish "in mempool, unconfirmed" vs "0 confs but seen"?
-- [ ] **ETA** — show it (needs a per-chain block-time estimate) or omit as guesswork?
-- [ ] **Event history** — surface only the *latest* tick event, or a short rolling list (last
-  3) in the expandable audit?
-- [ ] **Corkboard ActiveSwaps panel** — mirror the same progress line there, or keep it on the
-  Swaps screen only?
-- [ ] Does `listswaps` or only `getswap` carry `SwapProgress`? (Prefer `listswaps` so the row
-  shows it without expanding.)
+Decisions baked in (no open points): three `watching` buckets; **no ETA**; **latest event
+only, no history**; `SwapProgress` carried on `listswaps`; rendered in the **Corkboard
+ActiveSwaps dock (primary, as a compact second line per row)** and on the **Swaps screen**.
