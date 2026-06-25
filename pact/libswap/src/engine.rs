@@ -3101,10 +3101,24 @@ impl Engine {
                     .ok()
                     .and_then(|p| p.htlc_b().ok())
                     .map(|h| h.script_pubkey());
-                ("their_funding", &rec.chain_b, rec.htlc_b_txid.clone(), spk, rec.n_b, false, 0)
+                (
+                    "their_funding",
+                    &rec.chain_b,
+                    rec.htlc_b_txid.clone(),
+                    spk,
+                    rec.n_b,
+                    false,
+                    0,
+                )
             }
             (Initiator, RedeemedB) => (
-                "settlement", &rec.chain_b, rec.final_txid.clone(), spend_spk(rec), rec.n_b, true, rec.amount_b,
+                "settlement",
+                &rec.chain_b,
+                rec.final_txid.clone(),
+                spend_spk(rec),
+                rec.n_b,
+                true,
+                rec.amount_b,
             ),
             (Participant, Accepted) => {
                 let spk = self
@@ -3112,7 +3126,15 @@ impl Engine {
                     .ok()
                     .and_then(|p| p.htlc_a().ok())
                     .map(|h| h.script_pubkey());
-                ("their_funding", &rec.chain_a, rec.htlc_a_txid.clone(), spk, rec.n_a, false, 0)
+                (
+                    "their_funding",
+                    &rec.chain_a,
+                    rec.htlc_a_txid.clone(),
+                    spk,
+                    rec.n_a,
+                    false,
+                    0,
+                )
             }
             (Participant, FundedA) => {
                 let spk = self
@@ -3120,14 +3142,29 @@ impl Engine {
                     .ok()
                     .and_then(|p| p.htlc_b().ok())
                     .map(|h| h.script_pubkey());
-                ("ours_funding", &rec.chain_b, rec.htlc_b_txid.clone(), spk, rec.n_b, false, 0)
+                (
+                    "ours_funding",
+                    &rec.chain_b,
+                    rec.htlc_b_txid.clone(),
+                    spk,
+                    rec.n_b,
+                    false,
+                    0,
+                )
             }
             _ => return None,
         };
         let txid = txid?;
         let backend = self.backend(chain).ok()?;
-        let confs = backend.tx_confirmations(&txid, spk.as_ref()).unwrap_or(0).min(u64::from(u32::MAX)) as u32;
-        let feerate = if settlement { feerate_of(rec.final_tx_hex.as_deref(), amount) } else { None };
+        let confs = backend
+            .tx_confirmations(&txid, spk.as_ref())
+            .unwrap_or(0)
+            .min(u64::from(u32::MAX)) as u32;
+        let feerate = if settlement {
+            feerate_of(rec.final_tx_hex.as_deref(), amount)
+        } else {
+            None
+        };
         Some(SwapProgress {
             swap_id: rec.swap_id.clone(),
             watching: watching.into(),
@@ -3145,16 +3182,29 @@ impl Engine {
     /// feerate baked into the record, so no tx parsing is needed.
     fn swap_progress_v2(&self, rec: &AdaptorSwapRecord) -> Option<SwapProgress> {
         use crate::adaptor_swap::AdaptorState::*;
-        let (chain, txid, hex, needed, feerate): (&ChainRef, Option<String>, Option<&str>, u32, u64) =
-            match (rec.role, rec.state) {
-                (Role::Initiator, RedeemedB) => (
-                    &rec.chain_b, rec.final_txid_b.clone(), rec.final_tx_b_hex.as_deref(), rec.n_b, rec.redeem_feerate_b,
-                ),
-                (Role::Participant, Completed) => (
-                    &rec.chain_a, rec.final_txid_a.clone(), rec.final_tx_a_hex.as_deref(), rec.n_a, rec.redeem_feerate_a,
-                ),
-                _ => return None,
-            };
+        let (chain, txid, hex, needed, feerate): (
+            &ChainRef,
+            Option<String>,
+            Option<&str>,
+            u32,
+            u64,
+        ) = match (rec.role, rec.state) {
+            (Role::Initiator, RedeemedB) => (
+                &rec.chain_b,
+                rec.final_txid_b.clone(),
+                rec.final_tx_b_hex.as_deref(),
+                rec.n_b,
+                rec.redeem_feerate_b,
+            ),
+            (Role::Participant, Completed) => (
+                &rec.chain_a,
+                rec.final_txid_a.clone(),
+                rec.final_tx_a_hex.as_deref(),
+                rec.n_a,
+                rec.redeem_feerate_a,
+            ),
+            _ => return None,
+        };
         let txid = txid?;
         let backend = self.backend(chain).ok()?;
         let confs = backend
