@@ -312,8 +312,6 @@ export const nl: Bundle = {
     feeCommitted: "Redeem-overprovisie (×)",
     feeCommittedHint:
       "Hoeveel extra de v2-redeem-fee vooruit wordt betaald zodat hij bevestigt zelfs wanneer Satchel gesloten is. Geldt alleen voor nieuwe swaps. Standaard 2.",
-    feeStep: "RBF-escalatiestap (%)",
-    feeStepHint: "Hoe agressief de fee van een vastgelopen uitgave stijgt bij elke scheduler-doorgang. Standaard 50.",
     feeSave: "Opslaan",
     feeSaving: "Opslaan…",
     feeSaved: "Opgeslagen",

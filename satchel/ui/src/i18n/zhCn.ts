@@ -312,8 +312,6 @@ export const zhCn: Bundle = {
     feeCommitted: "赎回超额预付（×）",
     feeCommittedHint:
       "v2 赎回费用预付多少额外金额，以便即使 Satchel 已关闭也能确认。仅适用于新交换。默认 2。",
-    feeStep: "RBF 递增步长（%）",
-    feeStepHint: "每轮调度时，卡住的支出费用上调的激进程度。默认 50。",
     feeSave: "保存",
     feeSaving: "正在保存…",
     feeSaved: "已保存",

@@ -312,8 +312,6 @@ export const fi: Bundle = {
     feeCommitted: "Lunastuksen ylimitoitus (×)",
     feeCommittedHint:
       "Kuinka paljon ylimääräistä v2-lunastusmaksu maksetaan etukäteen, jotta se vahvistuu silloinkin kun Satchel on suljettu. Koskee vain uusia swapeja. Oletus 2.",
-    feeStep: "RBF-eskalaatioaskel (%)",
-    feeStepHint: "Kuinka aggressiivisesti jumiutuneen lähetyksen maksu nousee jokaisella ajastimen kierroksella. Oletus 50.",
     feeSave: "Tallenna",
     feeSaving: "Tallennetaan…",
     feeSaved: "Tallennettu",

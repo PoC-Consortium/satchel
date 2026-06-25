@@ -320,8 +320,6 @@ export const en = {
     feeCommitted: "Redeem over-provision (×)",
     feeCommittedHint:
       "How much extra the v2 redeem fee is pre-paid so it confirms even when Satchel is closed. Applies to new swaps only. Default 2.",
-    feeStep: "RBF escalation step (%)",
-    feeStepHint: "How aggressively a stuck spend's fee climbs each scheduler pass. Default 50.",
     feeSave: "Save",
     feeSaving: "Saving…",
     feeSaved: "Saved",

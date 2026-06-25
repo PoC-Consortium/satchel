@@ -312,8 +312,6 @@ export const cs: Bundle = {
     feeCommitted: "Předzásobení výplaty (×)",
     feeCommittedHint:
       "Kolik navíc se předplatí na poplatek za v2 výplatu, aby se potvrdila, i když je Satchel zavřený. Platí jen pro nové swapy. Výchozí 2.",
-    feeStep: "Krok eskalace RBF (%)",
-    feeStepHint: "Jak agresivně roste poplatek uvázlé útraty při každém průchodu plánovače. Výchozí 50.",
     feeSave: "Uložit",
     feeSaving: "Ukládání…",
     feeSaved: "Uloženo",

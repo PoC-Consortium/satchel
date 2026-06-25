@@ -312,8 +312,6 @@ export const hi: Bundle = {
     feeCommitted: "Redeem ओवर-प्रोविज़न (×)",
     feeCommittedHint:
       "v2 redeem fee कितनी अतिरिक्त पहले से चुकाई जाती है ताकि Satchel बंद होने पर भी यह कन्फ़र्म हो। केवल नए स्वैप पर लागू। डिफ़ॉल्ट 2।",
-    feeStep: "RBF वृद्धि चरण (%)",
-    feeStepHint: "हर शेड्यूलर पास पर एक अटके हुए खर्च की fee कितनी आक्रामक रूप से बढ़ती है। डिफ़ॉल्ट 50।",
     feeSave: "सहेजें",
     feeSaving: "सहेजा जा रहा है…",
     feeSaved: "सहेजा गया",

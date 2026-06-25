@@ -312,8 +312,6 @@ export const pl: Bundle = {
     feeCommitted: "Nadwyżka na wykup (×)",
     feeCommittedHint:
       "Ile dodatkowo opłata za wykup v2 jest opłacana z góry, aby potwierdziła się nawet przy zamkniętym Satchel. Dotyczy tylko nowych swapów. Domyślnie 2.",
-    feeStep: "Krok eskalacji RBF (%)",
-    feeStepHint: "Jak agresywnie rośnie opłata utkniętego wydatku przy każdym przejściu schedulera. Domyślnie 50.",
     feeSave: "Zapisz",
     feeSaving: "Zapisywanie…",
     feeSaved: "Zapisano",
