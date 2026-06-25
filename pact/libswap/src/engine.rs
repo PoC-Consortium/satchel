@@ -3083,15 +3083,21 @@ impl Engine {
             (Role::Initiator, State::RedeemedB) => {
                 let backend_b = self.backend(&rec.chain_b)?;
                 let txid = rec.final_txid.as_deref().context("no redeem txid")?;
+                let confs = backend_b.tx_confirmations(txid, spend_spk(rec).as_ref())?;
                 // Completion needs the chain's full confirmation policy,
                 // not 1 conf — a shallow redeem can still reorg away, and
                 // the T1 refund stays armed until this point (spec §9.5).
-                if backend_b.tx_confirmations(txid, spend_spk(rec).as_ref())? >= u64::from(rec.n_b)
-                {
+                if confs >= u64::from(rec.n_b) {
                     let mut updated = rec.clone();
                     updated.state = State::Completed;
                     self.store.put(&updated)?;
                     return event("completed", txid.to_string());
+                }
+                // Mined but shallow (1..n_b): the redeem is in a block, so it
+                // can't be RBF'd — nursing it would only emit rejected
+                // double-spend broadcasts every tick. Just wait for depth.
+                if confs >= 1 {
+                    return Ok(None);
                 }
                 self.maybe_bump(rec, &backend_b)
             }
@@ -3275,18 +3281,37 @@ impl Engine {
         }))
     }
 
-    /// RBF-replace our unconfirmed HTLC spend at an escalated fee
-    /// (spec §7.4 mandates aggressive bumping near deadlines). Reuses the
-    /// original destination. Once a higher fee would push the output
-    /// under dust, falls back to rebroadcasting the existing tx in case
-    /// mempools dropped it.
+    /// Nurse our unconfirmed HTLC spend (v1 redeem/refund) toward the live
+    /// market, not by a market-blind geometric step. The unified strategy
+    /// (post-mortem 2026-06-25, `fee-bump-design.md` §2.3):
+    ///
+    /// - **Block-driven cadence** — act at most once per block (`last_action_height`);
+    ///   the 30s tick that produced the live-mainnet fee storm now backs out within
+    ///   the same block.
+    /// - **Market-tracking, value-capped target** — [`FeeBumpPolicy::target_feerate`]
+    ///   = `min(market, value_at_risk·cap, ceiling)`; it can never bid 159 sat/vB
+    ///   into a 1 sat/vB market, and never exceeds the amount being claimed.
+    /// - **Bump only when it clears BIP125 Rule 4** — the target must beat the
+    ///   current feerate by the node's incremental-relay fee (A4), else there is
+    ///   nothing relayable to do.
+    /// - **Evicted-only rebroadcast** — when no bump is warranted, re-anchor the
+    ///   *same* tx only if it actually fell out of the mempool; steady state is
+    ///   silent (no per-tick wallet churn).
+    ///
+    /// Only called with a 0-confirmation tx (callers gate on confirmations).
     fn maybe_bump(&self, rec: &SwapRecord, backend: &MultiBackend) -> Result<Option<TickEvent>> {
         let Some(tx_hex) = &rec.final_tx_hex else {
             return Ok(None); // record predates fee-bumping support
         };
+        // Step 0: act at most once per block.
+        let tip_height = backend.tip_height()?;
+        if tip_height == rec.last_action_height {
+            return Ok(None);
+        }
         let old_tx: bitcoin::Transaction =
             bitcoin::consensus::encode::deserialize(&hex::decode(tx_hex)?)
                 .context("corrupt final_tx_hex")?;
+        let old_txid = old_tx.compute_txid().to_string();
         let params = self.swap_params(rec)?;
         let (htlc, chain, amount, is_redeem) = match (rec.role, rec.state) {
             (Role::Initiator, State::RedeemedB) => {
@@ -3305,28 +3330,32 @@ impl Engine {
         };
 
         let destination = old_tx.output[0].script_pubkey.clone();
-        let old_fee = amount.saturating_sub(old_tx.output[0].value.to_sat());
-        // Policy escalation, capped at max_feerate (was a fixed ~50%, uncapped).
-        // `None` = already at the ceiling (nothing relayable); the dust case is
-        // when a higher fee would push the output under dust. Both fall back to
-        // rebroadcasting the existing tx in case mempools dropped it.
-        let (step_pct, vsize) = if is_redeem {
-            (self.fee_bump.redeem.step_pct, REDEEM_TX_VSIZE)
+        let vsize = if is_redeem {
+            REDEEM_TX_VSIZE
         } else {
-            (self.fee_bump.refund.step_pct, REFUND_TX_VSIZE)
+            REFUND_TX_VSIZE
         };
-        let new_fee = match self.fee_bump.escalate(old_fee, step_pct, vsize) {
-            Some(f) if amount > f + DUST_LIMIT_SAT => f,
-            _ => {
-                let txid = backend.broadcast(&old_tx)?;
-                return Ok(Some(TickEvent {
-                    swap_id: rec.swap_id.clone(),
-                    action: "rebroadcast".into(),
-                    detail: txid.to_string(),
-                }));
-            }
-        };
+        let old_fee = amount.saturating_sub(old_tx.output[0].value.to_sat());
+        let old_feerate = old_fee / vsize.max(1);
 
+        // Step 3: market-tracking, value-capped target.
+        let market = backend.fee_rate_sat_per_vb()?;
+        let target = self.fee_bump.target_feerate(market, amount, vsize);
+
+        // Step 4 gate: a replacement must clear BIP125 Rule 4 (beat the old
+        // feerate by the node's incremental relay fee). If the target doesn't —
+        // because the market hasn't risen, or we're already paying enough — there
+        // is nothing to bump (the "already paying enough" no-op that escalate()
+        // lacked). Re-anchor the existing tx only if it was evicted (step 5).
+        let new_fee = target.saturating_mul(vsize);
+        let bump_floor = old_feerate.saturating_add(backend.incremental_relay_feerate()?);
+        let dustless = amount > new_fee + DUST_LIMIT_SAT;
+        if target < bump_floor || !dustless {
+            return self.reanchor_if_evicted(rec, backend, &old_tx, &old_txid);
+        }
+
+        // Step 4: build and broadcast the higher-fee replacement, then record the
+        // block we acted in so we don't act again until the next block.
         let outpoint = old_tx.input[0].previous_output;
         let seed = self.store.seed()?;
         let key = seed.swap_secret_key(coin_of(chain)?, rec.swap_index)?;
@@ -3352,11 +3381,36 @@ impl Engine {
         let mut updated = rec.clone();
         updated.final_txid = Some(txid.to_string());
         updated.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&new_tx));
+        updated.last_action_height = tip_height;
         self.store.put(&updated)?;
         Ok(Some(TickEvent {
             swap_id: rec.swap_id.clone(),
             action: "fee-bump".into(),
-            detail: format!("{txid} (fee {old_fee} -> {new_fee} sat)"),
+            detail: format!(
+                "{txid} (fee {old_fee} -> {new_fee} sat, {old_feerate} -> {target} sat/vB)"
+            ),
+        }))
+    }
+
+    /// Step 5 of the bump loop: when no fee bump is warranted, re-broadcast the
+    /// *same* tx (same txid — invisible to the wallet) only if it actually fell
+    /// out of the mempool. In steady state the tx is present, so this is a silent
+    /// no-op — eliminating the per-tick rebroadcast that the old escalator emitted.
+    fn reanchor_if_evicted(
+        &self,
+        rec: &SwapRecord,
+        backend: &MultiBackend,
+        old_tx: &bitcoin::Transaction,
+        old_txid: &str,
+    ) -> Result<Option<TickEvent>> {
+        if backend.is_in_mempool(old_txid)? {
+            return Ok(None); // present → nothing to do
+        }
+        let txid = backend.broadcast(old_tx)?;
+        Ok(Some(TickEvent {
+            swap_id: rec.swap_id.clone(),
+            action: "rebroadcast".into(),
+            detail: txid.to_string(),
         }))
     }
 
