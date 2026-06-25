@@ -312,8 +312,6 @@ export const fr: Bundle = {
     feeCommitted: "Surprovisionnement du redeem (×)",
     feeCommittedHint:
       "Combien les frais de redeem v2 sont surpayés à l'avance pour qu'il confirme même quand Satchel est fermé. S'applique uniquement aux nouveaux swaps. Par défaut 2.",
-    feeStep: "Pas d'escalade RBF (%)",
-    feeStepHint: "À quelle agressivité les frais d'une dépense bloquée grimpent à chaque passage du planificateur. Par défaut 50.",
     feeSave: "Enregistrer",
     feeSaving: "Enregistrement…",
     feeSaved: "Enregistré",

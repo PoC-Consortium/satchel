@@ -312,8 +312,6 @@ export const ptBR: Bundle = {
     feeCommitted: "Sobreprovisão do redeem (×)",
     feeCommittedHint:
       "Quanto a mais a taxa de redeem v2 é pré-paga para que confirme mesmo com o Satchel fechado. Aplica-se apenas a novos swaps. Padrão 2.",
-    feeStep: "Passo de escalonamento RBF (%)",
-    feeStepHint: "Com que agressividade a taxa de um gasto travado sobe a cada passagem do agendador. Padrão 50.",
     feeSave: "Salvar",
     feeSaving: "Salvando…",
     feeSaved: "Salvo",

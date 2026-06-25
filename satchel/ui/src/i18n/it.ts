@@ -312,8 +312,6 @@ export const it: Bundle = {
     feeCommitted: "Sovra-provisioning del redeem (×)",
     feeCommittedHint:
       "Quanto extra viene pre-pagato per la fee del redeem v2 affinché venga confermato anche quando Satchel è chiuso. Si applica solo ai nuovi swap. Predefinito 2.",
-    feeStep: "Step di escalation RBF (%)",
-    feeStepHint: "Quanto aggressivamente la fee di una spesa bloccata sale ad ogni passaggio dello scheduler. Predefinito 50.",
     feeSave: "Salva",
     feeSaving: "Salvataggio…",
     feeSaved: "Salvato",

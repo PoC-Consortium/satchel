@@ -312,8 +312,6 @@ export const tr: Bundle = {
     feeCommitted: "Geri alma fazla tahsisi (×)",
     feeCommittedHint:
       "Satchel kapalıyken bile onaylansın diye v2 geri alma ücretinin ne kadar fazla önceden ödendiği. Yalnızca yeni takaslara uygulanır. Varsayılan 2.",
-    feeStep: "RBF tırmanma adımı (%)",
-    feeStepHint: "Takılı bir harcamanın ücretinin her zamanlayıcı geçişinde ne kadar agresif yükseldiği. Varsayılan 50.",
     feeSave: "Kaydet",
     feeSaving: "Kaydediliyor…",
     feeSaved: "Kaydedildi",
