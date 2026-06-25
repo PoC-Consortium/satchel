@@ -2363,7 +2363,9 @@ impl Engine {
         // value-capped target, bump only when it clears BIP125 Rule 4, else
         // re-anchor the same tx only if it was evicted.
         let market = backend.fee_rate_sat_per_vb()?;
-        let target = self.fee_bump.target_feerate(market, amount, REFUND_TX_VSIZE);
+        let target = self
+            .fee_bump
+            .target_feerate(market, amount, REFUND_TX_VSIZE);
         let new_fee = target.saturating_mul(REFUND_TX_VSIZE);
         let bump_floor = old_feerate.saturating_add(backend.incremental_relay_feerate()?);
         let dustless = amount > new_fee + DUST_LIMIT_SAT;
@@ -3577,8 +3579,11 @@ impl Engine {
                 .params()
                 .parse_address(&backend.wallet_new_address()?)?;
             let fee = spend_fee_sat(
-                self.fee_bump
-                    .target_feerate(backend.fee_rate_sat_per_vb()?, amount, REFUND_TX_VSIZE),
+                self.fee_bump.target_feerate(
+                    backend.fee_rate_sat_per_vb()?,
+                    amount,
+                    REFUND_TX_VSIZE,
+                ),
                 REFUND_TX_VSIZE,
             );
             let refund_tx = build_refund_tx(&htlc, new_outpoint, amount, destination, fee, &key)?;
