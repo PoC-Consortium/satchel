@@ -673,6 +673,13 @@ export const sr: Bundle = {
     refunded: "Своп се није завршио, па се ваш {coin} аутоматски вратио. Ништа изгубљено осим накнада.",
     aborted: "Отказано пре него што се иједан новац померио.",
   },
+  progress: {
+    settlement: "Потврђивање наплате",
+    theirFunding: "Чекање на њихово закључавање",
+    oursFunding: "Закључавање ваших средстава",
+    feeBumped: "Накнада повећана",
+    reorg: "Откривена реорганизација — поновна провера",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

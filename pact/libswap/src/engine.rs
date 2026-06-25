@@ -15,9 +15,10 @@ use anyhow::{bail, ensure, Context, Result};
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::{OutPoint, ScriptBuf};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Mutex;
 
 use crate::adaptor_swap::AdaptorState;
 use crate::chain::{ChainBackend, MultiBackend};
@@ -74,6 +75,13 @@ pub struct Engine {
     /// [`Engine::open`]; toggled at runtime via [`Engine::set_watch_only`]
     /// (pactd `setwatchonly`), and reported by `getinfo`.
     pub watch_only: bool,
+    /// Live, in-memory progress snapshot per active swap (observability only —
+    /// never ledger truth). Rebuilt every [`Engine::tick`] from the data the
+    /// tick already gathers, and served verbatim by the `swapprogress` RPC so
+    /// the UI shows confirmation depth + the latest scheduler action without a
+    /// node call per poll. Ephemeral: empty after a restart until the next tick
+    /// repopulates it.
+    progress: Mutex<HashMap<String, SwapProgress>>,
 }
 
 fn chain_params(chain: &ChainRef) -> Result<&'static ChainParams> {
@@ -449,6 +457,7 @@ impl Engine {
             auto_fund: false,
             fee_bump,
             watch_only,
+            progress: Mutex::new(HashMap::new()),
         })
     }
 
@@ -2958,7 +2967,148 @@ impl Engine {
                 }),
             }
         }
+        // Observability: refresh the live progress snapshot from the records (and
+        // fold in this round's latest event per swap). Never fails the tick.
+        self.refresh_progress(&events);
         events
+    }
+
+    /// Rebuild the in-memory [`SwapProgress`] map from the current records. Called
+    /// at the end of every [`Engine::tick`]; terminal swaps yield no progress so
+    /// the map self-prunes. One light confirmations query per active swap per tick
+    /// (the 30s scheduler cadence) — never on the UI's faster poll.
+    fn refresh_progress(&self, events: &[TickEvent]) {
+        let mut latest: HashMap<&str, &TickEvent> = HashMap::new();
+        for e in events {
+            latest.insert(e.swap_id.as_str(), e); // events are in order → last wins
+        }
+        let mut snap: HashMap<String, SwapProgress> = HashMap::new();
+        let fold = |mut p: SwapProgress| -> SwapProgress {
+            if let Some(e) = latest.get(p.swap_id.as_str()) {
+                if e.action != "error" {
+                    p.last_action = Some(e.action.clone());
+                    p.last_detail = Some(e.detail.clone());
+                }
+            }
+            p
+        };
+        if let Ok(records) = self.store.list() {
+            for rec in &records {
+                if let Some(p) = self.swap_progress_v1(rec) {
+                    snap.insert(rec.swap_id.clone(), fold(p));
+                }
+            }
+        }
+        for rec in self.store.list_adaptor().unwrap_or_default() {
+            if let Some(p) = self.swap_progress_v2(&rec) {
+                snap.insert(rec.swap_id.clone(), fold(p));
+            }
+        }
+        if let Ok(mut g) = self.progress.lock() {
+            *g = snap;
+        }
+    }
+
+    /// A clone of the current progress snapshot (served by the `swapprogress` RPC).
+    pub fn swap_progress_snapshot(&self) -> Vec<SwapProgress> {
+        self.progress
+            .lock()
+            .map(|g| g.values().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// Progress for one v1 swap, or `None` for states with nothing watchable
+    /// (pre-funding, terminal, or a leg we can't yet see on-chain). `confs` comes
+    /// from the chain backend; `feerate_sat_vb` is read off our own settlement tx.
+    fn swap_progress_v1(&self, rec: &SwapRecord) -> Option<SwapProgress> {
+        use Role::*;
+        use State::*;
+        // (watching, chain, txid, spk_hint, needed, settlement, claim_amount)
+        let (watching, chain, txid, spk, needed, settlement, amount): (
+            &str,
+            &ChainRef,
+            Option<String>,
+            Option<ScriptBuf>,
+            u32,
+            bool,
+            u64,
+        ) = match (rec.role, rec.state) {
+            (Initiator, FundedA) | (Initiator, FundedB) => {
+                let spk = self
+                    .swap_params(rec)
+                    .ok()
+                    .and_then(|p| p.htlc_b().ok())
+                    .map(|h| h.script_pubkey());
+                ("their_funding", &rec.chain_b, rec.htlc_b_txid.clone(), spk, rec.n_b, false, 0)
+            }
+            (Initiator, RedeemedB) => (
+                "settlement", &rec.chain_b, rec.final_txid.clone(), spend_spk(rec), rec.n_b, true, rec.amount_b,
+            ),
+            (Participant, Accepted) => {
+                let spk = self
+                    .swap_params(rec)
+                    .ok()
+                    .and_then(|p| p.htlc_a().ok())
+                    .map(|h| h.script_pubkey());
+                ("their_funding", &rec.chain_a, rec.htlc_a_txid.clone(), spk, rec.n_a, false, 0)
+            }
+            (Participant, FundedA) => {
+                let spk = self
+                    .swap_params(rec)
+                    .ok()
+                    .and_then(|p| p.htlc_b().ok())
+                    .map(|h| h.script_pubkey());
+                ("ours_funding", &rec.chain_b, rec.htlc_b_txid.clone(), spk, rec.n_b, false, 0)
+            }
+            _ => return None,
+        };
+        let txid = txid?;
+        let backend = self.backend(chain).ok()?;
+        let confs = backend.tx_confirmations(&txid, spk.as_ref()).unwrap_or(0).min(u64::from(u32::MAX)) as u32;
+        let feerate = if settlement { feerate_of(rec.final_tx_hex.as_deref(), amount) } else { None };
+        Some(SwapProgress {
+            swap_id: rec.swap_id.clone(),
+            watching: watching.into(),
+            confs,
+            needed,
+            feerate_sat_vb: feerate,
+            last_action: None,
+            last_detail: None,
+            updated_at: local_now(),
+        })
+    }
+
+    /// Progress for one v2 (adaptor) swap — settlement-confirming legs only (the
+    /// high-value case); v2 funding is nursed separately. Feerate is the redeem
+    /// feerate baked into the record, so no tx parsing is needed.
+    fn swap_progress_v2(&self, rec: &AdaptorSwapRecord) -> Option<SwapProgress> {
+        use crate::adaptor_swap::AdaptorState::*;
+        let (chain, txid, hex, needed, feerate): (&ChainRef, Option<String>, Option<&str>, u32, u64) =
+            match (rec.role, rec.state) {
+                (Role::Initiator, RedeemedB) => (
+                    &rec.chain_b, rec.final_txid_b.clone(), rec.final_tx_b_hex.as_deref(), rec.n_b, rec.redeem_feerate_b,
+                ),
+                (Role::Participant, Completed) => (
+                    &rec.chain_a, rec.final_txid_a.clone(), rec.final_tx_a_hex.as_deref(), rec.n_a, rec.redeem_feerate_a,
+                ),
+                _ => return None,
+            };
+        let txid = txid?;
+        let backend = self.backend(chain).ok()?;
+        let confs = backend
+            .tx_confirmations(&txid, first_output_spk(hex).as_ref())
+            .unwrap_or(0)
+            .min(u64::from(u32::MAX)) as u32;
+        Some(SwapProgress {
+            swap_id: rec.swap_id.clone(),
+            watching: "settlement".into(),
+            confs,
+            needed,
+            feerate_sat_vb: Some(feerate),
+            last_action: None,
+            last_detail: None,
+            updated_at: local_now(),
+        })
     }
 
     /// C8: abandon taker-side pending takes older than the handshake timeout.
@@ -4691,9 +4841,51 @@ impl Engine {
 /// The scriptPubKey our final spend pays (output 0 of the stored tx) —
 /// the script hint Electrum backends need to locate the transaction.
 fn spend_spk(rec: &SwapRecord) -> Option<bitcoin::ScriptBuf> {
-    let bytes = hex::decode(rec.final_tx_hex.as_deref()?).ok()?;
+    first_output_spk(rec.final_tx_hex.as_deref())
+}
+
+/// The first-output scriptPubKey of a serialized tx (our HTLC spends are 1-out),
+/// used as a backend lookup hint. `None` if the hex is absent/corrupt.
+fn first_output_spk(tx_hex: Option<&str>) -> Option<bitcoin::ScriptBuf> {
+    let bytes = hex::decode(tx_hex?).ok()?;
     let tx: bitcoin::Transaction = bitcoin::consensus::encode::deserialize(&bytes).ok()?;
     Some(tx.output.first()?.script_pubkey.clone())
+}
+
+/// Effective feerate (sat/vB) of a 1-in/1-out settlement tx: `(claimed − output)
+/// / vsize`. `None` if the hex is absent/corrupt or the arithmetic underflows.
+fn feerate_of(tx_hex: Option<&str>, claimed_amount: u64) -> Option<u64> {
+    let bytes = hex::decode(tx_hex?).ok()?;
+    let tx: bitcoin::Transaction = bitcoin::consensus::encode::deserialize(&bytes).ok()?;
+    let out = tx.output.first()?.value.to_sat();
+    let fee = claimed_amount.checked_sub(out)?;
+    let vsize = tx.vsize() as u64;
+    (vsize > 0).then(|| fee / vsize)
+}
+
+/// Live per-swap progress for the UI (observability only). Rebuilt each
+/// [`Engine::tick`] and served by `swapprogress`; see the field doc on
+/// [`Engine::progress`]. Secret-free by construction (counts, txid-derived data,
+/// feerate, the latest scheduler action text — no preimage or keys).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SwapProgress {
+    pub swap_id: String,
+    /// What we're watching now: `settlement` | `their_funding` | `ours_funding`.
+    pub watching: String,
+    /// Confirmations of the watched tx so far (`0` = in mempool / not yet seen).
+    pub confs: u32,
+    /// Confirmation depth required for this leg (`n_a`/`n_b`).
+    pub needed: u32,
+    /// Current feerate of our settlement tx (sat/vB); absent for funding waits.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub feerate_sat_vb: Option<u64>,
+    /// The most recent scheduler action for this swap, if any this tick.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_action: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_detail: Option<String>,
+    /// When this snapshot was taken (unix seconds) — lets the UI grey out stale data.
+    pub updated_at: u64,
 }
 
 /// One scheduler action (or error) on one swap.

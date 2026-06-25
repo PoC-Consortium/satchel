@@ -673,6 +673,13 @@ export const gl: Bundle = {
     refunded: "O intercambio non se completou, así que os teus {coin} retornaron automaticamente. Non se perdeu nada agás as comisións.",
     aborted: "Cancelado antes de que se movese diñeiro.",
   },
+  progress: {
+    settlement: "Confirmando o cobro",
+    theirFunding: "Agardando o seu bloqueo",
+    oursFunding: "Bloqueando os teus fondos",
+    feeBumped: "Comisión aumentada",
+    reorg: "Reorganización detectada — comprobando de novo",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

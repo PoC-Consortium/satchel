@@ -673,6 +673,13 @@ export const hi: Bundle = {
     refunded: "स्वैप पूरा नहीं हुआ, इसलिए आपका {coin} अपने आप वापस आ गया। fees के अलावा कुछ नहीं खोया।",
     aborted: "किसी पैसे के हिलने से पहले रद्द किया गया।",
   },
+  progress: {
+    settlement: "दावे की पुष्टि हो रही है",
+    theirFunding: "उनके लॉक की प्रतीक्षा",
+    oursFunding: "आपके फंड लॉक हो रहे हैं",
+    feeBumped: "शुल्क बढ़ाया गया",
+    reorg: "रीऑर्ग पाया गया — फिर से जाँच",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

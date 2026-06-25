@@ -673,6 +673,13 @@ export const ja: Bundle = {
     refunded: "スワップは完了しなかったため、あなたの {coin} は自動的に返ってきました。失ったのは手数料だけです。",
     aborted: "資金が動く前にキャンセルされました。",
   },
+  progress: {
+    settlement: "受領を確認中",
+    theirFunding: "相手のロックを待機中",
+    oursFunding: "資金をロック中",
+    feeBumped: "手数料を引き上げ",
+    reorg: "再編成を検出 — 再確認中",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

@@ -673,6 +673,13 @@ export const ro: Bundle = {
     refunded: "Swap-ul nu s-a finalizat, deci {coin} tău s-a întors automat. Nimic pierdut în afară de comisioane.",
     aborted: "Anulat înainte ca vreun ban să se miște.",
   },
+  progress: {
+    settlement: "Se confirmă revendicarea",
+    theirFunding: "Se așteaptă blocarea lor",
+    oursFunding: "Se blochează fondurile tale",
+    feeBumped: "Comision majorat",
+    reorg: "Reorganizare detectată — se reverifică",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

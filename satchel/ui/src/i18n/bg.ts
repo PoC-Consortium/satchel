@@ -673,6 +673,13 @@ export const bg: Bundle = {
     refunded: "Суапът не се завърши, така че вашите {coin} се върнаха автоматично. Не сте загубили нищо освен такси.",
     aborted: "Отменен, преди да се раздвижат пари.",
   },
+  progress: {
+    settlement: "Потвърждаване на вземането",
+    theirFunding: "Изчакване на тяхното заключване",
+    oursFunding: "Заключване на средствата ви",
+    feeBumped: "Таксата е увеличена",
+    reorg: "Открита реорганизация — повторна проверка",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

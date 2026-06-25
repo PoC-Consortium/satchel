@@ -673,6 +673,13 @@ export const ca: Bundle = {
     refunded: "L'intercanvi no s'ha completat, així que els teus {coin} han tornat automàticament. No s'ha perdut res excepte comissions.",
     aborted: "Cancel·lat abans que es mogués cap diner.",
   },
+  progress: {
+    settlement: "Confirmant la reclamació",
+    theirFunding: "Esperant el seu bloqueig",
+    oursFunding: "Bloquejant els teus fons",
+    feeBumped: "Comissió apujada",
+    reorg: "Reorganització detectada — recomprovant",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

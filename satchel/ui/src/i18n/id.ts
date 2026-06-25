@@ -673,6 +673,13 @@ export const id: Bundle = {
     refunded: "Swap tidak selesai, jadi {coin} Anda kembali otomatis. Tidak ada yang hilang selain biaya.",
     aborted: "Dibatalkan sebelum ada uang yang bergerak.",
   },
+  progress: {
+    settlement: "Mengonfirmasi klaim",
+    theirFunding: "Menunggu penguncian mereka",
+    oursFunding: "Mengunci dana Anda",
+    feeBumped: "Biaya dinaikkan",
+    reorg: "Reorg terdeteksi — memeriksa ulang",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

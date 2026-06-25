@@ -681,6 +681,15 @@ export const en = {
     refunded: "The swap did not complete, so your {coin} came back automatically. Nothing lost but fees.",
     aborted: "Cancelled before any money moved.",
   },
+  // Live active-swap progress line (observability). Only these labels are
+  // translatable; counts and feerate are composed from data in the component.
+  progress: {
+    settlement: "Claim confirming",
+    theirFunding: "Waiting for their lock",
+    oursFunding: "Locking your funds",
+    feeBumped: "Fee-bumped",
+    reorg: "Reorg detected — re-checking",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

@@ -673,6 +673,13 @@ export const lt: Bundle = {
     refunded: "Mainai nebuvo užbaigti, todėl jūsų {coin} grįžo automatiškai. Prarasti tik mokesčiai.",
     aborted: "Atšaukta prieš judant pinigams.",
   },
+  progress: {
+    settlement: "Patvirtinamas atsiėmimas",
+    theirFunding: "Laukiama jų užrakinimo",
+    oursFunding: "Užrakinamos jūsų lėšos",
+    feeBumped: "Mokestis padidintas",
+    reorg: "Aptiktas reorg — tikrinama iš naujo",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

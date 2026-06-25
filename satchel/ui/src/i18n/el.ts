@@ -673,6 +673,13 @@ export const el: Bundle = {
     refunded: "Η ανταλλαγή δεν ολοκληρώθηκε, οπότε τα {coin} σας επέστρεψαν αυτόματα. Δεν χάθηκε τίποτα εκτός των τελών.",
     aborted: "Ακυρώθηκε πριν κινηθούν χρήματα.",
   },
+  progress: {
+    settlement: "Επιβεβαίωση εξαργύρωσης",
+    theirFunding: "Αναμονή για το κλείδωμά τους",
+    oursFunding: "Κλείδωμα των κεφαλαίων σας",
+    feeBumped: "Αύξηση τέλους",
+    reorg: "Εντοπίστηκε reorg — επανέλεγχος",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

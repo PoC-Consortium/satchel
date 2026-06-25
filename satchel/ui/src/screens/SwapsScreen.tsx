@@ -20,6 +20,7 @@ import { useT } from "../i18n";
 import { asset, fmtAmt, isActive, isTerminal, settlementLeg } from "../format";
 import { dumpSwap } from "../api/tauri";
 import { narrate } from "./narrate";
+import SwapProgressLine from "../components/SwapProgressLine";
 import { C } from "../theme";
 import type { Swap, SwapState } from "../api/types";
 
@@ -189,6 +190,12 @@ function SwapRow({ s }: { s: Swap }) {
         <TableCell colSpan={6} sx={{ color: "text.secondary", fontSize: 12, pt: 0 }}>
           {/* pactd narration is shown VERBATIM (do not rewrite). */}
           <Typography sx={{ fontSize: 12, color: "text.secondary" }}>{narrate(s)}</Typography>
+          {/* Live progress (observability) — additive, never replaces narrate(). */}
+          {s.progress && (
+            <Box sx={{ mt: 0.5 }}>
+              <SwapProgressLine p={s.progress} />
+            </Box>
+          )}
           <Collapse in={open} unmountOnExit>
             <SwapAudit s={s} />
           </Collapse>

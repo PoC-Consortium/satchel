@@ -673,6 +673,13 @@ export const zhCn: Bundle = {
     refunded: "交换未能完成，因此你的 {coin} 已自动退回。除手续费外没有任何损失。",
     aborted: "在任何资金转移之前已取消。",
   },
+  progress: {
+    settlement: "正在确认认领",
+    theirFunding: "等待对方锁定",
+    oursFunding: "正在锁定您的资金",
+    feeBumped: "已提高手续费",
+    reorg: "检测到重组 — 重新检查",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).

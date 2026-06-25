@@ -20,6 +20,7 @@ import type {
   PendingTake,
   RelayStatus,
   Swap,
+  SwapProgress,
   V1SwapRecord,
 } from "./api/types";
 
@@ -181,12 +182,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // pre-swap. A pending take is dropped once its real record exists (same id).
   const refreshSwaps = useCallback(async () => {
     try {
-      const [v1, v2, pend] = await Promise.all([
+      const [v1, v2, pend, prog] = await Promise.all([
         rpc<V1SwapRecord[]>("listswaps"),
         rpc<AdaptorSwapRecord[]>("listadaptorswaps"),
         rpc<PendingTake[]>("listpendingtakes"),
+        // Live progress is observability-only; never let it break the refresh.
+        rpc<SwapProgress[]>("swapprogress").catch(() => [] as SwapProgress[]),
       ]);
-      const real = [...v1.map(v1ToSwap), ...v2.map(adaptorToSwap)];
+      const progById = new Map(prog.map((p) => [p.swap_id, p]));
+      const real = [...v1.map(v1ToSwap), ...v2.map(adaptorToSwap)].map((s) => {
+        const p = progById.get(s.swap_id);
+        return p ? { ...s, progress: p } : s;
+      });
       const realIds = new Set(real.map((s) => s.swap_id));
       const pending = pend.filter((p) => !realIds.has(p.offer_id)).map(pendingTakeToSwap);
       setSwaps([...real, ...pending]);

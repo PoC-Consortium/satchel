@@ -5,6 +5,7 @@ import { useT } from "../i18n";
 import { dumpSwap, errMsg, rpc } from "../api/tauri";
 import { asset, fmtAmt, isActive } from "../format";
 import { narrate } from "../screens/narrate";
+import SwapProgressLine from "./SwapProgressLine";
 import { C } from "../theme";
 import type { Swap } from "../api/types";
 
@@ -146,17 +147,18 @@ function ActiveSwapRow({
   const t = useT();
   const refundAt = s.role === "initiator" ? s.t1 : s.t2;
   return (
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        gap: 1.25,
-        px: 2,
-        py: 0.875,
-        flexWrap: "wrap",
-        borderTop: first ? "none" : `1px solid ${C.line}`,
-      }}
-    >
+    <Box sx={{ borderTop: first ? "none" : `1px solid ${C.line}` }}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1.25,
+          px: 2,
+          pt: 0.875,
+          pb: s.progress ? 0.25 : 0.875,
+          flexWrap: "wrap",
+        }}
+      >
       <Chip label={s.state} size="small" sx={{ height: 20, bgcolor: "action.selected", fontSize: 11 }} />
       <Typography sx={{ fontFamily: C.mono, fontWeight: 600, fontSize: 13 }}>
         {fmtAmt(s.amount_a, asset(s.chain_a))} → {fmtAmt(s.amount_b, asset(s.chain_b))}
@@ -201,6 +203,14 @@ function ActiveSwapRow({
           </Button>
         </Tooltip>
       </Stack>
+      </Box>
+      {/* Live progress (observability) — a compact second line; the top row is
+          already horizontally full. */}
+      {s.progress && (
+        <Box sx={{ px: 2, pb: 0.875 }}>
+          <SwapProgressLine p={s.progress} />
+        </Box>
+      )}
     </Box>
   );
 }
