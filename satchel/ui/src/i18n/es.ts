@@ -312,8 +312,6 @@ export const es: Bundle = {
     feeCommitted: "Sobreprovisión de redención (×)",
     feeCommittedHint:
       "Cuánto se prepaga de más la comisión de redención v2 para que confirme incluso con Satchel cerrado. Solo se aplica a swaps nuevos. Por defecto 2.",
-    feeStep: "Paso de escalado RBF (%)",
-    feeStepHint: "Con cuánta agresividad sube la comisión de un gasto atascado en cada pasada del planificador. Por defecto 50.",
     feeSave: "Guardar",
     feeSaving: "Guardando…",
     feeSaved: "Guardado",

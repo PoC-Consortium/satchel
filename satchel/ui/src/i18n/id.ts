@@ -312,8 +312,6 @@ export const id: Bundle = {
     feeCommitted: "Kelebihan provisi redeem (×)",
     feeCommittedHint:
       "Seberapa banyak ekstra biaya redeem v2 dibayar di muka agar terkonfirmasi bahkan saat Satchel ditutup. Hanya berlaku untuk swap baru. Bawaan 2.",
-    feeStep: "Langkah eskalasi RBF (%)",
-    feeStepHint: "Seberapa agresif biaya pengeluaran yang macet naik di tiap putaran penjadwal. Bawaan 50.",
     feeSave: "Simpan",
     feeSaving: "Menyimpan…",
     feeSaved: "Tersimpan",

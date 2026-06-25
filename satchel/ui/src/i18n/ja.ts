@@ -312,8 +312,6 @@ export const ja: Bundle = {
     feeCommitted: "リデーム過剰引き当て (×)",
     feeCommittedHint:
       "Satchel を閉じていても確定するよう、v2 のリデーム手数料を前払いする割増分です。新しいスワップにのみ適用されます。デフォルトは 2 です。",
-    feeStep: "RBF 引き上げ幅 (%)",
-    feeStepHint: "詰まった送金の手数料が、スケジューラのパスごとにどれだけ積極的に上がるかです。デフォルトは 50 です。",
     feeSave: "保存",
     feeSaving: "保存中…",
     feeSaved: "保存しました",

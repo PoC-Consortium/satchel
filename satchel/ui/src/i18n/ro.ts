@@ -312,8 +312,6 @@ export const ro: Bundle = {
     feeCommitted: "Supra-provizionare la redeem (×)",
     feeCommittedHint:
       "Cu cât în plus este pre-plătit comisionul de redeem v2 astfel încât să se confirme chiar și când Satchel este închis. Se aplică doar swap-urilor noi. Implicit 2.",
-    feeStep: "Pas de escaladare RBF (%)",
-    feeStepHint: "Cât de agresiv crește comisionul unei cheltuieli blocate la fiecare trecere a planificatorului. Implicit 50.",
     feeSave: "Salvează",
     feeSaving: "Se salvează…",
     feeSaved: "Salvat",

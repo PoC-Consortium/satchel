@@ -312,8 +312,6 @@ export const gl: Bundle = {
     feeCommitted: "Sobreaprovisionamento de redención (×)",
     feeCommittedHint:
       "Canto extra se prepaga a comisión de redención v2 para que confirme mesmo cando Satchel está pechado. Aplícase só a novos intercambios. Predeterminado 2.",
-    feeStep: "Paso de escalada RBF (%)",
-    feeStepHint: "Con que agresividade sobe a comisión dun gasto atascado en cada pasada do planificador. Predeterminado 50.",
     feeSave: "Gardar",
     feeSaving: "Gardando…",
     feeSaved: "Gardado",

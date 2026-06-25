@@ -312,8 +312,6 @@ export const ca: Bundle = {
     feeCommitted: "Sobreprovisió de bescanvi (×)",
     feeCommittedHint:
       "Quant extra es paga per avançat la comissió de bescanvi v2 perquè es confirmi fins i tot amb Satchel tancat. S'aplica només a intercanvis nous. Per defecte 2.",
-    feeStep: "Pas d'escalada RBF (%)",
-    feeStepHint: "Com d'agressivament puja la comissió d'una despesa encallada a cada passada del planificador. Per defecte 50.",
     feeSave: "Desa",
     feeSaving: "Desant…",
     feeSaved: "Desat",

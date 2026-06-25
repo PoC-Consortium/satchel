@@ -312,8 +312,6 @@ export const lt: Bundle = {
     feeCommitted: "Atpirkimo perteklinis aprūpinimas (×)",
     feeCommittedHint:
       "Kiek papildomai iš anksto apmokamas v2 atpirkimo mokestis, kad jis patvirtinamas net uždarius Satchel. Taikoma tik naujiems mainams. Numatytoji 2.",
-    feeStep: "RBF eskalavimo žingsnis (%)",
-    feeStepHint: "Kaip agresyviai užstrigusio išleidimo mokestis kyla kiekvieną planuoklio praėjimą. Numatytoji 50.",
     feeSave: "Įrašyti",
     feeSaving: "Įrašoma…",
     feeSaved: "Įrašyta",

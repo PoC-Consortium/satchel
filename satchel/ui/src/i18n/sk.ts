@@ -312,8 +312,6 @@ export const sk: Bundle = {
     feeCommitted: "Predzásobenie redeemu (×)",
     feeCommittedHint:
       "O koľko sa vopred zaplatí navyše poplatok za v2 redeem, aby sa potvrdil, aj keď je Satchel zatvorený. Platí len pre nové swapy. Predvolene 2.",
-    feeStep: "Krok eskalácie RBF (%)",
-    feeStepHint: "Ako agresívne stúpa poplatok zaseknutej platby pri každom prechode plánovača. Predvolene 50.",
     feeSave: "Uložiť",
     feeSaving: "Ukladanie…",
     feeSaved: "Uložené",

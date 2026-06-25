@@ -309,16 +309,16 @@ impl Params {
 }
 
 /// Flattened JSON view of a fee-bump policy for `get/setfeepolicy` — one level so
-/// the CLI/UI sets each field by a simple typed name (no nested objects). The two
-/// `step_pct` fields are kept in sync (single knob, decision #3), so the redeem
-/// value represents both.
+/// the CLI/UI sets each field by a simple typed name (no nested objects). The
+/// `step_pct` escalation knob was retired when the bump sites moved to the
+/// market-tracking `target_feerate` strategy (fee-bump-design.md); it is no
+/// longer exposed.
 fn fee_policy_json(p: &libswap::FeeBumpPolicy) -> Value {
     json!({
         "max_feerate_sat_vb": p.max_feerate_sat_vb,
         "min_fee_sat": p.min_fee_sat,
         "reservation_mult": p.funding.reservation_mult,
         "committed_mult": p.redeem.committed_mult,
-        "step_pct": p.redeem.step_pct,
     })
 }
 
@@ -429,14 +429,12 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             Ok(fee_policy_json(&policy))
         }
         // Update the active merchant's policy. Each field is optional; only the
-        // fields supplied change. `step_pct` sets both the redeem and refund step
-        // (single knob). Validated server-side; persisted; applied live.
+        // fields supplied change. Validated server-side; persisted; applied live.
         "setfeepolicy" => {
             let max = p.opt_u64(0, "max_feerate_sat_vb");
             let min = p.opt_u64(1, "min_fee_sat");
             let reservation = p.opt_u64(2, "reservation_mult");
             let committed = p.opt_u64(3, "committed_mult");
-            let step = p.opt_u64(4, "step_pct");
             let policy = blocking_mut(app, move |e| {
                 let mut pol = e.fee_bump;
                 if let Some(v) = max {
@@ -450,10 +448,6 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 }
                 if let Some(v) = committed {
                     pol.redeem.committed_mult = v;
-                }
-                if let Some(v) = step {
-                    pol.redeem.step_pct = v;
-                    pol.refund.step_pct = v;
                 }
                 e.set_fee_bump(pol)?;
                 Ok(e.fee_bump)

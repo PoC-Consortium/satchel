@@ -77,6 +77,14 @@ pub struct SwapRecord {
     /// Full hex of that spend — kept for RBF fee-bumping and rebroadcast
     /// while unconfirmed (spec §7.4).
     pub final_tx_hex: Option<String>,
+    /// Chain tip height at which the nurse last *acted* (broadcast a bump or
+    /// replacement) on this swap's pending tx. The bump loop backs out when the
+    /// tip hasn't advanced since (≤1 action per block), turning the 30s poll
+    /// into block-driven cadence. Defaults to 0 for records persisted before
+    /// this field existed and for fresh swaps — 0 ≠ any real tip, so the first
+    /// post-load tick is free to act.
+    #[serde(default)]
+    pub last_action_height: u64,
 }
 
 /// One party's durable view of one **v2** (adaptor) swap (spec v2 §9).
@@ -151,6 +159,12 @@ pub struct AdaptorSwapRecord {
     /// into the pre-signed adaptor signature — v2+). See spec/protocol-v2.md.
     pub final_tx_a_hex: Option<String>,
     pub final_tx_b_hex: Option<String>,
+    /// Chain tip height at which a nurse last *acted* (RBF/CPFP/replacement) on
+    /// this swap. Backs out the bump loop when the tip hasn't advanced since
+    /// (≤1 action per block). See [`SwapRecord::last_action_height`]; defaults
+    /// to 0 (pre-existing records / fresh swaps → first tick may act).
+    #[serde(default)]
+    pub last_action_height: u64,
 }
 
 pub struct Store {
@@ -1029,6 +1043,7 @@ mod tests {
             refund_tx_hex: None,
             final_txid: None,
             final_tx_hex: None,
+            last_action_height: 0,
         }
     }
 

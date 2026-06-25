@@ -312,8 +312,6 @@ export const hr: Bundle = {
     feeCommitted: "Predoplata naknade za otkup (×)",
     feeCommittedHint:
       "Koliko se dodatno unaprijed plaća v2 naknada za otkup kako bi se potvrdila čak i kad je Satchel zatvoren. Vrijedi samo za nove swapove. Zadano 2.",
-    feeStep: "Korak RBF eskalacije (%)",
-    feeStepHint: "Koliko agresivno naknada zaglavljene transakcije raste pri svakom prolazu rasporeda. Zadano 50.",
     feeSave: "Spremi",
     feeSaving: "Spremanje…",
     feeSaved: "Spremljeno",

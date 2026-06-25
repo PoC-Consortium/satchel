@@ -312,8 +312,6 @@ export const de: Bundle = {
     feeCommitted: "Redeem-Überprovisionierung (×)",
     feeCommittedHint:
       "Wie viel zusätzlich die v2-Redeem-Gebühr vorausbezahlt wird, damit sie auch bei geschlossenem Satchel bestätigt. Gilt nur für neue Swaps. Standard 2.",
-    feeStep: "RBF-Eskalationsschritt (%)",
-    feeStepHint: "Wie aggressiv die Gebühr eines feststeckenden Spends bei jedem Scheduler-Durchlauf steigt. Standard 50.",
     feeSave: "Speichern",
     feeSaving: "Speichern…",
     feeSaved: "Gespeichert",
