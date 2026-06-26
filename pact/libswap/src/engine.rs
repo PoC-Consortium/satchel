@@ -350,13 +350,15 @@ fn validate_offer_offsets(network: Network, t1_secs: u32, t2_secs: u32) -> Resul
     Ok(())
 }
 
-/// Cooperative-redeem feerate (sat/vB) on regtest — fees are meaningless there
-/// and the deterministic e2e relies on a low fixed value. Also the clamp floor
-/// for a negotiated rate elsewhere.
-pub(crate) const REGTEST_REDEEM_FEERATE: u64 = 2;
+/// Min-relay floor (sat/vB) for the cooperative-redeem feerate negotiated into
+/// the init. The committed redeem can't be RBF'd but IS CPFP-bumpable, so we
+/// commit at market with no over-provision and let this floor (and the nurse)
+/// catch the bottom. On regtest the node can't estimate, so the redeem lands on
+/// market's fallback (≈1), i.e. this floor.
+pub(crate) const MIN_REDEEM_FEERATE: u64 = 1;
 
-// The v2 committed-redeem over-provision multiplier is now
-// `FeeBumpPolicy::redeem.committed_mult` (default 2); see crate::fee_policy.
+// The v2 committed-redeem multiplier is `FeeBumpPolicy::redeem.committed_mult`
+// (default 1 — commit at market, CPFP-bump up if it rises); see crate::fee_policy.
 
 /// Upper bound on a negotiated redeem feerate (sat/vB) — the **protocol** bound
 /// (spec v2 §5), distinct from the local `FeeBumpPolicy::max_feerate_sat_vb` bump
@@ -559,24 +561,22 @@ impl Engine {
     }
 
     /// The cooperative-redeem feerate (sat/vB) the initiator fixes at init for
-    /// `chain` (M2). Regtest keeps the legacy low fee so the deterministic e2e
-    /// is unchanged; elsewhere it is the live 6-block estimate over-provisioned
-    /// by [`crate::fee_policy::RedeemPolicy::committed_mult`] (the committed fee
-    /// can't be RBF'd; the CPFP child handles bigger spikes when the scheduler is
-    /// up). Clamped to the **protocol** [`MAX_REDEEM_FEERATE`] (NOT the local
-    /// `max_feerate_sat_vb` bump ceiling): this value is negotiated into the init
-    /// message and must pass the counterparty's protocol validation (§2 init
-    /// check). A conservative fallback applies when no backend is reachable. Only
-    /// the initiator calls this; the participant adopts the value from the signed
-    /// init, so the two parties never diverge.
+    /// `chain` (M2): `committed_mult × live market`, floored at
+    /// [`MIN_REDEEM_FEERATE`] (min-relay) and clamped to the **protocol**
+    /// [`MAX_REDEEM_FEERATE`] (NOT the local `max_feerate_sat_vb` bump ceiling).
+    /// With the default `committed_mult == 1` this commits at market with no
+    /// over-provision — the committed fee can't be RBF'd, but the CPFP child
+    /// lifts it if market climbs while it's pending. On regtest the node can't
+    /// estimate, so market lands on its ≈1 fallback (= the floor). The value is
+    /// negotiated into the init and must pass the counterparty's protocol
+    /// validation (§2 init check); a conservative fallback applies when no
+    /// backend is reachable. Only the initiator calls this; the participant
+    /// adopts the value from the signed init, so the two never diverge.
     fn adaptor_redeem_feerate(&self, chain: &ChainRef) -> u64 {
-        if chain.network == Network::Regtest {
-            return REGTEST_REDEEM_FEERATE;
-        }
         match self.backend(chain).and_then(|b| b.fee_rate_sat_per_vb()) {
             Ok(rate) => rate
                 .saturating_mul(self.fee_bump.redeem.committed_mult)
-                .clamp(REGTEST_REDEEM_FEERATE, MAX_REDEEM_FEERATE),
+                .clamp(MIN_REDEEM_FEERATE, MAX_REDEEM_FEERATE),
             Err(_) => ADAPTOR_REDEEM_FEERATE_FALLBACK,
         }
     }
@@ -1655,6 +1655,15 @@ impl Engine {
     /// nodes (the in-process flow is covered by `adaptor_funding_ready`).
     pub fn adaptor_fund(&self, swap: &str) -> Result<Envelope> {
         let rec = self.store.get_adaptor(swap)?;
+        // Idempotency guard: never broadcast a second funding tx for a leg we've
+        // already funded. The auto-fund path gates on this at the call site; a
+        // direct call (e.g. a manual retry) must too, or we'd wallet_send again
+        // and strand the first output in a leg the record then forgets.
+        let already = match rec.role {
+            Role::Initiator => rec.funding_a_txid.is_some(),
+            Role::Participant => rec.funding_b_txid.is_some(),
+        };
+        ensure!(!already, "leg already funded for swap {swap}");
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let p = self.adaptor_params(&rec)?;
         let (chain, leg, amount) = match rec.role {

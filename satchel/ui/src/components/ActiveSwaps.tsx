@@ -15,9 +15,11 @@ import type { Swap } from "../api/types";
 // when there's something to act on. Swap LOGIC stays in pactd — these buttons
 // just call its RPCs.
 
-function primaryAction(s: Swap): "fund" | "redeem" | null {
-  if (s.state === "accepted") return s.role === "initiator" ? "fund" : null;
-  if (s.state === "funded_a") return s.role === "participant" ? "fund" : null;
+// Funding is automatic (--auto-fund), so there's no manual fund button — it was
+// redundant and a double-fund footgun (a second click re-sends funds). Redeem
+// stays as a manual "claim now" nudge; auto-redeem still runs and the engine
+// guards it by state. Pre-funding abort = Cancel; post-funding exit = Refund.
+function primaryAction(s: Swap): "redeem" | null {
   if (s.state === "funded_b") return "redeem";
   return null;
 }
@@ -138,7 +140,7 @@ function ActiveSwapRow({
 }: {
   s: Swap;
   first: boolean;
-  action: "fund" | "redeem" | null;
+  action: "redeem" | null;
   onAction: (a: string) => void;
   onCancel: () => void;
   onRefund: () => void;
