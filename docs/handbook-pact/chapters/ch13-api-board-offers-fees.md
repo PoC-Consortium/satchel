@@ -33,6 +33,23 @@ chooses one transport rather than merging.
 - `boardtake` — takes a posted offer by `offer_id`.
 - `boardrevoke` — revokes one of your own posted offers.
 
+> **Note** — **Cumulative funds gate.** `boardpostoffer` rejects an offer the
+> core wallet could not fund — and "fund" means the **sum** of the give-leg
+> amounts across **all** your still-live offers in that coin, not just this one
+> offer, plus per-offer funding-fee headroom (`Engine::ensure_can_fund_new_offer`
+> → `committed_give_for_coin`). Because each offer is funded only when *taken*,
+> advertising several offers whose give-legs together exceed your balance would
+> let two of them be taken and only one funded; the gate stops that at post
+> time. It is a best-effort pre-flight — in-flight takes are not subtracted and
+> balances are not netted across coins. On failure the maker sees:
+>
+> ```text
+> insufficient {coin_id} balance to advertise this offer: have {balance} sat,
+> need ~{needed} sat ({amount} for this offer + {committed} already committed
+> across {n_live} live offer(s) + ~funding-fee headroom). Withdraw or let some
+> offers expire first.
+> ```
+
 > **Note** — On Nostr the listing's expiry is **rolling**:
 > `min(now + 1800s, created + ttl_secs)`. It is refreshed as the offer is
 > republished, not pinned to `ttl_secs` from creation.

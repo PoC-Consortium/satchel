@@ -8,6 +8,15 @@ No platform fees — `platform_fee_sat` is hard-wired to 0. You pay only the on-
 **Who holds my coins during a swap?**
 You do. The engine holds your seed and keys locally, signs everything itself, and auto-refunds via a timelock if the counterparty walks. No board, relay, or counterparty ever custodies your funds. See [Security Model](Security-Model).
 
+**Can I just look at the board without setting up coins?**
+Yes — pick **Browse in watch-only mode** on first run (or **Settings → Mode** later). You can read the whole board and withdraw offers you already own, but posting, taking, and funding stay blocked until you connect **two live coins**. See [Configuring Coins](Configuring-Coins).
+
+**What languages does Satchel support?**
+26 — switch any time from the globe-icon picker in the header, including during first-run onboarding.
+
+**Why did the manual fee-step setting disappear?**
+Fee-bumping is now automatic market-tracking: the engine bumps stuck swap transactions toward the live market feerate instead of a fixed manual escalation step, capped so you never pay more in fees than the amount being claimed. The old RBF-step knob is gone from the Fees page. See [Security Model](Security-Model).
+
 **Do I need to run my own nodes?**
 For now, yes — the engine drives a real node (or Electrum backend) per coin. You must have **at least two coins live** before Satchel lets you trade. A full send/receive wallet without your own node arrives with the planned nodeless build. See [Configuring Coins](Configuring-Coins).
 

@@ -29,6 +29,30 @@ can't load data — the app can't reach its swap engine. The usual causes:
 > offers, or swaps. Fixing the engine connection usually fixes several symptoms at
 > once.
 
+## Satchel won't start — "another network's engine is on this port"
+
+If you run **more than one Satchel** — say one on the practice network and one on
+mainnet — they each start their own engine, and each engine needs its **own port**
+to listen on. If a second Satchel finds that another network's engine is **already
+using the port** it was told to use, it now **refuses to start** and shows a clear
+error rather than quietly latching onto the wrong engine (which could have it
+trading on a network you didn't mean).
+
+This is a deliberate safety stop. To clear it, give each Satchel its own port — or
+shut the other one down:
+
+1. **Use a distinct port per network.** In the `satchel.json` settings file for the
+   one that won't start, set its **`listen`** port to the value for its network:
+   **9739** for regtest, **9738** for testnet, **9737** for mainnet. With each
+   network on its own port, they stop colliding.
+2. **Or stop the other instance** that's already holding the port, if you didn't
+   mean to have two running.
+3. Relaunch Satchel.
+
+> **Note** — This only comes up when two Satchels (or their engines) try to share
+> one port. A single Satchel never hits it. The chapter *"Settings"* explains where
+> `satchel.json` lives.
+
 ## A coin shows a connection error
 
 In **Settings → Coins**, each coin carries a status pill. **Connection error**

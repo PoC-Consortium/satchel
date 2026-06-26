@@ -13,29 +13,69 @@ policy** (`FeeBumpPolicy`, `crate::fee_policy`) rather than scattered constants;
 the defaults below reproduce the historical behaviour. See "Configurable fee
 policy" at the end of this chapter.
 
+## The unified fee-bump strategy (market-tracking)
+
+Every local fee-bump in Pact — the v1 redeem and refund, and the v2 single-key
+refund — shares **one** strategy (`maybe_bump`, `engine.rs:3360`;
+`adaptor_bump_refund`, `engine.rs:2339`; unified 2026-06-25). It replaces an
+earlier market-**blind** escalator that simply added `step_pct` percent per tick
+until it hit the ceiling. That escalator caused a real incident: a live mainnet
+redeem ratcheted **159 → 358 sat/vB** into a roughly **1 sat/vB** market — a
+"redeem fee storm" — because nothing tied the bump to what the market actually
+was. The unified strategy fixes that by tracking the live estimate and gating on
+block height and mempool state.
+
+**Market-tracking, value-capped target** (`FeeBumpPolicy::target_feerate`,
+`fee_policy.rs:160`):
+
+```text
+target = min(market,
+             value_at_risk × FEE_CAP_PCT / vsize,
+             max_feerate_sat_vb).max(1)
+```
+
+- `market` is the backend's live feerate estimate, so the bump **never bids
+  above what the network is charging** — the storm is impossible by
+  construction.
+- `value_at_risk × FEE_CAP_PCT / vsize` is the **value-at-risk cap**: with
+  `FEE_CAP_PCT = 100` (a hardcoded constant, `fee_policy.rs:28`, *not* a knob)
+  the absolute fee can never exceed the amount being claimed. This is Eclair's
+  rule — "it wouldn't make sense to pay more in fees than the amount we're
+  trying to claim on-chain." It is a last-resort backstop, not the working term;
+  the `market` term is what keeps real fees low.
+- `max_feerate_sat_vb` (default 500) is the absolute local ceiling.
+- The result is floored at 1 sat/vB.
+
+Around that target, the loop applies three gates:
+
+- **Block-driven cadence** (`last_action_height`, `store.rs:87`). The loop acts
+  **at most once per block**; if the tip has not advanced since the last action
+  it does nothing. This replaces the old 30-second scheduler tick that produced
+  the per-tick churn behind the storm — a back-off when the chain is quiet.
+- **BIP125 Rule-4 gate.** A replacement is broadcast only when `target` clears
+  the current feerate by the node's **incremental-relay fee** (`getmempoolinfo`
+  → `incremental_relay_feerate`, `chain.rs:389`). If the market has not risen —
+  or we are already paying enough — there is nothing relayable to do, so the
+  loop emits no replacement.
+- **Evicted-only rebroadcast** (`reanchor_if_evicted`, `engine.rs:3457`). When
+  no bump is warranted, the engine re-broadcasts the *same* transaction (same
+  txid — invisible to the wallet) **only if it actually fell out of the
+  mempool**. In steady state the tx is present, so this is a silent no-op — the
+  per-tick rebroadcast the old escalator emitted is gone.
+
+A dust guard still applies: a target whose `new_fee` would push the swept output
+below `DUST_LIMIT_SAT = 546` (`swap.rs:20`) is treated as "no bump" and falls
+through to the evicted-only rebroadcast path rather than dusting the output.
+
 ## v1 fee-bumping (RBF)
 
 In v1 **both** the redeem and the refund are RBF-bumpable. Both spends signal
 RBF (`nSequence = 0xFFFFFFFD`), and because the v1 keys sign deterministically
 (ECDSA), the engine can re-sign a higher-fee replacement unilaterally
-(`maybe_bump`).
-
-Each bump **re-prices to the live market**, not a geometric step. The
-replacement fee is `target_feerate × vsize`, where
-(`FeeBumpPolicy::target_feerate`):
-
-```text
-target_feerate = min(market_sat_vb, value_at_risk / vsize, max_feerate_sat_vb)
-```
-
-i.e. the current estimator feerate, capped by the value being claimed (a bump
-never pays more in fees than the leg is worth) and by `max_feerate_sat_vb`
-(default 500). There is **no minimum-fee floor** — the old flat 1000-sat floor
-was removed, so a quiet mempool gets a 1 sat/vB spend rather than an inflated
-one. The engine only emits a replacement when that target exceeds the current
-fee; otherwise it **rebroadcasts the existing transaction**, and it never
-broadcasts a replacement that would dust the swept output below
-`DUST_LIMIT_SAT = 546` (`swap.rs:20`).
+(`maybe_bump`). Both follow the **unified market-tracking strategy** above:
+`target_feerate` toward the live market, at most once per block, only when the
+target clears the BIP125 Rule-4 floor, otherwise a silent evicted-only
+rebroadcast (`max_feerate_sat_vb = 500` by default).
 
 ## v2 fee-bumping: a split design
 
@@ -48,11 +88,12 @@ v2 is asymmetric, and the asymmetry is load-bearing (spec v2 §8):
 
 ### The refund is RBF-bumpable
 
-The v2 single-key refund (`adaptor_bump_refund`) bumps exactly like v1: same
-market-tracking `target_feerate` re-price (capped at `max_feerate_sat_vb`), deterministic
-single-key Schnorr re-sign, RBF sequence. No interactive ceremony is needed
-because the refund tapleaf is single-signature (see the chapter "v2
-Taproot/MuSig2 Adaptor Swaps").
+The v2 single-key refund (`adaptor_bump_refund`, `engine.rs:2339`) bumps exactly
+like v1: the same **unified market-tracking strategy** (block-driven cadence,
+value-capped `target_feerate`, BIP125 Rule-4 gate, evicted-only rebroadcast),
+with a deterministic single-key Schnorr re-sign and an RBF sequence. No
+interactive ceremony is needed because the refund tapleaf is single-signature
+(see the chapter "v2 Taproot/MuSig2 Adaptor Swaps").
 
 ### The cooperative redeem is NOT bumpable
 
@@ -230,9 +271,10 @@ owned per-merchant by pactd's store and surfaced as typed RPC:
   A change is validated, applied to the live engine, and persisted, so it
   survives a restart with no Satchel involved.
 - **Satchel → Settings → Fees** edits the **active merchant's** policy over the
-  same RPC (applied live, no relaunch). It exposes three knobs (max feerate,
-  reservation, committed); every fee is market-derived, so there is no
-  minimum-fee floor to show.
+  same RPC (applied live, no relaunch). It exposes three knobs
+  (`max_feerate_sat_vb`, `reservation_mult`, `committed_mult`); every fee is
+  market-derived, so there is no minimum-fee floor to show. The retired
+  `step_pct` knob was removed from this page when the bump strategy was unified.
 
 Changes take effect on the **next** bump; swaps already funded keep the
 `committed_mult` and gate reservation they were funded under (both fixed at
@@ -244,16 +286,27 @@ funding time).
 | `funding.reservation_mult` | 3× | funds-gate headroom + funding-nurse bound (`× old_feerate`) |
 | `redeem.committed_mult` | 2× | v2 redeem over-provision (the unattended floor) |
 
+> **Note** — `min_fee_sat` (the old 1000-sat floor) and `redeem.step_pct` /
+> `refund.step_pct` (default 50) are **retired**. The floor and the per-tick
+> percentage step both drove the old market-blind escalator that the unified
+> market-tracking strategy replaced. They survive in the `FeeBumpPolicy` struct
+> only for serde back-compat (an old stored policy that still sets them
+> deserializes cleanly) and are **not** exposed by `getfeepolicy` /
+> `setfeepolicy` or the Satchel Fees page. Setting them has no effect on bump
+> behaviour.
+
 Other fee-related constants remain fixed (not policy):
 
 | Constant | Value | Meaning |
 |---|---|---|
+| `FEE_CAP_PCT` | 100% | value-at-risk cap in `target_feerate`: a bump's fee never exceeds the amount being claimed (Eclair's rule). Hardcoded (`fee_policy.rs:28`), not a knob |
 | `DUST_LIMIT_SAT` | 546 sat | swept output must stay above this |
 | `MAX_REDEEM_FEERATE` | 500 sat/vB | **protocol** bound on the negotiated redeem feerate (distinct from `max_feerate_sat_vb`) |
 | `CPFP_CHILD_VSIZE` | 150 vB | the CPFP redeem/funding-bump child |
 | `FUNDING_VSIZE_EST` | 250 vB | sizing estimate for the funds-gate reservation |
 
-The v1 RBF re-pricing and the v2 over-provision-plus-CPFP strategy are two
-answers to the same question — *how do I make sure a time-critical spend
-confirms?* — chosen because v1 can re-sign freely and v2's cooperative redeem
-cannot.
+The unified RBF strategy (v1 redeem/refund, v2 refund) and the v2
+over-provision-plus-CPFP strategy are two answers to the same question — *how do
+I make sure a time-critical spend confirms?* — chosen because an RBF-able spend
+can re-sign freely toward the market, while v2's cooperative redeem cannot and
+must commit its fee up front.

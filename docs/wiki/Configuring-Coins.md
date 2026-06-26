@@ -45,6 +45,8 @@ Each coin has a confirmation depth for reorg finality (`N≥1`), which gates aut
 
 > **Note** — in Satchel, the **first-run ≥2-live-coins gate** means you must have at least two coins with status `ok` before you can reach the trading screens. See [Satchel User Guide](Satchel-User-Guide).
 
+> **Watch-only escape hatch** — you can skip coin setup entirely and **browse the board with zero coins configured** via watch-only mode. You can read offers and withdraw any you already own, but trading (post/take/fund) still requires two live coins. See [Satchel User Guide](Satchel-User-Guide).
+
 ## See also
 
 - [Running pactd](Running-pactd) · [JSON-RPC API](JSON-RPC-API) · [Satchel User Guide](Satchel-User-Guide)

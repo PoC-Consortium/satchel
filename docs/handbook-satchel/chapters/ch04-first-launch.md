@@ -13,6 +13,12 @@ sequence in order:
 After that, Satchel checks your coins are connected and hands off to the next
 chapter.
 
+> **Tip** — Prefer to do this in another language? Look for the **globe** menu in
+> the **top-right corner of the welcome dialog**. Click it and pick from the list —
+> Satchel ships in **26 languages**, and the choice applies right away, so you can
+> switch before or even partway through setup. The same picker is always available
+> later from the header.
+
 ## Step 1 — Create your merchant
 
 The first screen welcomes you and explains that Satchel trades under a
@@ -96,10 +102,31 @@ wrong word in it.
 ### Importing instead
 
 If you chose **Import** back in Step 1, this step looks a little different: rather
-than revealing words, Satchel gives you a box to **enter your existing 12- or
-24-word phrase**. It recognises valid words as you type and flags anything that
-isn't a real phrase word, and you can paste the whole phrase at once. Then you
-continue to the passphrase choice, the same as everyone else.
+than revealing words, Satchel gives you a **numbered grid of word cells** —
+arranged in three columns, one cell per word — to **enter your existing 12- or
+24-word phrase**. A toggle at the top lets you say whether your phrase is **12 or
+24 words**, so the grid has exactly the right number of slots.
+
+Type into the cells one word at a time, and Satchel **suggests the matching word**
+as you go (the words come from a fixed list, so it can autocomplete each one). Any
+cell holding a word that isn't on that list is **highlighted** so you can spot a
+typo at a glance. In a hurry? You can **paste your whole phrase** into the first
+cell and Satchel spreads the words across the grid for you.
+
+As you fill it in, a **status line** at the bottom keeps you posted:
+
+- *"Enter all 12 words."* (or 24) while the grid isn't full yet.
+- *"Some words aren't in the BIP39 wordlist — check the highlighted ones."* if a
+  cell holds a word it doesn't recognise.
+- *"Checksum doesn't match — re-check your words and their order."* if every word
+  is valid but the phrase as a whole doesn't add up — usually a word in the wrong
+  place.
+- *"Recovery phrase looks valid."* once everything checks out.
+
+Only when you see **"Recovery phrase looks valid."** can you continue — Satchel
+won't let you import a phrase it can't verify, which protects you from a small
+slip costing you the import. Then you carry on to the passphrase choice, the same
+as everyone else.
 
 ## Step 3 — Passphrase: protect the seed, or not
 

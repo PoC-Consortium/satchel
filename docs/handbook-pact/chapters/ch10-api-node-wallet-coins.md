@@ -9,24 +9,33 @@ merchant* error) are covered in the chapter "JSON-RPC Conventions".
 
 | Method | Params | Returns | Mutates |
 |---|---|---|---|
-| `getinfo` | — | `{ name, version, protocol, network, identity?, seed_exists, encrypted, locked, coins }` | no |
+| `getinfo` | — | `{ name, version, protocol, network, identity?, seed_exists, encrypted, locked, coins, watch_only }` | no |
 | `walletstatus` | — | `{ seed_exists, encrypted, locked }` | no |
+| `setwatchonly` | `on` | `{ watch_only }` | yes (live + persisted) |
 | `stop` | — | `"pactd stopping"` | yes (lifecycle) |
 
 - `getinfo` — `name` is always `"pactd"`; `version` is the crate version;
   `protocol` is the swap protocol version; `network` is the lowercased network
   name (`regtest`/`testnet`/`mainnet`); `coins` is the list of configured coin
-  ids. Tolerates a missing or locked seed — `identity` is `null` until a seed
-  is present **and** unlocked.
+  ids; `watch_only` is the active merchant's watch-only flag (see below).
+  Tolerates a missing or locked seed — `identity` is `null` until a seed is
+  present **and** unlocked.
 - `walletstatus` — the seed state triple. `locked` is true only when the seed
   is encrypted **and** its passphrase is not held in memory.
+- `setwatchonly` — enters (`on: true`) or leaves (`on: false`) **watch-only
+  mode** for the active merchant. A watch-only session may browse the board and
+  withdraw its own offers, but the engine **blocks** posting, taking, and
+  funding (and no-ops offer-liveness management for another session). The flag
+  is persisted per-merchant in pactd's store and applied live (no relaunch);
+  `getinfo.watch_only` reports it, letting a UI skip the ≥ 2-coin first-run
+  gate. Returns the new value.
 - `stop` — requests a graceful shutdown and returns immediately.
 
 ### Fee policy
 
 The active merchant's local fee-bump policy — the knobs that drive funding-nurse
-bumps, redeem over-provisioning, and the auto-refund fee escalation. Both methods
-are scoped to the active merchant.
+bumps, redeem over-provisioning, and the market-tracking refund/redeem bumps.
+Both methods are scoped to the active merchant.
 
 | Method | Params | Returns | Mutates |
 |---|---|---|---|
@@ -56,10 +65,13 @@ The policy object is a flat shape:
 > value-at-risk, max_feerate_sat_vb)`); there is no minimum-fee floor. The former
 > `min_fee_sat` and per-step `step_pct` knobs were removed.
 
-> **Note** — These knobs are the *local* policy; `max_feerate_sat_vb` is distinct
-> from the protocol-negotiated redeem-feerate bound. See the chapter "Fees,
-> Fee-Bumping & Auto-Refund" for what each value does in the funding nurse, the
-> redeem path, and the refund escalation.
+> **Note** — The old `step_pct` escalation knob is **retired**: the unified
+> bump strategy is market-tracking, not a fixed per-tick percentage step, so
+> `step_pct` is no longer part of the `getfeepolicy` / `setfeepolicy` surface.
+> (It survives in the on-disk struct only for serde back-compat.) These knobs
+> are the *local* policy; `max_feerate_sat_vb` is distinct from the
+> protocol-negotiated redeem-feerate bound. See the chapter "Fees, Fee-Bumping
+> & Auto-Refund" for what each value does.
 
 ## Seed lifecycle
 

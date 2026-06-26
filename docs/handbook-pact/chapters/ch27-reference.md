@@ -35,7 +35,7 @@ All methods are JSON-RPC over `POST /`. Grouped by area; see the named chapter
 for params and return shapes.
 
 **Node / info** (*"API: Node, Seed, Merchants, Coins"*): `getinfo`,
-`walletstatus`, `stop`, `getfeepolicy`, `setfeepolicy`.
+`walletstatus`, `setwatchonly`, `stop`, `getfeepolicy`, `setfeepolicy`.
 
 **Seed lifecycle** (same chapter): `createseed`, `generateseed`, `importseed`,
 `unlock`.
@@ -66,7 +66,8 @@ for params and return shapes.
 **Fees** (same chapter): `estimateswapfees`.
 
 **Diagnostics** (*"API: v1 HTLC Swaps"*): `dumpswap` (secret-free per-swap
-record + log bundle; works for v1 and v2).
+record + log bundle; works for v1 and v2); `swapprogress` (live snapshot of every
+active swap — confirmations and feerate; v1 and v2).
 
 ## Error format
 
