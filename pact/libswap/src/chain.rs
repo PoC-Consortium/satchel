@@ -371,14 +371,24 @@ impl ChainBackend for CoreRpcBackend {
         // The bump nurse covers the rare case where this later under-prices.
         const FALLBACK_SAT_PER_VB: u64 = 1;
         const MAX_SAT_PER_VB: u64 = 500; // sanity cap against estimator glitches
-        let rate = self
+        let estimate = self
             .rpc
             .call("estimatesmartfee", &[json!(6)])
             .ok()
             .and_then(|r| r["feerate"].as_f64()) // BTC per kvB
             .map(|btc_kvb| ((btc_kvb * 1e8) / 1000.0).ceil() as u64)
             .unwrap_or(FALLBACK_SAT_PER_VB);
-        Ok(rate.clamp(1, MAX_SAT_PER_VB))
+        // Never price below the coin's minimum. estimatesmartfee already honors the
+        // node's mempool/relay floor WHEN it returns an estimate (Core src/rpc/
+        // fees.cpp), but on a quiet/fresh chain it returns nothing and we fall back
+        // to 1 — and some wallets reject anything below a higher baked-in
+        // `-mintxfee` that no RPC exposes (Litecoin's is ~10 sat/vB), giving -6
+        // "lower than the minimum fee rate setting". `min_feerate_sat_vb` carries
+        // that per-coin floor (coins.toml for file coins, 1 for the built-ins).
+        // Applied AFTER the sanity clamp so the coin's floor always wins.
+        Ok(estimate
+            .clamp(1, MAX_SAT_PER_VB)
+            .max(self.params.min_feerate_sat_vb))
     }
 
     fn is_in_mempool(&self, txid: &str) -> Result<bool> {

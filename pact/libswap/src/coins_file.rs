@@ -66,6 +66,12 @@ pub struct CapsEntry {
 /// defaults) is intentionally absent here — serde ignores it.
 #[derive(Debug, Deserialize)]
 pub struct NetEntry {
+    /// Minimum feerate (sat/vB) this coin's node accepts for a wallet spend on
+    /// this network. Litecoin's wallet `-mintxfee` is ~10 and is exposed by no
+    /// RPC, so a spend below it is rejected (-6 "lower than the minimum fee rate
+    /// setting"). Optional, per-network; defaults to 1 (Bitcoin's floor).
+    #[serde(default)]
+    pub min_feerate_sat_vb: Option<u64>,
     pub consensus: ConsensusEntry,
 }
 
@@ -130,6 +136,7 @@ pub struct BuiltParams {
     pub bech32_hrp: String,
     pub genesis_hash: String,
     pub target_spacing_secs: u32,
+    pub min_feerate_sat_vb: u64,
 }
 
 /// Parse + validate a `coins.toml` document into owned [`BuiltCoin`]s.
@@ -201,6 +208,8 @@ fn build_params(
     target_spacing_secs: u32,
 ) -> Result<Option<BuiltParams>> {
     let Some(entry) = entry else { return Ok(None) };
+    // Per-network fee floor; absent → Bitcoin's 1 sat/vB.
+    let min_feerate_sat_vb = entry.min_feerate_sat_vb.unwrap_or(1).max(1);
     let c = &entry.consensus;
     // header_format is optional (Core-RPC coins never use it); default Bitcoin.
     let header_format = match &c.header_format {
@@ -246,6 +255,7 @@ fn build_params(
         bech32_hrp: hrp,
         genesis_hash,
         target_spacing_secs,
+        min_feerate_sat_vb,
     }))
 }
 
