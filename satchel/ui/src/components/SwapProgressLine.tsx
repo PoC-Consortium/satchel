@@ -4,38 +4,49 @@ import { C } from "../theme";
 import type { SwapProgress } from "../api/types";
 
 // The live progress line for an active swap (observability). Shown beneath the
-// verbatim narrate() story — confirmation depth + the current settlement feerate
-// + the latest scheduler action. Fed from pactd's `swapprogress` snapshot; never
-// drives any swap logic. Renders nothing if there's nothing to report.
+// verbatim narrate() story. Two display kinds, fed from pactd's `swapprogress`:
+//   - awaiting_lock / awaiting_claim → waiting on the COUNTERPARTY (no target);
+//     an indeterminate bar + "+N blocks" liveness count.
+//   - their_lock / settlement → a wait that is OURS (their lock burying, or our
+//     own claim burying); a determinate bar + "confs/needed".
+// Never drives swap logic; renders nothing when there's nothing to report.
 //
-// i18n note: only the leading LABEL is translatable (via t()). The counts and
-// feerate are pure data composed in JS (not JSX text), so they sit outside the
-// no-literal-string rule and need no keys.
+// i18n note: only the LABEL is translatable (via t()). Counts, feerate and the
+// "+N blocks" number are data composed in JS (not JSX text), outside the
+// no-literal-string rule.
 const LABELS: Record<SwapProgress["watching"], string> = {
-  settlement: "progress.settlement",
-  their_funding: "progress.theirFunding",
-  ours_funding: "progress.oursFunding",
+  awaiting_lock: "progress.awaitingLock",
+  awaiting_claim: "progress.awaitingClaim",
+  their_lock: "progress.theirLock",
+  settlement: "progress.securing", // rendered with {coin} via the special case below
 };
 
 export default function SwapProgressLine({ p }: { p: SwapProgress }) {
   const t = useT();
 
-  const counts = `${p.confs}/${p.needed}`;
-  const fee = p.feerate_sat_vb != null ? ` · ${p.feerate_sat_vb} sat/vB` : "";
-  const pct = p.needed > 0 ? Math.min(100, Math.round((p.confs / p.needed) * 100)) : 0;
-
   const reorg = p.last_action === "reorg-alert";
   const bumped = p.last_action === "fee-bump";
+  const awaiting = p.watching === "awaiting_lock" || p.watching === "awaiting_claim";
 
   // A snapshot older than a few scheduler ticks (e.g. the daemon detached) is
   // greyed so it doesn't read as live.
   const stale = Date.now() / 1000 - p.updated_at > 90;
 
-  const head = reorg
-    ? t("progress.reorg")
-    : `${bumped ? t("progress.feeBumped") : t(LABELS[p.watching])} · ${counts}${fee}`;
+  const label = bumped
+    ? t("progress.feeBumped")
+    : p.watching === "settlement"
+      ? t("progress.securing", { coin: p.coin })
+      : t(LABELS[p.watching]);
 
+  // Awaiting → a "+N blocks" liveness count (no target). Confirming → confs/needed
+  // (+ feerate on our settlement).
+  const tail = awaiting
+    ? ` · ${t("progress.blocks", { n: p.blocks_elapsed ?? 0 })}`
+    : ` · ${p.confs}/${p.needed}${p.feerate_sat_vb != null ? ` · ${p.feerate_sat_vb} sat/vB` : ""}`;
+
+  const head = reorg ? t("progress.reorg") : `${label}${tail}`;
   const color = reorg ? "warning.main" : bumped ? C.accent : "text.secondary";
+  const pct = p.needed > 0 ? Math.min(100, Math.round((p.confs / p.needed) * 100)) : 0;
 
   return (
     <Box sx={{ opacity: stale ? 0.5 : 1, maxWidth: 360 }}>
@@ -44,8 +55,8 @@ export default function SwapProgressLine({ p }: { p: SwapProgress }) {
       </Typography>
       {!reorg && (
         <LinearProgress
-          variant="determinate"
-          value={pct}
+          variant={awaiting ? "indeterminate" : "determinate"}
+          value={awaiting ? undefined : pct}
           sx={{ height: 3, mt: 0.25, borderRadius: 2 }}
         />
       )}

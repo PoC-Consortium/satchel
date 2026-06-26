@@ -3035,6 +3035,9 @@ impl Engine {
     /// the map self-prunes. One light confirmations query per active swap per tick
     /// (the 30s scheduler cadence) — never on the UI's faster poll.
     fn refresh_progress(&self, events: &[TickEvent]) {
+        // Previous snapshot — carries the awaiting-phase baseline forward so the
+        // blocks-elapsed count survives across ticks.
+        let prev = self.progress.lock().map(|g| g.clone()).unwrap_or_default();
         let mut latest: HashMap<&str, &TickEvent> = HashMap::new();
         for e in events {
             latest.insert(e.swap_id.as_str(), e); // events are in order → last wins
@@ -3051,13 +3054,13 @@ impl Engine {
         };
         if let Ok(records) = self.store.list() {
             for rec in &records {
-                if let Some(p) = self.swap_progress_v1(rec) {
+                if let Some(p) = self.swap_progress_v1(rec, &prev) {
                     snap.insert(rec.swap_id.clone(), fold(p));
                 }
             }
         }
         for rec in self.store.list_adaptor().unwrap_or_default() {
-            if let Some(p) = self.swap_progress_v2(&rec) {
+            if let Some(p) = self.swap_progress_v2(&rec, &prev) {
                 snap.insert(rec.swap_id.clone(), fold(p));
             }
         }
@@ -3074,207 +3077,225 @@ impl Engine {
             .unwrap_or_default()
     }
 
-    /// Progress for one v1 swap, or `None` for states with nothing watchable
-    /// (pre-funding, terminal, or a leg we can't yet see on-chain). `confs` comes
-    /// from the chain backend; `feerate_sat_vb` is read off our own settlement tx.
-    fn swap_progress_v1(&self, rec: &SwapRecord) -> Option<SwapProgress> {
+    /// Progress for one v1 swap. Surfaces only waits that are OURS: the
+    /// counterparty's lock burying toward `n` (our gate before we act) and our
+    /// own claim burying (settlement). Our own lock is never shown as a target —
+    /// the counterparty gates on it, not us — so after we lock we show an
+    /// `awaiting_claim` liveness count instead. `None` when nothing applies.
+    fn swap_progress_v1(
+        &self,
+        rec: &SwapRecord,
+        prev: &HashMap<String, SwapProgress>,
+    ) -> Option<SwapProgress> {
         use Role::*;
         use State::*;
-        // (watching, chain, txid, spk_hint, needed, settlement, claim_amount)
-        let (watching, chain, txid, spk, needed, settlement, amount): (
-            &str,
-            &ChainRef,
-            Option<String>,
-            Option<ScriptBuf>,
-            u32,
-            bool,
-            u64,
-        ) = match (rec.role, rec.state) {
-            (Initiator, FundedA) | (Initiator, FundedB) => {
-                let spk = self
-                    .swap_params(rec)
-                    .ok()
-                    .and_then(|p| p.htlc_b().ok())
-                    .map(|h| h.script_pubkey());
-                (
-                    "their_funding",
+        let htlc_spk = |leg_a: bool| {
+            self.swap_params(rec)
+                .ok()
+                .and_then(|p| {
+                    if leg_a {
+                        p.htlc_a().ok()
+                    } else {
+                        p.htlc_b().ok()
+                    }
+                })
+                .map(|h| h.script_pubkey())
+        };
+        match (rec.role, rec.state) {
+            // Maker: wait for the taker's B lock to bury, then secure our B redeem.
+            (Initiator, FundedA) | (Initiator, FundedB) => match &rec.htlc_b_txid {
+                Some(txid) => self.progress_confirming(
+                    &rec.swap_id,
                     &rec.chain_b,
-                    rec.htlc_b_txid.clone(),
-                    spk,
+                    txid.clone(),
+                    htlc_spk(false),
                     rec.n_b,
-                    false,
-                    0,
-                )
-            }
-            (Initiator, RedeemedB) => (
-                "settlement",
+                    "their_lock",
+                    None,
+                ),
+                None => self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_lock", prev),
+            },
+            (Initiator, RedeemedB) => self.progress_confirming(
+                &rec.swap_id,
                 &rec.chain_b,
-                rec.final_txid.clone(),
+                rec.final_txid.clone()?,
                 spend_spk(rec),
                 rec.n_b,
-                true,
-                rec.amount_b,
+                "settlement",
+                feerate_of(rec.final_tx_hex.as_deref(), rec.amount_b),
             ),
-            (Participant, Accepted) => {
-                let spk = self
-                    .swap_params(rec)
-                    .ok()
-                    .and_then(|p| p.htlc_a().ok())
-                    .map(|h| h.script_pubkey());
-                (
-                    "their_funding",
+            // Taker: wait for the maker's A lock to bury; after we lock B, wait for
+            // their reveal; then secure our A redeem.
+            (Participant, Accepted) => match &rec.htlc_a_txid {
+                Some(txid) => self.progress_confirming(
+                    &rec.swap_id,
                     &rec.chain_a,
-                    rec.htlc_a_txid.clone(),
-                    spk,
+                    txid.clone(),
+                    htlc_spk(true),
                     rec.n_a,
-                    false,
-                    0,
-                )
+                    "their_lock",
+                    None,
+                ),
+                None => self.progress_awaiting(&rec.swap_id, &rec.chain_a, "awaiting_lock", prev),
+            },
+            (Participant, FundedA) | (Participant, FundedB) => {
+                self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_claim", prev)
             }
-            (Participant, FundedA) => {
-                let spk = self
-                    .swap_params(rec)
-                    .ok()
-                    .and_then(|p| p.htlc_b().ok())
-                    .map(|h| h.script_pubkey());
-                (
-                    "ours_funding",
-                    &rec.chain_b,
-                    rec.htlc_b_txid.clone(),
-                    spk,
-                    rec.n_b,
-                    false,
-                    0,
-                )
+            (Participant, Completed) => self.progress_confirming(
+                &rec.swap_id,
+                &rec.chain_a,
+                rec.final_txid.clone()?,
+                spend_spk(rec),
+                rec.n_a,
+                "settlement",
+                feerate_of(rec.final_tx_hex.as_deref(), rec.amount_a),
+            ),
+            _ => None,
+        }
+    }
+
+    /// Progress for one v2 (adaptor) swap — same OURS-only model as v1. v2 funds
+    /// and waits inside the `Signed` state; the Taproot leg scriptPubKey is
+    /// derived from the adaptor params (as the tick does).
+    fn swap_progress_v2(
+        &self,
+        rec: &AdaptorSwapRecord,
+        prev: &HashMap<String, SwapProgress>,
+    ) -> Option<SwapProgress> {
+        use crate::adaptor_swap::AdaptorState::*;
+        let leg_spk = |leg_a: bool| {
+            let secp = bitcoin::secp256k1::Secp256k1::new();
+            let p = self.adaptor_params(rec).ok()?;
+            if leg_a {
+                p.leg_a(&secp).ok()?.script_pubkey(&secp).ok()
+            } else {
+                p.leg_b(&secp).ok()?.script_pubkey(&secp).ok()
             }
-            _ => return None,
         };
-        let txid = txid?;
+        match (rec.role, rec.state) {
+            // Maker: wait for the taker's B lock to bury, then secure our B redeem.
+            (Role::Initiator, Signed) => match &rec.funding_b_txid {
+                Some(txid) => self.progress_confirming(
+                    &rec.swap_id,
+                    &rec.chain_b,
+                    txid.clone(),
+                    leg_spk(false),
+                    rec.n_b,
+                    "their_lock",
+                    None,
+                ),
+                None => self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_lock", prev),
+            },
+            (Role::Initiator, RedeemedB) => self.progress_confirming(
+                &rec.swap_id,
+                &rec.chain_b,
+                rec.final_txid_b.clone()?,
+                first_output_spk(rec.final_tx_b_hex.as_deref()),
+                rec.n_b,
+                "settlement",
+                Some(rec.redeem_feerate_b),
+            ),
+            // Taker: wait for the maker's A lock; after we lock B, wait for their
+            // reveal; then secure our A redeem.
+            (Role::Participant, Signed) => {
+                if rec.funding_b_txid.is_some() {
+                    self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_claim", prev)
+                } else if let Some(txid) = &rec.funding_a_txid {
+                    self.progress_confirming(
+                        &rec.swap_id,
+                        &rec.chain_a,
+                        txid.clone(),
+                        leg_spk(true),
+                        rec.n_a,
+                        "their_lock",
+                        None,
+                    )
+                } else {
+                    self.progress_awaiting(&rec.swap_id, &rec.chain_a, "awaiting_lock", prev)
+                }
+            }
+            (Role::Participant, Completed) => self.progress_confirming(
+                &rec.swap_id,
+                &rec.chain_a,
+                rec.final_txid_a.clone()?,
+                first_output_spk(rec.final_tx_a_hex.as_deref()),
+                rec.n_a,
+                "settlement",
+                Some(rec.redeem_feerate_a),
+            ),
+            _ => None,
+        }
+    }
+
+    /// A "confirming X/n" entry — a wait that is ours: the counterparty's lock
+    /// burying (our gate before we act), or our own claim burying (settlement).
+    /// `None` once `confs >= needed` (the leg is final, so the line disappears).
+    fn progress_confirming(
+        &self,
+        swap_id: &str,
+        chain: &ChainRef,
+        txid: String,
+        spk: Option<ScriptBuf>,
+        needed: u32,
+        watching: &str,
+        feerate: Option<u64>,
+    ) -> Option<SwapProgress> {
         let backend = self.backend(chain).ok()?;
         let confs = backend
             .tx_confirmations(&txid, spk.as_ref())
             .unwrap_or(0)
             .min(u64::from(u32::MAX)) as u32;
-        // Fully confirmed → stop displaying. Progress is for the in-flight
-        // confirmation window only; once the tx reaches its required depth the
-        // leg is final, so the line disappears (the narrate "complete"/next-state
-        // story carries it). Without this the count climbed past `needed` forever.
         if confs >= needed {
             return None;
         }
-        let feerate = if settlement {
-            feerate_of(rec.final_tx_hex.as_deref(), amount)
-        } else {
-            None
-        };
         Some(SwapProgress {
-            swap_id: rec.swap_id.clone(),
+            swap_id: swap_id.to_string(),
             watching: watching.into(),
+            coin: coin_symbol(chain),
             confs,
             needed,
+            blocks_elapsed: None,
             feerate_sat_vb: feerate,
             last_action: None,
             last_detail: None,
             updated_at: local_now(),
+            awaiting_since_height: None,
         })
     }
 
-    /// Progress for one v2 (adaptor) swap. Mirrors v1: the funding-confirmation
-    /// waits (which v2 does inside the `Signed` phase — both legs fund and bury
-    /// there, before the reveal) AND the settlement confirmation after the redeem.
-    /// The Taproot leg scriptPubKey is derived from the adaptor params (same as
-    /// the tick) so confs can be read for the counterparty's funding too.
-    fn swap_progress_v2(&self, rec: &AdaptorSwapRecord) -> Option<SwapProgress> {
-        use crate::adaptor_swap::AdaptorState::*;
-        // How to derive the watched output's scriptPubKey (a backend lookup hint).
-        enum Spk {
-            Settlement(Option<String>), // first output of the final (redeem) tx
-            LegA,                       // Taproot funding leg A
-            LegB,                       // Taproot funding leg B
-        }
-        // (watching, chain, txid, spk source, needed depth, settlement feerate)
-        let (watching, chain, txid, spk_src, needed, feerate): (
-            &str,
-            &ChainRef,
-            Option<String>,
-            Spk,
-            u32,
-            Option<u64>,
-        ) = match (rec.role, rec.state) {
-            // Settlement (claim) confirming.
-            (Role::Initiator, RedeemedB) => (
-                "settlement", &rec.chain_b, rec.final_txid_b.clone(),
-                Spk::Settlement(rec.final_tx_b_hex.clone()), rec.n_b, Some(rec.redeem_feerate_b),
-            ),
-            (Role::Participant, Completed) => (
-                "settlement", &rec.chain_a, rec.final_txid_a.clone(),
-                Spk::Settlement(rec.final_tx_a_hex.clone()), rec.n_a, Some(rec.redeem_feerate_a),
-            ),
-            // Funding confirming during the `Signed` phase.
-            (Role::Initiator, Signed) => {
-                if rec.funding_a_txid.is_some() && rec.funding_b_txid.is_some() {
-                    // Waiting on the taker's leg-B lock to bury before we reveal.
-                    ("their_funding", &rec.chain_b, rec.funding_b_txid.clone(), Spk::LegB, rec.n_b, None)
-                } else if rec.funding_a_txid.is_some() {
-                    // Our leg-A lock confirming (then we wait for their leg B).
-                    ("ours_funding", &rec.chain_a, rec.funding_a_txid.clone(), Spk::LegA, rec.n_a, None)
-                } else {
-                    return None;
-                }
-            }
-            (Role::Participant, Signed) => {
-                if rec.funding_b_txid.is_some() {
-                    // Our leg-B lock confirming (then we wait for their reveal).
-                    ("ours_funding", &rec.chain_b, rec.funding_b_txid.clone(), Spk::LegB, rec.n_b, None)
-                } else if rec.funding_a_txid.is_some() {
-                    // Waiting on the maker's leg-A lock to bury before we fund B.
-                    ("their_funding", &rec.chain_a, rec.funding_a_txid.clone(), Spk::LegA, rec.n_a, None)
-                } else {
-                    return None;
-                }
-            }
-            _ => return None,
-        };
-        let txid = txid?;
-        let backend = self.backend(chain).ok()?;
-        let spk = match spk_src {
-            Spk::Settlement(hex) => first_output_spk(hex.as_deref()),
-            Spk::LegA => {
-                let secp = bitcoin::secp256k1::Secp256k1::new();
-                self.adaptor_params(rec)
-                    .ok()?
-                    .leg_a(&secp)
-                    .ok()?
-                    .script_pubkey(&secp)
-                    .ok()
-            }
-            Spk::LegB => {
-                let secp = bitcoin::secp256k1::Secp256k1::new();
-                self.adaptor_params(rec)
-                    .ok()?
-                    .leg_b(&secp)
-                    .ok()?
-                    .script_pubkey(&secp)
-                    .ok()
-            }
-        };
-        let confs = backend
-            .tx_confirmations(&txid, spk.as_ref())
+    /// An "awaiting <counterparty action>" entry — no target, just a blocks-
+    /// elapsed liveness count. The phase-start tip is carried forward from the
+    /// prior snapshot while the phase is unchanged, so the count grows per block.
+    fn progress_awaiting(
+        &self,
+        swap_id: &str,
+        chain: &ChainRef,
+        watching: &str,
+        prev: &HashMap<String, SwapProgress>,
+    ) -> Option<SwapProgress> {
+        let tip = self
+            .backend(chain)
+            .ok()?
+            .tip_height()
             .unwrap_or(0)
             .min(u64::from(u32::MAX)) as u32;
-        // Fully confirmed → stop displaying (see swap_progress_v1).
-        if confs >= needed {
-            return None;
-        }
+        let since = prev
+            .get(swap_id)
+            .filter(|p| p.watching == watching)
+            .and_then(|p| p.awaiting_since_height)
+            .unwrap_or(tip);
         Some(SwapProgress {
-            swap_id: rec.swap_id.clone(),
+            swap_id: swap_id.to_string(),
             watching: watching.into(),
-            confs,
-            needed,
-            feerate_sat_vb: feerate,
+            coin: coin_symbol(chain),
+            confs: 0,
+            needed: 0,
+            blocks_elapsed: Some(tip.saturating_sub(since)),
+            feerate_sat_vb: None,
             last_action: None,
             last_detail: None,
             updated_at: local_now(),
+            awaiting_since_height: Some(since),
         })
     }
 
@@ -5091,6 +5112,11 @@ fn feerate_of(tx_hex: Option<&str>, claimed_amount: u64) -> Option<u64> {
     (vsize > 0).then(|| fee / vsize)
 }
 
+/// Display symbol for a chain (e.g. `btcx` → `BTCX`), for "Securing your {coin}".
+fn coin_symbol(chain: &ChainRef) -> String {
+    chain.coin_id.to_uppercase()
+}
+
 /// Live per-swap progress for the UI (observability only). Rebuilt each
 /// [`Engine::tick`] and served by `swapprogress`; see the field doc on
 /// [`Engine::progress`]. Secret-free by construction (counts, txid-derived data,
@@ -5098,13 +5124,27 @@ fn feerate_of(tx_hex: Option<&str>, claimed_amount: u64) -> Option<u64> {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SwapProgress {
     pub swap_id: String,
-    /// What we're watching now: `settlement` | `their_funding` | `ours_funding`.
+    /// The current wait, and how to display it:
+    /// - `awaiting_lock` / `awaiting_claim` — waiting on the COUNTERPARTY to act
+    ///   (their lock to appear, or their claim/reveal). No target; show
+    ///   `blocks_elapsed` as a liveness count.
+    /// - `their_lock` — their lock burying toward `needed` (our gate before we
+    ///   act). Show `confs/needed`.
+    /// - `settlement` — our own claim burying ("Securing your {coin}").
+    ///   Show `confs/needed` (+ `feerate_sat_vb`).
     pub watching: String,
-    /// Confirmations of the watched tx so far (`0` = in mempool / not yet seen).
+    /// Display symbol of the watched leg (e.g. `BTC`).
+    pub coin: String,
+    /// Confirmations so far — for the `their_lock`/`settlement` phases (`0` for
+    /// the awaiting phases).
     pub confs: u32,
-    /// Confirmation depth required for this leg (`n_a`/`n_b`).
+    /// Required depth for this leg (`n_a`/`n_b`); `0` for the awaiting phases.
     pub needed: u32,
-    /// Current feerate of our settlement tx (sat/vB); absent for funding waits.
+    /// Blocks elapsed in the current awaiting phase (liveness cue, no deadline).
+    /// Present only for `awaiting_lock`/`awaiting_claim`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocks_elapsed: Option<u32>,
+    /// Current feerate of our settlement tx (sat/vB); `settlement` phase only.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub feerate_sat_vb: Option<u64>,
     /// The most recent scheduler action for this swap, if any this tick.
@@ -5114,6 +5154,10 @@ pub struct SwapProgress {
     pub last_detail: Option<String>,
     /// When this snapshot was taken (unix seconds) — lets the UI grey out stale data.
     pub updated_at: u64,
+    /// Internal carry-forward: the chain tip when the awaiting phase began, so
+    /// `blocks_elapsed` grows across ticks. The UI ignores it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub awaiting_since_height: Option<u32>,
 }
 
 /// One scheduler action (or error) on one swap.

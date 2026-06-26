@@ -680,11 +680,13 @@ export const en = {
     aborted: "Cancelled before any money moved.",
   },
   // Live active-swap progress line (observability). Only these labels are
-  // translatable; counts and feerate are composed from data in the component.
+  // translatable; counts, feerate and the "+N blocks" number are data.
   progress: {
-    settlement: "Claim confirming",
-    theirFunding: "Waiting for their lock",
-    oursFunding: "Locking your funds",
+    awaitingLock: "Awaiting their lock",
+    awaitingClaim: "Awaiting their claim",
+    theirLock: "Their lock confirming",
+    securing: "Securing your {coin}",
+    blocks: "+{n} blocks",
     feeBumped: "Fee-bumped",
     reorg: "Reorg detected — re-checking",
   },
