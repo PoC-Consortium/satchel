@@ -730,18 +730,24 @@ def test_funding_fee_bump_v1(h):
 
 
 def test_balance_validation(h):
-    """An offer you can't fund is refused up front (not left to fail at fund
-    time / pollute the board with un-fundable offers). The other scenarios
-    already prove a fundable offer is accepted, so this only checks rejection."""
+    """An offer you can't fund is refused up front, at the point it would be
+    advertised. `board post` runs the cumulative funds gate
+    (engine.ensure_can_fund_new_offer) so an un-fundable offer never reaches the
+    board / pollutes it. NOTE: the bare `offer` command is an offline envelope
+    builder and is intentionally ungated (engine.offer, "works offline") — the
+    funds gate lives only where money is actually committed: board-post, take and
+    fund. So this drives `board post`, the same gated path Satchel's "Post an
+    offer" uses (boardpostoffer). The other scenarios already prove a fundable
+    offer is accepted, so this only checks rejection."""
     alice = Party("alicebal", h, h.workdir, "alice_pocx", "alice_btc").start()
     try:
-        t2, t1 = regtest_timelocks(h)
-        m_init = msg(h.workdir, "bal_init.json")
-        # alice_pocx holds ~100 POCX; offering to GIVE a million is refused
-        # because the core wallet can't cover the leg we'd have to lock.
+        # alice_pocx holds ~100 POCX; advertising an offer to GIVE a million is
+        # refused because the core wallet can't cover the leg we'd lock when taken.
+        # The gate fires after the chains-live check but before any board is
+        # contacted, so this needs no Corkboard. Default board-post timelocks
+        # (12h/6h) satisfy validate_offer_offsets.
         err = expect_fail(alice, "over-balance offer",
-                          "offer", "--give", "btcx:1000000.0", "--get", "btc:0.001",
-                          "--t1", str(t1), "--t2", str(t2), "--out", m_init)
+                          "board", "post", "--give", "btcx:1000000.0", "--get", "btc:0.001")
         assert "insufficient" in err.lower(), f"expected insufficient-balance error, got: {err}"
         print("[e2e] balance-validation scenario OK")
     finally:
