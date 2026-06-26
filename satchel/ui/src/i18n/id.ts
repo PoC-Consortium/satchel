@@ -4,7 +4,6 @@ import type { Bundle } from "./en";
 export const id: Bundle = {
   app: {
     name: "Satchel",
-    tagline: "swap tanpa perantara",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -59,7 +58,6 @@ export const id: Bundle = {
     balance: "Saldo: {amt} {sym}",
     balanceLoading: "Saldo: …",
     noCoins: "Tidak ada koin yang dikonfigurasi",
-    sameCoin: "Koin yang diberikan dan diterima harus berbeda.",
     legDown: "Salah satu node koin ini mati — jalankan (atau cek Pengaturan → Koin) sebelum memasang.",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -98,8 +96,6 @@ export const id: Bundle = {
     cancelTip: "Berhenti menghormati slip ini — teman yang masih memegangnya tidak bisa lagi mengambilnya.",
   },
   takeSlip: {
-    open: "Tempel slip",
-    title: "Ambil penawaran privat",
     intro:
       "Seorang teman mengirimi Anda slip penawaran privat (diawali dengan pactoffer1:). Tempel di sini untuk meninjau dan mengambilnya — persis seperti penawaran dari board.",
     placeholder: "pactoffer1:…",
@@ -182,7 +178,6 @@ export const id: Bundle = {
       "Satchel berdagang di bawah sebuah “merchant” — satu identitas dagang dengan seed-nya sendiri. Anda belum punya: buat yang baru, atau impor frasa pemulihan yang sudah ada untuk memulai.",
     importMerchant: "Impor merchant",
     none: "Belum ada merchant.",
-    active: "aktif",
     switch: "beralih",
     newMerchant: "Merchant baru",
     thisMerchant: "merchant ini",
@@ -211,7 +206,6 @@ export const id: Bundle = {
     import: "Impor",
     importDesc: "Pulihkan dari frasa 12/24 kata yang sudah ada.",
     recoveryLabel: "Frasa pemulihan",
-    importPlaceholder: "kata1 kata2 kata3 …",
     encrypt: "Enkripsi",
     encryptDesc:
       "Frasa sandi melindungi seed saat disimpan. Anda memasukkannya sekali per sesi — Satchel tidak pernah menyimpannya. Catatan: auto-refund tanpa pengawasan akan terhenti setelah restart sampai Anda memasukkannya kembali.",
@@ -220,9 +214,6 @@ export const id: Bundle = {
       "Auto-refund tetap bekerja menembus reboot tanpa perlu memasukkan apa pun — ini hanya seed transit panas. Risikonya: akses file/host akan membuka kunci transit + identitas merchant ini.",
     passphraseLabel: "Frasa sandi",
     passphrasePlaceholder: "pilih frasa sandi",
-    createTitle: "Buat seed",
-    importTitle: "Impor seed",
-    secureTitle: "Amankan {label}",
     revealTitle: "Catat frasa pemulihan Anda",
     revealBody:
       "Siapa pun yang memiliki kata-kata ini mengendalikan kunci panas merchant ini. Satchel tidak menyimpan salinan — simpan secara offline. Berikutnya Anda akan mengonfirmasi beberapa kata.",
@@ -353,19 +344,10 @@ export const id: Bundle = {
     protoPrivateTip: "Swap privat (adaptor Taproot/MuSig2) — tampak seperti pembayaran biasa on-chain",
     protoHtlcTip: "Swap HTLC klasik",
     // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "Dompet RPC inti",
-    backendCoreDesc: "Dompet node Anda sendiri mendanai swap dan menerima hasilnya.",
-    backendHardwareTitle: "Perangkat keras",
-    backendHardwareDesc: "Penandatanganan Ledger / PSBT untuk leg pendanaan.",
-    backendLater: "nanti",
     // CoinSetup dialog.
     setupTitle: "Hubungkan {coin}",
     setupIntro:
       "Arahkan Satchel ke node {sym} Anda sendiri. Tidak ada yang disimpan sampai node lolos pemeriksaan blok genesis — dana Anda hanya pernah menyentuh chain {sym} yang asli.",
-    backendUrlLabel: "URL backend node",
-    backendUrlHint:
-      "URL pertama = dompet node Anda sendiri (mendanai swap, menerima hasil). Tambahkan server Electrum (tcp://host:port) setelah koma untuk tampilan chain tambahan yang independen.",
-    fundingWallet: "Dompet pendanaan",
     confirmationsLabel: "Konfirmasi sebelum final",
     confirmationsHint:
       "Seberapa dalam sebuah pendanaan atau redeem di chain ini harus ada sebelum swap bertindak atasnya — margin keamanan reorg. Lebih tinggi lebih aman tapi lebih lambat; biarkan kosong untuk bawaan yang disarankan ({default}).",
@@ -426,12 +408,6 @@ export const id: Bundle = {
     walletDefaultHint:
       "Tidak ada dompet yang diatur untuk koin ini, jadi RPC memakai dompet bawaan node. Atur satu di Pengaturan → Koin untuk mencakupkan setiap panggilan ke dompet tertentu.",
     balanceLabel: "Saldo {symbol}",
-    receive: "Terima",
-    send: "Kirim",
-    sendTo: "Kirim ke alamat",
-    amount: "Jumlah",
-    sendTitle: "Kirim {amount} {sym}?",
-    sendConfirmBody: "Ke {to}\n\nIni mengeluarkan dari dompet node Anda sendiri dan tidak bisa dibatalkan.",
   },
   corkboard: {
     noBoardTitle: "Tidak ada Corkboard terhubung",
@@ -442,7 +418,6 @@ export const id: Bundle = {
     boardSettings: "Konfigurasikan di Pengaturan",
     filterAll: "Semua",
     filterMine: "Milik saya",
-    offered: "{symbol} ditawarkan",
     noOffers: "Tidak ada penawaran yang bisa Anda ambil sekarang",
     noOffersBody:
       "Penawaran muncul di sini begitu seorang maker memasang satu untuk pasangan yang sudah Anda atur. Anda juga bisa memasang milik Anda sendiri.",
@@ -461,7 +436,6 @@ export const id: Bundle = {
       "Jika swap macet, kedua sisi auto-refund — leg taker terbuka kuncinya lebih dulu, milik Anda sedikit kemudian. Tidak ada yang berakhir terjebak.",
     activeTitle: "Swap aktif Anda",
     states: {
-      open: "terbuka",
       takenByUs: "diambil oleh Anda",
       revoked: "ditarik",
       expired: "kedaluwarsa",
@@ -485,7 +459,6 @@ export const id: Bundle = {
       mid: "tengah {price}",
       levelOffers: "{count} penawaran pada harga ini — pilih satu untuk diambil",
       depthTip: "Total {sym} yang ditawarkan pada harga ini di {count} pengumuman.",
-      takerNote: "Mengambilnya, Anda berikan {give} dan terima {get}.",
       selectLevel: "Pilih level harga di atas untuk melihat penawaran di sana.",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "Unit tampilan untuk jumlah {coin}",
@@ -571,23 +544,8 @@ export const id: Bundle = {
       "{sym} tidak cukup untuk mendanai swap ini — butuh ~{need} {sym} (jumlah + biaya pendanaan), dompet punya {have} {sym}.",
   },
   wizard: {
-    welcome: "Selamat datang di Satchel",
-    connectTitle: "Hubungkan engine Pact",
-    connectIntro:
-      "Satchel adalah klien tipis dari engine Pact — inti yang memegang kunci Anda dan menjalankan swap. Pilih cara menjangkaunya.",
-    managed: "Jalankan engine Pact bawaan",
-    managedDesc: "Satchel meluncurkan dan mengawasi engine Pact-nya sendiri. Disarankan.",
-    external: "Hubungkan ke engine Pact eksternal",
-    externalDesc: "Arahkan ke engine Pact yang sudah Anda jalankan (atur SATCHEL_PACTD_URL + cookie sebelum peluncuran).",
-    externalNote:
-      "Mode eksternal dipilih lewat variabel lingkungan sebelum meluncurkan Satchel. Jalankan ulang dengan SATCHEL_PACTD_URL terpasang untuk memakainya.",
-    coinsTitle: "Tambahkan koin Anda",
-    coinsIntro:
-      "Setelah merchant Anda dibuat, hubungkan tiap koin ke node Anda sendiri di Pengaturan → Koin. Pilih koin dan backend (Electrum publik tanpa pengaturan, atau node Anda sendiri); genesis diperiksa terhadap jaringan ini sebelum apa pun disimpan.",
-    coinsTemplatesSoon: "Template koin satu-klik hadir di sini pada rilis berikutnya.",
     back: "Kembali",
     continue: "Lanjutkan",
-    finish: "Selesaikan pengaturan",
   },
   // UI-4 docked activity log.
   log: {
@@ -666,8 +624,6 @@ export const id: Bundle = {
       "{a} mereka terkunci dan terverifikasi. Berikutnya: kunci {b} Anda. Jaring pengaman: refund otomatis pada {t2} jika ada yang macet.",
     fundedBMaker: "Keduanya terkunci. Daemon Anda mengklaim {b} begitu terkonfirmasi dengan aman.",
     fundedBTaker: "Keduanya terkunci. Daemon Anda akan mengklaim {a} begitu sisi lain mengambil {b} mereka.",
-    redeemedB:
-      "Anda mengklaim {b} — menunggu terkonfirmasi. {a} Anda yang terkunci tetap terlindungi sampai ini final.",
     completed: "Swap selesai — {coin} ada di dompet Anda.",
     refunded: "Swap tidak selesai, jadi {coin} Anda kembali otomatis. Tidak ada yang hilang selain biaya.",
     aborted: "Dibatalkan sebelum ada uang yang bergerak.",

@@ -4,7 +4,6 @@ import type { Bundle } from "./en";
 export const ca: Bundle = {
   app: {
     name: "Satchel",
-    tagline: "intercanvis sense confiança",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -59,7 +58,6 @@ export const ca: Bundle = {
     balance: "Saldo: {amt} {sym}",
     balanceLoading: "Saldo: …",
     noCoins: "No hi ha cap moneda configurada",
-    sameCoin: "Donar i rebre han de ser monedes diferents.",
     legDown: "El node d'una d'aquestes monedes no funciona — inicia'l (o revisa Configuració → Monedes) abans de publicar.",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -98,8 +96,6 @@ export const ca: Bundle = {
     cancelTip: "Deixa d'honrar aquest val — un amic que encara el tingui ja no podrà acceptar-lo.",
   },
   takeSlip: {
-    open: "Enganxa un val",
-    title: "Accepta una oferta privada",
     intro:
       "Un amic t'ha enviat un val d'oferta privada (comença amb pactoffer1:). Enganxa'l aquí per revisar-lo i acceptar-lo — exactament com una oferta del tauler.",
     placeholder: "pactoffer1:…",
@@ -182,7 +178,6 @@ export const ca: Bundle = {
       "Satchel negocia sota un «comerciant» — una identitat de negociació amb la seva pròpia llavor. Encara no en tens cap: crea'n una de nova, o importa una frase de recuperació existent per començar.",
     importMerchant: "Importa un comerciant",
     none: "Encara no hi ha comerciants.",
-    active: "actiu",
     switch: "canvia",
     newMerchant: "Comerciant nou",
     thisMerchant: "aquest comerciant",
@@ -211,7 +206,6 @@ export const ca: Bundle = {
     import: "Importa",
     importDesc: "Restaura des d'una frase existent de 12/24 paraules.",
     recoveryLabel: "Frase de recuperació",
-    importPlaceholder: "paraula1 paraula2 paraula3 …",
     encrypt: "Xifra",
     encryptDesc:
       "Una contrasenya protegeix la llavor en repòs. La introdueixes un cop per sessió — Satchel mai l'emmagatzema. Nota: el reemborsament automàtic sense vigilància es pausa després d'un reinici fins que la tornis a introduir.",
@@ -220,9 +214,6 @@ export const ca: Bundle = {
       "El reemborsament automàtic continua funcionant entre reinicis sense haver d'introduir res — això només és una llavor de trànsit calenta. Cost: l'accés al fitxer/host exposa les claus de trànsit i la identitat d'aquest comerciant.",
     passphraseLabel: "Contrasenya",
     passphrasePlaceholder: "tria una contrasenya",
-    createTitle: "Crea una llavor",
-    importTitle: "Importa una llavor",
-    secureTitle: "Assegura {label}",
     revealTitle: "Anota la teva frase de recuperació",
     revealBody:
       "Qualsevol que tingui aquestes paraules controla les claus calentes d'aquest comerciant. Satchel no en guarda cap còpia — desa-la fora de línia. A continuació en confirmaràs unes quantes paraules.",
@@ -353,19 +344,10 @@ export const ca: Bundle = {
     protoPrivateTip: "Intercanvi privat (adaptador Taproot/MuSig2) — sembla un pagament ordinari on-chain",
     protoHtlcTip: "Intercanvi HTLC clàssic",
     // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "Cartera RPC del Core",
-    backendCoreDesc: "La cartera del teu propi node finança l'intercanvi i rep els guanys.",
-    backendHardwareTitle: "Maquinari",
-    backendHardwareDesc: "Signatura Ledger / PSBT per a la pota de finançament.",
-    backendLater: "més tard",
     // CoinSetup dialog.
     setupTitle: "Connecta {coin}",
     setupIntro:
       "Apunta Satchel al teu propi node {sym}. No es desa res fins que el node passa una comprovació del bloc gènesi — els teus fons només toquen mai la cadena {sym} real.",
-    backendUrlLabel: "URL(s) del backend del node",
-    backendUrlHint:
-      "Primera URL = la cartera del teu propi node (finança intercanvis, rep guanys). Afegeix servidors Electrum (tcp://host:port) després de comes per a vistes de cadena extra i independents.",
-    fundingWallet: "Cartera de finançament",
     confirmationsLabel: "Confirmacions abans de final",
     confirmationsHint:
       "Com de profund ha de ser un finançament o bescanvi en aquesta cadena abans que un intercanvi hi actuï — el marge de seguretat davant reorganitzacions. Més alt és més segur però més lent; deixa-ho en blanc per al valor per defecte recomanat ({default}).",
@@ -426,12 +408,6 @@ export const ca: Bundle = {
     walletDefaultHint:
       "No hi ha cap cartera definida per a aquesta moneda, així que els RPC fan servir la cartera per defecte del node. Defineix-ne una a Configuració → Monedes per limitar cada crida a una cartera concreta.",
     balanceLabel: "saldo {symbol}",
-    receive: "Rep",
-    send: "Envia",
-    sendTo: "Envia a l'adreça",
-    amount: "Quantitat",
-    sendTitle: "Vols enviar {amount} {sym}?",
-    sendConfirmBody: "A {to}\n\nAixò gasta de la cartera del teu propi node i no es pot desfer.",
   },
   corkboard: {
     noBoardTitle: "Cap Corkboard connectat",
@@ -442,7 +418,6 @@ export const ca: Bundle = {
     boardSettings: "Configura a Configuració",
     filterAll: "Totes",
     filterMine: "Meves",
-    offered: "{symbol} oferts",
     noOffers: "No hi ha cap oferta que puguis acceptar ara mateix",
     noOffersBody:
       "Les ofertes apareixen aquí tan bon punt un maker en publica una per a un parell que hagis configurat. També pots publicar les teves.",
@@ -461,7 +436,6 @@ export const ca: Bundle = {
       "Si l'intercanvi s'encalla, les dues parts es reemborsen automàticament — la pota del taker es desbloqueja primer, la teva una mica després. Ningú no acaba encallat.",
     activeTitle: "Els teus intercanvis actius",
     states: {
-      open: "oberta",
       takenByUs: "acceptada per tu",
       revoked: "retirada",
       expired: "caducada",
@@ -485,7 +459,6 @@ export const ca: Bundle = {
       mid: "mitjana {price}",
       levelOffers: "{count} oferta/es a aquest preu — tria'n una per acceptar",
       depthTip: "Total de {sym} en oferta a aquest preu repartit en {count} anunci(s).",
-      takerNote: "En acceptar-la, dones {give} i reps {get}.",
       selectLevel: "Tria un nivell de preu a dalt per veure'n les ofertes.",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "Unitat de visualització per a les quantitats de {coin}",
@@ -571,23 +544,8 @@ export const ca: Bundle = {
       "No hi ha prou {sym} per finançar aquest intercanvi — calen ~{need} {sym} (quantitat + comissió de finançament), la cartera té {have} {sym}.",
   },
   wizard: {
-    welcome: "Benvingut a Satchel",
-    connectTitle: "Connecta el motor Pact",
-    connectIntro:
-      "Satchel és un client lleuger del motor Pact — el nucli que conté les teves claus i executa els intercanvis. Tria com arribar-hi.",
-    managed: "Executa el motor Pact integrat",
-    managedDesc: "Satchel inicia i supervisa el seu propi motor Pact. Recomanat.",
-    external: "Connecta't a un motor Pact extern",
-    externalDesc: "Apunta a un motor Pact que ja executis (defineix SATCHEL_PACTD_URL + cookie abans d'iniciar).",
-    externalNote:
-      "El mode extern se selecciona mitjançant variables d'entorn abans d'iniciar Satchel. Torna a iniciar amb SATCHEL_PACTD_URL definit per fer-lo servir.",
-    coinsTitle: "Afegeix les teves monedes",
-    coinsIntro:
-      "Després de crear el teu comerciant, connecta cada moneda al teu propi node a Configuració → Monedes. Tria una moneda i un backend (Electrum públic per zero configuració, o el teu propi node); el gènesi es comprova contra aquesta xarxa abans de desar res.",
-    coinsTemplatesSoon: "Les plantilles de monedes amb un clic arribaran aquí en una versió posterior.",
     back: "Enrere",
     continue: "Continua",
-    finish: "Finalitza la configuració",
   },
   // UI-4 docked activity log.
   log: {
@@ -666,8 +624,6 @@ export const ca: Bundle = {
       "Els seus {a} estan bloquejats i verificats. Següent: bloqueja els teus {b}. Xarxa de seguretat: reemborsament automàtic a {t2} si alguna cosa s'encalla.",
     fundedBMaker: "Tots dos bloquejats. El teu dimoni reclama els {b} tan bon punt es confirmin amb seguretat.",
     fundedBTaker: "Tots dos bloquejats. El teu dimoni reclamarà els {a} en el moment que l'altra part agafi els seus {b}.",
-    redeemedB:
-      "Has reclamat els {b} — esperant que es confirmin. Els teus {a} bloquejats queden protegits fins que això sigui definitiu.",
     completed: "Intercanvi complet — els {coin} són a la teva cartera.",
     refunded: "L'intercanvi no s'ha completat, així que els teus {coin} han tornat automàticament. No s'ha perdut res excepte comissions.",
     aborted: "Cancel·lat abans que es mogués cap diner.",

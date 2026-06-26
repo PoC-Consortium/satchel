@@ -4,7 +4,6 @@ import type { Bundle } from "./en";
 export const hi: Bundle = {
   app: {
     name: "Satchel",
-    tagline: "भरोसा-रहित (trustless) स्वैप",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -59,7 +58,6 @@ export const hi: Bundle = {
     balance: "बैलेंस: {amt} {sym}",
     balanceLoading: "बैलेंस: …",
     noCoins: "कोई coins कॉन्फ़िगर नहीं हैं",
-    sameCoin: "देने और पाने वाले coins अलग होने चाहिए।",
     legDown: "इन coins में से एक का node बंद है — पोस्ट करने से पहले उसे शुरू करें (या Settings → Coins जाँचें)।",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -98,8 +96,6 @@ export const hi: Bundle = {
     cancelTip: "इस slip को मानना बंद करें — जिस मित्र के पास यह अभी भी है, वह इसे नहीं ले पाएगा।",
   },
   takeSlip: {
-    open: "एक slip पेस्ट करें",
-    title: "एक निजी offer लें",
     intro:
       "एक मित्र ने आपको एक निजी offer slip भेजी है (यह pactoffer1: से शुरू होती है)। समीक्षा करने और लेने के लिए इसे यहाँ पेस्ट करें — बिल्कुल बोर्ड के किसी offer की तरह।",
     placeholder: "pactoffer1:…",
@@ -182,7 +178,6 @@ export const hi: Bundle = {
       "Satchel एक “merchant” के तहत व्यापार करता है — एक व्यापारिक पहचान जिसका अपना seed होता है। आपके पास अभी कोई नहीं है: शुरू करने के लिए एक नया बनाएँ, या एक मौजूदा recovery phrase आयात करें।",
     importMerchant: "एक merchant आयात करें",
     none: "अभी कोई merchants नहीं।",
-    active: "सक्रिय",
     switch: "स्विच करें",
     newMerchant: "नया merchant",
     thisMerchant: "यह merchant",
@@ -211,7 +206,6 @@ export const hi: Bundle = {
     import: "आयात करें",
     importDesc: "एक मौजूदा 12/24-शब्द वाले phrase से पुनर्स्थापित करें।",
     recoveryLabel: "Recovery phrase",
-    importPlaceholder: "word1 word2 word3 …",
     encrypt: "एन्क्रिप्ट करें",
     encryptDesc:
       "एक passphrase seed को निष्क्रिय अवस्था में सुरक्षित रखता है। आप इसे प्रति सत्र एक बार दर्ज करते हैं — Satchel इसे कभी संग्रहीत नहीं करता। ध्यान दें: पुनरारंभ के बाद आपके इसे फिर से दर्ज करने तक अनअटेंडेड auto-refund रुक जाता है।",
@@ -220,9 +214,6 @@ export const hi: Bundle = {
       "रिबूट के दौरान auto-refund बिना कुछ दर्ज किए काम करता रहता है — यह केवल एक hot ट्रांज़िट seed है। लागत: फ़ाइल/होस्ट तक पहुँच इस merchant की ट्रांज़िट keys + पहचान को उजागर करती है।",
     passphraseLabel: "Passphrase",
     passphrasePlaceholder: "एक passphrase चुनें",
-    createTitle: "seed बनाएँ",
-    importTitle: "seed आयात करें",
-    secureTitle: "{label} सुरक्षित करें",
     revealTitle: "अपना recovery phrase लिख लें",
     revealBody:
       "इन शब्दों वाला कोई भी व्यक्ति इस merchant की hot keys को नियंत्रित करता है। Satchel कोई प्रति नहीं रखता — इसे ऑफ़लाइन संग्रहीत करें। आगे आप कुछ शब्दों की पुष्टि करेंगे।",
@@ -353,19 +344,10 @@ export const hi: Bundle = {
     protoPrivateTip: "निजी स्वैप (Taproot/MuSig2 adaptor) — on-chain एक सामान्य भुगतान जैसा दिखता है",
     protoHtlcTip: "क्लासिक HTLC स्वैप",
     // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "Core RPC wallet",
-    backendCoreDesc: "आपके node का अपना wallet स्वैप को फंड करता है और आय प्राप्त करता है।",
-    backendHardwareTitle: "Hardware",
-    backendHardwareDesc: "funding leg के लिए Ledger / PSBT साइनिंग।",
-    backendLater: "बाद में",
     // CoinSetup dialog.
     setupTitle: "{coin} कनेक्ट करें",
     setupIntro:
       "Satchel को अपने स्वयं के {sym} node पर इंगित करें। node के genesis-block चेक पास करने तक कुछ भी सहेजा नहीं जाता — आपके funds केवल असली {sym} chain को ही छूते हैं।",
-    backendUrlLabel: "Node backend URL(s)",
-    backendUrlHint:
-      "पहला URL = आपके node का अपना wallet (स्वैप फंड करता है, आय प्राप्त करता है)। अतिरिक्त, स्वतंत्र chain व्यू के लिए कॉमा के बाद Electrum सर्वर (tcp://host:port) जोड़ें।",
-    fundingWallet: "Funding wallet",
     confirmationsLabel: "अंतिम होने से पहले confirmations",
     confirmationsHint:
       "इस chain पर एक स्वैप के कार्य करने से पहले funding या redeem कितनी गहरी होनी चाहिए — reorg-सुरक्षा मार्जिन। अधिक सुरक्षित पर धीमा; अनुशंसित डिफ़ॉल्ट ({default}) के लिए खाली छोड़ें।",
@@ -426,12 +408,6 @@ export const hi: Bundle = {
     walletDefaultHint:
       "इस coin के लिए कोई wallet सेट नहीं है, इसलिए RPCs node के डिफ़ॉल्ट wallet का उपयोग करते हैं। हर कॉल को एक विशिष्ट wallet तक सीमित करने के लिए Settings → Coins में एक सेट करें।",
     balanceLabel: "{symbol} बैलेंस",
-    receive: "प्राप्त करें",
-    send: "भेजें",
-    sendTo: "पते पर भेजें",
-    amount: "राशि",
-    sendTitle: "{amount} {sym} भेजें?",
-    sendConfirmBody: "{to} को\n\nयह आपके अपने node के wallet से खर्च होता है और इसे पूर्ववत नहीं किया जा सकता।",
   },
   corkboard: {
     noBoardTitle: "कोई Corkboard कनेक्ट नहीं",
@@ -442,7 +418,6 @@ export const hi: Bundle = {
     boardSettings: "Settings में कॉन्फ़िगर करें",
     filterAll: "सभी",
     filterMine: "मेरे",
-    offered: "{symbol} प्रस्तावित",
     noOffers: "अभी आप कोई offer नहीं ले सकते",
     noOffersBody:
       "जैसे ही कोई maker आपके द्वारा सेट अप किए गए किसी pair के लिए offer पोस्ट करता है, offers यहाँ दिखाई देते हैं। आप अपना खुद का भी पोस्ट कर सकते हैं।",
@@ -461,7 +436,6 @@ export const hi: Bundle = {
       "यदि स्वैप अटक जाता है, तो दोनों पक्ष auto-refund होते हैं — taker का leg पहले अनलॉक होता है, आपका थोड़ा बाद में। कोई फँसा नहीं रहता।",
     activeTitle: "आपके सक्रिय स्वैप",
     states: {
-      open: "खुला",
       takenByUs: "आपके द्वारा लिया गया",
       revoked: "वापस लिया गया",
       expired: "समाप्त",
@@ -485,7 +459,6 @@ export const hi: Bundle = {
       mid: "mid {price}",
       levelOffers: "इस कीमत पर {count} offer(s) — लेने के लिए एक चुनें",
       depthTip: "{count} नोटिस में इस कीमत पर प्रस्तावित कुल {sym}।",
-      takerNote: "इसे लेने पर, आप {give} देते हैं और {get} प्राप्त करते हैं।",
       selectLevel: "वहाँ के offers देखने के लिए ऊपर एक कीमत स्तर चुनें।",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "{coin} राशियों के लिए प्रदर्शन इकाई",
@@ -571,23 +544,8 @@ export const hi: Bundle = {
       "इस स्वैप को फंड करने के लिए पर्याप्त {sym} नहीं — ~{need} {sym} चाहिए (राशि + funding fee), wallet में {have} {sym} है।",
   },
   wizard: {
-    welcome: "Satchel में आपका स्वागत है",
-    connectTitle: "Pact engine कनेक्ट करें",
-    connectIntro:
-      "Satchel Pact engine का एक पतला क्लाइंट है — वह कोर जो आपकी keys रखता है और स्वैप चलाता है। चुनें कि इस तक कैसे पहुँचना है।",
-    managed: "बिल्ट-इन Pact engine चलाएँ",
-    managedDesc: "Satchel अपना खुद का Pact engine लॉन्च और निगरानी करता है। अनुशंसित।",
-    external: "एक बाहरी Pact engine से कनेक्ट करें",
-    externalDesc: "जो Pact engine आप पहले से चलाते हैं उस पर इंगित करें (लॉन्च से पहले SATCHEL_PACTD_URL + cookie सेट करें)।",
-    externalNote:
-      "बाहरी मोड Satchel लॉन्च करने से पहले environment variables के ज़रिए चुना जाता है। इसका उपयोग करने के लिए SATCHEL_PACTD_URL सेट करके पुनः लॉन्च करें।",
-    coinsTitle: "अपने coins जोड़ें",
-    coinsIntro:
-      "आपका merchant बनने के बाद, Settings → Coins में हर coin को अपने node से कनेक्ट करें। एक coin और एक backend चुनें (शून्य-सेटअप के लिए सार्वजनिक Electrum, या आपका अपना node); कुछ भी सहेजने से पहले genesis को इस network के विरुद्ध जाँचा जाता है।",
-    coinsTemplatesSoon: "वन-क्लिक coin टेम्पलेट बाद की रिलीज़ में यहाँ आएँगे।",
     back: "वापस",
     continue: "जारी रखें",
-    finish: "सेटअप पूरा करें",
   },
   // UI-4 docked activity log.
   log: {
@@ -666,8 +624,6 @@ export const hi: Bundle = {
       "उनका {a} लॉक और सत्यापित है। आगे: अपना {b} लॉक करें। सुरक्षा जाल: कुछ अटकने पर {t2} पर स्वचालित refund।",
     fundedBMaker: "दोनों लॉक हुए। आपका daemon {b} को सुरक्षित रूप से कन्फ़र्म होते ही क्लेम कर लेता है।",
     fundedBTaker: "दोनों लॉक हुए। दूसरे पक्ष द्वारा अपना {b} लेते ही आपका daemon {a} क्लेम करेगा।",
-    redeemedB:
-      "आपने {b} क्लेम किया — इसके कन्फ़र्म होने की प्रतीक्षा में। यह अंतिम होने तक आपका लॉक किया {a} सुरक्षित रहता है।",
     completed: "स्वैप पूरा — {coin} आपके wallet में है।",
     refunded: "स्वैप पूरा नहीं हुआ, इसलिए आपका {coin} अपने आप वापस आ गया। fees के अलावा कुछ नहीं खोया।",
     aborted: "किसी पैसे के हिलने से पहले रद्द किया गया।",

@@ -4,7 +4,6 @@ import type { Bundle } from "./en";
 export const fr: Bundle = {
   app: {
     name: "Satchel",
-    tagline: "swaps sans confiance",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -59,7 +58,6 @@ export const fr: Bundle = {
     balance: "Solde : {amt} {sym}",
     balanceLoading: "Solde : …",
     noCoins: "Aucun coin configuré",
-    sameCoin: "Le coin donné et le coin reçu doivent être différents.",
     legDown: "Le nœud de l'un de ces coins est hors service — démarrez-le (ou vérifiez Paramètres → Coins) avant de publier.",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -98,8 +96,6 @@ export const fr: Bundle = {
     cancelTip: "Cesser d'honorer ce slip — un ami qui le détient encore ne pourra plus le prendre.",
   },
   takeSlip: {
-    open: "Coller un slip",
-    title: "Prendre une offre privée",
     intro:
       "Un ami vous a envoyé un slip d'offre privée (il commence par pactoffer1:). Collez-le ici pour le vérifier et le prendre — exactement comme une offre du board.",
     placeholder: "pactoffer1:…",
@@ -182,7 +178,6 @@ export const fr: Bundle = {
       "Satchel trade sous un « merchant » — une identité de trading avec sa propre seed. Vous n'en avez encore aucune : créez-en une nouvelle, ou importez une phrase de récupération existante pour démarrer.",
     importMerchant: "Importer un merchant",
     none: "Aucun merchant pour l'instant.",
-    active: "actif",
     switch: "changer",
     newMerchant: "Nouveau merchant",
     thisMerchant: "ce merchant",
@@ -211,7 +206,6 @@ export const fr: Bundle = {
     import: "Importer",
     importDesc: "Restaurez à partir d'une phrase de 12/24 mots existante.",
     recoveryLabel: "Phrase de récupération",
-    importPlaceholder: "mot1 mot2 mot3 …",
     encrypt: "Chiffrer",
     encryptDesc:
       "Une phrase secrète protège la seed au repos. Vous la saisissez une fois par session — Satchel ne la stocke jamais. Note : l'auto-remboursement sans surveillance est suspendu après un redémarrage jusqu'à ce que vous la ressaisissiez.",
@@ -220,9 +214,6 @@ export const fr: Bundle = {
       "L'auto-remboursement continue de fonctionner après les redémarrages sans rien à saisir — ce n'est qu'une seed de transit chaude. Coût : l'accès au fichier/à l'hôte expose les clés de transit et l'identité de ce merchant.",
     passphraseLabel: "Phrase secrète",
     passphrasePlaceholder: "choisissez une phrase secrète",
-    createTitle: "Créer la seed",
-    importTitle: "Importer la seed",
-    secureTitle: "Sécuriser {label}",
     revealTitle: "Notez votre phrase de récupération",
     revealBody:
       "Quiconque possède ces mots contrôle les clés chaudes de ce merchant. Satchel n'en garde aucune copie — conservez-la hors ligne. Vous confirmerez quelques mots ensuite.",
@@ -353,19 +344,10 @@ export const fr: Bundle = {
     protoPrivateTip: "Swap privé (adaptateur Taproot/MuSig2) — ressemble à un paiement ordinaire on-chain",
     protoHtlcTip: "Swap HTLC classique",
     // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "Portefeuille RPC du Core",
-    backendCoreDesc: "Le portefeuille de votre nœud finance le swap et reçoit les gains.",
-    backendHardwareTitle: "Matériel",
-    backendHardwareDesc: "Signature Ledger / PSBT pour la jambe de financement.",
-    backendLater: "plus tard",
     // CoinSetup dialog.
     setupTitle: "Connecter {coin}",
     setupIntro:
       "Pointez Satchel vers votre propre nœud {sym}. Rien n'est enregistré tant que le nœud n'a pas passé un contrôle de bloc genesis — vos fonds ne touchent jamais que la vraie chaîne {sym}.",
-    backendUrlLabel: "URL(s) du backend de nœud",
-    backendUrlHint:
-      "Première URL = le portefeuille de votre nœud (finance les swaps, reçoit les gains). Ajoutez des serveurs Electrum (tcp://host:port) après des virgules pour des vues de chaîne supplémentaires et indépendantes.",
-    fundingWallet: "Portefeuille de financement",
     confirmationsLabel: "Confirmations avant finalisation",
     confirmationsHint:
       "À quelle profondeur un financement ou un redeem sur cette chaîne doit se trouver avant qu'un swap n'agisse dessus — la marge de sécurité contre les réorgs. Plus élevé est plus sûr mais plus lent ; laissez vide pour la valeur par défaut recommandée ({default}).",
@@ -426,12 +408,6 @@ export const fr: Bundle = {
     walletDefaultHint:
       "Aucun portefeuille défini pour ce coin, donc les RPC utilisent le portefeuille par défaut du nœud. Définissez-en un dans Paramètres → Coins pour limiter chaque appel à un portefeuille spécifique.",
     balanceLabel: "Solde {symbol}",
-    receive: "Recevoir",
-    send: "Envoyer",
-    sendTo: "Envoyer à l'adresse",
-    amount: "Montant",
-    sendTitle: "Envoyer {amount} {sym} ?",
-    sendConfirmBody: "Vers {to}\n\nCeci dépense depuis le portefeuille de votre propre nœud et ne peut pas être annulé.",
   },
   corkboard: {
     noBoardTitle: "Aucun Corkboard connecté",
@@ -442,7 +418,6 @@ export const fr: Bundle = {
     boardSettings: "Configurer dans Paramètres",
     filterAll: "Toutes",
     filterMine: "Les miennes",
-    offered: "{symbol} proposés",
     noOffers: "Aucune offre que vous puissiez prendre pour le moment",
     noOffersBody:
       "Les offres apparaissent ici dès qu'un maker en publie une pour une paire que vous avez configurée. Vous pouvez aussi publier les vôtres.",
@@ -461,7 +436,6 @@ export const fr: Bundle = {
       "Si le swap se bloque, les deux côtés sont auto-remboursés — la jambe du taker se déverrouille en premier, la vôtre un peu plus tard. Personne ne reste coincé.",
     activeTitle: "Vos swaps actifs",
     states: {
-      open: "ouverte",
       takenByUs: "prise par vous",
       revoked: "retirée",
       expired: "expirée",
@@ -485,7 +459,6 @@ export const fr: Bundle = {
       mid: "milieu {price}",
       levelOffers: "{count} offre(s) à ce prix — choisissez-en une à prendre",
       depthTip: "Total {sym} proposés à ce prix sur {count} annonce(s).",
-      takerNote: "En la prenant, vous donnez {give} et recevez {get}.",
       selectLevel: "Choisissez un niveau de prix ci-dessus pour voir les offres correspondantes.",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "Unité d'affichage pour les montants {coin}",
@@ -571,23 +544,8 @@ export const fr: Bundle = {
       "Pas assez de {sym} pour financer ce swap — il faut ~{need} {sym} (montant + frais de financement), le portefeuille a {have} {sym}.",
   },
   wizard: {
-    welcome: "Bienvenue sur Satchel",
-    connectTitle: "Connecter le moteur Pact",
-    connectIntro:
-      "Satchel est un client léger du moteur Pact — le cœur qui détient vos clés et exécute les swaps. Choisissez comment le joindre.",
-    managed: "Lancer le moteur Pact intégré",
-    managedDesc: "Satchel lance et supervise son propre moteur Pact. Recommandé.",
-    external: "Se connecter à un moteur Pact externe",
-    externalDesc: "Pointez vers un moteur Pact que vous exécutez déjà (définissez SATCHEL_PACTD_URL + cookie avant le lancement).",
-    externalNote:
-      "Le mode externe se sélectionne via des variables d'environnement avant de lancer Satchel. Relancez avec SATCHEL_PACTD_URL défini pour l'utiliser.",
-    coinsTitle: "Ajoutez vos coins",
-    coinsIntro:
-      "Une fois votre merchant créé, connectez chaque coin à votre propre nœud dans Paramètres → Coins. Choisissez un coin et un backend (Electrum public pour zéro configuration, ou votre propre nœud) ; le genesis est vérifié par rapport à ce réseau avant tout enregistrement.",
-    coinsTemplatesSoon: "Les modèles de coins en un clic arrivent ici dans une version ultérieure.",
     back: "Retour",
     continue: "Continuer",
-    finish: "Terminer la configuration",
   },
   // UI-4 docked activity log.
   log: {
@@ -666,8 +624,6 @@ export const fr: Bundle = {
       "Leurs {a} sont verrouillés et vérifiés. Ensuite : verrouillez vos {b}. Filet de sécurité : remboursement automatique à {t2} si quelque chose se bloque.",
     fundedBMaker: "Les deux verrouillés. Votre daemon réclame les {b} dès qu'ils sont confirmés en toute sécurité.",
     fundedBTaker: "Les deux verrouillés. Votre daemon réclamera les {a} dès que l'autre côté prendra ses {b}.",
-    redeemedB:
-      "Vous avez réclamé les {b} — en attente de confirmation. Vos {a} verrouillés restent protégés jusqu'à ce que ce soit final.",
     completed: "Swap terminé — les {coin} sont dans votre portefeuille.",
     refunded: "Le swap ne s'est pas terminé, donc vos {coin} sont revenus automatiquement. Rien de perdu sauf les frais.",
     aborted: "Annulé avant tout mouvement d'argent.",

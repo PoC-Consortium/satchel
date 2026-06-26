@@ -4,7 +4,6 @@ import type { Bundle } from "./en";
 export const gl: Bundle = {
   app: {
     name: "Satchel",
-    tagline: "intercambios sen confianza",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -59,7 +58,6 @@ export const gl: Bundle = {
     balance: "Saldo: {amt} {sym}",
     balanceLoading: "Saldo: …",
     noCoins: "Non hai moedas configuradas",
-    sameCoin: "O que dás e o que recibes deben ser moedas distintas.",
     legDown: "Un dos nodos destas moedas está caído — inícialo (ou revisa Axustes → Moedas) antes de publicar.",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -98,8 +96,6 @@ export const gl: Bundle = {
     cancelTip: "Deixa de honrar este vale — un amigo que aínda o teña xa non poderá tomalo.",
   },
   takeSlip: {
-    open: "Pegar un vale",
-    title: "Tomar unha oferta privada",
     intro:
       "Un amigo enviouche un vale de oferta privada (comeza por pactoffer1:). Pégao aquí para revisalo e tomalo — exactamente coma unha oferta do taboleiro.",
     placeholder: "pactoffer1:…",
@@ -182,7 +178,6 @@ export const gl: Bundle = {
       "Satchel negocia baixo un «comerciante» — unha identidade de negociación coa súa propia semente. Aínda non tes ningún: crea un novo, ou importa unha frase de recuperación existente para comezar.",
     importMerchant: "Importar un comerciante",
     none: "Aínda non hai comerciantes.",
-    active: "activo",
     switch: "cambiar",
     newMerchant: "Novo comerciante",
     thisMerchant: "este comerciante",
@@ -211,7 +206,6 @@ export const gl: Bundle = {
     import: "Importar",
     importDesc: "Restaura desde unha frase existente de 12/24 palabras.",
     recoveryLabel: "Frase de recuperación",
-    importPlaceholder: "palabra1 palabra2 palabra3 …",
     encrypt: "Cifrar",
     encryptDesc:
       "Unha frase de paso protexe a semente en repouso. Introdúcela unha vez por sesión — Satchel nunca a garda. Nota: o reembolso automático sen supervisión páusase tras un reinicio ata que a volvas introducir.",
@@ -220,9 +214,6 @@ export const gl: Bundle = {
       "O reembolso automático segue funcionando a través de reinicios sen nada que introducir — isto é só unha semente de tránsito en quente. Custo: o acceso ao ficheiro/host expón as claves de tránsito e a identidade deste comerciante.",
     passphraseLabel: "Frase de paso",
     passphrasePlaceholder: "escolle unha frase de paso",
-    createTitle: "Crear semente",
-    importTitle: "Importar semente",
-    secureTitle: "Asegurar {label}",
     revealTitle: "Anota a túa frase de recuperación",
     revealBody:
       "Calquera con estas palabras controla as claves en quente deste comerciante. Satchel non garda ningunha copia — gárdaa sen conexión. A continuación confirmarás algunhas palabras.",
@@ -353,19 +344,10 @@ export const gl: Bundle = {
     protoPrivateTip: "Intercambio privado (adaptador Taproot/MuSig2) — parece un pagamento corrente en cadea",
     protoHtlcTip: "Intercambio HTLC clásico",
     // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "Carteira Core RPC",
-    backendCoreDesc: "A carteira do teu propio nodo financia o intercambio e recibe os beneficios.",
-    backendHardwareTitle: "Hardware",
-    backendHardwareDesc: "Sinatura Ledger / PSBT para a pata de financiamento.",
-    backendLater: "máis tarde",
     // CoinSetup dialog.
     setupTitle: "Conectar {coin}",
     setupIntro:
       "Apunta Satchel ao teu propio nodo {sym}. Non se garda nada ata que o nodo pase a comprobación do bloque xénese — os teus fondos só tocan sempre a cadea real de {sym}.",
-    backendUrlLabel: "URL(s) do backend do nodo",
-    backendUrlHint:
-      "Primeiro URL = a carteira do teu propio nodo (financia intercambios, recibe beneficios). Engade servidores Electrum (tcp://host:porto) despois de comas para vistas da cadea adicionais e independentes.",
-    fundingWallet: "Carteira de financiamento",
     confirmationsLabel: "Confirmacións antes de finalizar",
     confirmationsHint:
       "Cantas confirmacións debe ter un financiamento ou unha redención nesta cadea antes de que un intercambio actúe sobre el — a marxe de seguranza fronte a reorganizacións. Maior é máis seguro pero máis lento; déixao en branco para o predeterminado recomendado ({default}).",
@@ -426,12 +408,6 @@ export const gl: Bundle = {
     walletDefaultHint:
       "Non hai carteira definida para esta moeda, polo que as RPC usan a carteira predeterminada do nodo. Define unha en Axustes → Moedas para acoutar cada chamada a unha carteira concreta.",
     balanceLabel: "saldo de {symbol}",
-    receive: "Recibir",
-    send: "Enviar",
-    sendTo: "Enviar ao enderezo",
-    amount: "Cantidade",
-    sendTitle: "Enviar {amount} {sym}?",
-    sendConfirmBody: "A {to}\n\nIsto gástase da carteira do teu propio nodo e non se pode desfacer.",
   },
   corkboard: {
     noBoardTitle: "Non hai ningún Corkboard conectado",
@@ -442,7 +418,6 @@ export const gl: Bundle = {
     boardSettings: "Configurar en Axustes",
     filterAll: "Todas",
     filterMine: "Miñas",
-    offered: "{symbol} ofrecido",
     noOffers: "Non hai ofertas que poidas tomar agora mesmo",
     noOffersBody:
       "As ofertas aparecen aquí en canto un maker publica unha para un par que configuraches. Tamén podes publicar a túa propia.",
@@ -461,7 +436,6 @@ export const gl: Bundle = {
       "Se o intercambio se atasca, ambas as partes reembólsanse automaticamente — a pata do taker desbloquéase primeiro, a túa un pouco despois. Ninguén queda atascado.",
     activeTitle: "Os teus intercambios activos",
     states: {
-      open: "aberta",
       takenByUs: "tomada por ti",
       revoked: "retirada",
       expired: "caducada",
@@ -485,7 +459,6 @@ export const gl: Bundle = {
       mid: "medio {price}",
       levelOffers: "{count} oferta(s) a este prezo — escolle unha para tomar",
       depthTip: "Total de {sym} en oferta a este prezo en {count} anuncio(s).",
-      takerNote: "Ao tomala, dás {give} e recibes {get}.",
       selectLevel: "Escolle un nivel de prezo de arriba para ver as ofertas que hai aí.",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "Unidade de visualización para as cantidades de {coin}",
@@ -571,23 +544,8 @@ export const gl: Bundle = {
       "Non hai {sym} dabondo para financiar este intercambio — precísanse ~{need} {sym} (cantidade + comisión de financiamento), a carteira ten {have} {sym}.",
   },
   wizard: {
-    welcome: "Benvido/a a Satchel",
-    connectTitle: "Conecta o motor Pact",
-    connectIntro:
-      "Satchel é un cliente lixeiro do motor Pact — o núcleo que garda as túas claves e executa os intercambios. Escolle como alcanzalo.",
-    managed: "Executar o motor Pact integrado",
-    managedDesc: "Satchel inicia e supervisa o seu propio motor Pact. Recomendado.",
-    external: "Conectar a un motor Pact externo",
-    externalDesc: "Apunta a un motor Pact que xa executes (define SATCHEL_PACTD_URL + cookie antes de iniciar).",
-    externalNote:
-      "O modo externo selecciónase mediante variables de contorno antes de iniciar Satchel. Reinicia con SATCHEL_PACTD_URL definido para usalo.",
-    coinsTitle: "Engade as túas moedas",
-    coinsIntro:
-      "Despois de crear o teu comerciante, conecta cada moeda ao teu propio nodo en Axustes → Moedas. Escolle unha moeda e un backend (Electrum público para cero configuración, ou o teu propio nodo); o xénese compróbase contra esta rede antes de gardar nada.",
-    coinsTemplatesSoon: "As plantillas de moedas dun só clic chegarán aquí nunha versión posterior.",
     back: "Atrás",
     continue: "Continuar",
-    finish: "Rematar configuración",
   },
   // UI-4 docked activity log.
   log: {
@@ -666,8 +624,6 @@ export const gl: Bundle = {
       "Os seus {a} están bloqueados e verificados. A continuación: bloquea os teus {b}. Rede de seguranza: reembolso automático ás {t2} se algo se atasca.",
     fundedBMaker: "Ambos bloqueados. O teu daemon reclama os {b} en canto estean confirmados con seguranza.",
     fundedBTaker: "Ambos bloqueados. O teu daemon reclamará os {a} no momento en que a outra parte tome os seus {b}.",
-    redeemedB:
-      "Reclamaches os {b} — agardando a que confirmen. Os teus {a} bloqueados quedan protexidos ata que isto sexa definitivo.",
     completed: "Intercambio completo — os {coin} están na túa carteira.",
     refunded: "O intercambio non se completou, así que os teus {coin} retornaron automaticamente. Non se perdeu nada agás as comisións.",
     aborted: "Cancelado antes de que se movese diñeiro.",

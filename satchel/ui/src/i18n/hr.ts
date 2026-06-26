@@ -4,7 +4,6 @@ import type { Bundle } from "./en";
 export const hr: Bundle = {
   app: {
     name: "Satchel",
-    tagline: "swapovi bez povjerenja",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -59,7 +58,6 @@ export const hr: Bundle = {
     balance: "Stanje: {amt} {sym}",
     balanceLoading: "Stanje: …",
     noCoins: "Nema konfiguriranih kovanica",
-    sameCoin: "Kovanica koju dajete i ona koju primate moraju biti različite.",
     legDown: "Čvor jedne od ovih kovanica je nedostupan — pokrenite ga (ili provjerite Postavke → Kovanice) prije objave.",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -98,8 +96,6 @@ export const hr: Bundle = {
     cancelTip: "Prestani priznavati ovaj slip — prijatelj koji ga još drži više ga ne može preuzeti.",
   },
   takeSlip: {
-    open: "Zalijepi slip",
-    title: "Preuzmi privatnu ponudu",
     intro:
       "Prijatelj vam je poslao privatni slip ponude (počinje s pactoffer1:). Zalijepite ga ovdje za pregled i preuzimanje — baš kao ponudu s ploče.",
     placeholder: "pactoffer1:…",
@@ -182,7 +178,6 @@ export const hr: Bundle = {
       "Satchel trguje pod „trgovcem” — jednim trgovačkim identitetom s vlastitim seedom. Još nemate nijedan: stvorite novi ili uvezite postojeću recovery frazu za početak.",
     importMerchant: "Uvezi trgovca",
     none: "Još nema trgovaca.",
-    active: "aktivan",
     switch: "zamijeni",
     newMerchant: "Novi trgovac",
     thisMerchant: "ovaj trgovac",
@@ -211,7 +206,6 @@ export const hr: Bundle = {
     import: "Uvezi",
     importDesc: "Obnovite iz postojeće fraze od 12/24 riječi.",
     recoveryLabel: "Recovery fraza",
-    importPlaceholder: "riječ1 riječ2 riječ3 …",
     encrypt: "Šifriraj",
     encryptDesc:
       "Zaporka štiti seed u mirovanju. Unosite je jednom po sesiji — Satchel je nikad ne pohranjuje. Napomena: automatski povrat bez nadzora pauzira se nakon ponovnog pokretanja dok je ponovno ne unesete.",
@@ -220,9 +214,6 @@ export const hr: Bundle = {
       "Automatski povrat radi i kroz ponovna pokretanja bez ičega za unos — ovo je samo vrući tranzitni seed. Cijena: pristup datoteci/hostu izlaže tranzitne ključeve i identitet ovog trgovca.",
     passphraseLabel: "Zaporka",
     passphrasePlaceholder: "odaberite zaporku",
-    createTitle: "Stvori seed",
-    importTitle: "Uvezi seed",
-    secureTitle: "Osiguraj {label}",
     revealTitle: "Zapišite svoju recovery frazu",
     revealBody:
       "Tko god ima ove riječi kontrolira vruće ključeve ovog trgovca. Satchel ne čuva nikakvu kopiju — pohranite je offline. Sljedeće ćete potvrditi nekoliko riječi.",
@@ -353,19 +344,10 @@ export const hr: Bundle = {
     protoPrivateTip: "Privatni swap (Taproot/MuSig2 adaptor) — izgleda kao obična uplata on-chain",
     protoHtlcTip: "Klasičan HTLC swap",
     // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "Core RPC novčanik",
-    backendCoreDesc: "Vlastiti novčanik vašeg čvora financira swap i prima dobit.",
-    backendHardwareTitle: "Hardver",
-    backendHardwareDesc: "Ledger / PSBT potpisivanje za dio financiranja.",
-    backendLater: "kasnije",
     // CoinSetup dialog.
     setupTitle: "Poveži {coin}",
     setupIntro:
       "Usmjerite Satchel na vlastiti {sym} čvor. Ništa se ne sprema dok čvor ne prođe provjeru genesis bloka — vaša sredstva ikad dodiruju samo stvarni {sym} lanac.",
-    backendUrlLabel: "URL(ovi) backenda čvora",
-    backendUrlHint:
-      "Prvi URL = vlastiti novčanik vašeg čvora (financira swapove, prima dobit). Dodajte Electrum poslužitelje (tcp://host:port) iza zareza za dodatne, neovisne prikaze lanca.",
-    fundingWallet: "Novčanik za financiranje",
     confirmationsLabel: "Potvrde prije konačnog",
     confirmationsHint:
       "Koliko duboko financiranje ili otkup na ovom lancu mora biti prije nego što swap reagira — margina sigurnosti od reorga. Više je sigurnije, ali sporije; ostavite prazno za preporučenu zadanu vrijednost ({default}).",
@@ -426,12 +408,6 @@ export const hr: Bundle = {
     walletDefaultHint:
       "Za ovu kovanicu nije postavljen novčanik, pa RPC-ovi koriste zadani novčanik čvora. Postavite jedan u Postavke → Kovanice da ograničite svaki poziv na određeni novčanik.",
     balanceLabel: "Stanje {symbol}",
-    receive: "Primi",
-    send: "Pošalji",
-    sendTo: "Pošalji na adresu",
-    amount: "Iznos",
-    sendTitle: "Poslati {amount} {sym}?",
-    sendConfirmBody: "Na {to}\n\nOvo troši iz novčanika vašeg vlastitog čvora i ne može se poništiti.",
   },
   corkboard: {
     noBoardTitle: "Nijedan Corkboard nije povezan",
@@ -442,7 +418,6 @@ export const hr: Bundle = {
     boardSettings: "Konfiguriraj u Postavkama",
     filterAll: "Sve",
     filterMine: "Moje",
-    offered: "{symbol} ponuđeno",
     noOffers: "Trenutno nema ponuda koje možete preuzeti",
     noOffersBody:
       "Ponude se pojavljuju ovdje čim maker objavi neku za par koji ste postavili. Možete objaviti i vlastitu.",
@@ -461,7 +436,6 @@ export const hr: Bundle = {
       "Ako swap zapne, obje strane se automatski vraćaju — takerov dio se prvi otključava, vaš malo kasnije. Nitko ne ostane zaglavljen.",
     activeTitle: "Vaši aktivni swapovi",
     states: {
-      open: "otvoreno",
       takenByUs: "preuzeli ste vi",
       revoked: "povučeno",
       expired: "isteklo",
@@ -485,7 +459,6 @@ export const hr: Bundle = {
       mid: "sredina {price}",
       levelOffers: "{count} ponuda po ovoj cijeni — odaberite jednu za preuzimanje",
       depthTip: "Ukupno {sym} u ponudi po ovoj cijeni kroz {count} oglas(a).",
-      takerNote: "Preuzimanjem dajete {give} i primate {get}.",
       selectLevel: "Odaberite razinu cijene iznad da vidite ponude tamo.",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "Prikazna jedinica za iznose {coin}",
@@ -571,23 +544,8 @@ export const hr: Bundle = {
       "Nedovoljno {sym} za financiranje ovog swapa — treba ~{need} {sym} (iznos + naknada za financiranje), novčanik ima {have} {sym}.",
   },
   wizard: {
-    welcome: "Dobro došli u Satchel",
-    connectTitle: "Povežite Pact engine",
-    connectIntro:
-      "Satchel je tanak klijent Pact enginea — jezgre koja drži vaše ključeve i pokreće swapove. Odaberite kako ćete ga doseći.",
-    managed: "Pokreni ugrađeni Pact engine",
-    managedDesc: "Satchel pokreće i nadzire vlastiti Pact engine. Preporučeno.",
-    external: "Poveži se s vanjskim Pact engineom",
-    externalDesc: "Usmjerite na Pact engine koji već pokrećete (postavite SATCHEL_PACTD_URL + cookie prije pokretanja).",
-    externalNote:
-      "Vanjski način odabire se putem varijabli okruženja prije pokretanja Satchela. Ponovno pokrenite uz postavljen SATCHEL_PACTD_URL da ga koristite.",
-    coinsTitle: "Dodajte svoje kovanice",
-    coinsIntro:
-      "Nakon što je vaš trgovac stvoren, povežite svaku kovanicu s vlastitim čvorom u Postavke → Kovanice. Odaberite kovanicu i backend (javni Electrum za nulto postavljanje ili vlastiti čvor); genesis se provjerava s ovom mrežom prije nego što se išta spremi.",
-    coinsTemplatesSoon: "Predlošci kovanica jednim klikom stižu ovdje u kasnijem izdanju.",
     back: "Natrag",
     continue: "Nastavi",
-    finish: "Završi postavljanje",
   },
   // UI-4 docked activity log.
   log: {
@@ -666,8 +624,6 @@ export const hr: Bundle = {
       "Njihov {a} je zaključan i potvrđen. Sljedeće: zaključajte svoj {b}. Sigurnosna mreža: automatski povrat u {t2} ako išta zapne.",
     fundedBMaker: "Oboje zaključano. Vaš daemon preuzima {b} čim bude sigurno potvrđen.",
     fundedBTaker: "Oboje zaključano. Vaš daemon će preuzeti {a} u trenutku kad druga strana preuzme svoj {b}.",
-    redeemedB:
-      "Preuzeli ste {b} — čeka se potvrda. Vaš zaključani {a} ostaje zaštićen dok ovo ne bude konačno.",
     completed: "Swap dovršen — {coin} je u vašem novčaniku.",
     refunded: "Swap nije dovršen, pa vam se {coin} automatski vratio. Ništa izgubljeno osim naknada.",
     aborted: "Otkazano prije nego što je išta novca pokrenuto.",

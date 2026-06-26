@@ -4,7 +4,6 @@ import type { Bundle } from "./en";
 export const ro: Bundle = {
   app: {
     name: "Satchel",
-    tagline: "swap-uri fără încredere",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -59,7 +58,6 @@ export const ro: Bundle = {
     balance: "Sold: {amt} {sym}",
     balanceLoading: "Sold: …",
     noCoins: "Nicio monedă configurată",
-    sameCoin: "Moneda dată și cea primită trebuie să fie diferite.",
     legDown: "Nodul uneia dintre aceste monede este oprit — pornește-l (sau verifică Setări → Monede) înainte de a posta.",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -98,8 +96,6 @@ export const ro: Bundle = {
     cancelTip: "Oprește onorarea acestui bilet — un prieten care încă îl deține nu îl mai poate accepta.",
   },
   takeSlip: {
-    open: "Lipește un bilet",
-    title: "Acceptă o ofertă privată",
     intro:
       "Un prieten ți-a trimis un bilet de ofertă privată (începe cu pactoffer1:). Lipește-l aici pentru a-l verifica și accepta — exact ca o ofertă de pe board.",
     placeholder: "pactoffer1:…",
@@ -182,7 +178,6 @@ export const ro: Bundle = {
       "Satchel tranzacționează sub un „merchant” — o identitate de tranzacționare cu propriul seed. Nu ai încă niciunul: creează unul nou sau importă o frază de recuperare existentă pentru a începe.",
     importMerchant: "Importă un merchant",
     none: "Niciun merchant încă.",
-    active: "activ",
     switch: "schimbă",
     newMerchant: "Merchant nou",
     thisMerchant: "acest merchant",
@@ -211,7 +206,6 @@ export const ro: Bundle = {
     import: "Importă",
     importDesc: "Restaurează dintr-o frază existentă de 12/24 de cuvinte.",
     recoveryLabel: "Frază de recuperare",
-    importPlaceholder: "cuvânt1 cuvânt2 cuvânt3 …",
     encrypt: "Criptează",
     encryptDesc:
       "O parolă protejează seed-ul în repaus. O introduci o dată pe sesiune — Satchel nu o stochează niciodată. Notă: rambursarea automată nesupravegheată se întrerupe după o repornire până când o reintroduci.",
@@ -220,9 +214,6 @@ export const ro: Bundle = {
       "Rambursarea automată continuă să funcționeze peste reporniri fără nimic de introdus — acesta este doar un seed fierbinte de tranzit. Cost: accesul la fișier/gazdă expune cheile de tranzit + identitatea acestui merchant.",
     passphraseLabel: "Parolă",
     passphrasePlaceholder: "alege o parolă",
-    createTitle: "Creează seed",
-    importTitle: "Importă seed",
-    secureTitle: "Securizează {label}",
     revealTitle: "Notează-ți fraza de recuperare",
     revealBody:
       "Oricine deține aceste cuvinte controlează cheile fierbinți ale acestui merchant. Satchel nu păstrează nicio copie — stochează-o offline. În continuare vei confirma câteva cuvinte.",
@@ -353,19 +344,10 @@ export const ro: Bundle = {
     protoPrivateTip: "Swap privat (adaptor Taproot/MuSig2) — arată ca o plată obișnuită on-chain",
     protoHtlcTip: "Swap HTLC clasic",
     // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "Portofel Core RPC",
-    backendCoreDesc: "Chiar portofelul nodului tău finanțează swap-ul și primește câștigurile.",
-    backendHardwareTitle: "Hardware",
-    backendHardwareDesc: "Semnare Ledger / PSBT pentru piciorul de finanțare.",
-    backendLater: "mai târziu",
     // CoinSetup dialog.
     setupTitle: "Conectează {coin}",
     setupIntro:
       "Îndreaptă Satchel către propriul tău nod {sym}. Nimic nu este salvat până când nodul nu trece o verificare a blocului genesis — fondurile tale ating doar lanțul {sym} real.",
-    backendUrlLabel: "URL-uri backend ale nodului",
-    backendUrlHint:
-      "Primul URL = chiar portofelul nodului tău (finanțează swap-uri, primește câștiguri). Adaugă servere Electrum (tcp://host:port) după virgule pentru vederi suplimentare, independente, asupra lanțului.",
-    fundingWallet: "Portofel de finanțare",
     confirmationsLabel: "Confirmări înainte de finalizare",
     confirmationsHint:
       "Cât de adânc trebuie să fie o finanțare sau un redeem pe acest lanț înainte ca un swap să acționeze pe el — marja de siguranță împotriva reorg-urilor. Mai mare este mai sigur, dar mai lent; lasă gol pentru valoarea implicită recomandată ({default}).",
@@ -426,12 +408,6 @@ export const ro: Bundle = {
     walletDefaultHint:
       "Niciun portofel setat pentru această monedă, deci RPC-urile folosesc portofelul implicit al nodului. Setează unul în Setări → Monede pentru a limita fiecare apel la un portofel specific.",
     balanceLabel: "Sold {symbol}",
-    receive: "Primește",
-    send: "Trimite",
-    sendTo: "Trimite la adresă",
-    amount: "Sumă",
-    sendTitle: "Trimiți {amount} {sym}?",
-    sendConfirmBody: "Către {to}\n\nAceasta cheltuiește din chiar portofelul nodului tău și nu poate fi anulată.",
   },
   corkboard: {
     noBoardTitle: "Niciun Corkboard conectat",
@@ -442,7 +418,6 @@ export const ro: Bundle = {
     boardSettings: "Configurează în Setări",
     filterAll: "Toate",
     filterMine: "Ale mele",
-    offered: "{symbol} oferit",
     noOffers: "Nicio ofertă pe care o poți accepta acum",
     noOffersBody:
       "Ofertele apar aici imediat ce un maker postează una pentru o pereche pe care ai configurat-o. Poți de asemenea să postezi propria ofertă.",
@@ -461,7 +436,6 @@ export const ro: Bundle = {
       "Dacă swap-ul se blochează, ambele părți se rambursează automat — piciorul taker-ului se deblochează primul, al tău puțin mai târziu. Nimeni nu rămâne blocat.",
     activeTitle: "Swap-urile tale active",
     states: {
-      open: "deschis",
       takenByUs: "acceptat de tine",
       revoked: "retras",
       expired: "expirat",
@@ -485,7 +459,6 @@ export const ro: Bundle = {
       mid: "mediu {price}",
       levelOffers: "{count} ofertă(e) la acest preț — alege una de acceptat",
       depthTip: "Total {sym} oferit la acest preț pe {count} anunț(uri).",
-      takerNote: "Acceptând-o, dai {give} și primești {get}.",
       selectLevel: "Alege un nivel de preț de mai sus pentru a vedea ofertele de acolo.",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "Unitate de afișare pentru sumele în {coin}",
@@ -571,23 +544,8 @@ export const ro: Bundle = {
       "Insuficient {sym} pentru a finanța acest swap — ai nevoie de ~{need} {sym} (sumă + comision de finanțare), portofelul are {have} {sym}.",
   },
   wizard: {
-    welcome: "Bun venit la Satchel",
-    connectTitle: "Conectează engine-ul Pact",
-    connectIntro:
-      "Satchel este un client subțire al engine-ului Pact — nucleul care îți deține cheile și rulează swap-urile. Alege cum să ajungi la el.",
-    managed: "Rulează engine-ul Pact integrat",
-    managedDesc: "Satchel lansează și supraveghează propriul engine Pact. Recomandat.",
-    external: "Conectează-te la un engine Pact extern",
-    externalDesc: "Îndreaptă către un engine Pact pe care îl rulezi deja (setează SATCHEL_PACTD_URL + cookie înainte de lansare).",
-    externalNote:
-      "Modul extern este selectat prin variabile de mediu înainte de lansarea Satchel. Relansează cu SATCHEL_PACTD_URL setat pentru a-l folosi.",
-    coinsTitle: "Adaugă-ți monedele",
-    coinsIntro:
-      "După crearea merchant-ului tău, conectează fiecare monedă la propriul tău nod în Setări → Monede. Alege o monedă și un backend (Electrum public pentru zero configurare sau propriul tău nod); genesis-ul este verificat față de această rețea înainte de a salva orice.",
-    coinsTemplatesSoon: "Șabloanele de monede cu un singur clic apar aici într-o lansare ulterioară.",
     back: "Înapoi",
     continue: "Continuă",
-    finish: "Finalizează configurarea",
   },
   // UI-4 docked activity log.
   log: {
@@ -666,8 +624,6 @@ export const ro: Bundle = {
       "{a} lor este blocat și verificat. Următorul pas: blochează-ți {b}. Plasă de siguranță: rambursare automată la {t2} dacă ceva se blochează.",
     fundedBMaker: "Ambele blocate. Daemon-ul tău revendică {b} imediat ce este confirmat în siguranță.",
     fundedBTaker: "Ambele blocate. Daemon-ul tău va revendica {a} în momentul în care cealaltă parte își ia {b}.",
-    redeemedB:
-      "Ai revendicat {b} — se așteaptă confirmarea. {a} blocat de tine rămâne protejat până când acesta devine final.",
     completed: "Swap finalizat — {coin} este în portofelul tău.",
     refunded: "Swap-ul nu s-a finalizat, deci {coin} tău s-a întors automat. Nimic pierdut în afară de comisioane.",
     aborted: "Anulat înainte ca vreun ban să se miște.",

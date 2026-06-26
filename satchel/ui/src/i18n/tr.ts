@@ -4,7 +4,6 @@ import type { Bundle } from "./en";
 export const tr: Bundle = {
   app: {
     name: "Satchel",
-    tagline: "güvene dayanmayan takaslar",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -59,7 +58,6 @@ export const tr: Bundle = {
     balance: "Bakiye: {amt} {sym}",
     balanceLoading: "Bakiye: …",
     noCoins: "Yapılandırılmış coin yok",
-    sameCoin: "Verilen ve alınan coin'ler farklı olmalıdır.",
     legDown: "Bu coin'lerden birinin düğümü çalışmıyor — yayınlamadan önce başlatın (veya Ayarlar → Coin'ler bölümünü kontrol edin).",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -98,8 +96,6 @@ export const tr: Bundle = {
     cancelTip: "Bu fişi geçerli saymayı durdurun — hâlâ elinde tutan bir arkadaşınız artık alamaz.",
   },
   takeSlip: {
-    open: "Bir fiş yapıştır",
-    title: "Özel bir teklif al",
     intro:
       "Bir arkadaşınız size özel bir teklif fişi gönderdi (pactoffer1: ile başlar). Gözden geçirip almak için buraya yapıştırın — tıpkı panodan gelen bir teklif gibi.",
     placeholder: "pactoffer1:…",
@@ -182,7 +178,6 @@ export const tr: Bundle = {
       "Satchel, kendi seed'ine sahip tek bir işlem kimliği olan bir “satıcı” altında işlem yapar. Henüz hiçbiriniz yok: yeni bir tane oluşturun veya başlamak için mevcut bir kurtarma ifadesini içe aktarın.",
     importMerchant: "Bir satıcı içe aktar",
     none: "Henüz satıcı yok.",
-    active: "etkin",
     switch: "değiştir",
     newMerchant: "Yeni satıcı",
     thisMerchant: "bu satıcı",
@@ -211,7 +206,6 @@ export const tr: Bundle = {
     import: "İçe aktar",
     importDesc: "Mevcut bir 12/24 sözcüklü ifadeden geri yükleyin.",
     recoveryLabel: "Kurtarma ifadesi",
-    importPlaceholder: "sözcük1 sözcük2 sözcük3 …",
     encrypt: "Şifrele",
     encryptDesc:
       "Bir parola, seed'i beklerken korur. Oturum başına bir kez girersiniz — Satchel onu asla saklamaz. Not: Yeniden başlatmadan sonra, siz onu tekrar girene kadar gözetimsiz otomatik geri ödeme duraklar.",
@@ -220,9 +214,6 @@ export const tr: Bundle = {
       "Otomatik geri ödeme, hiçbir şey girmeden yeniden başlatmalar boyunca çalışmaya devam eder — bu yalnızca sıcak bir transit seed'idir. Bedeli: dosya/ana makine erişimi, bu satıcının transit anahtarlarını + kimliğini açığa çıkarır.",
     passphraseLabel: "Parola",
     passphrasePlaceholder: "bir parola seçin",
-    createTitle: "Seed oluştur",
-    importTitle: "Seed içe aktar",
-    secureTitle: "{label} güvenliğini sağla",
     revealTitle: "Kurtarma ifadenizi yazın",
     revealBody:
       "Bu sözcüklere sahip herkes bu satıcının sıcak anahtarlarını kontrol eder. Satchel hiçbir kopya tutmaz — çevrimdışı saklayın. Sonraki adımda birkaç sözcüğü onaylayacaksınız.",
@@ -353,19 +344,10 @@ export const tr: Bundle = {
     protoPrivateTip: "Özel takas (Taproot/MuSig2 adaptör) — zincir üzerinde sıradan bir ödeme gibi görünür",
     protoHtlcTip: "Klasik HTLC takası",
     // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "Core RPC cüzdanı",
-    backendCoreDesc: "Düğümünüzün kendi cüzdanı takası fonlar ve gelirleri alır.",
-    backendHardwareTitle: "Donanım",
-    backendHardwareDesc: "Fonlama bacağı için Ledger / PSBT imzalama.",
-    backendLater: "sonra",
     // CoinSetup dialog.
     setupTitle: "{coin} bağla",
     setupIntro:
       "Satchel'ı kendi {sym} düğümünüze yönlendirin. Düğüm bir genesis-bloğu kontrolünden geçene kadar hiçbir şey kaydedilmez — fonlarınız yalnızca gerçek {sym} zincirine dokunur.",
-    backendUrlLabel: "Düğüm arka uç URL'leri",
-    backendUrlHint:
-      "İlk URL = düğümünüzün kendi cüzdanı (takasları fonlar, gelirleri alır). Ekstra, bağımsız zincir görünümleri için virgüllerden sonra Electrum sunucuları (tcp://host:port) ekleyin.",
-    fundingWallet: "Fonlama cüzdanı",
     confirmationsLabel: "Kesinleşmeden önceki onay sayısı",
     confirmationsHint:
       "Bu zincirdeki bir fonlama veya geri almanın, bir takas ona göre hareket etmeden önce ne kadar derin olması gerektiği — reorg güvenlik payı. Yüksek olması daha güvenli ama daha yavaştır; önerilen varsayılan ({default}) için boş bırakın.",
@@ -426,12 +408,6 @@ export const tr: Bundle = {
     walletDefaultHint:
       "Bu coin için cüzdan ayarlanmamış, bu yüzden RPC'ler düğümün varsayılan cüzdanını kullanır. Her çağrıyı belirli bir cüzdana kapsamlandırmak için Ayarlar → Coin'ler bölümünden bir tane ayarlayın.",
     balanceLabel: "{symbol} bakiyesi",
-    receive: "Al",
-    send: "Gönder",
-    sendTo: "Adrese gönder",
-    amount: "Miktar",
-    sendTitle: "{amount} {sym} gönderilsin mi?",
-    sendConfirmBody: "Şu adrese: {to}\n\nBu, kendi düğümünüzün cüzdanından harcar ve geri alınamaz.",
   },
   corkboard: {
     noBoardTitle: "Bağlı Corkboard yok",
@@ -442,7 +418,6 @@ export const tr: Bundle = {
     boardSettings: "Ayarlar'dan yapılandır",
     filterAll: "Tümü",
     filterMine: "Benimkiler",
-    offered: "{symbol} sunuldu",
     noOffers: "Şu anda alabileceğiniz teklif yok",
     noOffersBody:
       "Kurduğunuz bir parite için bir maker teklif yayınlar yayınlamaz teklifler burada görünür. Kendi teklifinizi de yayınlayabilirsiniz.",
@@ -461,7 +436,6 @@ export const tr: Bundle = {
       "Takas takılırsa, her iki taraf da otomatik geri ödeme alır — taker'ın bacağı önce, sizinki biraz sonra açılır. Kimse takılı kalmaz.",
     activeTitle: "Etkin takaslarınız",
     states: {
-      open: "açık",
       takenByUs: "siz aldınız",
       revoked: "geri çekildi",
       expired: "süresi doldu",
@@ -485,7 +459,6 @@ export const tr: Bundle = {
       mid: "orta {price}",
       levelOffers: "Bu fiyatta {count} teklif — almak için birini seçin",
       depthTip: "{count} ilan boyunca bu fiyatta sunulan toplam {sym}.",
-      takerNote: "Onu alırsanız, {give} verir ve {get} alırsınız.",
       selectLevel: "Oradaki teklifleri görmek için yukarıdan bir fiyat seviyesi seçin.",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "{coin} miktarları için görüntüleme birimi",
@@ -571,23 +544,8 @@ export const tr: Bundle = {
       "Bu takası fonlamak için yeterli {sym} yok — ~{need} {sym} gerekir (miktar + fonlama ücreti), cüzdanda {have} {sym} var.",
   },
   wizard: {
-    welcome: "Satchel'a hoş geldiniz",
-    connectTitle: "Pact motoruna bağlanın",
-    connectIntro:
-      "Satchel, Pact motorunun ince bir istemcisidir — anahtarlarınızı tutan ve takasları yürüten çekirdek. Ona nasıl ulaşacağınızı seçin.",
-    managed: "Yerleşik Pact motorunu çalıştır",
-    managedDesc: "Satchel kendi Pact motorunu başlatır ve denetler. Önerilir.",
-    external: "Harici bir Pact motoruna bağlan",
-    externalDesc: "Zaten çalıştırdığınız bir Pact motoruna yönlendirin (başlatmadan önce SATCHEL_PACTD_URL + çerezi ayarlayın).",
-    externalNote:
-      "Harici mod, Satchel başlatılmadan önce ortam değişkenleriyle seçilir. Kullanmak için SATCHEL_PACTD_URL ayarlı olarak yeniden başlatın.",
-    coinsTitle: "Coin'lerinizi ekleyin",
-    coinsIntro:
-      "Satıcınız oluşturulduktan sonra, Ayarlar → Coin'ler bölümünden her coin'i kendi düğümünüze bağlayın. Bir coin ve bir arka uç seçin (sıfır kurulum için herkese açık Electrum veya kendi düğümünüz); hiçbir şey kaydedilmeden önce genesis bu ağa karşı kontrol edilir.",
-    coinsTemplatesSoon: "Tek tıkla coin şablonları daha sonraki bir sürümde burada gelir.",
     back: "Geri",
     continue: "Devam et",
-    finish: "Kurulumu bitir",
   },
   // UI-4 docked activity log.
   log: {
@@ -666,8 +624,6 @@ export const tr: Bundle = {
       "{a} miktarları kilitli ve doğrulandı. Sıradaki: {b} miktarınızı kilitleyin. Güvenlik ağı: bir şey takılırsa {t2} zamanında otomatik geri ödeme.",
     fundedBMaker: "İkisi de kilitlendi. Daemon'ınız güvenle onaylanır onaylanmaz {b} miktarını talep eder.",
     fundedBTaker: "İkisi de kilitlendi. Daemon'ınız diğer taraf {b} miktarını alır almaz {a} miktarını talep edecek.",
-    redeemedB:
-      "{b} miktarını talep ettiniz — onaylanmasını bekliyor. Kilitli {a} miktarınız, bu kesinleşene kadar korunmaya devam eder.",
     completed: "Takas tamamlandı — {coin} cüzdanınızda.",
     refunded: "Takas tamamlanmadı, bu yüzden {coin} miktarınız otomatik olarak geri döndü. Ücretler dışında hiçbir kayıp yok.",
     aborted: "Herhangi bir para hareket etmeden önce iptal edildi.",
