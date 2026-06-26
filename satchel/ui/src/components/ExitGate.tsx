@@ -42,7 +42,7 @@ type Pending =
   | { kind: "offers"; offers: Offer[] };
 
 export default function ExitGate() {
-  const { swaps, identity } = useApp();
+  const { swaps, identity, watchOnly } = useApp();
   const t = useT();
   const [pending, setPending] = useState<Pending>(null);
   const [confirmText, setConfirmText] = useState("");
@@ -53,6 +53,8 @@ export default function ExitGate() {
   swapsRef.current = swaps;
   const idRef = useRef(identity);
   idRef.current = identity;
+  const watchOnlyRef = useRef(watchOnly);
+  watchOnlyRef.current = watchOnly;
 
   useEffect(() => {
     if (!inTauri()) return;
@@ -63,6 +65,18 @@ export default function ExitGate() {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const win = getCurrentWindow();
       unlisten = await win.onCloseRequested(async (event) => {
+        // Watch-only viewer: it owns no offer liveness (delist-on-close /
+        // readvertise are engine no-ops here) and can hold no live swap, so
+        // closing it can't strand funds — there is nothing to gate. Skip the
+        // board query and dialog entirely. Crucially, this session shares the
+        // live session's identity, so its "own" board offers are really the
+        // LIVE session's; surfacing a Withdraw button here would let a viewer
+        // accidentally `boardrevoke` them. Quiet exit instead.
+        if (watchOnlyRef.current) {
+          event.preventDefault();
+          await quit(false, false);
+          return;
+        }
         // Our own open offers, if any (best-effort — no board / unreachable is fine).
         let mine: Offer[] = [];
         try {
