@@ -3,7 +3,7 @@ import { useApp } from "../AppContext";
 import { useConfirm } from "../ui/ConfirmProvider";
 import { useT } from "../i18n";
 import { dumpSwap, errMsg, rpc } from "../api/tauri";
-import { asset, fmtAmt, isActive } from "../format";
+import { asset, fmtAmt, isActive, isFinalizing } from "../format";
 import { narrate } from "../screens/narrate";
 import SwapProgressLine from "./SwapProgressLine";
 import { C } from "../theme";
@@ -146,6 +146,8 @@ function ActiveSwapRow({
 }) {
   const t = useT();
   const refundAt = s.role === "initiator" ? s.t1 : s.t2;
+  // While finalizing the state is `completed` but it isn't done — show "finalizing".
+  const stateLabel = isFinalizing(s) ? "finalizing" : s.state;
   return (
     <Box sx={{ borderTop: first ? "none" : `1px solid ${C.line}` }}>
       <Box
@@ -159,7 +161,7 @@ function ActiveSwapRow({
           flexWrap: "wrap",
         }}
       >
-      <Chip label={s.state} size="small" sx={{ height: 20, bgcolor: "action.selected", fontSize: 11 }} />
+      <Chip label={stateLabel} size="small" sx={{ height: 20, bgcolor: "action.selected", fontSize: 11 }} />
       <Typography sx={{ fontFamily: C.mono, fontWeight: 600, fontSize: 13 }}>
         {fmtAmt(s.amount_a, asset(s.chain_a))} → {fmtAmt(s.amount_b, asset(s.chain_b))}
       </Typography>

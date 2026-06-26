@@ -675,6 +675,8 @@ export const en = {
     fundedBTaker: "Both locked. Your daemon will claim the {a} the moment the other side takes their {b}.",
     redeemedB:
       "You claimed the {b} — waiting for it to confirm. Your locked {a} stays protected until this is final.",
+    finalizing:
+      "You claimed your {got} — final confirmations. Keep the app open until it buries; your {gave} stays protected until then.",
     completed: "Swap complete — the {coin} is in your wallet.",
     refunded: "The swap did not complete, so your {coin} came back automatically. Nothing lost but fees.",
     aborted: "Cancelled before any money moved.",

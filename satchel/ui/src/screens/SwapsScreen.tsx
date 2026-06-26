@@ -17,7 +17,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useApp } from "../AppContext";
 import { useT } from "../i18n";
-import { asset, fmtAmt, isActive, isTerminal, settlementLeg } from "../format";
+import { asset, fmtAmt, isActive, isFinalizing, isTerminal, settlementLeg } from "../format";
 import { dumpSwap } from "../api/tauri";
 import { narrate } from "./narrate";
 import SwapProgressLine from "../components/SwapProgressLine";
@@ -135,6 +135,11 @@ function SwapSection({
 function SwapRow({ s }: { s: Swap }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  // While finalizing, the state is `completed` but it isn't done — show
+  // "finalizing" and not the terminal (green) colour.
+  const fin = isFinalizing(s);
+  const stateLabel = fin ? "finalizing" : s.state;
+  const stateColor = fin ? undefined : STATE_COLOR[s.state];
   return (
     <>
       <TableRow sx={{ "& td": { borderBottom: "none" } }}>
@@ -166,12 +171,12 @@ function SwapRow({ s }: { s: Swap }) {
         <TableCell>{s.role}</TableCell>
         <TableCell>
           <Chip
-            label={s.state}
+            label={stateLabel}
             size="small"
             sx={{
               height: 20,
-              bgcolor: STATE_COLOR[s.state] ? `${STATE_COLOR[s.state]}22` : "action.selected",
-              color: STATE_COLOR[s.state] ?? "text.primary",
+              bgcolor: stateColor ? `${stateColor}22` : "action.selected",
+              color: stateColor ?? "text.primary",
               fontSize: 12,
             }}
           />

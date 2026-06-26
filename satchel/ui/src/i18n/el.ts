@@ -648,6 +648,7 @@ export const el: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "Διεκδικήσατε τα {got} σας — τελικές επιβεβαιώσεις. Κρατήστε την εφαρμογή ανοιχτή μέχρι να θαφτεί· τα {gave} σας παραμένουν προστατευμένα μέχρι τότε.",
     initiating:
       "Η αποδοχή στάλθηκε — αναμονή να ξεκινήσει την ανταλλαγή ο maker. Τίποτα δεν είναι ακόμα κλειδωμένο· ακυρώνεται από μόνη της αν δεν απαντήσουν.",
     created: "Η προσφορά στάλθηκε — αναμονή να συμφωνήσει η άλλη πλευρά. Τίποτα δεν έχει δεσμευτεί.",

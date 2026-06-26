@@ -648,6 +648,7 @@ export const id: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "Anda mengklaim {got} Anda — konfirmasi akhir. Biarkan aplikasi terbuka sampai terkubur; {gave} Anda tetap terlindungi sampai saat itu.",
     initiating:
       "Pengambilan terkirim — menunggu maker memulai swap. Belum ada yang dikunci; otomatis dibatalkan jika mereka tidak menanggapi.",
     created: "Penawaran terkirim — menunggu sisi lain menyetujui. Tidak ada yang berkomitmen.",

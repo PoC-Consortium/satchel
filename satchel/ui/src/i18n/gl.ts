@@ -648,6 +648,7 @@ export const gl: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "Reclamaches os teus {got} — confirmacións finais. Mantén a app aberta ata que se enterre; os teus {gave} quedan protexidos ata entón.",
     initiating:
       "Toma enviada — agardando a que o maker inicie o intercambio. Aínda non se bloqueou nada; cancélase por si soa se non responden.",
     created: "Oferta enviada — agardando a que a outra parte acepte. Non hai nada comprometido.",

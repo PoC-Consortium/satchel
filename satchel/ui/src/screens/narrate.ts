@@ -31,10 +31,16 @@ export function narrate(s: Swap): string {
       return tr(maker ? "narrate.fundedAMaker" : "narrate.fundedATaker", v);
     case "funded_b":
       return tr(maker ? "narrate.fundedBMaker" : "narrate.fundedBTaker", v);
+    // "Finalizing": the claim is broadcast but still burying — not done yet.
+    // The maker is here at `redeemed_b`; the taker reaches it at `completed`
+    // while its settlement bar is still counting (see isFinalizing). Same wording
+    // for both roles: claimed-coin = {got}, locked-coin = {gave}.
     case "redeemed_b":
-      return tr("narrate.redeemedB", v);
+      return tr("narrate.finalizing", { got: b, gave: a });
     case "completed":
-      return tr("narrate.completed", { coin: maker ? b : a });
+      return s.progress?.watching === "settlement"
+        ? tr("narrate.finalizing", { got: maker ? b : a, gave: maker ? a : b })
+        : tr("narrate.completed", { coin: maker ? b : a });
     case "refunded":
       return tr("narrate.refunded", { coin: maker ? a : b });
     case "aborted":

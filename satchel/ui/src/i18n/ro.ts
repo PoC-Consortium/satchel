@@ -648,6 +648,7 @@ export const ro: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "Ți-ai revendicat {got} — confirmări finale. Ține aplicația deschisă până se îngroapă; {gave} tăi rămân protejați până atunci.",
     initiating:
       "Acceptare trimisă — se așteaptă ca maker-ul să pornească swap-ul. Nimic nu este blocat încă; se anulează singur dacă nu răspund.",
     created: "Ofertă trimisă — se așteaptă ca cealaltă parte să fie de acord. Nimic nu este angajat.",

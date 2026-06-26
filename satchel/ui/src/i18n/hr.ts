@@ -648,6 +648,7 @@ export const hr: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "Zatražili ste svoje {got} — završne potvrde. Držite aplikaciju otvorenom dok se ne zakopa; vaši {gave} ostaju zaštićeni do tada.",
     initiating:
       "Preuzimanje poslano — čeka se da maker pokrene swap. Ništa još nije zaključano; otkazuje se samo od sebe ako ne odgovori.",
     created: "Ponuda poslana — čeka se da druga strana pristane. Ništa nije obvezano.",

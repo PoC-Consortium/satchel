@@ -648,6 +648,7 @@ export const ja: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "{got} を請求しました — 最終確認中。埋まるまでアプリを開いたままにしてください。それまで {gave} は保護されます。",
     initiating:
       "テイクを送信 — メーカーがスワップを開始するのを待っています。まだ何もロックされていません。相手が応答しなければ自動でキャンセルされます。",
     created: "オファーを送信 — 相手の同意を待っています。何もコミットされていません。",
