@@ -17,8 +17,8 @@
 |---|---|
 | `getinfo` | Daemon name/version/protocol/network, identity, seed status, coin ids. |
 | `walletstatus` | `{ seed_exists, encrypted, locked }`. |
-| `getfeepolicy` | Active merchant's fee-bump policy `{ max_feerate_sat_vb, min_fee_sat, reservation_mult, committed_mult, step_pct }`. |
-| `setfeepolicy` | Update the fee-bump policy — positional, all optional `[max_feerate_sat_vb?, min_fee_sat?, reservation_mult?, committed_mult?, step_pct?]`; returns the updated policy; persisted per-merchant. |
+| `getfeepolicy` | Active merchant's fee-bump policy `{ max_feerate_sat_vb, reservation_mult, committed_mult }`. |
+| `setfeepolicy` | Update the fee-bump policy — positional, all optional `[max_feerate_sat_vb?, reservation_mult?, committed_mult?]`; returns the updated policy; persisted per-merchant. |
 | `stop` | Trigger graceful shutdown. |
 
 ## Seed / wallet lifecycle

@@ -394,16 +394,16 @@ pub(crate) const CPFP_CHILD_VSIZE: u64 = 150;
 /// The child fee (sat) that lifts a stuck cooperative redeem's PACKAGE feerate
 /// to `target` sat/vB, or `None` when the parent already pays at least `target`
 /// on its own (nothing to bump). `parent_fee` is the redeem's committed fee;
-/// the package spans both vsizes. `min_fee` is the policy floor for the child
-/// (`FeeBumpPolicy::min_fee_sat`) — passed in rather than hardcoded so the
-/// configurable floor is honoured. The committed redeem fee can't be RBF'd, so a
-/// child is the only lever — see spec/protocol-v2.md. Pure, so the CPFP fee
-/// policy is unit-testable without a node.
+/// the package spans both vsizes. The child pays **exactly** the top-up needed
+/// to reach `target` — no minimum-fee floor: we bump to market, and the caller's
+/// dust check (`child_value > DUST_LIMIT_SAT`) already rejects an output too
+/// small to fund the child. The committed redeem fee can't be RBF'd, so a child
+/// is the only lever — see spec/protocol-v2.md. Pure, so the CPFP fee policy is
+/// unit-testable without a node.
 pub(crate) fn cpfp_child_fee(
     parent_fee: u64,
     parent_vsize: u64,
     target_feerate: u64,
-    min_fee: u64,
 ) -> Option<u64> {
     let parent_feerate = parent_fee / parent_vsize.max(1);
     if target_feerate <= parent_feerate {
@@ -411,7 +411,7 @@ pub(crate) fn cpfp_child_fee(
     }
     let package_vsize = parent_vsize + CPFP_CHILD_VSIZE;
     let desired_package_fee = target_feerate.saturating_mul(package_vsize);
-    Some(desired_package_fee.saturating_sub(parent_fee).max(min_fee))
+    Some(desired_package_fee.saturating_sub(parent_fee))
 }
 
 /// Default confirmation requirement per chain — the fallback when the operator
@@ -2168,12 +2168,9 @@ impl Engine {
         let target = backend
             .fee_rate_sat_per_vb()?
             .min(self.fee_bump.max_feerate_sat_vb);
-        let Some(child_fee) = cpfp_child_fee(
-            parent_fee,
-            crate::taproot::KEYPATH_REDEEM_VSIZE,
-            target,
-            self.fee_bump.min_fee_sat,
-        ) else {
+        let Some(child_fee) =
+            cpfp_child_fee(parent_fee, crate::taproot::KEYPATH_REDEEM_VSIZE, target)
+        else {
             return Ok(None); // parent already clears the target unaided
         };
         let Some(child_value) = parent_value.checked_sub(child_fee) else {
@@ -2290,9 +2287,7 @@ impl Engine {
         if target <= old_feerate {
             return Ok(None);
         }
-        let Some(child_fee) =
-            cpfp_child_fee(parent_fee, parent_vsize, target, self.fee_bump.min_fee_sat)
-        else {
+        let Some(child_fee) = cpfp_child_fee(parent_fee, parent_vsize, target) else {
             return Ok(None); // parent already clears the target
         };
         let Some(child_value) = change_value.checked_sub(child_fee) else {
@@ -5106,7 +5101,6 @@ pub struct PendingTakeInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::swap::MIN_SPEND_FEE_SAT;
 
     fn engine_with(tag: &str, passphrase: Option<&str>) -> (Engine, std::path::PathBuf) {
         let dir = std::env::temp_dir().join(format!("libswap-engine-{tag}-{}", std::process::id()));
@@ -5494,31 +5488,20 @@ mod tests {
         let parent_fee = 10 * parent_vsize; // committed at 10 sat/vB
 
         // Target below what the parent already pays: no child needed.
-        assert_eq!(
-            cpfp_child_fee(parent_fee, parent_vsize, 5, MIN_SPEND_FEE_SAT),
-            None
-        );
-        assert_eq!(
-            cpfp_child_fee(parent_fee, parent_vsize, 10, MIN_SPEND_FEE_SAT),
-            None
-        );
+        assert_eq!(cpfp_child_fee(parent_fee, parent_vsize, 5), None);
+        assert_eq!(cpfp_child_fee(parent_fee, parent_vsize, 10), None);
 
         // Target 50 sat/vB: the package (parent+child vsizes) must pay
         // 50 * (111 + 150) = 13050 sat; child covers the shortfall over parent.
         let pkg_vsize = parent_vsize + CPFP_CHILD_VSIZE;
-        let child = cpfp_child_fee(parent_fee, parent_vsize, 50, MIN_SPEND_FEE_SAT).unwrap();
+        let child = cpfp_child_fee(parent_fee, parent_vsize, 50).unwrap();
         assert_eq!(child, 50 * pkg_vsize - parent_fee);
         // The realised package feerate meets the target.
         assert!((parent_fee + child) / pkg_vsize >= 50);
-        // Never below the passed-in floor: with the default floor, a tiny natural
-        // fee (target 1 → 261 sat) is lifted to MIN_SPEND_FEE_SAT.
-        assert_eq!(
-            cpfp_child_fee(0, parent_vsize, 1, MIN_SPEND_FEE_SAT).unwrap(),
-            MIN_SPEND_FEE_SAT
-        );
-        // The floor is honoured from the arg, not hardcoded: with a floor of 1 the
-        // natural fee (target × package vsize = 261) is returned unraised.
-        assert_eq!(cpfp_child_fee(0, parent_vsize, 1, 1).unwrap(), pkg_vsize);
+        // No arbitrary floor: the child pays EXACTLY the top-up to reach market.
+        // A zero-fee parent at target 1 sat/vB → the natural package fee
+        // (1 × package vsize = 261 sat), not lifted to any minimum.
+        assert_eq!(cpfp_child_fee(0, parent_vsize, 1).unwrap(), pkg_vsize);
     }
 
     #[test]
@@ -5744,11 +5727,15 @@ mod tests {
         assert_eq!(give_legs[1]["name"], "refund");
         assert_eq!(get_legs[0]["name"], "redeem");
         for leg in give_legs.iter().chain(get_legs.iter()) {
-            assert!(leg["vbytes"].as_u64().unwrap() > 0);
-            assert!(leg["fee_sat"].as_u64().unwrap() >= MIN_SPEND_FEE_SAT);
+            let vbytes = leg["vbytes"].as_u64().unwrap();
+            assert!(vbytes > 0);
+            // No arbitrary floor: fee = market rate × vsize with only a 1 sat/vB
+            // (min-relay) guard, so each leg pays at least its vsize in sats.
+            assert!(leg["fee_sat"].as_u64().unwrap() >= vbytes);
         }
-        // 1 sat/vB * 160 vB fund = 160 sat, floored to the 1000-sat MIN_SPEND_FEE_SAT.
-        assert_eq!(give_legs[0]["fee_sat"], MIN_SPEND_FEE_SAT);
+        // Fallback market is 1 sat/vB → each leg pays exactly its vsize (fund 160 vB
+        // = 160 sat), no longer lifted to the old flat 1000-sat floor.
+        assert_eq!(give_legs[0]["fee_sat"], give_legs[0]["vbytes"]);
 
         std::fs::remove_dir_all(&dir).ok();
     }

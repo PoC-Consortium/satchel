@@ -33,14 +33,20 @@ pub const REFUND_TX_VSIZE: u64 = 146;
 /// sensible mid-point; real wallet selection (more inputs) may differ.
 pub const FUND_TX_VSIZE: u64 = 160;
 
-/// Floor for HTLC-spend fees: keeps us above min-relay even if the
-/// estimator returns 1 sat/vB (spec §6.4 only requires output ≥ dust).
+/// Default for the deprecated [`crate::fee_policy::FeeBumpPolicy::min_fee_sat`]
+/// field — retained only so previously-persisted policies still deserialize. It
+/// is **not** a fee floor: every spend/bump is market-derived (`spend_fee_sat` /
+/// [`crate::fee_policy::FeeBumpPolicy::target_feerate`]).
 pub const MIN_SPEND_FEE_SAT: u64 = 1000;
 
-/// Fee for an HTLC spend at the given feerate, floored at
-/// [`MIN_SPEND_FEE_SAT`].
+/// Absolute fee (sat) for an HTLC spend at the given feerate. The feerate is
+/// already market-derived and clamped to ≥ 1 sat/vB upstream (`target_feerate`
+/// and the estimator), 1 sat/vB being the relay minimum — so this is just
+/// `rate × vsize` with a defensive min-relay guard, **not** an arbitrary
+/// absolute floor (the old 1000-sat floor was removed: it overrode the market
+/// price on quiet mempools).
 pub fn spend_fee_sat(rate_sat_per_vb: u64, tx_vsize: u64) -> u64 {
-    (rate_sat_per_vb * tx_vsize).max(MIN_SPEND_FEE_SAT)
+    rate_sat_per_vb.max(1).saturating_mul(tx_vsize)
 }
 
 /// Legacy alias used by tests; production paths compute via

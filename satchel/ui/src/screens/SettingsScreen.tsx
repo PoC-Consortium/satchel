@@ -325,18 +325,16 @@ function UrlList({
 
 // Fee-bump policy — per the active merchant (pactd's store owns it; the engine
 // reloads it on launch). Read via getfeepolicy, written via setfeepolicy (typed,
-// applied live, no relaunch). Four knobs; the low-level min_fee_sat floor is not
-// exposed but is preserved across saves.
+// applied live, no relaunch). Three knobs; every fee is market-derived, so there
+// is no minimum-fee floor to expose (the old min_fee_sat was removed).
 type FeePolicy = {
   max_feerate_sat_vb: number;
-  min_fee_sat: number;
   reservation_mult: number;
   committed_mult: number;
 };
 
 const FEE_DEFAULTS: FeePolicy = {
   max_feerate_sat_vb: 500,
-  min_fee_sat: 1000,
   reservation_mult: 3,
   committed_mult: 2,
 };
@@ -367,11 +365,9 @@ function FeesTab() {
     setBusy(true);
     setStatus(t("settings.feeSaving"));
     try {
-      // Positional params: max, min, reservation, committed. min_fee_sat is not
-      // editable here but is round-tripped so it isn't reset.
+      // Positional params: max, reservation, committed.
       await rpc("setfeepolicy", [
         pol.max_feerate_sat_vb,
-        pol.min_fee_sat,
         pol.reservation_mult,
         pol.committed_mult,
       ]);
@@ -431,7 +427,7 @@ function FeesTab() {
           variant="outlined"
           color="inherit"
           disabled={busy}
-          onClick={() => setPol((prev) => ({ ...FEE_DEFAULTS, min_fee_sat: prev.min_fee_sat }))}
+          onClick={() => setPol(FEE_DEFAULTS)}
         >
           {t("settings.feeReset")}
         </Button>
