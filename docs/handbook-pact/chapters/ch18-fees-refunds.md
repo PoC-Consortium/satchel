@@ -20,23 +20,22 @@ RBF (`nSequence = 0xFFFFFFFD`), and because the v1 keys sign deterministically
 (ECDSA), the engine can re-sign a higher-fee replacement unilaterally
 (`maybe_bump`).
 
-The fee escalation on each bump is `step_pct` percent (default 50), floored at
-`min_fee_sat` and **capped at `max_feerate_sat_vb`** (`FeeBumpPolicy::escalate`):
+Each bump **re-prices to the live market**, not a geometric step. The
+replacement fee is `target_feerate × vsize`, where
+(`FeeBumpPolicy::target_feerate`):
 
 ```text
-new_fee = min(old_fee + max(old_fee × step_pct/100, min_fee_sat),
-              max_feerate_sat_vb × vsize)
+target_feerate = min(market_sat_vb, value_at_risk / vsize, max_feerate_sat_vb)
 ```
 
-with `min_fee_sat = 1000` and `max_feerate_sat_vb = 500` by default. Two stop
-conditions fall back to **rebroadcasting the existing transaction** instead of
-emitting a worse replacement:
-
-- the escalation would push the swept output below `DUST_LIMIT_SAT = 546`
-  (`swap.rs:20`) — a higher fee that dusts the output is worse than retrying; or
-- the fee is already at the `max_feerate_sat_vb` ceiling, so a further bump
-  could not clear the BIP125 incremental-relay floor (`escalate` returns `None`).
-  The engine never broadcasts an unrelayable +1 nudge.
+i.e. the current estimator feerate, capped by the value being claimed (a bump
+never pays more in fees than the leg is worth) and by `max_feerate_sat_vb`
+(default 500). There is **no minimum-fee floor** — the old flat 1000-sat floor
+was removed, so a quiet mempool gets a 1 sat/vB spend rather than an inflated
+one. The engine only emits a replacement when that target exceeds the current
+fee; otherwise it **rebroadcasts the existing transaction**, and it never
+broadcasts a replacement that would dust the swept output below
+`DUST_LIMIT_SAT = 546` (`swap.rs:20`).
 
 ## v2 fee-bumping: a split design
 
@@ -50,7 +49,7 @@ v2 is asymmetric, and the asymmetry is load-bearing (spec v2 §8):
 ### The refund is RBF-bumpable
 
 The v2 single-key refund (`adaptor_bump_refund`) bumps exactly like v1: same
-`refund.step_pct` escalation (capped at `max_feerate_sat_vb`), deterministic
+market-tracking `target_feerate` re-price (capped at `max_feerate_sat_vb`), deterministic
 single-key Schnorr re-sign, RBF sequence. No interactive ceremony is needed
 because the refund tapleaf is single-signature (see the chapter "v2
 Taproot/MuSig2 Adaptor Swaps").
@@ -231,8 +230,9 @@ owned per-merchant by pactd's store and surfaced as typed RPC:
   A change is validated, applied to the live engine, and persisted, so it
   survives a restart with no Satchel involved.
 - **Satchel → Settings → Fees** edits the **active merchant's** policy over the
-  same RPC (applied live, no relaunch). It exposes four knobs; the low-level
-  `min_fee_sat` floor is round-tripped but not shown.
+  same RPC (applied live, no relaunch). It exposes three knobs (max feerate,
+  reservation, committed); every fee is market-derived, so there is no
+  minimum-fee floor to show.
 
 Changes take effect on the **next** bump; swaps already funded keep the
 `committed_mult` and gate reservation they were funded under (both fixed at
@@ -241,10 +241,8 @@ funding time).
 | Field | Default | Meaning |
 |---|---|---|
 | `max_feerate_sat_vb` | 500 sat/vB | ceiling for every local bump; also the hard system max (the estimator is clamped to 500), settable `1..=500` |
-| `min_fee_sat` | 1000 sat | floor for any single-tx bump |
 | `funding.reservation_mult` | 3× | funds-gate headroom + funding-nurse bound (`× old_feerate`) |
 | `redeem.committed_mult` | 2× | v2 redeem over-provision (the unattended floor) |
-| `redeem.step_pct` / `refund.step_pct` | 50% | RBF escalation per scheduler tick |
 
 Other fee-related constants remain fixed (not policy):
 
@@ -255,7 +253,7 @@ Other fee-related constants remain fixed (not policy):
 | `CPFP_CHILD_VSIZE` | 150 vB | the CPFP redeem/funding-bump child |
 | `FUNDING_VSIZE_EST` | 250 vB | sizing estimate for the funds-gate reservation |
 
-The v1 RBF escalation and the v2 over-provision-plus-CPFP strategy are two
+The v1 RBF re-pricing and the v2 over-provision-plus-CPFP strategy are two
 answers to the same question — *how do I make sure a time-critical spend
 confirms?* — chosen because v1 can re-sign freely and v2's cooperative redeem
 cannot.

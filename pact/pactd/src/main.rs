@@ -316,7 +316,6 @@ impl Params {
 fn fee_policy_json(p: &libswap::FeeBumpPolicy) -> Value {
     json!({
         "max_feerate_sat_vb": p.max_feerate_sat_vb,
-        "min_fee_sat": p.min_fee_sat,
         "reservation_mult": p.funding.reservation_mult,
         "committed_mult": p.redeem.committed_mult,
     })
@@ -432,16 +431,12 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         // fields supplied change. Validated server-side; persisted; applied live.
         "setfeepolicy" => {
             let max = p.opt_u64(0, "max_feerate_sat_vb");
-            let min = p.opt_u64(1, "min_fee_sat");
-            let reservation = p.opt_u64(2, "reservation_mult");
-            let committed = p.opt_u64(3, "committed_mult");
+            let reservation = p.opt_u64(1, "reservation_mult");
+            let committed = p.opt_u64(2, "committed_mult");
             let policy = blocking_mut(app, move |e| {
                 let mut pol = e.fee_bump;
                 if let Some(v) = max {
                     pol.max_feerate_sat_vb = v;
-                }
-                if let Some(v) = min {
-                    pol.min_fee_sat = v;
                 }
                 if let Some(v) = reservation {
                     pol.funding.reservation_mult = v;

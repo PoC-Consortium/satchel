@@ -36,25 +36,25 @@ are scoped to the active merchant.
 The policy object is a flat shape:
 
 ```json
-{ "max_feerate_sat_vb": 500, "min_fee_sat": 1000,
-  "reservation_mult": 3, "committed_mult": 2, "step_pct": 50 }
+{ "max_feerate_sat_vb": 500, "reservation_mult": 3, "committed_mult": 2 }
 ```
 
 - `getfeepolicy` — read-only; returns the active merchant's current policy.
 - `setfeepolicy` — **positional** params, all optional, in order
-  `[max_feerate_sat_vb?, min_fee_sat?, reservation_mult?, committed_mult?, step_pct?]`.
-  Only the fields you supply change; the rest keep their current values. `step_pct`
-  is a single knob that sets **both** the redeem step and the refund step. The new
+  `[max_feerate_sat_vb?, reservation_mult?, committed_mult?]`.
+  Only the fields you supply change; the rest keep their current values. The new
   values are validated server-side, applied live, and persisted per-merchant (they
   survive a restart). Returns the full updated policy (same shape).
 
 | Field | Default | Range | What it does |
 |---|---|---|---|
 | `max_feerate_sat_vb` | 500 | `1..=500` | Local ceiling on any bump's feerate (sat/vB). |
-| `min_fee_sat` | 1000 | `≥ 1` | Floor on each bump increment (sat). |
 | `reservation_mult` | 3 | `1..=1000` | Funding-nurse target multiplier over the old feerate. |
 | `committed_mult` | 2 | `1..=1000` | Redeem fee over-provision multiplier. |
-| `step_pct` | 50 | `1..=1000` | Per-step escalation percentage (redeem **and** refund). |
+
+> Every spend and bump is market-derived (`target_feerate` = `min(market,
+> value-at-risk, max_feerate_sat_vb)`); there is no minimum-fee floor. The former
+> `min_fee_sat` and per-step `step_pct` knobs were removed.
 
 > **Note** — These knobs are the *local* policy; `max_feerate_sat_vb` is distinct
 > from the protocol-negotiated redeem-feerate bound. See the chapter "Fees,

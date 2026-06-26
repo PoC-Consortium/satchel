@@ -45,7 +45,11 @@ pub struct FeeBumpPolicy {
     /// RBF escalators (which were uncapped before this policy existed). Bounded by
     /// [`MAX_FEERATE_CEILING`]. Default 500.
     pub max_feerate_sat_vb: u64,
-    /// Floor for any single-tx bump (sat). Default 1000 (was `MIN_SPEND_FEE_SAT`).
+    /// **Deprecated / inert.** No longer read by any fee path — every spend and
+    /// bump is market-derived ([`Self::target_feerate`]); the old flat 1000-sat
+    /// floor was removed (it overrode the market price on quiet mempools).
+    /// Retained as a field only so policies persisted before its removal still
+    /// deserialize under `deny_unknown_fields`. Not exposed by `get/setfeepolicy`.
     pub min_fee_sat: u64,
     pub funding: FundingPolicy,
     pub redeem: RedeemPolicy,
@@ -164,29 +168,13 @@ impl FeeBumpPolicy {
             .min(self.max_feerate_sat_vb)
             .max(1)
     }
-
-    /// RBF escalation step, capped at the absolute ceiling for this tx `vsize`.
-    /// Returns the new absolute fee (sat), or `None` when even the capped step
-    /// can't clear the BIP125 Rule-4 floor (`old_fee` + the incremental relay fee,
-    /// = 1 sat/vB × `vsize`). `None` means we're already at/above the ceiling and
-    /// any "bump" would be unrelayable — the caller treats it as a no-op for this
-    /// tick (it must NOT broadcast a +1 nudge).
-    pub fn escalate(&self, old_fee: u64, step_pct: u64, vsize: u64) -> Option<u64> {
-        let stepped = old_fee + (old_fee.saturating_mul(step_pct) / 100).max(self.min_fee_sat);
-        let ceiling_fee = self.max_feerate_sat_vb.saturating_mul(vsize);
-        let new_fee = stepped.min(ceiling_fee);
-        // BIP125 Rule 4: a replacement must beat the old fee by at least the
-        // incremental relay fee (1 sat/vB × vsize). A +1 bump is not enough.
-        let incremental_relay = vsize;
-        (new_fee >= old_fee + incremental_relay).then_some(new_fee)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // A representative spend vsize (≈ v1 redeem) for escalate tests.
+    // A representative spend vsize (≈ v1 redeem) for the fee-policy tests.
     const VSIZE: u64 = 155;
 
     #[test]
@@ -213,35 +201,6 @@ mod tests {
         assert_eq!(p.target_feerate(400, 30_000, VSIZE), 30_000 / VSIZE);
         // Absolute ceiling still binds when the claim is large.
         assert_eq!(p.target_feerate(900, 10_000_000, VSIZE), 500);
-    }
-
-    #[test]
-    fn escalate_steps_normally() {
-        let p = FeeBumpPolicy::default();
-        // old_fee 4000, +50% = +2000 (> min_fee 1000) → 6000, well under ceiling.
-        assert_eq!(p.escalate(4000, 50, VSIZE), Some(6000));
-        // Small old_fee: +50% < min_fee, so the floor (1000) applies → 1000+1000.
-        assert_eq!(p.escalate(1000, 50, VSIZE), Some(2000));
-    }
-
-    #[test]
-    fn escalate_caps_at_ceiling() {
-        let p = FeeBumpPolicy::default(); // max 500 sat/vB
-        let ceiling = 500 * VSIZE; // 77_500
-                                   // A fee just under the ceiling steps up to exactly the ceiling, not past.
-        let old = ceiling - 5_000;
-        assert_eq!(p.escalate(old, 50, VSIZE), Some(ceiling));
-    }
-
-    #[test]
-    fn escalate_returns_none_at_ceiling() {
-        let p = FeeBumpPolicy::default();
-        let ceiling = 500 * VSIZE;
-        // Already at the ceiling: capped step can't clear old_fee + vsize → None,
-        // NOT a +1 nudge.
-        assert_eq!(p.escalate(ceiling, 50, VSIZE), None);
-        // Just below by less than the incremental relay fee: still None.
-        assert_eq!(p.escalate(ceiling - (VSIZE - 1), 50, VSIZE), None);
     }
 
     #[test]
