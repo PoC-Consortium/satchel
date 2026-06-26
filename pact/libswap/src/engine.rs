@@ -350,13 +350,15 @@ fn validate_offer_offsets(network: Network, t1_secs: u32, t2_secs: u32) -> Resul
     Ok(())
 }
 
-/// Cooperative-redeem feerate (sat/vB) on regtest — fees are meaningless there
-/// and the deterministic e2e relies on a low fixed value. Also the clamp floor
-/// for a negotiated rate elsewhere.
-pub(crate) const REGTEST_REDEEM_FEERATE: u64 = 2;
+/// Min-relay floor (sat/vB) for the cooperative-redeem feerate negotiated into
+/// the init. The committed redeem can't be RBF'd but IS CPFP-bumpable, so we
+/// commit at market with no over-provision and let this floor (and the nurse)
+/// catch the bottom. On regtest the node can't estimate, so the redeem lands on
+/// market's fallback (≈1), i.e. this floor.
+pub(crate) const MIN_REDEEM_FEERATE: u64 = 1;
 
-// The v2 committed-redeem over-provision multiplier is now
-// `FeeBumpPolicy::redeem.committed_mult` (default 2); see crate::fee_policy.
+// The v2 committed-redeem multiplier is `FeeBumpPolicy::redeem.committed_mult`
+// (default 1 — commit at market, CPFP-bump up if it rises); see crate::fee_policy.
 
 /// Upper bound on a negotiated redeem feerate (sat/vB) — the **protocol** bound
 /// (spec v2 §5), distinct from the local `FeeBumpPolicy::max_feerate_sat_vb` bump
@@ -559,24 +561,22 @@ impl Engine {
     }
 
     /// The cooperative-redeem feerate (sat/vB) the initiator fixes at init for
-    /// `chain` (M2). Regtest keeps the legacy low fee so the deterministic e2e
-    /// is unchanged; elsewhere it is the live 6-block estimate over-provisioned
-    /// by [`crate::fee_policy::RedeemPolicy::committed_mult`] (the committed fee
-    /// can't be RBF'd; the CPFP child handles bigger spikes when the scheduler is
-    /// up). Clamped to the **protocol** [`MAX_REDEEM_FEERATE`] (NOT the local
-    /// `max_feerate_sat_vb` bump ceiling): this value is negotiated into the init
-    /// message and must pass the counterparty's protocol validation (§2 init
-    /// check). A conservative fallback applies when no backend is reachable. Only
-    /// the initiator calls this; the participant adopts the value from the signed
-    /// init, so the two parties never diverge.
+    /// `chain` (M2): `committed_mult × live market`, floored at
+    /// [`MIN_REDEEM_FEERATE`] (min-relay) and clamped to the **protocol**
+    /// [`MAX_REDEEM_FEERATE`] (NOT the local `max_feerate_sat_vb` bump ceiling).
+    /// With the default `committed_mult == 1` this commits at market with no
+    /// over-provision — the committed fee can't be RBF'd, but the CPFP child
+    /// lifts it if market climbs while it's pending. On regtest the node can't
+    /// estimate, so market lands on its ≈1 fallback (= the floor). The value is
+    /// negotiated into the init and must pass the counterparty's protocol
+    /// validation (§2 init check); a conservative fallback applies when no
+    /// backend is reachable. Only the initiator calls this; the participant
+    /// adopts the value from the signed init, so the two never diverge.
     fn adaptor_redeem_feerate(&self, chain: &ChainRef) -> u64 {
-        if chain.network == Network::Regtest {
-            return REGTEST_REDEEM_FEERATE;
-        }
         match self.backend(chain).and_then(|b| b.fee_rate_sat_per_vb()) {
             Ok(rate) => rate
                 .saturating_mul(self.fee_bump.redeem.committed_mult)
-                .clamp(REGTEST_REDEEM_FEERATE, MAX_REDEEM_FEERATE),
+                .clamp(MIN_REDEEM_FEERATE, MAX_REDEEM_FEERATE),
             Err(_) => ADAPTOR_REDEEM_FEERATE_FALLBACK,
         }
     }
@@ -1655,6 +1655,15 @@ impl Engine {
     /// nodes (the in-process flow is covered by `adaptor_funding_ready`).
     pub fn adaptor_fund(&self, swap: &str) -> Result<Envelope> {
         let rec = self.store.get_adaptor(swap)?;
+        // Idempotency guard: never broadcast a second funding tx for a leg we've
+        // already funded. The auto-fund path gates on this at the call site; a
+        // direct call (e.g. a manual retry) must too, or we'd wallet_send again
+        // and strand the first output in a leg the record then forgets.
+        let already = match rec.role {
+            Role::Initiator => rec.funding_a_txid.is_some(),
+            Role::Participant => rec.funding_b_txid.is_some(),
+        };
+        ensure!(!already, "leg already funded for swap {swap}");
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let p = self.adaptor_params(&rec)?;
         let (chain, leg, amount) = match rec.role {
@@ -3035,6 +3044,9 @@ impl Engine {
     /// the map self-prunes. One light confirmations query per active swap per tick
     /// (the 30s scheduler cadence) — never on the UI's faster poll.
     fn refresh_progress(&self, events: &[TickEvent]) {
+        // Previous snapshot — carries the awaiting-phase baseline forward so the
+        // blocks-elapsed count survives across ticks.
+        let prev = self.progress.lock().map(|g| g.clone()).unwrap_or_default();
         let mut latest: HashMap<&str, &TickEvent> = HashMap::new();
         for e in events {
             latest.insert(e.swap_id.as_str(), e); // events are in order → last wins
@@ -3051,13 +3063,13 @@ impl Engine {
         };
         if let Ok(records) = self.store.list() {
             for rec in &records {
-                if let Some(p) = self.swap_progress_v1(rec) {
+                if let Some(p) = self.swap_progress_v1(rec, &prev) {
                     snap.insert(rec.swap_id.clone(), fold(p));
                 }
             }
         }
         for rec in self.store.list_adaptor().unwrap_or_default() {
-            if let Some(p) = self.swap_progress_v2(&rec) {
+            if let Some(p) = self.swap_progress_v2(&rec, &prev) {
                 snap.insert(rec.swap_id.clone(), fold(p));
             }
         }
@@ -3074,147 +3086,250 @@ impl Engine {
             .unwrap_or_default()
     }
 
-    /// Progress for one v1 swap, or `None` for states with nothing watchable
-    /// (pre-funding, terminal, or a leg we can't yet see on-chain). `confs` comes
-    /// from the chain backend; `feerate_sat_vb` is read off our own settlement tx.
-    fn swap_progress_v1(&self, rec: &SwapRecord) -> Option<SwapProgress> {
+    /// Progress for one v1 swap. Surfaces only waits that are OURS: the
+    /// counterparty's lock burying toward `n` (our gate before we act) and our
+    /// own claim burying (settlement). Our own lock is never shown as a target —
+    /// the counterparty gates on it, not us — so after we lock we show an
+    /// `awaiting_claim` liveness count instead. `None` when nothing applies.
+    fn swap_progress_v1(
+        &self,
+        rec: &SwapRecord,
+        prev: &HashMap<String, SwapProgress>,
+    ) -> Option<SwapProgress> {
         use Role::*;
         use State::*;
-        // (watching, chain, txid, spk_hint, needed, settlement, claim_amount)
-        let (watching, chain, txid, spk, needed, settlement, amount): (
-            &str,
-            &ChainRef,
-            Option<String>,
-            Option<ScriptBuf>,
-            u32,
-            bool,
-            u64,
-        ) = match (rec.role, rec.state) {
-            (Initiator, FundedA) | (Initiator, FundedB) => {
-                let spk = self
-                    .swap_params(rec)
-                    .ok()
-                    .and_then(|p| p.htlc_b().ok())
-                    .map(|h| h.script_pubkey());
-                (
-                    "their_funding",
+        let htlc_spk = |leg_a: bool| {
+            self.swap_params(rec)
+                .ok()
+                .and_then(|p| {
+                    if leg_a {
+                        p.htlc_a().ok()
+                    } else {
+                        p.htlc_b().ok()
+                    }
+                })
+                .map(|h| h.script_pubkey())
+        };
+        match (rec.role, rec.state) {
+            // Maker: wait for the taker's B lock to bury, then secure our B redeem.
+            (Initiator, FundedA) | (Initiator, FundedB) => match &rec.htlc_b_txid {
+                Some(txid) => self.progress_confirming(
+                    &rec.swap_id,
                     &rec.chain_b,
-                    rec.htlc_b_txid.clone(),
-                    spk,
+                    txid.clone(),
+                    rec.htlc_b_vout,
+                    htlc_spk(false),
                     rec.n_b,
-                    false,
-                    0,
-                )
-            }
-            (Initiator, RedeemedB) => (
-                "settlement",
+                    "their_lock",
+                    None,
+                ),
+                None => self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_lock", prev),
+            },
+            (Initiator, RedeemedB) => self.progress_confirming(
+                &rec.swap_id,
                 &rec.chain_b,
-                rec.final_txid.clone(),
+                rec.final_txid.clone()?,
+                None,
                 spend_spk(rec),
                 rec.n_b,
-                true,
-                rec.amount_b,
+                "settlement",
+                feerate_of(rec.final_tx_hex.as_deref(), rec.amount_b),
             ),
-            (Participant, Accepted) => {
-                let spk = self
-                    .swap_params(rec)
-                    .ok()
-                    .and_then(|p| p.htlc_a().ok())
-                    .map(|h| h.script_pubkey());
-                (
-                    "their_funding",
+            // Taker: wait for the maker's A lock to bury; after we lock B, wait for
+            // their reveal; then secure our A redeem.
+            (Participant, Accepted) => match &rec.htlc_a_txid {
+                Some(txid) => self.progress_confirming(
+                    &rec.swap_id,
                     &rec.chain_a,
-                    rec.htlc_a_txid.clone(),
-                    spk,
+                    txid.clone(),
+                    rec.htlc_a_vout,
+                    htlc_spk(true),
                     rec.n_a,
-                    false,
-                    0,
-                )
+                    "their_lock",
+                    None,
+                ),
+                None => self.progress_awaiting(&rec.swap_id, &rec.chain_a, "awaiting_lock", prev),
+            },
+            (Participant, FundedA) | (Participant, FundedB) => {
+                self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_claim", prev)
             }
-            (Participant, FundedA) => {
-                let spk = self
-                    .swap_params(rec)
-                    .ok()
-                    .and_then(|p| p.htlc_b().ok())
-                    .map(|h| h.script_pubkey());
-                (
-                    "ours_funding",
+            (Participant, Completed) => self.progress_confirming(
+                &rec.swap_id,
+                &rec.chain_a,
+                rec.final_txid.clone()?,
+                None,
+                spend_spk(rec),
+                rec.n_a,
+                "settlement",
+                feerate_of(rec.final_tx_hex.as_deref(), rec.amount_a),
+            ),
+            _ => None,
+        }
+    }
+
+    /// Progress for one v2 (adaptor) swap — same OURS-only model as v1. v2 funds
+    /// and waits inside the `Signed` state; the Taproot leg scriptPubKey is
+    /// derived from the adaptor params (as the tick does).
+    fn swap_progress_v2(
+        &self,
+        rec: &AdaptorSwapRecord,
+        prev: &HashMap<String, SwapProgress>,
+    ) -> Option<SwapProgress> {
+        use crate::adaptor_swap::AdaptorState::*;
+        let leg_spk = |leg_a: bool| {
+            let secp = bitcoin::secp256k1::Secp256k1::new();
+            let p = self.adaptor_params(rec).ok()?;
+            if leg_a {
+                p.leg_a(&secp).ok()?.script_pubkey(&secp).ok()
+            } else {
+                p.leg_b(&secp).ok()?.script_pubkey(&secp).ok()
+            }
+        };
+        match (rec.role, rec.state) {
+            // Maker: wait for the taker's B lock to bury, then secure our B redeem.
+            (Role::Initiator, Signed) => match &rec.funding_b_txid {
+                Some(txid) => self.progress_confirming(
+                    &rec.swap_id,
                     &rec.chain_b,
-                    rec.htlc_b_txid.clone(),
-                    spk,
+                    txid.clone(),
+                    rec.funding_b_vout,
+                    leg_spk(false),
                     rec.n_b,
-                    false,
-                    0,
-                )
+                    "their_lock",
+                    None,
+                ),
+                None => self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_lock", prev),
+            },
+            (Role::Initiator, RedeemedB) => self.progress_confirming(
+                &rec.swap_id,
+                &rec.chain_b,
+                rec.final_txid_b.clone()?,
+                None,
+                first_output_spk(rec.final_tx_b_hex.as_deref()),
+                rec.n_b,
+                "settlement",
+                Some(rec.redeem_feerate_b),
+            ),
+            // Taker: wait for the maker's A lock; after we lock B, wait for their
+            // reveal; then secure our A redeem.
+            (Role::Participant, Signed) => {
+                if rec.funding_b_txid.is_some() {
+                    self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_claim", prev)
+                } else if let Some(txid) = &rec.funding_a_txid {
+                    self.progress_confirming(
+                        &rec.swap_id,
+                        &rec.chain_a,
+                        txid.clone(),
+                        rec.funding_a_vout,
+                        leg_spk(true),
+                        rec.n_a,
+                        "their_lock",
+                        None,
+                    )
+                } else {
+                    self.progress_awaiting(&rec.swap_id, &rec.chain_a, "awaiting_lock", prev)
+                }
             }
-            _ => return None,
-        };
-        let txid = txid?;
+            (Role::Participant, Completed) => self.progress_confirming(
+                &rec.swap_id,
+                &rec.chain_a,
+                rec.final_txid_a.clone()?,
+                None,
+                first_output_spk(rec.final_tx_a_hex.as_deref()),
+                rec.n_a,
+                "settlement",
+                Some(rec.redeem_feerate_a),
+            ),
+            _ => None,
+        }
+    }
+
+    /// A "confirming X/n" entry — a wait that is ours: the counterparty's lock
+    /// burying (our gate before we act), or our own claim burying (settlement).
+    /// `None` once `confs >= needed` (the leg is final, so the line disappears).
+    fn progress_confirming(
+        &self,
+        swap_id: &str,
+        chain: &ChainRef,
+        txid: String,
+        vout: Option<u32>,
+        spk: Option<ScriptBuf>,
+        needed: u32,
+        watching: &str,
+        feerate: Option<u64>,
+    ) -> Option<SwapProgress> {
         let backend = self.backend(chain).ok()?;
-        let confs = backend
-            .tx_confirmations(&txid, spk.as_ref())
-            .unwrap_or(0)
-            .min(u64::from(u32::MAX)) as u32;
-        let feerate = if settlement {
-            feerate_of(rec.final_tx_hex.as_deref(), amount)
-        } else {
-            None
-        };
+        let confs = match (vout, spk.as_ref()) {
+            // A funding lock — usually the COUNTERPARTY's tx, so it isn't in our
+            // wallet and (on regtest) txindex may be off, which makes
+            // `tx_confirmations` blind to it. Scan the unspent output by
+            // outpoint+spk instead, exactly as the tick does — while the lock is
+            // unspent (the wait is live) this returns its depth.
+            (Some(vout), Some(spk)) => bitcoin::Txid::from_str(&txid)
+                .ok()
+                .and_then(|txid| {
+                    backend
+                        .get_txout(&OutPoint { txid, vout }, spk)
+                        .ok()
+                        .flatten()
+                })
+                .map(|o| o.confirmations)
+                .unwrap_or(0),
+            // Our own settlement tx is a wallet tx, so `gettransaction` finds it.
+            _ => backend.tx_confirmations(&txid, spk.as_ref()).unwrap_or(0),
+        }
+        .min(u64::from(u32::MAX)) as u32;
+        if confs >= needed {
+            return None;
+        }
         Some(SwapProgress {
-            swap_id: rec.swap_id.clone(),
+            swap_id: swap_id.to_string(),
             watching: watching.into(),
+            coin: coin_symbol(chain),
             confs,
             needed,
+            blocks_elapsed: None,
             feerate_sat_vb: feerate,
             last_action: None,
             last_detail: None,
             updated_at: local_now(),
+            awaiting_since_height: None,
         })
     }
 
-    /// Progress for one v2 (adaptor) swap — settlement-confirming legs only (the
-    /// high-value case); v2 funding is nursed separately. Feerate is the redeem
-    /// feerate baked into the record, so no tx parsing is needed.
-    fn swap_progress_v2(&self, rec: &AdaptorSwapRecord) -> Option<SwapProgress> {
-        use crate::adaptor_swap::AdaptorState::*;
-        let (chain, txid, hex, needed, feerate): (
-            &ChainRef,
-            Option<String>,
-            Option<&str>,
-            u32,
-            u64,
-        ) = match (rec.role, rec.state) {
-            (Role::Initiator, RedeemedB) => (
-                &rec.chain_b,
-                rec.final_txid_b.clone(),
-                rec.final_tx_b_hex.as_deref(),
-                rec.n_b,
-                rec.redeem_feerate_b,
-            ),
-            (Role::Participant, Completed) => (
-                &rec.chain_a,
-                rec.final_txid_a.clone(),
-                rec.final_tx_a_hex.as_deref(),
-                rec.n_a,
-                rec.redeem_feerate_a,
-            ),
-            _ => return None,
-        };
-        let txid = txid?;
-        let backend = self.backend(chain).ok()?;
-        let confs = backend
-            .tx_confirmations(&txid, first_output_spk(hex).as_ref())
+    /// An "awaiting <counterparty action>" entry — no target, just a blocks-
+    /// elapsed liveness count. The phase-start tip is carried forward from the
+    /// prior snapshot while the phase is unchanged, so the count grows per block.
+    fn progress_awaiting(
+        &self,
+        swap_id: &str,
+        chain: &ChainRef,
+        watching: &str,
+        prev: &HashMap<String, SwapProgress>,
+    ) -> Option<SwapProgress> {
+        let tip = self
+            .backend(chain)
+            .ok()?
+            .tip_height()
             .unwrap_or(0)
             .min(u64::from(u32::MAX)) as u32;
+        let since = prev
+            .get(swap_id)
+            .filter(|p| p.watching == watching)
+            .and_then(|p| p.awaiting_since_height)
+            .unwrap_or(tip);
         Some(SwapProgress {
-            swap_id: rec.swap_id.clone(),
-            watching: "settlement".into(),
-            confs,
-            needed,
-            feerate_sat_vb: Some(feerate),
+            swap_id: swap_id.to_string(),
+            watching: watching.into(),
+            coin: coin_symbol(chain),
+            confs: 0,
+            needed: 0,
+            blocks_elapsed: Some(tip.saturating_sub(since)),
+            feerate_sat_vb: None,
             last_action: None,
             last_detail: None,
             updated_at: local_now(),
+            awaiting_since_height: Some(since),
         })
     }
 
@@ -5031,6 +5146,11 @@ fn feerate_of(tx_hex: Option<&str>, claimed_amount: u64) -> Option<u64> {
     (vsize > 0).then(|| fee / vsize)
 }
 
+/// Display symbol for a chain (e.g. `btcx` → `BTCX`), for "Securing your {coin}".
+fn coin_symbol(chain: &ChainRef) -> String {
+    chain.coin_id.to_uppercase()
+}
+
 /// Live per-swap progress for the UI (observability only). Rebuilt each
 /// [`Engine::tick`] and served by `swapprogress`; see the field doc on
 /// [`Engine::progress`]. Secret-free by construction (counts, txid-derived data,
@@ -5038,13 +5158,27 @@ fn feerate_of(tx_hex: Option<&str>, claimed_amount: u64) -> Option<u64> {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SwapProgress {
     pub swap_id: String,
-    /// What we're watching now: `settlement` | `their_funding` | `ours_funding`.
+    /// The current wait, and how to display it:
+    /// - `awaiting_lock` / `awaiting_claim` — waiting on the COUNTERPARTY to act
+    ///   (their lock to appear, or their claim/reveal). No target; show
+    ///   `blocks_elapsed` as a liveness count.
+    /// - `their_lock` — their lock burying toward `needed` (our gate before we
+    ///   act). Show `confs/needed`.
+    /// - `settlement` — our own claim burying ("Securing your {coin}").
+    ///   Show `confs/needed` (+ `feerate_sat_vb`).
     pub watching: String,
-    /// Confirmations of the watched tx so far (`0` = in mempool / not yet seen).
+    /// Display symbol of the watched leg (e.g. `BTC`).
+    pub coin: String,
+    /// Confirmations so far — for the `their_lock`/`settlement` phases (`0` for
+    /// the awaiting phases).
     pub confs: u32,
-    /// Confirmation depth required for this leg (`n_a`/`n_b`).
+    /// Required depth for this leg (`n_a`/`n_b`); `0` for the awaiting phases.
     pub needed: u32,
-    /// Current feerate of our settlement tx (sat/vB); absent for funding waits.
+    /// Blocks elapsed in the current awaiting phase (liveness cue, no deadline).
+    /// Present only for `awaiting_lock`/`awaiting_claim`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocks_elapsed: Option<u32>,
+    /// Current feerate of our settlement tx (sat/vB); `settlement` phase only.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub feerate_sat_vb: Option<u64>,
     /// The most recent scheduler action for this swap, if any this tick.
@@ -5054,6 +5188,10 @@ pub struct SwapProgress {
     pub last_detail: Option<String>,
     /// When this snapshot was taken (unix seconds) — lets the UI grey out stale data.
     pub updated_at: u64,
+    /// Internal carry-forward: the chain tip when the awaiting phase began, so
+    /// `blocks_elapsed` grows across ticks. The UI ignores it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub awaiting_since_height: Option<u32>,
 }
 
 /// One scheduler action (or error) on one swap.

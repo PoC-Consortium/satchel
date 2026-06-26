@@ -648,6 +648,7 @@ export const ca: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "Has reclamat els teus {got} — confirmacions finals. Mantén l'aplicació oberta fins que s'enterri; els teus {gave} queden protegits fins llavors.",
     initiating:
       "Acceptació enviada — esperant que el maker iniciï l'intercanvi. Encara no es bloqueja res; es cancel·la sol si no responen.",
     created: "Oferta enviada — esperant que l'altra part hi accedeixi. No s'ha compromès res.",
@@ -672,9 +673,11 @@ export const ca: Bundle = {
     aborted: "Cancel·lat abans que es mogués cap diner.",
   },
   progress: {
-    settlement: "Confirmant la reclamació",
-    theirFunding: "Esperant el seu bloqueig",
-    oursFunding: "Bloquejant els teus fons",
+    awaitingLock: "A l'espera del seu bloqueig",
+    awaitingClaim: "A l'espera de la seva reclamació",
+    theirLock: "Confirmant el seu bloqueig",
+    securing: "Assegurant els teus {coin}",
+    blocks: "+{n} blocs",
     feeBumped: "Comissió apujada",
     reorg: "Reorganització detectada — recomprovant",
   },

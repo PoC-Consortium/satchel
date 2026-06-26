@@ -648,6 +648,7 @@ export const fr: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "Vous avez réclamé vos {got} — confirmations finales. Gardez l'app ouverte jusqu'à l'enfouissement ; vos {gave} restent protégés jusque-là.",
     initiating:
       "Prise envoyée — en attente que le maker démarre le swap. Rien n'est encore verrouillé ; cela s'annule tout seul s'il ne répond pas.",
     created: "Offre envoyée — en attente que l'autre côté accepte. Rien n'est engagé.",
@@ -672,9 +673,11 @@ export const fr: Bundle = {
     aborted: "Annulé avant tout mouvement d'argent.",
   },
   progress: {
-    settlement: "Confirmation de l'encaissement",
-    theirFunding: "En attente de leur verrouillage",
-    oursFunding: "Verrouillage de vos fonds",
+    awaitingLock: "En attente de leur verrouillage",
+    awaitingClaim: "En attente de leur réclamation",
+    theirLock: "Confirmation de leur verrouillage",
+    securing: "Sécurisation de vos {coin}",
+    blocks: "+{n} blocs",
     feeBumped: "Frais augmentés",
     reorg: "Réorg détectée — nouvelle vérification",
   },

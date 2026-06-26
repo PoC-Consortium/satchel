@@ -153,7 +153,8 @@ impl Node {
             .arg(format!("-rpcport={port}"))
             .arg(format!("-rpcuser={RPC_USER}"))
             .arg(format!("-rpcpassword={RPC_PASS}"))
-            .arg("-fallbackfee=0.0001")
+            // 1 sat/vB — regtest funding fee floor (see regtest_harness.py).
+            .arg("-fallbackfee=0.00001")
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()

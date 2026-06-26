@@ -648,6 +648,7 @@ export const uk: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "Ви отримали свої {got} — фінальні підтвердження. Тримайте застосунок відкритим, доки не закопається; ваші {gave} лишаються захищеними до того часу.",
     initiating:
       "Прийняття надіслано — очікуємо, поки maker запустить своп. Нічого ще не заблоковано; воно скасується само, якщо він не відповість.",
     created: "Оферту надіслано — очікуємо згоди іншої сторони. Нічого не зобов'язано.",
@@ -672,9 +673,11 @@ export const uk: Bundle = {
     aborted: "Скасовано до того, як гроші перемістилися.",
   },
   progress: {
-    settlement: "Підтвердження отримання",
-    theirFunding: "Очікування їхнього блокування",
-    oursFunding: "Блокування ваших коштів",
+    awaitingLock: "Очікування їхнього блокування",
+    awaitingClaim: "Очікування їхнього отримання",
+    theirLock: "Підтвердження їхнього блокування",
+    securing: "Захист ваших {coin}",
+    blocks: "+{n} блоків",
     feeBumped: "Комісію підвищено",
     reorg: "Виявлено реорганізацію — повторна перевірка",
   },

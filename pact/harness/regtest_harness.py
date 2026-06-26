@@ -126,7 +126,12 @@ class Node:
             f"-rpcport={self.rpc_port}",
             f"-rpcuser={self.rpc_user}",
             f"-rpcpassword={self.rpc_pass}",
-            "-fallbackfee=0.0001",
+            # 1 sat/vB (0.00001 BTC/kvB). Regtest has no fee history so the wallet
+            # can't estimate and falls back to this for funding txs; keep it at the
+            # market floor so playground funding fees read ~1 sat/vB like the rest,
+            # instead of an artificial 10x hump. (Mainnet nodes disable fallbackfee
+            # and use live estimatesmartfee.)
+            "-fallbackfee=0.00001",
             "-debug=rpc",
         ] + self.extra_args
         self.proc = subprocess.Popen(

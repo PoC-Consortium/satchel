@@ -648,6 +648,7 @@ export const lt: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "Atsiėmėte savo {got} — galutiniai patvirtinimai. Laikykite programėlę atvirą, kol bus palaidota; jūsų {gave} iki tol lieka apsaugoti.",
     initiating:
       "Priėmimas išsiųstas — laukiama, kol sudarytojas pradės mainus. Niekas dar neužrakinta; jie atsišaukia savaime, jei jis neatsako.",
     created: "Pasiūlymas išsiųstas — laukiama, kol kita pusė sutiks. Niekas neįsipareigota.",
@@ -672,9 +673,11 @@ export const lt: Bundle = {
     aborted: "Atšaukta prieš judant pinigams.",
   },
   progress: {
-    settlement: "Patvirtinamas atsiėmimas",
-    theirFunding: "Laukiama jų užrakinimo",
-    oursFunding: "Užrakinamos jūsų lėšos",
+    awaitingLock: "Laukiama jų užrakinimo",
+    awaitingClaim: "Laukiama jų atsiėmimo",
+    theirLock: "Tvirtinamas jų užrakinimas",
+    securing: "Saugomi jūsų {coin}",
+    blocks: "+{n} blokų",
     feeBumped: "Mokestis padidintas",
     reorg: "Aptiktas reorg — tikrinama iš naujo",
   },

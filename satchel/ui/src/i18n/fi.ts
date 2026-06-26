@@ -648,6 +648,7 @@ export const fi: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "Lunastit {got} — viimeiset vahvistukset. Pidä sovellus auki, kunnes se hautautuu; {gave} pysyvät suojattuina siihen asti.",
     initiating:
       "Otto lähetetty — odotetaan tekijää aloittamaan swapin. Mitään ei vielä lukita; se peruuntuu itsestään, jos he eivät vastaa.",
     created: "Tarjous lähetetty — odotetaan toista osapuolta hyväksymään. Mitään ei ole sidottu.",
@@ -672,9 +673,11 @@ export const fi: Bundle = {
     aborted: "Peruutettu ennen kuin mitään rahaa liikkui.",
   },
   progress: {
-    settlement: "Lunastusta vahvistetaan",
-    theirFunding: "Odotetaan heidän lukitustaan",
-    oursFunding: "Lukitaan varojasi",
+    awaitingLock: "Odotetaan heidän lukitustaan",
+    awaitingClaim: "Odotetaan heidän lunastustaan",
+    theirLock: "Vahvistetaan heidän lukitustaan",
+    securing: "Turvataan {coin}",
+    blocks: "+{n} lohkoa",
     feeBumped: "Maksua korotettu",
     reorg: "Reorg havaittu — tarkistetaan uudelleen",
   },

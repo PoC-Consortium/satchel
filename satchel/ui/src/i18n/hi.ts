@@ -648,6 +648,7 @@ export const hi: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "आपने अपने {got} का दावा किया — अंतिम पुष्टियाँ। इसके पक्का होने तक ऐप खुला रखें; तब तक आपके {gave} सुरक्षित रहते हैं।",
     initiating:
       "Take भेजा गया — maker द्वारा स्वैप शुरू करने की प्रतीक्षा में। अभी कुछ भी लॉक नहीं है; यदि वे जवाब नहीं देते तो यह अपने आप रद्द हो जाता है।",
     created: "Offer भेजा गया — दूसरे पक्ष की सहमति की प्रतीक्षा में। कुछ भी प्रतिबद्ध नहीं है।",
@@ -672,9 +673,11 @@ export const hi: Bundle = {
     aborted: "किसी पैसे के हिलने से पहले रद्द किया गया।",
   },
   progress: {
-    settlement: "दावे की पुष्टि हो रही है",
-    theirFunding: "उनके लॉक की प्रतीक्षा",
-    oursFunding: "आपके फंड लॉक हो रहे हैं",
+    awaitingLock: "उनके लॉक की प्रतीक्षा",
+    awaitingClaim: "उनके दावे की प्रतीक्षा",
+    theirLock: "उनका लॉक पुष्टि हो रहा",
+    securing: "आपके {coin} सुरक्षित कर रहे",
+    blocks: "+{n} ब्लॉक",
     feeBumped: "शुल्क बढ़ाया गया",
     reorg: "रीऑर्ग पाया गया — फिर से जाँच",
   },

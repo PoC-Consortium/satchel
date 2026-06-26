@@ -129,8 +129,11 @@ $pactdPath = (Join-Path $Repo "pact\target\debug\pactd.exe") -replace '\\', '/'
 # gate) runs and you wire btcx/btc/ltc yourself; otherwise all three are
 # pre-wired so Alice is ready to trade immediately. (Single-quoted JSON line:
 # the `@` in the RPC URLs must stay literal.)
+# `confirmations` = mainnet-like depths (not the regtest default 1), matching the
+# playground's bot parties, so the multi-confirmation flow + Satchel's progress
+# display are exercised against the faster-but-realistic block cadence.
 $coinsJson = if ($FirstRun) { '[]' } else {
-  '[{ "coin_id": "btcx", "chain_data": "http://pactharness:pactharness@127.0.0.1:19443/wallet/alice_pocx", "funding_wallet": "core-rpc" }, { "coin_id": "btc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19543/wallet/alice_btc", "funding_wallet": "core-rpc" }, { "coin_id": "ltc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19643/wallet/alice_ltc", "funding_wallet": "core-rpc" }]'
+  '[{ "coin_id": "btcx", "chain_data": "http://pactharness:pactharness@127.0.0.1:19443/wallet/alice_pocx", "funding_wallet": "core-rpc", "confirmations": 10 }, { "coin_id": "btc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19543/wallet/alice_btc", "funding_wallet": "core-rpc", "confirmations": 6 }, { "coin_id": "ltc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19643/wallet/alice_ltc", "funding_wallet": "core-rpc", "confirmations": 6 }]'
 }
 $satchelJson = @"
 {
@@ -220,7 +223,8 @@ if ($FirstRun) {
     Write-Host "    BTCX : 127.0.0.1:19443  user/pass  pactharness / pactharness  wallet alice_pocx"
     Write-Host "    BTC  : 127.0.0.1:19543  user/pass  pactharness / pactharness  wallet alice_btc"
     Write-Host "    LTC  : 127.0.0.1:19643  user/pass  pactharness / pactharness  wallet alice_ltc"
-    Write-Host "    (auth = user/pass, NOT cookie; confirmations blank = regtest default 1)"
+    Write-Host "    (auth = user/pass, NOT cookie. For realistic timing set confirmations"
+    Write-Host "     BTCX 10 / BTC 6 / LTC 6 - blank would fall back to the regtest default 1.)"
 } else {
     Write-Host "  In the window: wizard -> create merchant; Coins tab shows all"
     Write-Host "  three connected; Corkboard -> offers come from Nostr; take any"

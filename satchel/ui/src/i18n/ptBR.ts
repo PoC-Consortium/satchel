@@ -648,6 +648,7 @@ export const ptBR: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "Você reivindicou seus {got} — confirmações finais. Mantenha o app aberto até enterrar; seus {gave} ficam protegidos até lá.",
     initiating:
       "Aceite enviado — aguardando o maker iniciar o swap. Nada está bloqueado ainda; cancela sozinho se ele não responder.",
     created: "Oferta enviada — aguardando o outro lado concordar. Nada está comprometido.",
@@ -672,9 +673,11 @@ export const ptBR: Bundle = {
     aborted: "Cancelado antes de qualquer dinheiro se mover.",
   },
   progress: {
-    settlement: "Confirmando o resgate",
-    theirFunding: "Aguardando o bloqueio deles",
-    oursFunding: "Bloqueando seus fundos",
+    awaitingLock: "Aguardando o bloqueio deles",
+    awaitingClaim: "Aguardando o resgate deles",
+    theirLock: "Confirmando o bloqueio deles",
+    securing: "Protegendo seus {coin}",
+    blocks: "+{n} blocos",
     feeBumped: "Taxa aumentada",
     reorg: "Reorg detectada — verificando novamente",
   },

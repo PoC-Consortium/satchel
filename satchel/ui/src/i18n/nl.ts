@@ -648,6 +648,7 @@ export const nl: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "Je hebt je {got} geclaimd — laatste bevestigingen. Houd de app open tot het begraven is; je {gave} blijven tot dan beschermd.",
     initiating:
       "Aanname verstuurd — wachten tot de maker de swap start. Er is nog niets vergrendeld; het annuleert vanzelf als zij niet reageren.",
     created: "Aanbod verstuurd — wachten tot de andere kant akkoord gaat. Er is niets vastgelegd.",
@@ -672,9 +673,11 @@ export const nl: Bundle = {
     aborted: "Geannuleerd voordat er geld bewoog.",
   },
   progress: {
-    settlement: "Claim wordt bevestigd",
-    theirFunding: "Wachten op hun vergrendeling",
-    oursFunding: "Je geld wordt vergrendeld",
+    awaitingLock: "Wachten op hun vergrendeling",
+    awaitingClaim: "Wachten op hun claim",
+    theirLock: "Hun vergrendeling wordt bevestigd",
+    securing: "Je {coin} beveiligen",
+    blocks: "+{n} blokken",
     feeBumped: "Vergoeding verhoogd",
     reorg: "Reorg gedetecteerd — opnieuw controleren",
   },

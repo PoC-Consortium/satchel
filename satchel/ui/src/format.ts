@@ -353,8 +353,20 @@ export const isMainnet = (n: string | null | undefined): boolean => n === "mainn
 
 /** Terminal states: the swap is finished one way or another (history). */
 export const TERMINAL_STATES: SwapState[] = ["completed", "refunded", "aborted"];
-export const isTerminal = (s: Swap): boolean => TERMINAL_STATES.includes(s.state);
-/** Active = in flight: the scheduler still has work / funds may be exposed. */
+/** Finalizing = our claim is broadcast but still burying. The state reads
+ *  `completed`, yet the scheduler is still nursing it to depth (a `settlement`
+ *  progress bar is present) and the refund stays armed — so it is NOT done: the
+ *  funds aren't final and the app must stay open. The taker hits this because it
+ *  goes straight to `completed` on broadcast (the maker stays in `redeemed_b`
+ *  until buried, so it never lands here). */
+export const isFinalizing = (s: Swap): boolean =>
+  s.state === "completed" && s.progress?.watching === "settlement";
+/** Terminal = finished AND final (history). Finalizing is excluded — it is still
+ *  in flight until the claim buries. */
+export const isTerminal = (s: Swap): boolean =>
+  TERMINAL_STATES.includes(s.state) && !isFinalizing(s);
+/** Active = in flight: the scheduler still has work / funds may be exposed.
+ *  (Drives the active dock, the in-flight count, and the exit-gate warning.) */
 export const isActive = (s: Swap): boolean => !isTerminal(s);
 
 /** Which leg carries OUR settlement tx. We fund one leg and claim the other; a

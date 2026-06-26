@@ -648,6 +648,7 @@ export const sr: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "Затражили сте своје {got} — завршне потврде. Држите апликацију отвореном док се не закопа; ваши {gave} остају заштићени до тада.",
     initiating:
       "Прихватање послато — чека се да maker покрене своп. Ништа још није закључано; отказује се само од себе ако не одговоре.",
     created: "Понуда послата — чека се да се друга страна сложи. Ништа није обавезано.",
@@ -672,9 +673,11 @@ export const sr: Bundle = {
     aborted: "Отказано пре него што се иједан новац померио.",
   },
   progress: {
-    settlement: "Потврђивање наплате",
-    theirFunding: "Чекање на њихово закључавање",
-    oursFunding: "Закључавање ваших средстава",
+    awaitingLock: "Чекање на њихово закључавање",
+    awaitingClaim: "Чекање на њихово преузимање",
+    theirLock: "Потврђивање њиховог закључавања",
+    securing: "Обезбеђивање ваших {coin}",
+    blocks: "+{n} блокова",
     feeBumped: "Накнада повећана",
     reorg: "Откривена реорганизација — поновна провера",
   },

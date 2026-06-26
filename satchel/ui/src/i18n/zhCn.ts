@@ -648,6 +648,7 @@ export const zhCn: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "您已认领您的 {got} — 最终确认中。请保持应用开启直至其被埋入区块；在此之前您的 {gave} 受到保护。",
     initiating:
       "接受请求已发出 — 正等待做市方启动交换。目前什么都没有被锁定；若对方不响应，它会自行取消。",
     created: "报价已发出 — 正等待对方同意。没有任何承诺。",
@@ -672,9 +673,11 @@ export const zhCn: Bundle = {
     aborted: "在任何资金转移之前已取消。",
   },
   progress: {
-    settlement: "正在确认认领",
-    theirFunding: "等待对方锁定",
-    oursFunding: "正在锁定您的资金",
+    awaitingLock: "等待对方锁定",
+    awaitingClaim: "等待对方认领",
+    theirLock: "正在确认对方锁定",
+    securing: "正在保全您的 {coin}",
+    blocks: "+{n} 个区块",
     feeBumped: "已提高手续费",
     reorg: "检测到重组 — 重新检查",
   },

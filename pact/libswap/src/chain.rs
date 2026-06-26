@@ -413,10 +413,21 @@ impl ChainBackend for CoreRpcBackend {
             amount_sat / 100_000_000,
             amount_sat % 100_000_000
         );
+        // Choose the funding feerate OURSELVES — market estimate, or the 1 sat/vB
+        // fallback when the node can't estimate (a brand-new chain like BTCX with
+        // no fee history) — and pass it explicitly. Otherwise funding leans on the
+        // node's wallet estimator + `-fallbackfee`, which is disabled (0) by
+        // default on mainnet, so `sendtoaddress` would *error* on a fee-history-less
+        // chain. This mirrors how redeem/refund pick their rate (and phoenix-pocx's
+        // 1 sat/vB fallback), so the lock fee tracks the same policy as everything
+        // else instead of the node's config.
+        let fee_rate = self.fee_rate_sat_per_vb()?;
         // Funding is the ONLY use of wallet_send, and the funding nurse RBF-bumps
         // it, so broadcast it explicitly BIP125-replaceable rather than relying on
-        // the node's -walletrbf default. Positional sendtoaddress args:
-        // address, amount, comment, comment_to, subtractfeefromamount, replaceable.
+        // the node's -walletrbf default. Positional sendtoaddress args (Core 0.21+):
+        // address, amount, comment, comment_to, subtractfeefromamount, replaceable,
+        // conf_target, estimate_mode, avoid_reuse, fee_rate (sat/vB). conf_target is
+        // left null (estimate_mode "unset") so the explicit fee_rate is what's used.
         let txid = self.rpc.call(
             "sendtoaddress",
             &[
@@ -426,6 +437,10 @@ impl ChainBackend for CoreRpcBackend {
                 json!(""),
                 json!(false),
                 json!(true),
+                json!(null),
+                json!("unset"),
+                json!(false),
+                json!(fee_rate),
             ],
         )?;
         Ok(txid

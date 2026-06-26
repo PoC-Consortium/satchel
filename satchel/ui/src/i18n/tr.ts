@@ -648,6 +648,7 @@ export const tr: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "{got} talebinizi yaptınız — son onaylar. Gömülene kadar uygulamayı açık tutun; {gave} o zamana dek korunur.",
     initiating:
       "Alma gönderildi — maker'ın takası başlatmasını bekliyor. Henüz hiçbir şey kilitli değil; yanıt vermezlerse kendi kendine iptal olur.",
     created: "Teklif gönderildi — diğer tarafın kabul etmesini bekliyor. Hiçbir şey taahhüt edilmedi.",
@@ -672,9 +673,11 @@ export const tr: Bundle = {
     aborted: "Herhangi bir para hareket etmeden önce iptal edildi.",
   },
   progress: {
-    settlement: "Tahsilat onaylanıyor",
-    theirFunding: "Onların kilidi bekleniyor",
-    oursFunding: "Fonlarınız kilitleniyor",
+    awaitingLock: "Onların kilidi bekleniyor",
+    awaitingClaim: "Onların talebi bekleniyor",
+    theirLock: "Onların kilidi onaylanıyor",
+    securing: "{coin} güvenceye alınıyor",
+    blocks: "+{n} blok",
     feeBumped: "Ücret artırıldı",
     reorg: "Reorg algılandı — yeniden denetleniyor",
   },

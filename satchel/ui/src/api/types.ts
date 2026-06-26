@@ -194,13 +194,21 @@ export interface Swap {
  *  tick, served from memory). Observability only — never ledger truth. */
 export interface SwapProgress {
   swap_id: string;
-  /** What the daemon is watching now. */
-  watching: "settlement" | "their_funding" | "ours_funding";
-  /** Confirmations of the watched tx so far (0 = in mempool / not yet seen). */
+  /** The current wait + how to show it:
+   *  - `awaiting_lock` / `awaiting_claim` — waiting on the counterparty (no
+   *    target); show `blocks_elapsed`.
+   *  - `their_lock` — their lock burying (our gate); show `confs/needed`.
+   *  - `settlement` — our own claim burying ("Securing your {coin}"). */
+  watching: "awaiting_lock" | "awaiting_claim" | "their_lock" | "settlement";
+  /** Display symbol of the watched leg (e.g. "BTC"). */
+  coin: string;
+  /** Confirmations so far (0 for the awaiting phases). */
   confs: number;
-  /** Confirmation depth required for this leg (n_a / n_b). */
+  /** Required depth for this leg, n_a / n_b (0 for the awaiting phases). */
   needed: number;
-  /** Current feerate of our settlement tx (sat/vB); absent during funding waits. */
+  /** Blocks elapsed in the current awaiting phase (liveness cue, no deadline). */
+  blocks_elapsed?: number;
+  /** Current feerate of our settlement tx (sat/vB); settlement phase only. */
   feerate_sat_vb?: number;
   /** The latest scheduler action for this swap (e.g. "fee-bump", "auto-redeem"). */
   last_action?: string;

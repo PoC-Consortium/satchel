@@ -648,6 +648,7 @@ export const ru: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "Вы получили свои {got} — финальные подтверждения. Держите приложение открытым, пока не закопается; ваши {gave} остаются защищёнными до тех пор.",
     initiating:
       "Принятие отправлено — ожидание начала свопа мейкером. Ничего ещё не заблокировано; своп отменяется сам, если они не ответят.",
     created: "Оффер отправлен — ожидание согласия другой стороны. Ничего не зафиксировано.",
@@ -672,9 +673,11 @@ export const ru: Bundle = {
     aborted: "Отменено до того, как деньги пришли в движение.",
   },
   progress: {
-    settlement: "Подтверждение получения",
-    theirFunding: "Ожидание их блокировки",
-    oursFunding: "Блокировка ваших средств",
+    awaitingLock: "Ожидание их блокировки",
+    awaitingClaim: "Ожидание их получения",
+    theirLock: "Подтверждение их блокировки",
+    securing: "Защита ваших {coin}",
+    blocks: "+{n} блоков",
     feeBumped: "Комиссия повышена",
     reorg: "Обнаружена реорганизация — повторная проверка",
   },

@@ -648,6 +648,7 @@ export const sk: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "Nárokovali ste si svoje {got} — finálne potvrdenia. Nechajte aplikáciu otvorenú, kým sa nezahrabe; vaše {gave} zostávajú dovtedy chránené.",
     initiating:
       "Prijatie odoslané — čaká sa, kým maker začne swap. Nič nie je ešte zamknuté; samo sa zruší, ak neodpovie.",
     created: "Ponuka odoslaná — čaká sa, kým druhá strana súhlasí. Nič nie je viazané.",
@@ -672,9 +673,11 @@ export const sk: Bundle = {
     aborted: "Zrušené skôr, než sa pohli akékoľvek peniaze.",
   },
   progress: {
-    settlement: "Potvrdzovanie nároku",
-    theirFunding: "Čakanie na ich uzamknutie",
-    oursFunding: "Uzamykanie vašich prostriedkov",
+    awaitingLock: "Čakanie na ich uzamknutie",
+    awaitingClaim: "Čakanie na ich nárok",
+    theirLock: "Potvrdzovanie ich uzamknutia",
+    securing: "Zabezpečujem vaše {coin}",
+    blocks: "+{n} blokov",
     feeBumped: "Poplatok zvýšený",
     reorg: "Zistená reorganizácia — opätovná kontrola",
   },

@@ -648,6 +648,7 @@ export const ja: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    finalizing: "{got} を請求しました — 最終確認中。埋まるまでアプリを開いたままにしてください。それまで {gave} は保護されます。",
     initiating:
       "テイクを送信 — メーカーがスワップを開始するのを待っています。まだ何もロックされていません。相手が応答しなければ自動でキャンセルされます。",
     created: "オファーを送信 — 相手の同意を待っています。何もコミットされていません。",
@@ -672,9 +673,11 @@ export const ja: Bundle = {
     aborted: "資金が動く前にキャンセルされました。",
   },
   progress: {
-    settlement: "受領を確認中",
-    theirFunding: "相手のロックを待機中",
-    oursFunding: "資金をロック中",
+    awaitingLock: "相手のロックを待機中",
+    awaitingClaim: "相手の請求を待機中",
+    theirLock: "相手のロックを確認中",
+    securing: "{coin} を保全中",
+    blocks: "+{n} ブロック",
     feeBumped: "手数料を引き上げ",
     reorg: "再編成を検出 — 再確認中",
   },
