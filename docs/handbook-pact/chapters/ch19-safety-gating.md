@@ -110,13 +110,12 @@ and the pinned test vectors. Two operational details are worth understanding:
 
 - **v2's cooperative redeem is not RBF-bumpable.** Its fee is sealed into the
   pre-signed adaptor sighash, so it cannot be fee-bumped after the fact the way
-  an ordinary RBF transaction can. The engine handles this two ways: fee
-  over-provisioning at init (live 6-block estimate × `committed_mult`, default
-  2, clamped) plus a CPFP redeem-bump child that spends the redeem's own sweep
-  output to lift the
-  package feerate if the network gets busy. The single-key refund path is always
-  bumpable, so the funder is never the stuck party. See the chapter "Fees,
-  Fee-Bumping & Auto-Refund".
+  an ordinary RBF transaction can. The engine handles this two ways: the redeem
+  commits at the live market rate at init (live estimate × `committed_mult`,
+  default **1**, clamped) plus a CPFP redeem-bump child that spends the redeem's
+  own sweep output to lift the package feerate if the network gets busy. The
+  single-key refund path is always bumpable, so the funder is never the stuck
+  party. See the chapter "Fees, Fee-Bumping & Auto-Refund".
 - **Relay trust is liveness-only.** Pact never trusts a relay or a chain backend
   for *safety* — timelocks and on-chain enforcement protect funds regardless of
   what any relay says. A misbehaving or offline relay can only delay a swap (a
@@ -132,6 +131,6 @@ and the pinned test vectors. Two operational details are worth understanding:
 
 The safety model is: the chain enforces the deal, timelocks bound the worst
 case, confirmation depth defends against reorgs, and relays are trusted only for
-liveness. v2's cooperative redeem is non-bumpable by construction and is handled
-by fee over-provisioning plus a CPFP child. Both protocols are reviewed
-and live on every network.
+liveness. v2's cooperative redeem is non-bumpable by construction; it commits at
+the market rate and is dragged through by a CPFP child. Both protocols are
+reviewed and live on every network.

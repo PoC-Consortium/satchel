@@ -141,9 +141,11 @@ Two panels are docked along the bottom of the content area, visible on every
 page:
 
 - **Your active swaps** — a live card for each swap in progress, showing its
-  state, the amounts, your role, and — when needed — the action buttons to push a
-  swap along (fund, redeem, cancel, refund). These buttons appear only when it's
-  your turn to act. The chapter on tracking your swaps explains each one.
+  state, the amounts, your role, a live confirmation-progress line, and — when
+  needed — the action buttons to push a swap along (redeem, cancel, refund;
+  funding is always automatic, so there's no Fund button). These buttons appear
+  only when it's your turn to act. The chapter on tracking your swaps explains
+  each one.
 - **Activity log** — a running, collapsible feed of what the engine is doing,
   narrated in plain language. You don't need to watch it, but it's reassuring to
   glance at when a swap is mid-flight.

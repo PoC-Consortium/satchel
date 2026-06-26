@@ -21,6 +21,7 @@ Satchel ships with six recommended relays prewired on a fresh install, so there 
 - Public offers are **addressable events of kind `31510`** (NIP-33), signed by your identity key (identity == npub).
 - Coordination messages are **gift-wrapped, kind `1059`** (NIP-59), authored by a fresh ephemeral key so the sender is hidden.
 - Offers carry a **rolling NIP-40 expiry**: `min(now + 1800s, created + ttl_secs)` — not a flat `ttl_secs`.
+- Revocations are **NIP-09 deletions (kind `5`)**: when an offer is taken or withdrawn, viewers fetch the deletion, verify the author owns the offer, and drop it **immediately** — so a taken offer leaves every board at once instead of lingering until its expiry.
 
 > **Note** — the engine's `--nostr-relay` defaults empty; the default relay list lives in Satchel. Saving an empty relay list disables Nostr.
 

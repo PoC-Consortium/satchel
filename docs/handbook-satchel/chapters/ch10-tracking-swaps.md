@@ -36,7 +36,15 @@ glance.
 
 The **state** is colour-coded so you can scan the page quickly:
 
-- **Completed** — green. The swap finished and you received your coins.
+- **Finalizing** — your claim has been broadcast and you're just waiting for it to
+  bury under enough confirmations to be safe. The coins are effectively yours, but
+  the engine still needs to run, so the swap stays **active** (it keeps a card in
+  the dock, counts toward your in-flight total, and the exit gate still warns you).
+  Keep the app open until it finishes.
+- **Completed** — green. The swap finished, your claim is **buried and safe**, and
+  the engine is done — you can close the app freely. ("Completed" deliberately
+  appears only once the claim has confirmed deep enough, not the instant it's
+  broadcast.)
 - **Refunded** — amber. The swap didn't complete, so your locked funds came back
   to you. No loss.
 - **Aborted** — red. The swap was cancelled before any funds were locked.
@@ -44,6 +52,29 @@ The **state** is colour-coded so you can scan the page quickly:
 Alongside the state, Satchel shows the engine's own narration — a plain-language,
 verbatim description of what happened at each step. This is the same calm,
 running commentary you see in the activity log.
+
+### The live progress line
+
+While a swap is in flight, a compact **progress line** sits just beneath the
+narration — both here and on each card in the active-swaps dock. It turns the
+qualitative story into a number you can watch tick up, and it shows only while
+there's genuinely something to wait on (it disappears the moment a step is final,
+so it never sits "stuck" once a leg has buried). Depending on whose move you're
+waiting for, you'll see one of:
+
+- **Awaiting their lock** / **Awaiting their claim** — you've done your part and
+  are waiting on the counterparty. There's no fixed target to count toward, so the
+  bar is indeterminate and a small **+N blocks** shows how many blocks have passed
+  while you wait.
+- **Their lock confirming · 3/6** — their funding is burying toward the depth you
+  need before you act. The numbers are *confirmations so far / confirmations
+  needed*.
+- **Securing your BTC · 2/6** — your own claim is burying toward final. When this
+  reaches the needed depth the swap flips to **Completed**.
+
+Where it's relevant, the line also shows the current settlement **feerate** (for
+example `· 2 sat/vB`), so any automatic fee-bumping is visible to you rather than
+hidden. It's purely informational — the engine drives the swap either way.
 
 ### On-chain detail
 
@@ -71,16 +102,17 @@ The action buttons appear **only when it's your turn**, gated by the swap's stat
 
 | Button | When it appears | What it does |
 |---|---|---|
-| **fund** | When it's your turn to lock your side | Funds your leg of the swap. |
 | **redeem** | When the other side has funded and you can claim | Claims your coins. |
 | **cancel** | Before you've funded anything | Abandons the swap; you lose nothing, since nothing of yours is locked. |
 | **refund** | After the safety timelock has passed on a leg you funded | Pulls your locked funds back now. |
 
 Each button shows a confirmation dialog first. In normal operation the engine
-handles funding, redeeming, and refunding **automatically** — you'll rarely press
-anything. The buttons are there for the cases where you want to act manually, for
-example to cancel early or to refund the instant the timelock allows rather than
-waiting for the engine's automatic pass.
+handles **funding, redeeming, and refunding automatically** — you'll rarely press
+anything. **Funding is always automatic**, so there is no Fund button: your side
+of a swap is locked for you as soon as the trade begins. The buttons that remain
+are there for the cases where you want to act manually — to cancel early, nudge a
+claim, or refund the instant the timelock allows rather than waiting for the
+engine's automatic pass.
 
 > **Note** — **cancel** is only offered while nothing of yours is locked, so it's
 > always safe — the offer simply won't complete. **refund** only appears once the
