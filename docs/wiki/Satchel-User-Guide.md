@@ -9,8 +9,10 @@ This page orients you to the screens. For step-by-step chapters see the **Satche
 Satchel uses a **merchant** model: one merchant = one seed = one trading identity = one data directory (the Bitcoin-Core-wallet analog), owned by pactd. Before you can trade, first-run walks three gates:
 
 1. **Merchant** — create or import a merchant (name it, e.g. "Main").
-2. **Seed** — generate a BIP39 mnemonic (reveal → verify, skipped on regtest) or import one, then choose **No passphrase (recommended)** or **Encrypt**. Satchel itself stores no seed or passphrase; an encrypted seed is unlocked per session in pactd memory only.
-3. **≥2 live coins** — you must connect at least two coins with status `ok` before reaching the trading screens. See [Configuring Coins](Configuring-Coins).
+2. **Seed** — generate a BIP39 mnemonic (reveal → verify, skipped on regtest) or import one, then choose **No passphrase (recommended)** or **Encrypt**. Importing uses a numbered word-grid with per-word BIP39 autocomplete, invalid-word highlighting, paste support, and a live status line that validates the checksum before you can continue. Satchel itself stores no seed or passphrase; an encrypted seed is unlocked per session in pactd memory only.
+3. **≥2 live coins** — you must connect at least two coins with status `ok` before reaching the trading screens. See [Configuring Coins](Configuring-Coins). To skip this and just look around, pick **Browse in watch-only mode** (see below).
+
+> **Watch-only mode** — browse the whole board and withdraw your own offers with **no coins configured**. A **"Watch only"** badge sits in the header, the post/take screens show a watch-only notice, and the Take button is disabled. Trading is blocked until you connect two live coins; toggle the mode under **Settings → Mode** (it reboots the engine).
 
 ## The screens
 
@@ -22,11 +24,11 @@ Satchel uses a **merchant** model: one merchant = one seed = one trading identit
 - **Swaps** — a read-only ledger of every swap (**In flight** + **History**), with verbatim engine narration and expandable on-chain detail. v2 rows carry a "Private (Taproot)" chip. Each swap has a **Dump logs** button (here and in the dock) that copies a secret-free diagnostics bundle for a developer. Actions live in the active-swaps dock, not here.
 - **Relays** — a read-only monitor of your Nostr relay connections (status, latency, uptime; "{up} / {total} connected"). Relays are added/removed under **Settings → Network**.
 - **Wallets** — **read-only** per-coin balances (one card per configured coin), each showing the node wallet its RPCs are scoped to. There is no send/receive by design — these are your own nodes' wallets, and a full send/receive wallet arrives with the nodeless build.
-- **Settings** — tabs for **General** (theme + language), **Coins** (coin setup), **Network** (Nostr-relay + Corkboard URL lists + **Save & reconnect**; the read-only network-mode row is gone — the mode is launch-fixed and shown only in the top-bar badge), **Fees** (advanced, optional per-merchant fee-bump policy: max feerate, funding-bump reservation ×, redeem over-provision ×, RBF escalation step %), and **About** (version, key-storage trust note, risk disclaimer). Your side of every swap is funded automatically — there is no manual-funding mode.
+- **Settings** — tabs for **General** (theme + language), **Coins** (coin setup), **Network** (Nostr-relay + Corkboard URL lists + **Save & reconnect**; the read-only network-mode row is gone — the mode is launch-fixed and shown only in the top-bar badge), **Fees** (advanced, optional per-merchant fee-bump policy: max feerate, funding-bump reservation ×, redeem over-provision ×; the old manual RBF-step knob is gone — fee-bumping is now automatic market-tracking), and **About** (version, key-storage trust note, risk disclaimer). Your side of every swap is funded automatically — there is no manual-funding mode.
 
 ## Themes & languages
 
-Light / Dark / System themes, repainting immediately and persisted. The UI ships an English bundle today (the i18n layer is in place for more).
+Light / Dark / System themes, repainting immediately and persisted. The UI ships **26 languages** — switch from the globe-icon picker in the header (always visible), and during first-run onboarding the same picker floats in the dialog's top-right corner so you can change language before finishing setup.
 
 > **Warning** — real funds, your keys alone. The chain enforces the deal, and the protocol and implementation are reviewed. When you close Satchel with a live swap, the exit dialog lets you **keep running** so the engine can finish or refund — heed it.
 

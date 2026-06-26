@@ -22,6 +22,7 @@ What you trust, what you don't, and the risks stated honestly.
 ## Things worth knowing
 
 - **You are your own custodian.** No one can recover your funds for you. Keep your recovery phrase backed up offline, and never share it — the whole model rests on you holding your keys.
+- **Satchel won't adopt the wrong engine.** Before reusing a `pactd` already listening on the configured port, Satchel reads its cookie, calls `getinfo`, and verifies the network matches. If another network's instance holds the port it **fails loud** rather than silently adopting it (regtest `9739`, testnet `9738`, mainnet `9737`) — so a regtest run can never quietly attach to your mainnet engine.
 - **v2 cooperative redeem is not RBF-bumpable.** Its fee is sealed into the pre-signed adaptor signature. This is handled by over-provisioning the fee at swap start and by a CPFP child that bumps the redeem if the network gets busy. (The v2 single-key refund *is* bumpable; v1 redeem and refund are both bumpable.)
 - **Liveness depends on relays.** If every board you use goes dark mid-swap, coordination stalls — but your timelock refund still protects the funds.
 

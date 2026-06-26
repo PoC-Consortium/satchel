@@ -19,10 +19,22 @@ The **General** tab holds your look-and-feel preferences.
   whatever your computer is set to (dark in the evening, light by day, if your OS
   does that). The change applies instantly and is remembered next time you open
   the app.
-- **Language** — selects the app's display language. At the moment **English** is
-  the only language available; more may come later.
+- **Language** — selects the app's display language. Satchel ships in **26
+  languages**, each listed under its own native name; pick one and the app
+  switches straight away. (There's also a globe picker in the header for changing
+  language on the fly.)
+- **Mode** — a **Watch-only mode** toggle. Switch it **on** and Satchel becomes a
+  browse-only window: you can look around the **Corkboard** and **withdraw your
+  own offers**, but you can't **post**, **take**, or **fund** a swap — handy for
+  watching the market before you connect any coins. Switch it **off** to trade
+  normally. Either way Satchel **restarts the session** to apply the change, so
+  give it a moment to come back.
 > **Tip** — There's also a quick theme and language reach from the header, but the
 > **General** tab is the canonical place to set them.
+
+> **Note** — In **Watch-only mode** a **"Watch only"** badge shows in the header,
+> and the post, take, and fund actions are switched off until you turn the toggle
+> back off and have **two live coins** connected.
 
 ## Coins
 
@@ -91,9 +103,11 @@ you'll see the header's relay dot update to reflect what's now reachable.
 ## Fees
 
 The **Fees** tab holds one advanced, optional section — **Fee bumping** — that
-tunes how aggressively Satchel will raise on-chain fees to get a stuck swap
-transaction confirmed. **You don't need to touch this to trade.** The defaults are
-sensible; these are safety-versus-cost trade-offs for the rare swap that needs a
+sets the limits Satchel works within when it raises an on-chain fee to get a stuck
+swap transaction confirmed. Satchel now does the bumping automatically, tracking
+the going fee market for you rather than stepping up by a fixed amount, so these
+are just the guard-rails. **You don't need to touch this to trade.** The defaults
+are sensible; they're safety-versus-cost trade-offs for the rare swap that needs a
 nudge.
 
 A couple of things to know before you change anything:
@@ -102,7 +116,7 @@ A couple of things to know before you change anything:
 - New values affect **future** bumps only. A swap that's already funded keeps the
   policy it was funded under, so changing these won't disturb a trade in flight.
 
-The four knobs are:
+The three knobs are:
 
 - **Max feerate (sat/vB)** — the ceiling for every fee bump, so a runaway fee
   market can never drain you. Range 1–500; **default 500** (also the hard system
@@ -112,13 +126,11 @@ The four knobs are:
 - **Redeem over-provision (×)** — how much extra a Private (Taproot) redeem fee is
   pre-paid, so the redeem still confirms even if Satchel happens to be closed.
   Range 1–100; **default 2**. Applies to new swaps only.
-- **RBF escalation step (%)** — how steeply a stuck transaction's fee climbs on
-  each retry. Range 1–1000; **default 50**.
 
 Press **Save** to apply your changes — they take effect **live, with no restart** —
-or **Reset to defaults** to put all four back the way they came.
+or **Reset to defaults** to put all three back the way they came.
 
-![The Fees tab: the four fee-bumping knobs with Save and Reset to defaults.](images/processed/ch14-fees-tab.png){width=80%}
+![The Fees tab: the fee-bumping knobs with Save and Reset to defaults.](images/processed/ch14-fees-tab.png){width=80%}
 
 > **Note** — If you've never heard of fee bumping or RBF, that's fine — leave this
 > tab alone. Satchel handles fees for you out of the box; these knobs exist only

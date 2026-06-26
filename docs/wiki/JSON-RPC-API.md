@@ -1,6 +1,6 @@
 # JSON-RPC API
 
-[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 54 methods, grouped below by area with a one-line purpose each. This is an index; for full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
+[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 56 methods, grouped below by area with a one-line purpose each. This is an index; for full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
 
 ## Conventions
 
@@ -15,10 +15,11 @@
 
 | Method | Purpose |
 |---|---|
-| `getinfo` | Daemon name/version/protocol/network, identity, seed status, coin ids. |
+| `getinfo` | Daemon name/version/protocol/network, identity, seed status, coin ids, and a `watch_only` boolean. |
 | `walletstatus` | `{ seed_exists, encrypted, locked }`. |
+| `setwatchonly` | Toggle watch-only mode for the active merchant (`on: bool`); persisted, no relaunch. In watch-only you can browse the board and withdraw your own offers but cannot post/take/fund. |
 | `getfeepolicy` | Active merchant's fee-bump policy `{ max_feerate_sat_vb, reservation_mult, committed_mult }`. |
-| `setfeepolicy` | Update the fee-bump policy — positional, all optional `[max_feerate_sat_vb?, reservation_mult?, committed_mult?]`; returns the updated policy; persisted per-merchant. |
+| `setfeepolicy` | Update the fee-bump policy — positional, all optional `[max_feerate_sat_vb?, reservation_mult?, committed_mult?]`; returns the updated policy; persisted per-merchant. The fee-bump itself is automatic market-tracking (no manual step knob). |
 | `stop` | Trigger graceful shutdown. |
 
 ## Seed / wallet lifecycle
@@ -116,6 +117,7 @@ v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed).
 | Method | Purpose |
 |---|---|
 | `dumpswap` | Secret-free per-swap bundle (`swap_id`): scrubbed record + the `pactd` log lines mentioning that swap. Works for v1 and v2. Backs Satchel's **Dump logs** button. |
+| `swapprogress` | Live snapshot of every active swap (confirmations + feerate, v1 and v2). Backs Satchel's active-swaps progress display. |
 
 ## See also
 

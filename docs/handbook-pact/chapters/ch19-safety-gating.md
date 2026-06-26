@@ -26,6 +26,33 @@ is allowed. v1 has no network restriction.
 > shipped code runs v2 on every network. Treat the registry constants
 > (`ADAPTOR_BUILT`, `ADAPTOR_MAINNET_ENABLED`) as the source of truth.
 
+## Network isolation: the foreign-pactd guard
+
+Each network runs `pactd` on its own JSON-RPC port — **regtest 9739, testnet
+9738, mainnet 9737** — so a mainnet and a regtest install never share a daemon.
+Before the launcher adopts a `pactd` already listening on the configured
+`listen` port, it confirms the daemon is genuinely *ours*: it reads the data-dir
+`.cookie`, calls `getinfo`, and checks both that the cookie authenticates **and**
+that `getinfo.network` matches the active network (`probe_adoptable`,
+`satchel/src/main.rs:472`).
+
+If something is healthy on the port but is **not** this install's engine — a
+different network's daemon, or one whose cookie is unreadable — the launcher
+**refuses to start** rather than silently latching onto the wrong daemon (which
+would point every RPC at another network's chains) or starting with empty auth.
+It fails loud with an actionable error (`satchel/src/main.rs:1251`):
+
+```text
+configured listen <listen> is already serving a different engine (not this
+<network> install) — another network's Satchel/pactd is using that port. Set a
+distinct `listen` in satchel.json (regtest uses 9739, testnet 9738, mainnet
+9737), or stop the other instance, then relaunch.
+```
+
+The usual trigger is a stale or copied `satchel.json` whose `listen` still
+points at another network's port. The remedy is to give each network a distinct
+`listen` (the defaults above already are) or stop the colliding instance.
+
 ## Protocol selection prefers HTLC
 
 When a pair could run either version, the engine **prefers v1 HTLC**
@@ -84,8 +111,9 @@ and the pinned test vectors. Two operational details are worth understanding:
 - **v2's cooperative redeem is not RBF-bumpable.** Its fee is sealed into the
   pre-signed adaptor sighash, so it cannot be fee-bumped after the fact the way
   an ordinary RBF transaction can. The engine handles this two ways: fee
-  over-provisioning at init (live 6-block estimate × 3, clamped) plus a CPFP
-  redeem-bump child that spends the redeem's own sweep output to lift the
+  over-provisioning at init (live 6-block estimate × `committed_mult`, default
+  2, clamped) plus a CPFP redeem-bump child that spends the redeem's own sweep
+  output to lift the
   package feerate if the network gets busy. The single-key refund path is always
   bumpable, so the funder is never the stuck party. See the chapter "Fees,
   Fee-Bumping & Auto-Refund".

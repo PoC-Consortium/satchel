@@ -43,9 +43,14 @@ everything the app needs.
 
 1. Go to the project's **releases** page.
 2. Download the bundle for your operating system:
-   - **Windows** — the Windows bundle.
-   - **Linux** — the Linux bundle.
-3. Unpack it if needed, and run the **Satchel** application.
+   - **Windows** — the Windows installer,
+     `Satchel-<version>-Windows-x64-Setup.exe`. Run it, and it installs Satchel
+     for you.
+   - **Linux** — pick the format your distribution likes: the AppImage
+     (`Satchel-<version>-Linux-x64.AppImage`, a single self-contained file you
+     can run directly), or the `.deb` / `.rpm` package
+     (`Satchel-<version>-Linux-x64.deb` / `.rpm`).
+3. Run the installer (or the AppImage), then launch the **Satchel** application.
 
 That's the whole installation. There is nothing to register and no account to
 create.

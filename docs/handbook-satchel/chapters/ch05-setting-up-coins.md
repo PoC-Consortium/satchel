@@ -31,6 +31,25 @@ To connect a coin, click **Set up** on its card.
 
 ![The Coins screen, with one coin connected and one still to set up.](images/processed/ch05-coins-screen.png){width=85%}
 
+## Just want to look? Watch-only mode
+
+Maybe you're not ready to connect nodes yet — you'd just like to see what's
+trading before you commit. The wizard has an escape hatch for exactly that: a
+**"Browse in watch-only mode"** button. Click it and Satchel skips coin setup
+entirely and drops you straight onto the board.
+
+In watch-only mode you can **browse the Corkboard** and look around, and you can
+still **withdraw your own offers** if you have any. What you *can't* do is
+**post** a new offer, **take** someone else's, or **fund** a swap — anything that
+moves money is off the table until you connect coins. When you're ready to trade
+for real, leave watch-only mode (there's a toggle under **Settings → General**)
+and connect two coins as below.
+
+> **Note** — Watch-only mode is **browse-only**. Trading needs **two live coins**,
+> so to post, take, or fund a swap you must leave watch-only and finish connecting
+> your pair. While you're in it, a **"Watch only"** badge sits in the header to
+> remind you.
+
 ## The connection form
 
 Setting up a coin means telling Satchel **where your node is** and **how to log

@@ -49,6 +49,11 @@ And at the foot of the rail:
 > **Tip** — If you ever feel lost, click **Corkboard**. It's the home base and it's
 > where your live swaps and activity log are docked (more on that below).
 
+The header also carries a **globe** menu — the language picker. Click it to switch
+Satchel's display language on the spot; it offers all **26 languages** Satchel
+ships with, listed under their own native names. It's always there, so you can
+change language any time, not just during first-run setup.
+
 ## The active merchant, and switching between merchants
 
 A *merchant* is one trading identity — its own recovery seed, its own swap
@@ -100,6 +105,11 @@ about, because that's the real thing.
 
 > **Warning** — If there's no network stamp, you are on mainnet and trading with
 > real money. Double-check amounts before you confirm anything.
+
+If you've chosen to browse without connecting coins, a **"Watch only"** stamp sits
+just above the network stamp, a steady reminder that posting, taking, and funding
+are switched off until you leave watch-only mode and connect two coins. (See
+*"Setting Up Your Coins"* for what watch-only mode lets you do.)
 
 ## The Relays monitor
 
