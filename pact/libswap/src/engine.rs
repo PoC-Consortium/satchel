@@ -3155,6 +3155,13 @@ impl Engine {
             .tx_confirmations(&txid, spk.as_ref())
             .unwrap_or(0)
             .min(u64::from(u32::MAX)) as u32;
+        // Fully confirmed → stop displaying. Progress is for the in-flight
+        // confirmation window only; once the tx reaches its required depth the
+        // leg is final, so the line disappears (the narrate "complete"/next-state
+        // story carries it). Without this the count climbed past `needed` forever.
+        if confs >= needed {
+            return None;
+        }
         let feerate = if settlement {
             feerate_of(rec.final_tx_hex.as_deref(), amount)
         } else {
@@ -3206,6 +3213,10 @@ impl Engine {
             .tx_confirmations(&txid, first_output_spk(hex).as_ref())
             .unwrap_or(0)
             .min(u64::from(u32::MAX)) as u32;
+        // Fully confirmed → stop displaying (see swap_progress_v1).
+        if confs >= needed {
+            return None;
+        }
         Some(SwapProgress {
             swap_id: rec.swap_id.clone(),
             watching: "settlement".into(),

@@ -32,7 +32,20 @@ sys.stdout.reconfigure(line_buffering=True)
 from regtest_harness import Harness, HERE, EXE
 from test_swap_e2e import build_workspace, Party, COINS_TOML
 
-BLOCK_EVERY_SECS = 4
+# Per-chain block cadence (seconds). We mirror mainnet RATIOS scaled ~20x — a
+# fast coin and a slower one — rather than instant regtest blocks, so the
+# tick-vs-blocktime behaviour (fee bumping, the multi-tick-per-block window that
+# caused the redeem-fee storm) is actually exercised. With tick_secs=2 that's
+# ~3 ticks/block on btcx and ~6 on btc. btc≈12s sits around a scaled Litecoin
+# (≈2.5-min blocks); a true-scaled BTC would be ~30s but that's needlessly slow
+# for the playground.
+BLOCK_SECS = {"btcx": 6, "btc": 12, "ltc": 12}
+BASE_BLOCK_SECS = 6  # miner granularity = the fastest chain's interval
+# Confirmation depth per coin for the playground parties — mainnet-like (not the
+# regtest default of 1) so the confirmation flow and the Satchel progress display
+# are exercised realistically. e2e tests keep the fast default (they pass no
+# coin_confs), so CI speed is unaffected.
+PLAYGROUND_CONFS = {"btcx": 10, "btc": 6, "ltc": 6}
 REPOST_EVERY_SECS = 30
 # Use the engine's DEFAULT offer TTL (omit the ttl arg). The short TTL was to
 # avoid stale offers lingering on PUBLIC relays — but this playground runs a
@@ -196,11 +209,11 @@ def main():
         # relay; a file coin needs --coins-file (coins_file) + the extra --coin.
         bob = Party("bob", h, h.workdir, "bob_pocx", "bob_btc",
                     nostr_relays=relay.ws_url, auto_fund=True, tick_secs=2,
-                    coins_file=COINS_TOML,
+                    coins_file=COINS_TOML, coin_confs=PLAYGROUND_CONFS,
                     extra_coins=[("ltc", h.ltc.rpc_url(wallet="bob_ltc"))]).start()
         carol = Party("carol", h, h.workdir, "carol_pocx", "carol_btc",
                       nostr_relays=relay.ws_url, auto_fund=True, tick_secs=2,
-                      coins_file=COINS_TOML,
+                      coins_file=COINS_TOML, coin_confs=PLAYGROUND_CONFS,
                       extra_coins=[("ltc", h.ltc.rpc_url(wallet="carol_ltc"))]).start()
 
         posted = {"bob": [], "carol": [], "bob_ltc": [], "carol_ltc": []}
@@ -259,28 +272,35 @@ def main():
 {bar}
 """)
         start_wall = time.time()
-        legs = ((h.pocx, "alice_pocx"), (h.btc, "bob_btc"), (h.ltc, "alice_ltc"))
-        base = max(chain_time(n) for n, _ in legs)
+        legs = ((h.pocx, "alice_pocx", "btcx"), (h.btc, "bob_btc", "btc"), (h.ltc, "alice_ltc", "ltc"))
+        base = max(chain_time(n) for n, _, _ in legs)
         last_post = time.time()
         # Per-tick mining is BEST-EFFORT: a transient node error (e.g. a momentary
         # `bad-txns-vin-empty` on CreateNewBlock) must NOT crash the driver — that
         # would unwind the Harness and tear every node down, leaving Satchel on a
         # dead stack (the spurious coin-setup gate). Each chain advances on its
         # own; failures are logged and skipped, and the next tick retries.
+        elapsed = 0
         try:
             while True:
-                time.sleep(BLOCK_EVERY_SECS)
+                time.sleep(BASE_BLOCK_SECS)
+                elapsed += BASE_BLOCK_SECS
                 tip = base
-                for node, _ in legs:
+                for node, _, _ in legs:
                     try:
                         tip = max(tip, chain_time(node))
                     except Exception:  # noqa: BLE001
                         pass
                 now = max(tip, base + int(time.time() - start_wall)) + 1
-                for node, wallet in legs:
+                # Advance every chain's clock each tick (keeps timelocks moving),
+                # but only mine a block when this chain's own cadence is due — so
+                # btcx blocks ~6s and btc/ltc ~12s, giving several scheduler ticks
+                # per block (mainnet-like) instead of instant finality.
+                for node, wallet, coin in legs:
                     try:
                         node.set_mocktime(now)
-                        node.generate(1, wallet)
+                        if elapsed % BLOCK_SECS[coin] == 0:
+                            node.generate(1, wallet)
                     except Exception as e:  # noqa: BLE001
                         print(f"[nostr-pg] mine skipped ({wallet}): {e}")
                 if time.time() - last_post > REPOST_EVERY_SECS:
