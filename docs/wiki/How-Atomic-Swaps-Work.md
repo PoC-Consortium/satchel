@@ -23,7 +23,7 @@ Each leg is an ordinary-looking Taproot output co-owned 2-of-2 via MuSig2, with 
 | On-chain footprint | Visible HTLC script (hash + branches) | Looks like ordinary Taproot payments |
 | Privacy | Lower — legs are linkable by *H* | Higher — no shared on-chain marker |
 | Links the legs via | Hash preimage *s* | Adaptor secret in the redeem signature |
-| Cooperative redeem RBF-bumpable | Yes | **No** (sealed into the pre-signed sig; mitigated by fee over-provisioning + a CPFP child) |
+| Cooperative redeem RBF-bumpable | Yes | **No** (sealed into the pre-signed sig; the fee commits at the live market rate and a CPFP child lifts it if the market climbs) |
 | Refund RBF-bumpable | Yes | Yes (single-key timelock path) |
 | Mainnet | Yes (reviewed) | Yes (reviewed) |
 

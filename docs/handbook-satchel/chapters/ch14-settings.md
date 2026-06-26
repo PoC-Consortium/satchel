@@ -123,9 +123,13 @@ The three knobs are:
   maximum).
 - **Funding bump reservation (×)** — how much extra balance the funds check sets
   aside as headroom for a possible future bump. Range 1–100; **default 3**.
-- **Redeem over-provision (×)** — how much extra a Private (Taproot) redeem fee is
-  pre-paid, so the redeem still confirms even if Satchel happens to be closed.
-  Range 1–100; **default 2**. Applies to new swaps only.
+- **Redeem over-provision (×)** — a multiplier on the market rate a Private
+  (Taproot) redeem commits to up front (its fee is fixed when the swap is signed
+  and can't be raised by ordinary replacement). Range 1–100; **default 1** — i.e.
+  it commits at the live market rate, with no padding, and the engine accelerates
+  it with a child transaction only if the market actually climbs while it's
+  pending. Raise it above 1 if you'd rather pre-pay a cushion. Applies to new
+  swaps only.
 
 Press **Save** to apply your changes — they take effect **live, with no restart** —
 or **Reset to defaults** to put all three back the way they came.

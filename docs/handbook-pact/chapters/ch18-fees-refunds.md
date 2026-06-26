@@ -102,28 +102,31 @@ of the sighash the MuSig2 adaptor session signed, and re-signing would require
 re-running the interactive ceremony. The engine cannot raise it after the fact.
 Two mitigations make this safe in practice.
 
-**(a) Over-provision the fee at init.** The adaptor redeem feerate is set high
-*before* signing so the sealed fee is generous (`engine.rs`,
-`adaptor_redeem_feerate`):
+**(a) Commit the fee at init.** The adaptor redeem feerate is fixed *before*
+signing (`engine.rs`, `adaptor_redeem_feerate`):
 
 ```text
-adaptor_redeem_feerate = live_6block_estimate × redeem.committed_mult(2)
-                         clamped to the protocol MAX_REDEEM_FEERATE = 500 sat/vB
-                         fallback 20 sat/vB if no estimate
-                         fixed 2 sat/vB on regtest
+adaptor_redeem_feerate = live_market_estimate × redeem.committed_mult(1)
+                         clamped to [MIN_REDEEM_FEERATE = 1, MAX_REDEEM_FEERATE = 500] sat/vB
+                         fallback 20 sat/vB if no backend is reachable
 ```
 
-Doubling the 6-block estimate (capped at 500 sat/vB) buys headroom against fee
-spikes between signing and broadcast. `committed_mult` is the unattended floor
-only — the CPFP child below chases the market beyond it when the scheduler is
-running, which is why a 2× default suffices (it was 3× before CPFP existed).
-Note the clamp here is the **protocol** bound `MAX_REDEEM_FEERATE` (the value is
+With the default `committed_mult = 1` the redeem commits at the **live market
+rate, with no over-provision** — the CPFP child below is what lifts it if the
+market climbs while it's pending, so padding the committed fee up front is no
+longer needed (the multiplier was 2× before this, and 3× before CPFP existed).
+Raise `committed_mult` above 1 to deliberately pre-pay a cushion. There is no
+longer a regtest special-case: regtest has no fee history, so the estimate lands
+on its ≈1 sat/vB floor (`MIN_REDEEM_FEERATE`) like any other quiet chain. Note
+the clamp here is the **protocol** bound `MAX_REDEEM_FEERATE` (the value is
 negotiated into the init message and validated by the counterparty), *not* the
 local `max_feerate_sat_vb` bump ceiling.
 
-**(b) The CPFP redeem-bump child (v2+).** If the over-provisioned redeem is
-*still* too slow, the claimer accelerates it with a child-pays-for-parent
-transaction (`adaptor_cpfp_bump`, `engine.rs:1942-1985`):
+**(b) The CPFP redeem-bump child (v2+).** Because the committed redeem is priced
+at market (not padded), the CPFP child is the **primary** accelerator, not just a
+fallback: if the market rises while the redeem is pending, the claimer drags it
+through with a child-pays-for-parent transaction (`adaptor_cpfp_bump`,
+`engine.rs:1942-1985`):
 
 - The child spends the redeem's **own vout 0** — the claimer's wallet-owned
   sweep output — so it is self-funded and needs no extra inputs.
@@ -136,11 +139,11 @@ redeem stays relayable on its own, so a normal CPFP child suffices to drag it
 through. Proven by `test_adaptor_redeem_cpfp` (and `..._ltc`, the first v2 swap
 on litecoind).
 
-> **Note** — The cooperative redeem is not RBF-bumpable, so it is handled by fee
-> over-provisioning plus a CPFP child: enough fee is committed up front, and a
-> CPFP child can drag the parent through if conditions tighten before the
-> deadline. The single-key refund path is always bumpable, so the *funder* is
-> never stuck. See the chapter "Network Support, Reorgs & Safety".
+> **Note** — The cooperative redeem is not RBF-bumpable, so it commits at the
+> market rate up front and relies on a CPFP child to drag the parent through if
+> conditions tighten before the deadline. The single-key refund path is always
+> bumpable, so the *funder* is never stuck. See the chapter "Network Support,
+> Reorgs & Safety".
 
 ## The funding-bump nurse
 
@@ -284,7 +287,7 @@ funding time).
 |---|---|---|
 | `max_feerate_sat_vb` | 500 sat/vB | ceiling for every local bump; also the hard system max (the estimator is clamped to 500), settable `1..=500` |
 | `funding.reservation_mult` | 3× | funds-gate headroom + funding-nurse bound (`× old_feerate`) |
-| `redeem.committed_mult` | 2× | v2 redeem over-provision (the unattended floor) |
+| `redeem.committed_mult` | 1× | v2 committed-redeem multiplier over live market (1 = commit at market, no padding; CPFP lifts it if the market climbs) |
 
 > **Note** — `min_fee_sat` (the old 1000-sat floor) and `redeem.step_pct` /
 > `refund.step_pct` (default 50) are **retired**. The floor and the per-tick
@@ -306,7 +309,7 @@ Other fee-related constants remain fixed (not policy):
 | `FUNDING_VSIZE_EST` | 250 vB | sizing estimate for the funds-gate reservation |
 
 The unified RBF strategy (v1 redeem/refund, v2 refund) and the v2
-over-provision-plus-CPFP strategy are two answers to the same question — *how do
+commit-at-market-plus-CPFP strategy are two answers to the same question — *how do
 I make sure a time-critical spend confirms?* — chosen because an RBF-able spend
 can re-sign freely toward the market, while v2's cooperative redeem cannot and
 must commit its fee up front.

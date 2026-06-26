@@ -52,8 +52,8 @@ outpoint; `nonces`/`sign`/`assemble` complete the MuSig2 adaptor exchange;
 `refund` (timeout path). See "v2 Taproot/MuSig2 Adaptor Swaps" for why each
 step is required.
 
-> **Note** — The cooperative key-path **redeem is NOT RBF-bumpable**; it is
-> handled by fee over-provisioning plus a CPFP child. The single-key
+> **Note** — The cooperative key-path **redeem is NOT RBF-bumpable**; it commits
+> at the live market rate and is dragged through by a CPFP child. The single-key
 > **refund IS bumpable**. Budget fees accordingly when settling near a
 > deadline.
 

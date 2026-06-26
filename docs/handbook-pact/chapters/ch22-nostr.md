@@ -75,14 +75,28 @@ relays quickly — a listing therefore reflects a maker who is actually online.
 
 ## Revocation — NIP-09
 
-Revoking an offer publishes a NIP-09 `EventDeletion` referencing the addressable
-coordinate `31510:<maker pubkey>:<swap_id>` via an `["a", …]` tag, telling relays
-to drop the listing.
+Revoking an offer (when it is taken or withdrawn) publishes a NIP-09
+`EventDeletion` referencing the addressable coordinate
+`31510:<maker pubkey>:<swap_id>` via an `["a", …]` tag, telling relays to drop
+the listing.
+
+Because relays may not honour NIP-09, viewers also **enforce revocations
+client-side**. The sync loop subscribes to deletions (`{ kinds: [5] }`, its own
+cursor) alongside offers, and for each deletion it **verifies the event signature
+and that the deleting author matches the maker pubkey in the coordinate** — so a
+maker can only revoke offers it signed, never someone else's. A verified deletion
+writes a persistent `nostr_revoked:<swap_id>` tombstone and evicts the offer from
+the cache; the tombstone is applied *before* upserts each round, so an offer a
+relay keeps serving (NIP-09 ignored) never reappears. The effect: a taken or
+withdrawn offer leaves **every** board immediately, instead of lingering on other
+viewers' boards until its NIP-40 expiration lapses.
 
 ## Subscription filters
 
 - **Offers:** `{ kinds: [31510] }` — subscribe by kind; pair/network filtering is
   client-side.
+- **Deletions:** `{ kinds: [5] }` — NIP-09 deletions, so revocations are enforced
+  client-side (see "Revocation" above).
 - **Mailbox:** `{ kinds: [1059], #p: [me] }` — kind-1059 events tagged to our
   identity.
 
