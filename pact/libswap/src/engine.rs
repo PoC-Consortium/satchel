@@ -3179,38 +3179,87 @@ impl Engine {
         })
     }
 
-    /// Progress for one v2 (adaptor) swap — settlement-confirming legs only (the
-    /// high-value case); v2 funding is nursed separately. Feerate is the redeem
-    /// feerate baked into the record, so no tx parsing is needed.
+    /// Progress for one v2 (adaptor) swap. Mirrors v1: the funding-confirmation
+    /// waits (which v2 does inside the `Signed` phase — both legs fund and bury
+    /// there, before the reveal) AND the settlement confirmation after the redeem.
+    /// The Taproot leg scriptPubKey is derived from the adaptor params (same as
+    /// the tick) so confs can be read for the counterparty's funding too.
     fn swap_progress_v2(&self, rec: &AdaptorSwapRecord) -> Option<SwapProgress> {
         use crate::adaptor_swap::AdaptorState::*;
-        let (chain, txid, hex, needed, feerate): (
+        // How to derive the watched output's scriptPubKey (a backend lookup hint).
+        enum Spk {
+            Settlement(Option<String>), // first output of the final (redeem) tx
+            LegA,                       // Taproot funding leg A
+            LegB,                       // Taproot funding leg B
+        }
+        // (watching, chain, txid, spk source, needed depth, settlement feerate)
+        let (watching, chain, txid, spk_src, needed, feerate): (
+            &str,
             &ChainRef,
             Option<String>,
-            Option<&str>,
+            Spk,
             u32,
-            u64,
+            Option<u64>,
         ) = match (rec.role, rec.state) {
+            // Settlement (claim) confirming.
             (Role::Initiator, RedeemedB) => (
-                &rec.chain_b,
-                rec.final_txid_b.clone(),
-                rec.final_tx_b_hex.as_deref(),
-                rec.n_b,
-                rec.redeem_feerate_b,
+                "settlement", &rec.chain_b, rec.final_txid_b.clone(),
+                Spk::Settlement(rec.final_tx_b_hex.clone()), rec.n_b, Some(rec.redeem_feerate_b),
             ),
             (Role::Participant, Completed) => (
-                &rec.chain_a,
-                rec.final_txid_a.clone(),
-                rec.final_tx_a_hex.as_deref(),
-                rec.n_a,
-                rec.redeem_feerate_a,
+                "settlement", &rec.chain_a, rec.final_txid_a.clone(),
+                Spk::Settlement(rec.final_tx_a_hex.clone()), rec.n_a, Some(rec.redeem_feerate_a),
             ),
+            // Funding confirming during the `Signed` phase.
+            (Role::Initiator, Signed) => {
+                if rec.funding_a_txid.is_some() && rec.funding_b_txid.is_some() {
+                    // Waiting on the taker's leg-B lock to bury before we reveal.
+                    ("their_funding", &rec.chain_b, rec.funding_b_txid.clone(), Spk::LegB, rec.n_b, None)
+                } else if rec.funding_a_txid.is_some() {
+                    // Our leg-A lock confirming (then we wait for their leg B).
+                    ("ours_funding", &rec.chain_a, rec.funding_a_txid.clone(), Spk::LegA, rec.n_a, None)
+                } else {
+                    return None;
+                }
+            }
+            (Role::Participant, Signed) => {
+                if rec.funding_b_txid.is_some() {
+                    // Our leg-B lock confirming (then we wait for their reveal).
+                    ("ours_funding", &rec.chain_b, rec.funding_b_txid.clone(), Spk::LegB, rec.n_b, None)
+                } else if rec.funding_a_txid.is_some() {
+                    // Waiting on the maker's leg-A lock to bury before we fund B.
+                    ("their_funding", &rec.chain_a, rec.funding_a_txid.clone(), Spk::LegA, rec.n_a, None)
+                } else {
+                    return None;
+                }
+            }
             _ => return None,
         };
         let txid = txid?;
         let backend = self.backend(chain).ok()?;
+        let spk = match spk_src {
+            Spk::Settlement(hex) => first_output_spk(hex.as_deref()),
+            Spk::LegA => {
+                let secp = bitcoin::secp256k1::Secp256k1::new();
+                self.adaptor_params(rec)
+                    .ok()?
+                    .leg_a(&secp)
+                    .ok()?
+                    .script_pubkey(&secp)
+                    .ok()
+            }
+            Spk::LegB => {
+                let secp = bitcoin::secp256k1::Secp256k1::new();
+                self.adaptor_params(rec)
+                    .ok()?
+                    .leg_b(&secp)
+                    .ok()?
+                    .script_pubkey(&secp)
+                    .ok()
+            }
+        };
         let confs = backend
-            .tx_confirmations(&txid, first_output_spk(hex).as_ref())
+            .tx_confirmations(&txid, spk.as_ref())
             .unwrap_or(0)
             .min(u64::from(u32::MAX)) as u32;
         // Fully confirmed → stop displaying (see swap_progress_v1).
@@ -3219,10 +3268,10 @@ impl Engine {
         }
         Some(SwapProgress {
             swap_id: rec.swap_id.clone(),
-            watching: "settlement".into(),
+            watching: watching.into(),
             confs,
             needed,
-            feerate_sat_vb: Some(feerate),
+            feerate_sat_vb: feerate,
             last_action: None,
             last_detail: None,
             updated_at: local_now(),
