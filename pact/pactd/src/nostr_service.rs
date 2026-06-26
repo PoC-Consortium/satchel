@@ -33,6 +33,7 @@ pub struct Prep {
     outbox: Vec<(i64, String, Option<String>, String)>,
     offers_since: u64,
     mailbox_since: u64,
+    deletions_since: u64,
 }
 
 /// Step B's results, applied to the store under the lock (step C).
@@ -41,8 +42,11 @@ pub struct Apply {
     sent_outbox: Vec<i64>,
     inbox: Vec<(String, String, u64)>,
     offers: Vec<(String, String, String, u64, u64)>,
+    /// `swap_id`s revoked via an incoming NIP-09 deletion (offers to drop).
+    revoked: Vec<String>,
     offers_since: u64,
     mailbox_since: u64,
+    deletions_since: u64,
 }
 
 fn since(store: &Store, key: &str) -> u64 {
@@ -72,6 +76,7 @@ pub fn prep(store: &Store, nostr_configured: bool) -> Result<Option<Prep>> {
         outbox: store.nostr_outbox_pending()?,
         offers_since: since(store, "nostr_since:offers"),
         mailbox_since: since(store, "nostr_since:mailbox"),
+        deletions_since: since(store, "nostr_since:deletions"),
     }))
 }
 
@@ -83,11 +88,23 @@ pub fn apply(store: &Store, a: &Apply) -> Result<()> {
     for (event_id, blob, created) in &a.inbox {
         store.nostr_inbox_insert(event_id, blob, *created)?;
     }
+    // Apply revocations FIRST, as a persistent tombstone + an eviction. Relays
+    // may ignore NIP-09, so a revoked offer can keep showing up in the offer
+    // fetch (this round or later) — the tombstone makes the upsert below skip it
+    // every time, so it never reappears on the board.
+    for swap_id in &a.revoked {
+        store.meta_set(&format!("nostr_revoked:{swap_id}"), "1")?;
+        store.nostr_offer_cache_remove(swap_id)?;
+    }
     for (event_id, d_tag, envelope, created, expires) in &a.offers {
+        if store.meta_get(&format!("nostr_revoked:{d_tag}"))?.is_some() {
+            continue; // revoked offer still lingering on the relay — stay dropped
+        }
         store.nostr_offer_cache_upsert(event_id, d_tag, envelope, *created, *expires)?;
     }
     store.meta_set("nostr_since:offers", &a.offers_since.to_string())?;
     store.meta_set("nostr_since:mailbox", &a.mailbox_since.to_string())?;
+    store.meta_set("nostr_since:deletions", &a.deletions_since.to_string())?;
     Ok(())
 }
 
@@ -117,6 +134,7 @@ impl NostrService {
         let mut out = Apply {
             offers_since: prep.offers_since,
             mailbox_since: prep.mailbox_since,
+            deletions_since: prep.deletions_since,
             ..Apply::default()
         };
         let keys = match pn::keys_from_secret_hex(&prep.secret_hex) {
@@ -204,6 +222,25 @@ impl NostrService {
                     }
                     out.mailbox_since = out.mailbox_since.max(created);
                 }
+            }
+        }
+
+        // ---- fetch NIP-09 revocations (kind 5) ----
+        // Enforce deletions client-side: relays may not honor NIP-09, so a
+        // maker's deletion of its OWN offer evicts that offer here instead of
+        // waiting out its NIP-40 TTL. `revoked_offer_from_event` checks the
+        // signature + same-author ownership; foreign/unrelated kind-5s are
+        // ignored (but still advance the cursor).
+        if let Ok(events) = self
+            .fetch(pn::deletions_filter().since(Timestamp::from(prep.deletions_since)))
+            .await
+        {
+            for ev in events {
+                let created = ev.created_at.as_secs();
+                if let Some(swap_id) = pn::revoked_offer_from_event(&ev) {
+                    out.revoked.push(swap_id);
+                }
+                out.deletions_since = out.deletions_since.max(created);
             }
         }
 

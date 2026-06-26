@@ -183,6 +183,41 @@ pub fn mailbox_filter(me_xonly_hex: &str) -> Result<Filter> {
     Ok(Filter::new().kind(Kind::Custom(GIFTWRAP_KIND)).pubkey(me))
 }
 
+/// Filter for NIP-09 deletions (kind 5). The relay can't pre-filter these to
+/// "offer deletions only", so the ownership/coordinate check is done client-side
+/// in [`revoked_offer_from_event`].
+pub fn deletions_filter() -> Filter {
+    Filter::new().kind(Kind::EventDeletion)
+}
+
+/// If `event` is a NIP-09 deletion that revokes one of its OWN offers, return
+/// that offer's `swap_id`. Verifies the event signature and that the deletion's
+/// author matches the pubkey in the addressable coordinate
+/// (`{OFFER_KIND}:<author>:<swap_id>`, as built by [`revocation_event`]) — so a
+/// maker can only revoke offers it signed, never someone else's. `None` for
+/// foreign, unrelated, or malformed deletions.
+pub fn revoked_offer_from_event(event: &Event) -> Option<String> {
+    if event.kind != Kind::EventDeletion {
+        return None;
+    }
+    event.verify().ok()?;
+    let author = event.pubkey.to_hex();
+    for tag in event.tags.iter() {
+        let s = tag.as_slice();
+        if s.first().map(String::as_str) != Some("a") {
+            continue;
+        }
+        let mut parts = s.get(1)?.split(':');
+        let kind = parts.next()?;
+        let pubkey = parts.next()?;
+        let swap_id = parts.next().unwrap_or("");
+        if kind.parse::<u16>().ok() == Some(OFFER_KIND) && pubkey == author && !swap_id.is_empty() {
+            return Some(swap_id.to_string());
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -286,5 +321,30 @@ mod tests {
         let unwrapped = unwrap_giftwrap(&wrap).unwrap();
         let opened = pact_proto::seal::open_envelope(&recipient_kp, &unwrapped).unwrap();
         assert_eq!(opened, take);
+    }
+
+    #[test]
+    fn revocation_event_roundtrips_to_swap_id() {
+        let (_kp, keys, _x) = identity(0x41);
+        let ev = revocation_event("deadbeefcafe0011", &keys).unwrap();
+        assert_eq!(ev.kind, Kind::EventDeletion);
+        assert_eq!(
+            revoked_offer_from_event(&ev).as_deref(),
+            Some("deadbeefcafe0011")
+        );
+    }
+
+    #[test]
+    fn foreign_author_cannot_revoke_anothers_offer() {
+        // Maker A signs a deletion pointing at maker B's coordinate — must be
+        // ignored (a maker may only revoke offers it signed).
+        let (_a_kp, a_keys, _a_x) = identity(0x41);
+        let (_b_kp, _b_keys, b_x) = identity(0x42);
+        let coordinate = format!("{OFFER_KIND}:{b_x}:beefbeef");
+        let forged = EventBuilder::new(Kind::EventDeletion, "")
+            .tag(Tag::parse(["a", &coordinate]).unwrap())
+            .sign_with_keys(&a_keys)
+            .unwrap();
+        assert_eq!(revoked_offer_from_event(&forged), None);
     }
 }
