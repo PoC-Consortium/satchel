@@ -4,7 +4,6 @@ import type { Bundle } from "./en";
 export const nl: Bundle = {
   app: {
     name: "Satchel",
-    tagline: "trustless swaps",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -59,7 +58,6 @@ export const nl: Bundle = {
     balance: "Saldo: {amt} {sym}",
     balanceLoading: "Saldo: …",
     noCoins: "Geen munten geconfigureerd",
-    sameCoin: "Geven en ontvangen moeten verschillende munten zijn.",
     legDown: "Een van de nodes van deze munten ligt eruit — start hem (of controleer Instellingen → Munten) voordat je plaatst.",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -98,8 +96,6 @@ export const nl: Bundle = {
     cancelTip: "Stop met het honoreren van deze slip — een vriend die hem nog heeft, kan hem niet langer aannemen.",
   },
   takeSlip: {
-    open: "Plak een slip",
-    title: "Neem een privé aanbod aan",
     intro:
       "Een vriend heeft je een privé aanbod-slip gestuurd (die begint met pactoffer1:). Plak hem hier om hem te bekijken en aan te nemen — precies zoals een aanbod van het bord.",
     placeholder: "pactoffer1:…",
@@ -182,7 +178,6 @@ export const nl: Bundle = {
       "Satchel handelt onder een “merchant” — één handelsidentiteit met een eigen seed. Je hebt er nog geen: maak een nieuwe aan, of importeer een bestaande herstelzin om te beginnen.",
     importMerchant: "Importeer een merchant",
     none: "Nog geen merchants.",
-    active: "actief",
     switch: "wisselen",
     newMerchant: "Nieuwe merchant",
     thisMerchant: "deze merchant",
@@ -211,7 +206,6 @@ export const nl: Bundle = {
     import: "Importeren",
     importDesc: "Herstel vanuit een bestaande 12/24-woordenzin.",
     recoveryLabel: "Herstelzin",
-    importPlaceholder: "woord1 woord2 woord3 …",
     encrypt: "Versleutelen",
     encryptDesc:
       "Een wachtwoordzin beschermt het seed in rust. Je voert hem één keer per sessie in — Satchel slaat hem nooit op. Let op: onbeheerde auto-refund pauzeert na een herstart tot je hem opnieuw invoert.",
@@ -220,9 +214,6 @@ export const nl: Bundle = {
       "Auto-refund blijft werken na herstarts zonder dat er iets ingevoerd hoeft te worden — dit is slechts een hot transit-seed. Kosten: bestands-/host-toegang stelt de transit-sleutels + identiteit van deze merchant bloot.",
     passphraseLabel: "Wachtwoordzin",
     passphrasePlaceholder: "kies een wachtwoordzin",
-    createTitle: "Seed aanmaken",
-    importTitle: "Seed importeren",
-    secureTitle: "Beveilig {label}",
     revealTitle: "Schrijf je herstelzin op",
     revealBody:
       "Iedereen met deze woorden beheert de hot keys van deze merchant. Satchel bewaart geen kopie — bewaar hem offline. Hierna bevestig je een paar woorden.",
@@ -353,19 +344,10 @@ export const nl: Bundle = {
     protoPrivateTip: "Privé swap (Taproot/MuSig2 adaptor) — ziet er on-chain uit als een gewone betaling",
     protoHtlcTip: "Klassieke HTLC-swap",
     // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "Core RPC-wallet",
-    backendCoreDesc: "De eigen wallet van je node fundt de swap en ontvangt de opbrengsten.",
-    backendHardwareTitle: "Hardware",
-    backendHardwareDesc: "Ledger / PSBT-ondertekening voor de funding-leg.",
-    backendLater: "later",
     // CoinSetup dialog.
     setupTitle: "Verbind {coin}",
     setupIntro:
       "Wijs Satchel naar je eigen {sym}-node. Er wordt niets opgeslagen tot de node een genesis-block-controle doorstaat — je fondsen raken alleen ooit de echte {sym}-keten.",
-    backendUrlLabel: "Node-backend-URL(s)",
-    backendUrlHint:
-      "Eerste URL = de eigen wallet van je node (fundt swaps, ontvangt opbrengsten). Voeg Electrum-servers (tcp://host:port) na komma's toe voor extra, onafhankelijke ketenweergaven.",
-    fundingWallet: "Funding-wallet",
     confirmationsLabel: "Bevestigingen voor definitief",
     confirmationsHint:
       "Hoe diep een funding of redeem op deze keten moet zijn voordat een swap erop reageert — de reorg-veiligheidsmarge. Hoger is veiliger maar trager; laat leeg voor de aanbevolen standaard ({default}).",
@@ -426,12 +408,6 @@ export const nl: Bundle = {
     walletDefaultHint:
       "Geen wallet ingesteld voor deze munt, dus RPC's gebruiken de standaard wallet van de node. Stel er een in bij Instellingen → Munten om elke aanroep af te bakenen tot een specifieke wallet.",
     balanceLabel: "{symbol}-saldo",
-    receive: "Ontvangen",
-    send: "Versturen",
-    sendTo: "Versturen naar adres",
-    amount: "Bedrag",
-    sendTitle: "{amount} {sym} versturen?",
-    sendConfirmBody: "Naar {to}\n\nDit besteedt vanuit de eigen wallet van je node en kan niet ongedaan worden gemaakt.",
   },
   corkboard: {
     noBoardTitle: "Geen Corkboard verbonden",
@@ -442,7 +418,6 @@ export const nl: Bundle = {
     boardSettings: "Configureer in Instellingen",
     filterAll: "Alle",
     filterMine: "Mijne",
-    offered: "{symbol} aangeboden",
     noOffers: "Geen aanbiedingen die je nu kunt aannemen",
     noOffersBody:
       "Aanbiedingen verschijnen hier zodra een maker er een plaatst voor een paar dat je hebt ingesteld. Je kunt ook je eigen aanbod plaatsen.",
@@ -461,7 +436,6 @@ export const nl: Bundle = {
       "Als de swap vastloopt, krijgen beide kanten een auto-refund — de leg van de taker ontgrendelt als eerste, die van jou iets later. Niemand blijft vastzitten.",
     activeTitle: "Je actieve swaps",
     states: {
-      open: "open",
       takenByUs: "door jou aangenomen",
       revoked: "teruggetrokken",
       expired: "verlopen",
@@ -485,7 +459,6 @@ export const nl: Bundle = {
       mid: "mid {price}",
       levelOffers: "{count} aanbieding(en) op deze prijs — kies er een om aan te nemen",
       depthTip: "Totaal {sym} aangeboden op deze prijs over {count} bericht(en).",
-      takerNote: "Door het aan te nemen geef je {give} en ontvang je {get}.",
       selectLevel: "Kies hierboven een prijsniveau om de aanbiedingen daar te zien.",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "Weergave-eenheid voor {coin}-bedragen",
@@ -571,23 +544,8 @@ export const nl: Bundle = {
       "Niet genoeg {sym} om deze swap te funden — nodig ~{need} {sym} (bedrag + funding-fee), wallet heeft {have} {sym}.",
   },
   wizard: {
-    welcome: "Welkom bij Satchel",
-    connectTitle: "Verbind de Pact-engine",
-    connectIntro:
-      "Satchel is een dunne client van de Pact-engine — de kern die je sleutels vasthoudt en de swaps draait. Kies hoe je hem bereikt.",
-    managed: "Draai de ingebouwde Pact-engine",
-    managedDesc: "Satchel start en bewaakt zijn eigen Pact-engine. Aanbevolen.",
-    external: "Verbind met een externe Pact-engine",
-    externalDesc: "Wijs naar een Pact-engine die je al draait (stel SATCHEL_PACTD_URL + cookie in voor het starten).",
-    externalNote:
-      "Externe modus wordt geselecteerd via omgevingsvariabelen voordat Satchel wordt gestart. Herstart met SATCHEL_PACTD_URL ingesteld om hem te gebruiken.",
-    coinsTitle: "Voeg je munten toe",
-    coinsIntro:
-      "Nadat je merchant is aangemaakt, verbind je elke munt met je eigen node in Instellingen → Munten. Kies een munt en een backend (openbare Electrum voor nul-instelling, of je eigen node); genesis wordt gecontroleerd tegen dit netwerk voordat er iets wordt opgeslagen.",
-    coinsTemplatesSoon: "Een-klik munttemplates verschijnen hier in een latere release.",
     back: "Terug",
     continue: "Doorgaan",
-    finish: "Instelling afronden",
   },
   // UI-4 docked activity log.
   log: {
@@ -666,8 +624,6 @@ export const nl: Bundle = {
       "Hun {a} is vergrendeld en geverifieerd. Volgende: vergrendel je {b}. Vangnet: automatische refund om {t2} als er iets vastloopt.",
     fundedBMaker: "Beide vergrendeld. Je daemon claimt de {b} zodra die veilig bevestigd is.",
     fundedBTaker: "Beide vergrendeld. Je daemon zal de {a} claimen zodra de andere kant zijn {b} aanneemt.",
-    redeemedB:
-      "Je hebt de {b} geclaimd — wachten tot die bevestigt. Je vergrendelde {a} blijft beschermd tot dit definitief is.",
     completed: "Swap voltooid — de {coin} staat in je wallet.",
     refunded: "De swap is niet voltooid, dus je {coin} kwam automatisch terug. Niets verloren behalve fees.",
     aborted: "Geannuleerd voordat er geld bewoog.",

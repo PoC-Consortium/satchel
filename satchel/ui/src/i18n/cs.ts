@@ -4,7 +4,6 @@ import type { Bundle } from "./en";
 export const cs: Bundle = {
   app: {
     name: "Satchel",
-    tagline: "swapy bez důvěry",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -59,7 +58,6 @@ export const cs: Bundle = {
     balance: "Zůstatek: {amt} {sym}",
     balanceLoading: "Zůstatek: …",
     noCoins: "Žádné mince nejsou nakonfigurované",
-    sameCoin: "Co dáváte a co dostanete musí být různé mince.",
     legDown: "Uzel jedné z těchto mincí je mimo provoz — spusťte ho (nebo zkontrolujte Nastavení → Mince) před vystavením.",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -98,8 +96,6 @@ export const cs: Bundle = {
     cancelTip: "Přestat tento lístek ctít — přítel, který ho stále drží, ho už nemůže přijmout.",
   },
   takeSlip: {
-    open: "Vložit lístek",
-    title: "Přijmout soukromou nabídku",
     intro:
       "Přítel vám poslal soukromý nabídkový lístek (začíná na pactoffer1:). Vložte ho sem, abyste ho zkontrolovali a přijali — přesně jako nabídku z nástěnky.",
     placeholder: "pactoffer1:…",
@@ -182,7 +178,6 @@ export const cs: Bundle = {
       "Satchel obchoduje pod „merchantem“ — jednou obchodní identitou s vlastním seedem. Zatím žádného nemáte: vytvořte si nového, nebo importujte existující obnovovací frázi a začněte.",
     importMerchant: "Importovat merchanta",
     none: "Zatím žádní merchanti.",
-    active: "aktivní",
     switch: "přepnout",
     newMerchant: "Nový merchant",
     thisMerchant: "tento merchant",
@@ -211,7 +206,6 @@ export const cs: Bundle = {
     import: "Importovat",
     importDesc: "Obnovit z existující 12/24slovné fráze.",
     recoveryLabel: "Obnovovací fráze",
-    importPlaceholder: "slovo1 slovo2 slovo3 …",
     encrypt: "Zašifrovat",
     encryptDesc:
       "Přístupová fráze chrání seed v klidu. Zadáváte ji jednou za relaci — Satchel ji nikdy neukládá. Pozn.: po restartu se bezobslužné automatické vracení pozastaví, dokud ji znovu nezadáte.",
@@ -220,9 +214,6 @@ export const cs: Bundle = {
       "Automatické vracení funguje i po restartech bez nutnosti cokoli zadávat — jde jen o horký tranzitní seed. Cena: přístup k souboru/hostiteli odhalí tranzitní klíče a identitu tohoto merchanta.",
     passphraseLabel: "Přístupová fráze",
     passphrasePlaceholder: "zvolte přístupovou frázi",
-    createTitle: "Vytvořit seed",
-    importTitle: "Importovat seed",
-    secureTitle: "Zabezpečit {label}",
     revealTitle: "Zapište si svou obnovovací frázi",
     revealBody:
       "Kdokoli s těmito slovy ovládá horké klíče tohoto merchanta. Satchel si nenechává žádnou kopii — uložte je offline. Dále potvrdíte několik slov.",
@@ -353,19 +344,10 @@ export const cs: Bundle = {
     protoPrivateTip: "Soukromý swap (adaptér Taproot/MuSig2) — na řetězci vypadá jako běžná platba",
     protoHtlcTip: "Klasický swap HTLC",
     // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "Core RPC peněženka",
-    backendCoreDesc: "Vlastní peněženka vašeho uzlu financuje swap a přijímá výnosy.",
-    backendHardwareTitle: "Hardware",
-    backendHardwareDesc: "Podpis financovací části přes Ledger / PSBT.",
-    backendLater: "později",
     // CoinSetup dialog.
     setupTitle: "Připojit {coin}",
     setupIntro:
       "Nasměrujte Satchel na svůj vlastní uzel {sym}. Nic se neuloží, dokud uzel neprojde kontrolou genesis bloku — vaše prostředky se vždy dotknou jen skutečného řetězce {sym}.",
-    backendUrlLabel: "URL backendu uzlu",
-    backendUrlHint:
-      "První URL = vlastní peněženka vašeho uzlu (financuje swapy, přijímá výnosy). Za čárkami přidejte servery Electrum (tcp://host:port) pro další, nezávislé pohledy na řetězec.",
-    fundingWallet: "Financovací peněženka",
     confirmationsLabel: "Potvrzení před finalizací",
     confirmationsHint:
       "Jak hluboko musí být financování nebo výplata na tomto řetězci, než na ni swap zareaguje — rezerva pro bezpečnost při reorganizaci. Vyšší je bezpečnější, ale pomalejší; nechte prázdné pro doporučenou výchozí hodnotu ({default}).",
@@ -426,12 +408,6 @@ export const cs: Bundle = {
     walletDefaultHint:
       "Pro tuto minci není nastavena žádná peněženka, takže RPC používají výchozí peněženku uzlu. Nastavte ji v Nastavení → Mince, abyste vázali každé volání na konkrétní peněženku.",
     balanceLabel: "zůstatek {symbol}",
-    receive: "Přijmout",
-    send: "Odeslat",
-    sendTo: "Odeslat na adresu",
-    amount: "Množství",
-    sendTitle: "Odeslat {amount} {sym}?",
-    sendConfirmBody: "Na {to}\n\nToto utrácí z peněženky vašeho vlastního uzlu a nelze to vrátit zpět.",
   },
   corkboard: {
     noBoardTitle: "Žádný Corkboard připojen",
@@ -442,7 +418,6 @@ export const cs: Bundle = {
     boardSettings: "Nakonfigurovat v Nastavení",
     filterAll: "Vše",
     filterMine: "Moje",
-    offered: "nabízeno {symbol}",
     noOffers: "Žádné nabídky, které byste teď mohli přijmout",
     noOffersBody:
       "Nabídky se zde objeví, jakmile maker vystaví nějakou pro pár, který máte nastavený. Můžete také vystavit vlastní.",
@@ -461,7 +436,6 @@ export const cs: Bundle = {
       "Pokud swap uvázne, oběma stranám se prostředky automaticky vrátí — část takera se odemkne první, vaše o něco později. Nikdo neuvázne.",
     activeTitle: "Vaše aktivní swapy",
     states: {
-      open: "otevřená",
       takenByUs: "přijata vámi",
       revoked: "stažena",
       expired: "vypršela",
@@ -485,7 +459,6 @@ export const cs: Bundle = {
       mid: "střed {price}",
       levelOffers: "{count} nabídek za tuto cenu — vyberte jednu k přijetí",
       depthTip: "Celkem {sym} nabízeno za tuto cenu napříč {count} inzeráty.",
-      takerNote: "Při přijetí dáte {give} a dostanete {get}.",
       selectLevel: "Vyberte cenovou hladinu výše, abyste viděli tamní nabídky.",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "Zobrazovaná jednotka pro částky {coin}",
@@ -571,23 +544,8 @@ export const cs: Bundle = {
       "Nedostatek {sym} na financování tohoto swapu — potřeba ~{need} {sym} (množství + poplatek za financování), peněženka má {have} {sym}.",
   },
   wizard: {
-    welcome: "Vítejte v Satchelu",
-    connectTitle: "Připojit engine Pact",
-    connectIntro:
-      "Satchel je tenký klient enginu Pact — jádra, které drží vaše klíče a provádí swapy. Zvolte, jak se k němu připojit.",
-    managed: "Spustit vestavěný engine Pact",
-    managedDesc: "Satchel spustí a dohlíží na svůj vlastní engine Pact. Doporučeno.",
-    external: "Připojit se k externímu enginu Pact",
-    externalDesc: "Nasměrovat na engine Pact, který už provozujete (před spuštěním nastavte SATCHEL_PACTD_URL + cookie).",
-    externalNote:
-      "Externí režim se volí přes proměnné prostředí před spuštěním Satchelu. Pro jeho použití restartujte s nastaveným SATCHEL_PACTD_URL.",
-    coinsTitle: "Přidejte své mince",
-    coinsIntro:
-      "Po vytvoření merchanta připojte každou minci ke svému vlastnímu uzlu v Nastavení → Mince. Vyberte minci a backend (veřejný Electrum bez nutnosti nastavení, nebo váš vlastní uzel); genesis se kontroluje proti této síti, než se cokoli uloží.",
-    coinsTemplatesSoon: "Šablony mincí na jedno kliknutí přibydou zde v pozdějším vydání.",
     back: "Zpět",
     continue: "Pokračovat",
-    finish: "Dokončit nastavení",
   },
   // UI-4 docked activity log.
   log: {
@@ -666,8 +624,6 @@ export const cs: Bundle = {
       "Jejich {a} jsou uzamčena a ověřena. Dále: uzamkněte své {b}. Záchranná síť: automatické vrácení v {t2}, pokud cokoli uvázne.",
     fundedBMaker: "Obojí uzamčeno. Váš daemon nárokuje {b}, jakmile to bude bezpečně potvrzeno.",
     fundedBTaker: "Obojí uzamčeno. Váš daemon nárokuje {a} ve chvíli, kdy druhá strana převezme svá {b}.",
-    redeemedB:
-      "Nárokovali jste {b} — čeká se na potvrzení. Vaše uzamčená {a} zůstávají chráněna, dokud nebude toto finální.",
     completed: "Swap dokončen — {coin} je ve vaší peněžence.",
     refunded: "Swap se nedokončil, takže se vaše {coin} automaticky vrátila. Nic ztraceno kromě poplatků.",
     aborted: "Zrušeno dříve, než se pohnuly jakékoli peníze.",

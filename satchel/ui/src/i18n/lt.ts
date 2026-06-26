@@ -4,7 +4,6 @@ import type { Bundle } from "./en";
 export const lt: Bundle = {
   app: {
     name: "Satchel",
-    tagline: "be pasitikėjimo mainai",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -59,7 +58,6 @@ export const lt: Bundle = {
     balance: "Likutis: {amt} {sym}",
     balanceLoading: "Likutis: …",
     noCoins: "Monetų nesukonfigūruota",
-    sameCoin: "Duodama ir gaunama monetos turi skirtis.",
     legDown: "Vienos iš šių monetų mazgas neveikia — paleiskite jį (arba patikrinkite Nustatymai → Monetos) prieš skelbdami.",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -98,8 +96,6 @@ export const lt: Bundle = {
     cancelTip: "Nustoti laikytis šio lapelio — draugas, kuris jį vis dar turi, nebegalės jo priimti.",
   },
   takeSlip: {
-    open: "Įklijuoti lapelį",
-    title: "Priimti privatų pasiūlymą",
     intro:
       "Draugas atsiuntė jums privataus pasiūlymo lapelį (jis prasideda pactoffer1:). Įklijuokite jį čia, kad peržiūrėtumėte ir priimtumėte — visai kaip pasiūlymą iš lentos.",
     placeholder: "pactoffer1:…",
@@ -182,7 +178,6 @@ export const lt: Bundle = {
       "Satchel prekiauja per „prekiautoją“ — vieną prekybos tapatybę su savo sėkla. Kol kas jų neturite: sukurkite naują arba importuokite esamą atkūrimo frazę, kad pradėtumėte.",
     importMerchant: "Importuoti prekiautoją",
     none: "Prekiautojų dar nėra.",
-    active: "aktyvus",
     switch: "perjungti",
     newMerchant: "Naujas prekiautojas",
     thisMerchant: "šis prekiautojas",
@@ -211,7 +206,6 @@ export const lt: Bundle = {
     import: "Importuoti",
     importDesc: "Atkurkite iš esamos 12/24 žodžių frazės.",
     recoveryLabel: "Atkūrimo frazė",
-    importPlaceholder: "žodis1 žodis2 žodis3 …",
     encrypt: "Užšifruoti",
     encryptDesc:
       "Slaptafrazė apsaugo sėklą saugykloje. Ją įvedate kartą per sesiją — Satchel jos niekada nesaugo. Pastaba: automatinis grąžinimas be priežiūros sustabdomas po paleidimo iš naujo, kol jos vėl neįvesite.",
@@ -220,9 +214,6 @@ export const lt: Bundle = {
       "Automatinis grąžinimas veikia ir per pakartotinius paleidimus nieko nereikia įvesti — tai tik karšta tranzito sėkla. Kaina: prieiga prie failo/kompiuterio atskleidžia šio prekiautojo tranzito raktus ir tapatybę.",
     passphraseLabel: "Slaptafrazė",
     passphrasePlaceholder: "pasirinkite slaptafrazę",
-    createTitle: "Sukurti sėklą",
-    importTitle: "Importuoti sėklą",
-    secureTitle: "Apsaugoti {label}",
     revealTitle: "Užsirašykite atkūrimo frazę",
     revealBody:
       "Bet kas, turintis šiuos žodžius, valdo šio prekiautojo karštuosius raktus. Satchel nelaiko jokios kopijos — saugokite ją neprisijungę. Toliau patvirtinsite kelis žodžius.",
@@ -353,19 +344,10 @@ export const lt: Bundle = {
     protoPrivateTip: "Privatūs mainai (Taproot/MuSig2 adapteris) — grandinėje atrodo kaip įprastas mokėjimas",
     protoHtlcTip: "Klasikiniai HTLC mainai",
     // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "Core RPC piniginė",
-    backendCoreDesc: "Jūsų mazgo paties piniginė finansuoja mainus ir gauna pajamas.",
-    backendHardwareTitle: "Aparatūra",
-    backendHardwareDesc: "Ledger / PSBT pasirašymas finansavimo atkarpai.",
-    backendLater: "vėliau",
     // CoinSetup dialog.
     setupTitle: "Prijungti {coin}",
     setupIntro:
       "Nukreipkite Satchel į savo paties {sym} mazgą. Niekas neįrašoma, kol mazgas nepraeina genezės bloko patikros — jūsų lėšos visada liečia tik tikrą {sym} grandinę.",
-    backendUrlLabel: "Mazgo galinis URL (-ai)",
-    backendUrlHint:
-      "Pirmasis URL = jūsų mazgo paties piniginė (finansuoja mainus, gauna pajamas). Po kablelio pridėkite Electrum serverius (tcp://host:port) papildomiems, nepriklausomiems grandinės vaizdams.",
-    fundingWallet: "Finansavimo piniginė",
     confirmationsLabel: "Patvirtinimų prieš galutinį",
     confirmationsHint:
       "Kaip giliai finansavimas ar atpirkimas šioje grandinėje turi būti, kol mainai į jį reaguoja — reorganizacijos saugumo atsarga. Didesnis saugiau, bet lėčiau; palikite tuščią rekomenduojamai numatytajai ({default}).",
@@ -426,12 +408,6 @@ export const lt: Bundle = {
     walletDefaultHint:
       "Šiai monetai nenustatyta jokia piniginė, todėl RPC naudoja mazgo numatytąją piniginę. Nustatykite ją skiltyje Nustatymai → Monetos, kad kiekvienas iškvietimas būtų apribotas konkrečiai piniginei.",
     balanceLabel: "{symbol} likutis",
-    receive: "Gauti",
-    send: "Siųsti",
-    sendTo: "Siųsti adresu",
-    amount: "Suma",
-    sendTitle: "Siųsti {amount} {sym}?",
-    sendConfirmBody: "Kam: {to}\n\nTai išleidžia iš jūsų pačių mazgo piniginės ir negali būti atšaukta.",
   },
   corkboard: {
     noBoardTitle: "Neprijungta jokia Corkboard",
@@ -442,7 +418,6 @@ export const lt: Bundle = {
     boardSettings: "Konfigūruoti skiltyje Nustatymai",
     filterAll: "Visi",
     filterMine: "Mano",
-    offered: "siūloma {symbol}",
     noOffers: "Šiuo metu nėra pasiūlymų, kuriuos galėtumėte priimti",
     noOffersBody:
       "Pasiūlymai pasirodo čia, kai tik sudarytojas paskelbia vieną poros, kurią sukonfigūravote. Taip pat galite paskelbti savo.",
@@ -461,7 +436,6 @@ export const lt: Bundle = {
       "Jei mainai užstringa, abi pusės gauna automatinį grąžinimą — priimančiojo atkarpa atsirakina pirma, jūsiškė kiek vėliau. Niekas nelieka įstrigęs.",
     activeTitle: "Jūsų aktyvūs mainai",
     states: {
-      open: "atvira",
       takenByUs: "jūsų priimta",
       revoked: "pašalinta",
       expired: "nebegalioja",
@@ -485,7 +459,6 @@ export const lt: Bundle = {
       mid: "vidurys {price}",
       levelOffers: "{count} pasiūlym. (-ų) šia kaina — pasirinkite vieną, kad priimtumėte",
       depthTip: "Iš viso {sym} siūloma šia kaina iš {count} skelbim. (-ų).",
-      takerNote: "Priimdami duodate {give} ir gaunate {get}.",
       selectLevel: "Pasirinkite kainos lygį aukščiau, kad pamatytumėte ten esančius pasiūlymus.",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "Rodymo vienetas {coin} sumoms",
@@ -571,23 +544,8 @@ export const lt: Bundle = {
       "Nepakanka {sym} šiems mainams finansuoti — reikia ~{need} {sym} (suma + finansavimo mokestis), piniginėje yra {have} {sym}.",
   },
   wizard: {
-    welcome: "Sveiki atvykę į Satchel",
-    connectTitle: "Prijunkite Pact variklį",
-    connectIntro:
-      "Satchel yra plonas Pact variklio klientas — branduolio, kuris laiko jūsų raktus ir vykdo mainus. Pasirinkite, kaip jį pasiekti.",
-    managed: "Paleisti įmontuotą Pact variklį",
-    managedDesc: "Satchel paleidžia ir prižiūri savo paties Pact variklį. Rekomenduojama.",
-    external: "Prijungti prie išorinio Pact variklio",
-    externalDesc: "Nukreipkite į jau veikiantį Pact variklį (prieš paleidžiant nustatykite SATCHEL_PACTD_URL + slapuką).",
-    externalNote:
-      "Išorinis režimas pasirenkamas per aplinkos kintamuosius prieš paleidžiant Satchel. Paleiskite iš naujo su nustatytu SATCHEL_PACTD_URL, kad jį naudotumėte.",
-    coinsTitle: "Pridėkite savo monetas",
-    coinsIntro:
-      "Sukūrus prekiautoją, prijunkite kiekvieną monetą prie savo mazgo skiltyje Nustatymai → Monetos. Pasirinkite monetą ir galinę dalį (viešą Electrum be konfigūracijos arba savo mazgą); prieš ką nors įrašant genezė tikrinama su šiuo tinklu.",
-    coinsTemplatesSoon: "Vieno paspaudimo monetų šablonai atsiras čia vėlesniame leidime.",
     back: "Atgal",
     continue: "Tęsti",
-    finish: "Baigti konfigūravimą",
   },
   // UI-4 docked activity log.
   log: {
@@ -666,8 +624,6 @@ export const lt: Bundle = {
       "Jų {a} užrakinta ir patikrinta. Toliau: užrakinkite savo {b}. Apsauga: automatinis grąžinimas {t2}, jei kas užstringa.",
     fundedBMaker: "Abu užrakinta. Jūsų demonas pasiima {b}, kai tik jis saugiai patvirtinamas.",
     fundedBTaker: "Abu užrakinta. Jūsų demonas pasiims {a}, kai tik kita pusė pasiima savo {b}.",
-    redeemedB:
-      "Pasiėmėte {b} — laukiama, kol jis patvirtinamas. Jūsų užrakinta {a} lieka apsaugota, kol tai bus galutina.",
     completed: "Mainai baigti — {coin} yra jūsų piniginėje.",
     refunded: "Mainai nebuvo užbaigti, todėl jūsų {coin} grįžo automatiškai. Prarasti tik mokesčiai.",
     aborted: "Atšaukta prieš judant pinigams.",

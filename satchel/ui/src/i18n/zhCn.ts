@@ -4,7 +4,6 @@ import type { Bundle } from "./en";
 export const zhCn: Bundle = {
   app: {
     name: "Satchel",
-    tagline: "无需信任的原子交换",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -59,7 +58,6 @@ export const zhCn: Bundle = {
     balance: "余额：{amt} {sym}",
     balanceLoading: "余额：…",
     noCoins: "尚未配置币种",
-    sameCoin: "支付与收到必须是不同的币种。",
     legDown: "这两种币中有一个节点已下线 — 请在发布前启动它（或检查设置 → 币种）。",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -98,8 +96,6 @@ export const zhCn: Bundle = {
     cancelTip: "停止承认此凭条 — 仍持有它的朋友将无法再接受。",
   },
   takeSlip: {
-    open: "粘贴凭条",
-    title: "接受私下报价",
     intro:
       "朋友给你发来了一条私下报价凭条（以 pactoffer1: 开头）。把它粘贴到这里来核对并接受 — 就像接受牌板上的报价一样。",
     placeholder: "pactoffer1:…",
@@ -182,7 +178,6 @@ export const zhCn: Bundle = {
       "Satchel 以“商户”身份进行交易 — 一个拥有自己种子的交易身份。你目前还没有：新建一个，或导入已有的助记词即可开始。",
     importMerchant: "导入商户",
     none: "尚无商户。",
-    active: "当前",
     switch: "切换",
     newMerchant: "新建商户",
     thisMerchant: "此商户",
@@ -211,7 +206,6 @@ export const zhCn: Bundle = {
     import: "导入",
     importDesc: "从已有的 12/24 词助记词恢复。",
     recoveryLabel: "助记词",
-    importPlaceholder: "word1 word2 word3 …",
     encrypt: "加密",
     encryptDesc:
       "口令用于在静态时保护种子。每次会话输入一次 — Satchel 绝不存储它。注意：重启后，无人值守的自动退款会暂停，直到你重新输入口令。",
@@ -220,9 +214,6 @@ export const zhCn: Bundle = {
       "自动退款在重启后仍可正常运行且无需输入任何内容 — 这只是一个中转热种子。代价：文件/主机的访问者会暴露此商户的中转密钥和身份。",
     passphraseLabel: "口令",
     passphrasePlaceholder: "设置一个口令",
-    createTitle: "创建种子",
-    importTitle: "导入种子",
-    secureTitle: "保护 {label}",
     revealTitle: "请写下你的助记词",
     revealBody:
       "任何拥有这些词的人都能控制此商户的热密钥。Satchel 不保留任何副本 — 请离线保存。接下来你需要确认其中几个词。",
@@ -353,19 +344,10 @@ export const zhCn: Bundle = {
     protoPrivateTip: "私密交换（Taproot/MuSig2 适配器）— 在链上看起来就像一笔普通付款",
     protoHtlcTip: "经典 HTLC 交换",
     // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "Core RPC 钱包",
-    backendCoreDesc: "你节点自身的钱包为交换注资并接收收益。",
-    backendHardwareTitle: "硬件",
-    backendHardwareDesc: "为注资腿提供 Ledger / PSBT 签名。",
-    backendLater: "稍后",
     // CoinSetup dialog.
     setupTitle: "连接 {coin}",
     setupIntro:
       "将 Satchel 指向你自己的 {sym} 节点。在节点通过创世区块检查之前不会保存任何内容 — 你的资金始终只会触及真正的 {sym} 链。",
-    backendUrlLabel: "节点后端 URL",
-    backendUrlHint:
-      "第一个 URL = 你节点自身的钱包（为交换注资、接收收益）。在逗号后追加 Electrum 服务器（tcp://host:port）可获得额外的、独立的链视图。",
-    fundingWallet: "注资钱包",
     confirmationsLabel: "确认数（达到即视为最终）",
     confirmationsHint:
       "在此链上，一笔注资或赎回需要达到多深才会被交换据以行动 — 即重组安全余量。越高越安全但越慢；留空则使用推荐的默认值（{default}）。",
@@ -426,12 +408,6 @@ export const zhCn: Bundle = {
     walletDefaultHint:
       "此币种未设置钱包，因此 RPC 使用节点的默认钱包。请在设置 → 币种中设置一个，以将每次调用限定到指定钱包。",
     balanceLabel: "{symbol} 余额",
-    receive: "接收",
-    send: "发送",
-    sendTo: "发送到地址",
-    amount: "数量",
-    sendTitle: "发送 {amount} {sym}？",
-    sendConfirmBody: "发送至 {to}\n\n此操作从你自己节点的钱包支出，且无法撤销。",
   },
   corkboard: {
     noBoardTitle: "未连接 Corkboard",
@@ -442,7 +418,6 @@ export const zhCn: Bundle = {
     boardSettings: "在设置中配置",
     filterAll: "全部",
     filterMine: "我的",
-    offered: "提供 {symbol}",
     noOffers: "目前没有你可以接受的报价",
     noOffersBody:
       "一旦有做市方为你已设置的交易对发布报价，它就会显示在这里。你也可以发布自己的报价。",
@@ -461,7 +436,6 @@ export const zhCn: Bundle = {
       "若交换停滞，双方都会自动退款 — 接受方的腿先解锁，你的稍后。没人会被卡住。",
     activeTitle: "你的进行中交换",
     states: {
-      open: "开放",
       takenByUs: "已被你接受",
       revoked: "已撤回",
       expired: "已过期",
@@ -485,7 +459,6 @@ export const zhCn: Bundle = {
       mid: "中间价 {price}",
       levelOffers: "此价位有 {count} 条报价 — 挑一条接受",
       depthTip: "在此价位、横跨 {count} 条告示，总计提供 {sym}。",
-      takerNote: "接受它，你支付 {give} 并收到 {get}。",
       selectLevel: "请在上方选择一个价位，查看该处的报价。",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "{coin} 金额的显示单位",
@@ -571,23 +544,8 @@ export const zhCn: Bundle = {
       "{sym} 不足以为此交换注资 — 需要约 {need} {sym}（金额 + 注资费用），钱包仅有 {have} {sym}。",
   },
   wizard: {
-    welcome: "欢迎使用 Satchel",
-    connectTitle: "连接 Pact 引擎",
-    connectIntro:
-      "Satchel 是 Pact 引擎的轻量客户端 — 引擎是持有你密钥并运行交换的核心。选择如何连接它。",
-    managed: "运行内置的 Pact 引擎",
-    managedDesc: "Satchel 会启动并管理它自己的 Pact 引擎。推荐。",
-    external: "连接到外部 Pact 引擎",
-    externalDesc: "指向你已经运行的 Pact 引擎（启动前设置 SATCHEL_PACTD_URL + cookie）。",
-    externalNote:
-      "外部模式在启动 Satchel 前通过环境变量选择。请在设置好 SATCHEL_PACTD_URL 后重新启动以使用它。",
-    coinsTitle: "添加你的币种",
-    coinsIntro:
-      "在创建商户后，于设置 → 币种中将每种币连接到你自己的节点。挑选一种币和一个后端（公共 Electrum 免设置，或你自己的节点）；在保存任何内容之前会针对此网络检查创世区块。",
-    coinsTemplatesSoon: "一键币种模板将在后续版本中加入这里。",
     back: "返回",
     continue: "继续",
-    finish: "完成设置",
   },
   // UI-4 docked activity log.
   log: {
@@ -666,8 +624,6 @@ export const zhCn: Bundle = {
       "对方的 {a} 已锁定并验证。下一步：锁定你的 {b}。安全网：若有任何停滞，{t2} 自动退款。",
     fundedBMaker: "双方都已锁定。一旦 {b} 被安全确认，你的守护进程便会认领它。",
     fundedBTaker: "双方都已锁定。一旦对方取走他们的 {b}，你的守护进程便会立即认领 {a}。",
-    redeemedB:
-      "你已认领 {b} — 正等待其确认。在此交易最终完成前，你锁定的 {a} 仍受保护。",
     completed: "交换完成 — {coin} 已到你的钱包。",
     refunded: "交换未能完成，因此你的 {coin} 已自动退回。除手续费外没有任何损失。",
     aborted: "在任何资金转移之前已取消。",

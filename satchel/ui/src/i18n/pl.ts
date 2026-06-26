@@ -4,7 +4,6 @@ import type { Bundle } from "./en";
 export const pl: Bundle = {
   app: {
     name: "Satchel",
-    tagline: "swapy bez zaufania",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -59,7 +58,6 @@ export const pl: Bundle = {
     balance: "Saldo: {amt} {sym}",
     balanceLoading: "Saldo: …",
     noCoins: "Nie skonfigurowano monet",
-    sameCoin: "Oddawana i otrzymywana muszą być różnymi monetami.",
     legDown: "Węzeł jednej z tych monet jest niedostępny — uruchom go (lub sprawdź Ustawienia → Monety) przed wystawieniem.",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -98,8 +96,6 @@ export const pl: Bundle = {
     cancelTip: "Przestań honorować ten slip — znajomy, który nadal go ma, nie będzie mógł go już przyjąć.",
   },
   takeSlip: {
-    open: "Wklej slip",
-    title: "Przyjmij prywatną ofertę",
     intro:
       "Znajomy wysłał Ci prywatny slip ofertowy (zaczyna się od pactoffer1:). Wklej go tutaj, aby sprawdzić i przyjąć — dokładnie tak jak ofertę z tablicy.",
     placeholder: "pactoffer1:…",
@@ -182,7 +178,6 @@ export const pl: Bundle = {
       "Satchel handluje pod „sprzedawcą” — jedną tożsamością handlową z własnym seedem. Nie masz jeszcze żadnego: utwórz nowy lub zaimportuj istniejącą frazę odzyskiwania, aby zacząć.",
     importMerchant: "Zaimportuj sprzedawcę",
     none: "Brak sprzedawców.",
-    active: "aktywny",
     switch: "przełącz",
     newMerchant: "Nowy sprzedawca",
     thisMerchant: "ten sprzedawca",
@@ -211,7 +206,6 @@ export const pl: Bundle = {
     import: "Importuj",
     importDesc: "Przywróć z istniejącej frazy 12/24-wyrazowej.",
     recoveryLabel: "Fraza odzyskiwania",
-    importPlaceholder: "słowo1 słowo2 słowo3 …",
     encrypt: "Zaszyfruj",
     encryptDesc:
       "Hasło chroni seed w spoczynku. Wpisujesz je raz na sesję — Satchel nigdy go nie przechowuje. Uwaga: automatyczny zwrot bez nadzoru wstrzymuje się po restarcie, dopóki go ponownie nie wpiszesz.",
@@ -220,9 +214,6 @@ export const pl: Bundle = {
       "Automatyczny zwrot działa po restartach bez konieczności wpisywania czegokolwiek — to tylko gorący seed tranzytowy. Koszt: dostęp do pliku/hosta ujawnia klucze tranzytowe i tożsamość tego sprzedawcy.",
     passphraseLabel: "Hasło",
     passphrasePlaceholder: "wybierz hasło",
-    createTitle: "Utwórz seed",
-    importTitle: "Importuj seed",
-    secureTitle: "Zabezpiecz {label}",
     revealTitle: "Zapisz swoją frazę odzyskiwania",
     revealBody:
       "Każdy, kto ma te słowa, kontroluje gorące klucze tego sprzedawcy. Satchel nie przechowuje kopii — przechowuj ją offline. Za chwilę potwierdzisz kilka słów.",
@@ -353,19 +344,10 @@ export const pl: Bundle = {
     protoPrivateTip: "Prywatny swap (adapter Taproot/MuSig2) — wygląda na łańcuchu jak zwykła płatność",
     protoHtlcTip: "Klasyczny swap HTLC",
     // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "Portfel Core RPC",
-    backendCoreDesc: "Własny portfel Twojego węzła finansuje swap i odbiera zyski.",
-    backendHardwareTitle: "Sprzęt",
-    backendHardwareDesc: "Podpisywanie Ledger / PSBT dla strony finansowania.",
-    backendLater: "później",
     // CoinSetup dialog.
     setupTitle: "Połącz {coin}",
     setupIntro:
       "Wskaż Satchel swój własny węzeł {sym}. Nic nie jest zapisywane, dopóki węzeł nie przejdzie kontroli bloku genesis — Twoje środki dotykają wyłącznie prawdziwego łańcucha {sym}.",
-    backendUrlLabel: "Adres(y) URL backendu węzła",
-    backendUrlHint:
-      "Pierwszy URL = własny portfel Twojego węzła (finansuje swapy, odbiera zyski). Dodaj serwery Electrum (tcp://host:port) po przecinkach, aby uzyskać dodatkowe, niezależne widoki łańcucha.",
-    fundingWallet: "Portfel finansujący",
     confirmationsLabel: "Potwierdzeń przed finalizacją",
     confirmationsHint:
       "Jak głęboko finansowanie lub wykup na tym łańcuchu musi być, zanim swap na nim zadziała — margines bezpieczeństwa na reorg. Wyżej bezpieczniej, ale wolniej; pozostaw puste dla zalecanej wartości domyślnej ({default}).",
@@ -426,12 +408,6 @@ export const pl: Bundle = {
     walletDefaultHint:
       "Nie ustawiono portfela dla tej monety, więc RPC używają domyślnego portfela węzła. Ustaw go w Ustawienia → Monety, aby ograniczyć każde wywołanie do konkretnego portfela.",
     balanceLabel: "saldo {symbol}",
-    receive: "Odbierz",
-    send: "Wyślij",
-    sendTo: "Wyślij na adres",
-    amount: "Ilość",
-    sendTitle: "Wysłać {amount} {sym}?",
-    sendConfirmBody: "Do {to}\n\nTo wydaje z portfela Twojego własnego węzła i nie można tego cofnąć.",
   },
   corkboard: {
     noBoardTitle: "Brak połączonego Corkboardu",
@@ -442,7 +418,6 @@ export const pl: Bundle = {
     boardSettings: "Skonfiguruj w Ustawieniach",
     filterAll: "Wszystkie",
     filterMine: "Moje",
-    offered: "{symbol} oferowane",
     noOffers: "Brak ofert, które możesz teraz przyjąć",
     noOffersBody:
       "Oferty pojawiają się tutaj, gdy tylko maker wystawi je dla pary, którą skonfigurowałeś. Możesz też wystawić własną.",
@@ -461,7 +436,6 @@ export const pl: Bundle = {
       "Jeśli swap utknie, obie strony otrzymują automatyczny zwrot — strona takera odblokowuje się pierwsza, Twoja nieco później. Nikt nie zostaje uwięziony.",
     activeTitle: "Twoje aktywne swapy",
     states: {
-      open: "otwarta",
       takenByUs: "przyjęta przez Ciebie",
       revoked: "wycofana",
       expired: "wygasła",
@@ -485,7 +459,6 @@ export const pl: Bundle = {
       mid: "środek {price}",
       levelOffers: "{count} ofert(a) po tej cenie — wybierz jedną do przyjęcia",
       depthTip: "Łącznie {sym} oferowane po tej cenie w {count} ogłoszeniach.",
-      takerNote: "Przyjmując ją, oddajesz {give} i otrzymujesz {get}.",
       selectLevel: "Wybierz poziom cenowy powyżej, aby zobaczyć tamtejsze oferty.",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "Jednostka wyświetlania dla kwot {coin}",
@@ -571,23 +544,8 @@ export const pl: Bundle = {
       "Za mało {sym}, aby sfinansować ten swap — potrzeba ~{need} {sym} (kwota + opłata za finansowanie), portfel ma {have} {sym}.",
   },
   wizard: {
-    welcome: "Witaj w Satchel",
-    connectTitle: "Połącz silnik Pact",
-    connectIntro:
-      "Satchel to cienki klient silnika Pact — rdzenia, który przechowuje Twoje klucze i prowadzi swapy. Wybierz, jak się z nim połączyć.",
-    managed: "Uruchom wbudowany silnik Pact",
-    managedDesc: "Satchel uruchamia i nadzoruje własny silnik Pact. Zalecane.",
-    external: "Połącz z zewnętrznym silnikiem Pact",
-    externalDesc: "Wskaż silnik Pact, który już uruchamiasz (ustaw SATCHEL_PACTD_URL + cookie przed uruchomieniem).",
-    externalNote:
-      "Tryb zewnętrzny wybierany jest za pomocą zmiennych środowiskowych przed uruchomieniem Satchel. Uruchom ponownie z ustawionym SATCHEL_PACTD_URL, aby go użyć.",
-    coinsTitle: "Dodaj swoje monety",
-    coinsIntro:
-      "Po utworzeniu sprzedawcy połącz każdą monetę z własnym węzłem w Ustawienia → Monety. Wybierz monetę i backend (publiczny Electrum dla zerowej konfiguracji lub własny węzeł); genesis jest sprawdzany względem tej sieci przed zapisaniem czegokolwiek.",
-    coinsTemplatesSoon: "Szablony monet jednym kliknięciem pojawią się tutaj w późniejszym wydaniu.",
     back: "Wstecz",
     continue: "Kontynuuj",
-    finish: "Zakończ konfigurację",
   },
   // UI-4 docked activity log.
   log: {
@@ -666,8 +624,6 @@ export const pl: Bundle = {
       "Ich {a} są zablokowane i zweryfikowane. Dalej: zablokuj swoje {b}. Siatka bezpieczeństwa: automatyczny zwrot o {t2}, jeśli cokolwiek utknie.",
     fundedBMaker: "Obie strony zablokowane. Twój daemon odbiera {b}, gdy tylko zostanie bezpiecznie potwierdzone.",
     fundedBTaker: "Obie strony zablokowane. Twój daemon odbierze {a} w momencie, gdy druga strona odbierze swoje {b}.",
-    redeemedB:
-      "Odebrałeś {b} — czekanie na potwierdzenie. Twoje zablokowane {a} pozostają chronione, dopóki to nie będzie ostateczne.",
     completed: "Swap zakończony — {coin} są w Twoim portfelu.",
     refunded: "Swap się nie sfinalizował, więc Twoje {coin} wróciły automatycznie. Nic nie stracone poza opłatami.",
     aborted: "Anulowano, zanim jakiekolwiek pieniądze się przemieściły.",

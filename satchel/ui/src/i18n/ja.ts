@@ -4,7 +4,6 @@ import type { Bundle } from "./en";
 export const ja: Bundle = {
   app: {
     name: "Satchel",
-    tagline: "トラストレスなスワップ",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -59,7 +58,6 @@ export const ja: Bundle = {
     balance: "残高: {amt} {sym}",
     balanceLoading: "残高: …",
     noCoins: "コインが未設定です",
-    sameCoin: "渡すコインと受け取るコインは異なる必要があります。",
     legDown: "これらのコインのいずれかのノードが停止しています — 投稿前に起動してください（または設定 → コインを確認）。",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -98,8 +96,6 @@ export const ja: Bundle = {
     cancelTip: "このスリップの履行を停止します — まだ保持している友人もこれを取れなくなります。",
   },
   takeSlip: {
-    open: "スリップを貼り付け",
-    title: "プライベートオファーを取る",
     intro:
       "友人がプライベートオファースリップ（pactoffer1: で始まります）を送ってきました。ここに貼り付けて、ボードのオファーとまったく同じように確認して応じてください。",
     placeholder: "pactoffer1:…",
@@ -182,7 +178,6 @@ export const ja: Bundle = {
       "Satchel は「マーチャント」のもとで取引します — 独自のシードを持つ一つの取引アイデンティティです。まだ一つもありません。新しく作成するか、既存のリカバリーフレーズをインポートして始めましょう。",
     importMerchant: "マーチャントをインポート",
     none: "マーチャントがまだありません。",
-    active: "アクティブ",
     switch: "切り替え",
     newMerchant: "新しいマーチャント",
     thisMerchant: "このマーチャント",
@@ -211,7 +206,6 @@ export const ja: Bundle = {
     import: "インポート",
     importDesc: "既存の 12/24 語のフレーズから復元します。",
     recoveryLabel: "リカバリーフレーズ",
-    importPlaceholder: "word1 word2 word3 …",
     encrypt: "暗号化",
     encryptDesc:
       "パスフレーズで保存中のシードを保護します。セッションごとに一度入力します — Satchel は保存しません。注意: 再起動後は、再入力するまで無人の自動返金が一時停止します。",
@@ -220,9 +214,6 @@ export const ja: Bundle = {
       "何も入力せずとも自動返金が再起動をまたいで機能し続けます — これはあくまでホットな中継シードです。代償: ファイルやホストへのアクセスにより、このマーチャントの中継鍵とアイデンティティが露呈します。",
     passphraseLabel: "パスフレーズ",
     passphrasePlaceholder: "パスフレーズを選択",
-    createTitle: "シードを作成",
-    importTitle: "シードをインポート",
-    secureTitle: "{label} を保護",
     revealTitle: "リカバリーフレーズを書き留めてください",
     revealBody:
       "この単語を持つ者は誰でもこのマーチャントのホットキーを制御できます。Satchel はコピーを保持しません — オフラインで保管してください。次にいくつかの単語を確認します。",
@@ -353,19 +344,10 @@ export const ja: Bundle = {
     protoPrivateTip: "プライベートスワップ（Taproot/MuSig2 アダプター）— オンチェーンでは通常の支払いに見えます",
     protoHtlcTip: "クラシックな HTLC スワップ",
     // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "Core RPC ウォレット",
-    backendCoreDesc: "あなたのノード自身のウォレットがスワップに資金を入れ、収益を受け取ります。",
-    backendHardwareTitle: "ハードウェア",
-    backendHardwareDesc: "資金投入の脚を Ledger / PSBT で署名します。",
-    backendLater: "後で",
     // CoinSetup dialog.
     setupTitle: "{coin} を接続",
     setupIntro:
       "Satchel をご自身の {sym} ノードに向けます。ノードがジェネシスブロックのチェックに合格するまで何も保存されません — あなたの資金が触れるのは本物の {sym} チェーンだけです。",
-    backendUrlLabel: "ノードバックエンド URL",
-    backendUrlHint:
-      "最初の URL = あなたのノード自身のウォレット（スワップに資金を入れ、収益を受け取ります）。追加の独立したチェーンビューのために、カンマ区切りで Electrum サーバー（tcp://host:port）を追加できます。",
-    fundingWallet: "資金ウォレット",
     confirmationsLabel: "確定前の承認数",
     confirmationsHint:
       "このチェーン上の資金投入やリデームが、スワップが動作する前にどれだけ深くなる必要があるか — リオーグ安全マージンです。高いほど安全ですが遅くなります。推奨デフォルト（{default}）を使うには空欄のままにしてください。",
@@ -426,12 +408,6 @@ export const ja: Bundle = {
     walletDefaultHint:
       "このコインにウォレットが設定されていないため、RPC はノードのデフォルトウォレットを使用します。設定 → コインで設定すると、すべての呼び出しを特定のウォレットにスコープできます。",
     balanceLabel: "{symbol} 残高",
-    receive: "受け取る",
-    send: "送る",
-    sendTo: "アドレスに送る",
-    amount: "数量",
-    sendTitle: "{amount} {sym} を送りますか？",
-    sendConfirmBody: "送り先 {to}\n\nこれはあなた自身のノードのウォレットから支払われ、取り消せません。",
   },
   corkboard: {
     noBoardTitle: "Corkboard が接続されていません",
@@ -442,7 +418,6 @@ export const ja: Bundle = {
     boardSettings: "設定で構成",
     filterAll: "すべて",
     filterMine: "自分",
-    offered: "{symbol} 提供中",
     noOffers: "今すぐ取れるオファーはありません",
     noOffersBody:
       "設定したペアにメーカーがオファーを投稿すると、すぐにここに表示されます。自分でオファーを投稿することもできます。",
@@ -461,7 +436,6 @@ export const ja: Bundle = {
       "スワップが滞った場合、双方が自動返金されます — テイカーの脚が先に解除され、あなたの脚は少し後に解除されます。誰も立ち往生しません。",
     activeTitle: "進行中のスワップ",
     states: {
-      open: "オープン",
       takenByUs: "あなたが取得",
       revoked: "取り下げ済み",
       expired: "期限切れ",
@@ -485,7 +459,6 @@ export const ja: Bundle = {
       mid: "中値 {price}",
       levelOffers: "この価格に {count} 件のオファー — 一つ選んで取ってください",
       depthTip: "この価格で {count} 件の掲示にわたり提供中の {sym} の合計。",
-      takerNote: "これを取ると、{give} を渡して {get} を受け取ります。",
       selectLevel: "上の価格レベルを選ぶと、そこのオファーが表示されます。",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "{coin} 数量の表示単位",
@@ -571,23 +544,8 @@ export const ja: Bundle = {
       "このスワップに資金を入れるには {sym} が足りません — 約 {need} {sym}（数量 + 資金手数料）が必要ですが、ウォレットには {have} {sym} しかありません。",
   },
   wizard: {
-    welcome: "Satchel へようこそ",
-    connectTitle: "Pact エンジンを接続",
-    connectIntro:
-      "Satchel は Pact エンジンのシンクライアントです — 鍵を保持し、スワップを実行するコアです。到達方法を選んでください。",
-    managed: "組み込みの Pact エンジンを実行",
-    managedDesc: "Satchel が独自の Pact エンジンを起動・監督します。推奨。",
-    external: "外部の Pact エンジンに接続",
-    externalDesc: "すでに実行している Pact エンジンに向けます（起動前に SATCHEL_PACTD_URL + cookie を設定）。",
-    externalNote:
-      "外部モードは、Satchel 起動前の環境変数で選択します。SATCHEL_PACTD_URL を設定して再起動すると使用できます。",
-    coinsTitle: "コインを追加",
-    coinsIntro:
-      "マーチャントを作成したら、設定 → コインで各コインをご自身のノードに接続します。コインとバックエンドを選んでください（設定不要なら公開 Electrum、または自分のノード）。保存前に、このネットワークに対してジェネシスが確認されます。",
-    coinsTemplatesSoon: "ワンクリックのコインテンプレートは今後のリリースでここに追加されます。",
     back: "戻る",
     continue: "続ける",
-    finish: "設定を完了",
   },
   // UI-4 docked activity log.
   log: {
@@ -666,8 +624,6 @@ export const ja: Bundle = {
       "相手の {a} はロックされ、検証されました。次: あなたの {b} をロックします。セーフティネット: 何かが滞った場合 {t2} に自動返金。",
     fundedBMaker: "双方ロック済み。あなたのデーモンが、安全に確定し次第 {b} を請求します。",
     fundedBTaker: "双方ロック済み。相手が {b} を取った瞬間に、あなたのデーモンが {a} を請求します。",
-    redeemedB:
-      "あなたは {b} を請求しました — 確定を待っています。これが最終確定するまで、ロックされたあなたの {a} は保護されます。",
     completed: "スワップ完了 — {coin} はあなたのウォレットにあります。",
     refunded: "スワップは完了しなかったため、あなたの {coin} は自動的に返ってきました。失ったのは手数料だけです。",
     aborted: "資金が動く前にキャンセルされました。",

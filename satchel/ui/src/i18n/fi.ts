@@ -4,7 +4,6 @@ import type { Bundle } from "./en";
 export const fi: Bundle = {
   app: {
     name: "Satchel",
-    tagline: "luottamuksettomat swapit",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -59,7 +58,6 @@ export const fi: Bundle = {
     balance: "Saldo: {amt} {sym}",
     balanceLoading: "Saldo: …",
     noCoins: "Ei määritettyjä kolikoita",
-    sameCoin: "Annettavan ja saatavan kolikon on oltava eri kolikoita.",
     legDown: "Yksi näiden kolikoiden solmuista on alhaalla — käynnistä se (tai tarkista Asetukset → Kolikot) ennen julkaisua.",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -98,8 +96,6 @@ export const fi: Bundle = {
     cancelTip: "Lopeta tämän lipukkeen kunnioittaminen — ystävä, jolla se yhä on, ei voi enää ottaa sitä.",
   },
   takeSlip: {
-    open: "Liitä lipuke",
-    title: "Ota yksityinen tarjous",
     intro:
       "Ystävä lähetti sinulle yksityisen tarjouslipukkeen (se alkaa pactoffer1:). Liitä se tähän tarkistaaksesi ja ottaaksesi sen — aivan kuten tarjouksen taululta.",
     placeholder: "pactoffer1:…",
@@ -182,7 +178,6 @@ export const fi: Bundle = {
       "Satchel käy kauppaa ”kauppiaan” kautta — yksi kaupankäynti-identiteetti omalla seedillään. Sinulla ei ole vielä yhtään: luo uusi tai tuo olemassa oleva palautuslause aloittaaksesi.",
     importMerchant: "Tuo kauppias",
     none: "Ei vielä kauppiaita.",
-    active: "aktiivinen",
     switch: "vaihda",
     newMerchant: "Uusi kauppias",
     thisMerchant: "tämä kauppias",
@@ -211,7 +206,6 @@ export const fi: Bundle = {
     import: "Tuo",
     importDesc: "Palauta olemassa olevasta 12/24-sanaisesta lauseesta.",
     recoveryLabel: "Palautuslause",
-    importPlaceholder: "sana1 sana2 sana3 …",
     encrypt: "Salaa",
     encryptDesc:
       "Salasana suojaa seedin levossa. Syötät sen kerran istuntoa kohden — Satchel ei koskaan tallenna sitä. Huom: valvomaton automaattinen palautus pysähtyy uudelleenkäynnistyksen jälkeen, kunnes syötät sen uudelleen.",
@@ -220,9 +214,6 @@ export const fi: Bundle = {
       "Automaattinen palautus toimii uudelleenkäynnistysten läpi ilman, että mitään tarvitsee syöttää — tämä on vain kuuma siirto-seed. Hinta: tiedosto-/isäntäkoneen käyttö paljastaa tämän kauppiaan siirtoavaimet + identiteetin.",
     passphraseLabel: "Salasana",
     passphrasePlaceholder: "valitse salasana",
-    createTitle: "Luo seed",
-    importTitle: "Tuo seed",
-    secureTitle: "Suojaa {label}",
     revealTitle: "Kirjoita palautuslauseesi muistiin",
     revealBody:
       "Kuka tahansa, jolla on nämä sanat, hallitsee tämän kauppiaan kuumia avaimia. Satchel ei säilytä kopiota — tallenna se offline-tilassa. Vahvistat seuraavaksi muutaman sanan.",
@@ -353,19 +344,10 @@ export const fi: Bundle = {
     protoPrivateTip: "Yksityinen swap (Taproot/MuSig2-adapteri) — näyttää ketjussa tavalliselta maksulta",
     protoHtlcTip: "Klassinen HTLC-swap",
     // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "Core RPC -lompakko",
-    backendCoreDesc: "Solmusi oma lompakko rahoittaa swapin ja vastaanottaa tuotot.",
-    backendHardwareTitle: "Laitteisto",
-    backendHardwareDesc: "Ledger / PSBT -allekirjoitus rahoitusosalle.",
-    backendLater: "myöhemmin",
     // CoinSetup dialog.
     setupTitle: "Yhdistä {coin}",
     setupIntro:
       "Osoita Satchel omaan {sym}-solmuusi. Mitään ei tallenneta ennen kuin solmu läpäisee genesis-lohkon tarkistuksen — varasi koskettavat vain oikeaa {sym}-ketjua.",
-    backendUrlLabel: "Solmun taustajärjestelmän URL(:t)",
-    backendUrlHint:
-      "Ensimmäinen URL = solmusi oma lompakko (rahoittaa swapit, vastaanottaa tuotot). Lisää Electrum-palvelimia (tcp://host:port) pilkkujen jälkeen ylimääräisiä, riippumattomia ketjunäkymiä varten.",
-    fundingWallet: "Rahoituslompakko",
     confirmationsLabel: "Vahvistuksia ennen lopullisuutta",
     confirmationsHint:
       "Kuinka syvällä rahoituksen tai lunastuksen tässä ketjussa on oltava ennen kuin swap toimii sen perusteella — reorg-turvamarginaali. Korkeampi on turvallisempi mutta hitaampi; jätä tyhjäksi suositellulle oletukselle ({default}).",
@@ -426,12 +408,6 @@ export const fi: Bundle = {
     walletDefaultHint:
       "Tälle kolikolle ei ole asetettu lompakkoa, joten RPC:t käyttävät solmun oletuslompakkoa. Aseta sellainen kohdassa Asetukset → Kolikot rajataksesi jokaisen kutsun tiettyyn lompakkoon.",
     balanceLabel: "{symbol}-saldo",
-    receive: "Vastaanota",
-    send: "Lähetä",
-    sendTo: "Lähetä osoitteeseen",
-    amount: "Määrä",
-    sendTitle: "Lähetetäänkö {amount} {sym}?",
-    sendConfirmBody: "Osoitteeseen {to}\n\nTämä kuluttaa oman solmusi lompakosta eikä sitä voi peruuttaa.",
   },
   corkboard: {
     noBoardTitle: "Ei yhdistettyä Corkboardia",
@@ -442,7 +418,6 @@ export const fi: Bundle = {
     boardSettings: "Määritä Asetuksissa",
     filterAll: "Kaikki",
     filterMine: "Omat",
-    offered: "{symbol} tarjolla",
     noOffers: "Ei tarjouksia, jotka voisit ottaa juuri nyt",
     noOffersBody:
       "Tarjoukset ilmestyvät tähän heti, kun tekijä julkaisee sellaisen parille, jonka olet määrittänyt. Voit myös julkaista omasi.",
@@ -461,7 +436,6 @@ export const fi: Bundle = {
       "Jos swap jumiutuu, molemmat osapuolet palauttavat automaattisesti — ottajan osa avautuu ensin, sinun hieman myöhemmin. Kukaan ei jää jumiin.",
     activeTitle: "Aktiiviset swapisi",
     states: {
-      open: "avoin",
       takenByUs: "ottamasi",
       revoked: "vedetty pois",
       expired: "vanhentunut",
@@ -485,7 +459,6 @@ export const fi: Bundle = {
       mid: "keskihinta {price}",
       levelOffers: "{count} tarjousta tällä hinnalla — valitse yksi otettavaksi",
       depthTip: "Yhteensä {sym} tarjolla tällä hinnalla {count} ilmoituksen yli.",
-      takerNote: "Ottaessasi sen annat {give} ja saat {get}.",
       selectLevel: "Valitse hintataso yllä nähdäksesi siellä olevat tarjoukset.",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "{coin}-määrien näyttöyksikkö",
@@ -571,23 +544,8 @@ export const fi: Bundle = {
       "Ei tarpeeksi {sym} tämän swapin rahoittamiseen — tarvitaan ~{need} {sym} (määrä + rahoitusmaksu), lompakossa on {have} {sym}.",
   },
   wizard: {
-    welcome: "Tervetuloa Satcheliin",
-    connectTitle: "Yhdistä Pact-moottori",
-    connectIntro:
-      "Satchel on Pact-moottorin kevyt asiakas — ydin, joka pitää hallussaan avaimiasi ja ajaa swapit. Valitse, miten tavoitat sen.",
-    managed: "Aja sisäänrakennettu Pact-moottori",
-    managedDesc: "Satchel käynnistää ja valvoo omaa Pact-moottoriaan. Suositeltava.",
-    external: "Yhdistä ulkoiseen Pact-moottoriin",
-    externalDesc: "Osoita Pact-moottoriin, jota jo ajat (aseta SATCHEL_PACTD_URL + cookie ennen käynnistystä).",
-    externalNote:
-      "Ulkoinen tila valitaan ympäristömuuttujilla ennen Satchelin käynnistämistä. Käynnistä uudelleen SATCHEL_PACTD_URL asetettuna käyttääksesi sitä.",
-    coinsTitle: "Lisää kolikkosi",
-    coinsIntro:
-      "Kun kauppiaasi on luotu, yhdistä jokainen kolikko omaan solmuusi kohdassa Asetukset → Kolikot. Valitse kolikko ja taustajärjestelmä (julkinen Electrum nollamäärityksellä tai oma solmusi); genesis tarkistetaan tätä verkkoa vastaan ennen kuin mitään tallennetaan.",
-    coinsTemplatesSoon: "Yhden napsautuksen kolikkomallit saapuvat tähän myöhemmässä julkaisussa.",
     back: "Takaisin",
     continue: "Jatka",
-    finish: "Viimeistele määritys",
   },
   // UI-4 docked activity log.
   log: {
@@ -666,8 +624,6 @@ export const fi: Bundle = {
       "Heidän {a} on lukittu ja vahvistettu. Seuraavaksi: lukitse {b}. Turvaverkko: automaattinen palautus ajankohtana {t2}, jos jokin jumiutuu.",
     fundedBMaker: "Molemmat lukittu. Daemonisi lunastaa {b} heti kun se on turvallisesti vahvistettu.",
     fundedBTaker: "Molemmat lukittu. Daemonisi lunastaa {a} sillä hetkellä kun toinen osapuoli ottaa {b}.",
-    redeemedB:
-      "Lunastit {b} — odotetaan sen vahvistumista. Lukittu {a} pysyy suojattuna, kunnes tämä on lopullinen.",
     completed: "Swap valmis — {coin} on lompakossasi.",
     refunded: "Swap ei valmistunut, joten {coin} palautui automaattisesti. Mitään ei menetetty paitsi maksut.",
     aborted: "Peruutettu ennen kuin mitään rahaa liikkui.",

@@ -4,7 +4,6 @@ import type { Bundle } from "./en";
 export const sk: Bundle = {
   app: {
     name: "Satchel",
-    tagline: "swapy bez dôvery v tretiu stranu",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -59,7 +58,6 @@ export const sk: Bundle = {
     balance: "Zostatok: {amt} {sym}",
     balanceLoading: "Zostatok: …",
     noCoins: "Žiadne nakonfigurované mince",
-    sameCoin: "Mince, ktoré dávate a dostávate, musia byť rozdielne.",
     legDown: "Uzol jednej z týchto mincí je mimo prevádzky — spustite ho (alebo skontrolujte Nastavenia → Mince) pred zverejnením.",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -98,8 +96,6 @@ export const sk: Bundle = {
     cancelTip: "Prestať ctiť tento lístok — priateľ, ktorý ho stále má, ho už nemôže prijať.",
   },
   takeSlip: {
-    open: "Vložiť lístok",
-    title: "Prijať súkromnú ponuku",
     intro:
       "Priateľ vám poslal súkromný ponukový lístok (začína na pactoffer1:). Vložte ho sem, aby ste si ho prezreli a prijali — presne ako ponuku z nástenky.",
     placeholder: "pactoffer1:…",
@@ -182,7 +178,6 @@ export const sk: Bundle = {
       "Satchel obchoduje pod „obchodníkom“ — jednou obchodnou identitou s vlastným seedom. Zatiaľ žiadneho nemáte: vytvorte si nového alebo importujte existujúcu obnovovaciu frázu a začnite.",
     importMerchant: "Importovať obchodníka",
     none: "Zatiaľ žiadni obchodníci.",
-    active: "aktívny",
     switch: "prepnúť",
     newMerchant: "Nový obchodník",
     thisMerchant: "tento obchodník",
@@ -211,7 +206,6 @@ export const sk: Bundle = {
     import: "Importovať",
     importDesc: "Obnovte z existujúcej 12/24-slovnej frázy.",
     recoveryLabel: "Obnovovacia fráza",
-    importPlaceholder: "slovo1 slovo2 slovo3 …",
     encrypt: "Šifrovať",
     encryptDesc:
       "Prístupová fráza chráni seed v pokoji. Zadávate ju raz za reláciu — Satchel ju nikdy neukladá. Poznámka: bezobslužné automatické vrátenie sa po reštarte pozastaví, kým ju znova nezadáte.",
@@ -220,9 +214,6 @@ export const sk: Bundle = {
       "Automatické vrátenie funguje aj cez reštarty bez čohokoľvek na zadávanie — toto je len horúci tranzitný seed. Cena: prístup k súboru/hostiteľovi odhalí tranzitné kľúče a identitu tohto obchodníka.",
     passphraseLabel: "Prístupová fráza",
     passphrasePlaceholder: "zvoľte prístupovú frázu",
-    createTitle: "Vytvoriť seed",
-    importTitle: "Importovať seed",
-    secureTitle: "Zabezpečiť {label}",
     revealTitle: "Zapíšte si svoju obnovovaciu frázu",
     revealBody:
       "Ktokoľvek s týmito slovami ovláda horúce kľúče tohto obchodníka. Satchel si neuchováva žiadnu kópiu — uložte ju offline. Ďalej potvrdíte niekoľko slov.",
@@ -353,19 +344,10 @@ export const sk: Bundle = {
     protoPrivateTip: "Súkromný swap (Taproot/MuSig2 adaptor) — on-chain vyzerá ako bežná platba",
     protoHtlcTip: "Klasický HTLC swap",
     // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "RPC peňaženka jadra",
-    backendCoreDesc: "Vlastná peňaženka vášho uzla financuje swap a prijíma výnos.",
-    backendHardwareTitle: "Hardvér",
-    backendHardwareDesc: "Podpisovanie Ledger / PSBT pre financovaciu stranu.",
-    backendLater: "neskôr",
     // CoinSetup dialog.
     setupTitle: "Pripojiť {coin}",
     setupIntro:
       "Nasmerujte Satchel na svoj vlastný {sym} uzol. Nič sa neuloží, kým uzol neprejde kontrolou genesis bloku — vaše prostriedky sa kedykoľvek dotknú len skutočného reťazca {sym}.",
-    backendUrlLabel: "URL backendu uzla",
-    backendUrlHint:
-      "Prvá URL = vlastná peňaženka vášho uzla (financuje swapy, prijíma výnos). Pridajte servery Electrum (tcp://host:port) za čiarkami pre ďalšie, nezávislé pohľady na reťazec.",
-    fundingWallet: "Financovacia peňaženka",
     confirmationsLabel: "Potvrdení pred finalizáciou",
     confirmationsHint:
       "Ako hlboko musí byť financovanie alebo redeem na tomto reťazci, než na ňom swap zareaguje — bezpečnostná rezerva proti reorgu. Vyššia je bezpečnejšia, ale pomalšia; nechajte prázdne pre odporúčanú predvolenú hodnotu ({default}).",
@@ -426,12 +408,6 @@ export const sk: Bundle = {
     walletDefaultHint:
       "Pre túto mincu nie je nastavená žiadna peňaženka, takže RPC používajú predvolenú peňaženku uzla. Nastavte jednu v Nastavenia → Mince, aby každé volanie smerovalo na konkrétnu peňaženku.",
     balanceLabel: "Zostatok {symbol}",
-    receive: "Prijať",
-    send: "Odoslať",
-    sendTo: "Odoslať na adresu",
-    amount: "Množstvo",
-    sendTitle: "Odoslať {amount} {sym}?",
-    sendConfirmBody: "Na {to}\n\nToto sa minie z peňaženky vášho vlastného uzla a nedá sa vrátiť späť.",
   },
   corkboard: {
     noBoardTitle: "Žiadny pripojený Corkboard",
@@ -442,7 +418,6 @@ export const sk: Bundle = {
     boardSettings: "Konfigurovať v Nastaveniach",
     filterAll: "Všetky",
     filterMine: "Moje",
-    offered: "{symbol} ponúknuté",
     noOffers: "Žiadne ponuky, ktoré môžete práve teraz prijať",
     noOffersBody:
       "Ponuky sa tu objavia hneď, ako maker zverejní niektorú pre pár, ktorý ste nastavili. Môžete tiež zverejniť svoju vlastnú.",
@@ -461,7 +436,6 @@ export const sk: Bundle = {
       "Ak sa swap zasekne, obe strany dostanú prostriedky automaticky späť — strana takera sa odomkne ako prvá, vaša o niečo neskôr. Nikto nezostane zaseknutý.",
     activeTitle: "Vaše aktívne swapy",
     states: {
-      open: "otvorené",
       takenByUs: "prijaté vami",
       revoked: "stiahnuté",
       expired: "vypršané",
@@ -485,7 +459,6 @@ export const sk: Bundle = {
       mid: "stred {price}",
       levelOffers: "{count} ponúk za túto cenu — vyberte jednu na prijatie",
       depthTip: "Celkovo {sym} v ponuke za túto cenu naprieč {count} oznámeniami.",
-      takerNote: "Ak ju prijmete, dáte {give} a dostanete {get}.",
       selectLevel: "Vyberte cenovú úroveň vyššie, aby ste videli ponuky na nej.",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "Zobrazovacia jednotka pre sumy {coin}",
@@ -571,23 +544,8 @@ export const sk: Bundle = {
       "Nedostatok {sym} na financovanie tohto swapu — potrebných ~{need} {sym} (suma + financovací poplatok), peňaženka má {have} {sym}.",
   },
   wizard: {
-    welcome: "Vitajte v Satchel",
-    connectTitle: "Pripojiť engine Pact",
-    connectIntro:
-      "Satchel je tenký klient enginu Pact — jadra, ktoré drží vaše kľúče a spúšťa swapy. Vyberte, ako ho dosiahnuť.",
-    managed: "Spustiť zabudovaný engine Pact",
-    managedDesc: "Satchel spustí a dohliada na svoj vlastný engine Pact. Odporúčané.",
-    external: "Pripojiť k externému enginu Pact",
-    externalDesc: "Nasmerujte na engine Pact, ktorý už prevádzkujete (pred spustením nastavte SATCHEL_PACTD_URL + cookie).",
-    externalNote:
-      "Externý režim sa vyberá cez premenné prostredia pred spustením Satchel. Znova spustite s nastaveným SATCHEL_PACTD_URL, aby ste ho použili.",
-    coinsTitle: "Pridajte svoje mince",
-    coinsIntro:
-      "Po vytvorení vášho obchodníka pripojte každú mincu k svojmu vlastnému uzlu v Nastavenia → Mince. Vyberte mincu a backend (verejný Electrum pre nulové nastavenie alebo váš vlastný uzol); genesis sa skontroluje voči tejto sieti, než sa čokoľvek uloží.",
-    coinsTemplatesSoon: "Šablóny mincí na jedno kliknutie pribudnú v neskoršom vydaní.",
     back: "Späť",
     continue: "Pokračovať",
-    finish: "Dokončiť nastavenie",
   },
   // UI-4 docked activity log.
   log: {
@@ -666,8 +624,6 @@ export const sk: Bundle = {
       "Ich {a} je zamknuté a overené. Ďalej: zamknite svoje {b}. Záchranná sieť: automatické vrátenie o {t2}, ak sa čokoľvek zasekne.",
     fundedBMaker: "Oboje zamknuté. Váš démon nárokuje {b}, akonáhle je bezpečne potvrdené.",
     fundedBTaker: "Oboje zamknuté. Váš démon nárokuje {a} v okamihu, keď druhá strana prevezme svoje {b}.",
-    redeemedB:
-      "Nárokovali ste {b} — čaká sa na potvrdenie. Vaše zamknuté {a} zostáva chránené, kým toto nie je finálne.",
     completed: "Swap dokončený — {coin} je vo vašej peňaženke.",
     refunded: "Swap sa nedokončil, takže vaše {coin} sa vrátilo automaticky. Nestratilo sa nič okrem poplatkov.",
     aborted: "Zrušené skôr, než sa pohli akékoľvek peniaze.",

@@ -12,7 +12,6 @@
 export const en = {
   app: {
     name: "Satchel",
-    tagline: "trustless swaps",
   },
   // In-app update notifications (sidebar version badge + dialog).
   update: {
@@ -67,7 +66,6 @@ export const en = {
     balance: "Balance: {amt} {sym}",
     balanceLoading: "Balance: …",
     noCoins: "No coins configured",
-    sameCoin: "Give and receive must be different coins.",
     legDown: "One of these coins' nodes is down — start it (or check Settings → Coins) before posting.",
     // Swap-protocol pin (only offered when a pair+network supports more than
     // one). v2 label reuses coins.protoPrivate ("Private (Taproot)").
@@ -106,8 +104,6 @@ export const en = {
     cancelTip: "Stop honoring this slip — a friend who still holds it can no longer take it.",
   },
   takeSlip: {
-    open: "Paste a slip",
-    title: "Take a private offer",
     intro:
       "A friend sent you a private offer slip (it starts with pactoffer1:). Paste it here to review and take it — exactly like an offer from the board.",
     placeholder: "pactoffer1:…",
@@ -190,7 +186,6 @@ export const en = {
       "Satchel trades under a “merchant” — one trading identity with its own seed. You have none yet: create a fresh one, or import an existing recovery phrase to get started.",
     importMerchant: "Import a merchant",
     none: "No merchants yet.",
-    active: "active",
     switch: "switch",
     newMerchant: "New merchant",
     thisMerchant: "this merchant",
@@ -219,7 +214,6 @@ export const en = {
     import: "Import",
     importDesc: "Restore from an existing 12/24-word phrase.",
     recoveryLabel: "Recovery phrase",
-    importPlaceholder: "word1 word2 word3 …",
     encrypt: "Encrypt",
     encryptDesc:
       "A passphrase protects the seed at rest. You enter it once per session — Satchel never stores it. Note: unattended auto-refund pauses after a restart until you re-enter it.",
@@ -228,9 +222,6 @@ export const en = {
       "Auto-refund keeps working through reboots with nothing to enter — this is only a hot transit seed. Cost: file/host access exposes this merchant's transit keys + identity.",
     passphraseLabel: "Passphrase",
     passphrasePlaceholder: "choose a passphrase",
-    createTitle: "Create seed",
-    importTitle: "Import seed",
-    secureTitle: "Secure {label}",
     revealTitle: "Write down your recovery phrase",
     revealBody:
       "Anyone with these words controls this merchant's hot keys. Satchel keeps no copy — store it offline. You'll confirm a few words next.",
@@ -360,20 +351,10 @@ export const en = {
     protoPrivate: "Private (Taproot)",
     protoPrivateTip: "Private swap (Taproot/MuSig2 adaptor) — looks like an ordinary payment on-chain",
     protoHtlcTip: "Classic HTLC swap",
-    // Coin-setup backend choices (CoinSetup).
-    backendCoreTitle: "Core RPC wallet",
-    backendCoreDesc: "Your node's own wallet funds the swap and receives the proceeds.",
-    backendHardwareTitle: "Hardware",
-    backendHardwareDesc: "Ledger / PSBT signing for the funding leg.",
-    backendLater: "later",
     // CoinSetup dialog.
     setupTitle: "Connect {coin}",
     setupIntro:
       "Point Satchel at your own {sym} node. Nothing is saved until the node passes a genesis-block check — your funds only ever touch the real {sym} chain.",
-    backendUrlLabel: "Node backend URL(s)",
-    backendUrlHint:
-      "First URL = your node's own wallet (funds swaps, receives proceeds). Add Electrum servers (tcp://host:port) after commas for extra, independent chain views.",
-    fundingWallet: "Funding wallet",
     confirmationsLabel: "Confirmations before final",
     confirmationsHint:
       "How deep a funding or redeem on this chain must be before a swap acts on it — the reorg-safety margin. Higher is safer but slower; leave blank for the recommended default ({default}).",
@@ -434,12 +415,6 @@ export const en = {
     walletDefaultHint:
       "No wallet set for this coin, so RPCs use the node's default wallet. Set one in Settings → Coins to scope every call to a specific wallet.",
     balanceLabel: "{symbol} balance",
-    receive: "Receive",
-    send: "Send",
-    sendTo: "Send to address",
-    amount: "Amount",
-    sendTitle: "Send {amount} {sym}?",
-    sendConfirmBody: "To {to}\n\nThis spends from your own node's wallet and cannot be undone.",
   },
   corkboard: {
     noBoardTitle: "No Corkboard connected",
@@ -450,7 +425,6 @@ export const en = {
     boardSettings: "Configure in Settings",
     filterAll: "All",
     filterMine: "Mine",
-    offered: "{symbol} offered",
     noOffers: "No offers you can take right now",
     noOffersBody:
       "Offers show up here as soon as a maker posts one for a pair you've set up. You can also post your own.",
@@ -469,7 +443,6 @@ export const en = {
       "If the swap stalls, both sides auto-refund — the taker's leg unlocks first, yours a little later. Nobody ends up stuck.",
     activeTitle: "Your active swaps",
     states: {
-      open: "open",
       takenByUs: "taken by you",
       revoked: "withdrawn",
       expired: "expired",
@@ -493,7 +466,6 @@ export const en = {
       mid: "mid {price}",
       levelOffers: "{count} offer(s) at this price — pick one to take",
       depthTip: "Total {sym} on offer at this price across {count} notice(s).",
-      takerNote: "Taking it, you give {give} and receive {get}.",
       selectLevel: "Pick a price level above to see the offers there.",
       paneHeader: "{size} {base} @ {price} {unit}",
       denomTip: "Display unit for {coin} amounts",
@@ -579,23 +551,8 @@ export const en = {
       "Not enough {sym} to fund this swap — need ~{need} {sym} (amount + funding fee), wallet has {have} {sym}.",
   },
   wizard: {
-    welcome: "Welcome to Satchel",
-    connectTitle: "Connect the Pact engine",
-    connectIntro:
-      "Satchel is a thin client of the Pact engine — the core that holds your keys and runs the swaps. Choose how to reach it.",
-    managed: "Run the built-in Pact engine",
-    managedDesc: "Satchel launches and supervises its own Pact engine. Recommended.",
-    external: "Connect to an external Pact engine",
-    externalDesc: "Point at a Pact engine you already run (set SATCHEL_PACTD_URL + cookie before launch).",
-    externalNote:
-      "External mode is selected via environment variables before launching Satchel. Relaunch with SATCHEL_PACTD_URL set to use it.",
-    coinsTitle: "Add your coins",
-    coinsIntro:
-      "After your merchant is created, connect each coin to your own node in Settings → Coins. Pick a coin and a backend (public Electrum for zero-setup, or your own node); genesis is checked against this network before anything saves.",
-    coinsTemplatesSoon: "One-click coin templates land here in a later release.",
     back: "Back",
     continue: "Continue",
-    finish: "Finish setup",
   },
   // UI-4 docked activity log.
   log: {
@@ -673,8 +630,6 @@ export const en = {
       "Their {a} is locked and verified. Next: lock your {b}. Safety net: automatic refund at {t2} if anything stalls.",
     fundedBMaker: "Both locked. Your daemon claims the {b} as soon as it is safely confirmed.",
     fundedBTaker: "Both locked. Your daemon will claim the {a} the moment the other side takes their {b}.",
-    redeemedB:
-      "You claimed the {b} — waiting for it to confirm. Your locked {a} stays protected until this is final.",
     finalizing:
       "You claimed your {got} — final confirmations. Keep the app open until it buries; your {gave} stays protected until then.",
     completed: "Swap complete — the {coin} is in your wallet.",
