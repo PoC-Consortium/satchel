@@ -3108,6 +3108,7 @@ impl Engine {
                     &rec.swap_id,
                     &rec.chain_b,
                     txid.clone(),
+                    rec.htlc_b_vout,
                     htlc_spk(false),
                     rec.n_b,
                     "their_lock",
@@ -3119,6 +3120,7 @@ impl Engine {
                 &rec.swap_id,
                 &rec.chain_b,
                 rec.final_txid.clone()?,
+                None,
                 spend_spk(rec),
                 rec.n_b,
                 "settlement",
@@ -3131,6 +3133,7 @@ impl Engine {
                     &rec.swap_id,
                     &rec.chain_a,
                     txid.clone(),
+                    rec.htlc_a_vout,
                     htlc_spk(true),
                     rec.n_a,
                     "their_lock",
@@ -3145,6 +3148,7 @@ impl Engine {
                 &rec.swap_id,
                 &rec.chain_a,
                 rec.final_txid.clone()?,
+                None,
                 spend_spk(rec),
                 rec.n_a,
                 "settlement",
@@ -3179,6 +3183,7 @@ impl Engine {
                     &rec.swap_id,
                     &rec.chain_b,
                     txid.clone(),
+                    rec.funding_b_vout,
                     leg_spk(false),
                     rec.n_b,
                     "their_lock",
@@ -3190,6 +3195,7 @@ impl Engine {
                 &rec.swap_id,
                 &rec.chain_b,
                 rec.final_txid_b.clone()?,
+                None,
                 first_output_spk(rec.final_tx_b_hex.as_deref()),
                 rec.n_b,
                 "settlement",
@@ -3205,6 +3211,7 @@ impl Engine {
                         &rec.swap_id,
                         &rec.chain_a,
                         txid.clone(),
+                        rec.funding_a_vout,
                         leg_spk(true),
                         rec.n_a,
                         "their_lock",
@@ -3218,6 +3225,7 @@ impl Engine {
                 &rec.swap_id,
                 &rec.chain_a,
                 rec.final_txid_a.clone()?,
+                None,
                 first_output_spk(rec.final_tx_a_hex.as_deref()),
                 rec.n_a,
                 "settlement",
@@ -3235,16 +3243,33 @@ impl Engine {
         swap_id: &str,
         chain: &ChainRef,
         txid: String,
+        vout: Option<u32>,
         spk: Option<ScriptBuf>,
         needed: u32,
         watching: &str,
         feerate: Option<u64>,
     ) -> Option<SwapProgress> {
         let backend = self.backend(chain).ok()?;
-        let confs = backend
-            .tx_confirmations(&txid, spk.as_ref())
-            .unwrap_or(0)
-            .min(u64::from(u32::MAX)) as u32;
+        let confs = match (vout, spk.as_ref()) {
+            // A funding lock — usually the COUNTERPARTY's tx, so it isn't in our
+            // wallet and (on regtest) txindex may be off, which makes
+            // `tx_confirmations` blind to it. Scan the unspent output by
+            // outpoint+spk instead, exactly as the tick does — while the lock is
+            // unspent (the wait is live) this returns its depth.
+            (Some(vout), Some(spk)) => bitcoin::Txid::from_str(&txid)
+                .ok()
+                .and_then(|txid| {
+                    backend
+                        .get_txout(&OutPoint { txid, vout }, spk)
+                        .ok()
+                        .flatten()
+                })
+                .map(|o| o.confirmations)
+                .unwrap_or(0),
+            // Our own settlement tx is a wallet tx, so `gettransaction` finds it.
+            _ => backend.tx_confirmations(&txid, spk.as_ref()).unwrap_or(0),
+        }
+        .min(u64::from(u32::MAX)) as u32;
         if confs >= needed {
             return None;
         }
