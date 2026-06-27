@@ -6,6 +6,7 @@ import { dumpSwap, errMsg, rpc } from "../api/tauri";
 import { asset, fmtAmt, isActive, isFinalizing } from "../format";
 import { narrate } from "../screens/narrate";
 import SwapProgressLine from "./SwapProgressLine";
+import CounterpartyTag from "./CounterpartyTag";
 import { C } from "../theme";
 import type { Swap } from "../api/types";
 
@@ -170,6 +171,7 @@ function ActiveSwapRow({
       <Typography sx={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.05em", color: "text.secondary" }}>
         {s.role}
       </Typography>
+      <CounterpartyTag id={s.counterparty_identity} size={18} />
 
       {/* The plain-language swap story (frontend narrate()) — kept verbatim,
           truncated with the full text in the tooltip to keep the dock compact. */}

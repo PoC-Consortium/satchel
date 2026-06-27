@@ -403,6 +403,7 @@ export function pendingTakeToSwap(p: PendingTake): Swap {
     t2: 0,
     created_at: p.created_at,
     protocol: p.body.protocol,
+    counterparty_identity: p.from,
   };
 }
 
@@ -427,6 +428,7 @@ export function adaptorToSwap(r: AdaptorSwapRecord): Swap {
     fund_b_txid: r.funding_b_txid ?? null,
     final_txid: mySettle ?? null,
     protocol: "pact-htlc-v2",
+    counterparty_identity: r.counterparty_identity ?? null,
   };
 }
 

@@ -21,6 +21,7 @@ import { asset, fmtAmt, isActive, isFinalizing, isTerminal, settlementLeg } from
 import { dumpSwap } from "../api/tauri";
 import { narrate } from "./narrate";
 import SwapProgressLine from "../components/SwapProgressLine";
+import CounterpartyTag from "../components/CounterpartyTag";
 import { C } from "../theme";
 import type { Swap, SwapState } from "../api/types";
 
@@ -108,6 +109,7 @@ function SwapSection({
             {[
               t("swaps.col.swap"),
               t("swaps.col.role"),
+              t("takeConfirm.counterparty"),
               t("swaps.col.state"),
               t("swaps.col.amounts"),
               t("swaps.col.when"),
@@ -170,6 +172,9 @@ function SwapRow({ s }: { s: Swap }) {
         </TableCell>
         <TableCell>{s.role}</TableCell>
         <TableCell>
+          <CounterpartyTag id={s.counterparty_identity} />
+        </TableCell>
+        <TableCell>
           <Chip
             label={stateLabel}
             size="small"
@@ -192,7 +197,7 @@ function SwapRow({ s }: { s: Swap }) {
         </TableCell>
       </TableRow>
       <TableRow>
-        <TableCell colSpan={6} sx={{ color: "text.secondary", fontSize: 12, pt: 0 }}>
+        <TableCell colSpan={7} sx={{ color: "text.secondary", fontSize: 12, pt: 0 }}>
           {/* pactd narration is shown VERBATIM (do not rewrite). */}
           <Typography sx={{ fontSize: 12, color: "text.secondary" }}>{narrate(s)}</Typography>
           {/* Live progress (observability) — additive, never replaces narrate(). */}

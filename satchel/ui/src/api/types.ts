@@ -188,6 +188,10 @@ export interface Swap {
   /** Live progress snapshot (observability), folded in from the `swapprogress`
    *  RPC by `swap_id`. Present only for active swaps with something watchable. */
   progress?: SwapProgress;
+  /** BIP340 pubkey (hex) of the other party — who we're swapping with. From the
+   *  swap record (set at init/accept); shown via CounterpartyTag. Absent on a
+   *  pre-record pending take until the maker is known. */
+  counterparty_identity?: string | null;
 }
 
 /** Live per-swap progress from pactd `swapprogress` (rebuilt each scheduler
@@ -246,6 +250,8 @@ export interface AdaptorSwapRecord {
    *  surface OUR own (see `adaptorToSwap`). */
   final_txid_a?: string | null;
   final_txid_b?: string | null;
+  /** BIP340 pubkey (hex) of the counterparty. */
+  counterparty_identity?: string | null;
 }
 
 export interface TickEvent {
