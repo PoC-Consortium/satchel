@@ -171,19 +171,13 @@ function ActiveSwapRow({
         }}
       >
       <Chip label={stateLabel} size="small" sx={{ height: 20, bgcolor: "action.selected", fontSize: 11 }} />
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap" }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-          <Typography sx={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", color: "text.disabled" }}>
-            {MAKER_SLOT}
-          </Typography>
-          <CounterpartyTag id={maker.id} you={maker.you} size={18} />
-        </Box>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-          <Typography sx={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", color: "text.disabled" }}>
-            {TAKER_SLOT}
-          </Typography>
-          <CounterpartyTag id={taker.id} you={taker.you} size={18} />
-        </Box>
+      {/* maker (left) ↔ taker (right); the arrow tooltip spells out the sides. */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+        <CounterpartyTag id={maker.id} you={maker.you} size={18} />
+        <Tooltip title={`${MAKER_SLOT} ↔ ${TAKER_SLOT}`}>
+          <Typography sx={{ color: "text.disabled", fontSize: 15, cursor: "help" }}>↔</Typography>
+        </Tooltip>
+        <CounterpartyTag id={taker.id} you={taker.you} size={18} />
       </Box>
       <Typography sx={{ fontFamily: C.mono, fontWeight: 600, fontSize: 13 }}>
         {fmtAmt(s.amount_a, asset(s.chain_a))} → {fmtAmt(s.amount_b, asset(s.chain_b))}
