@@ -17,7 +17,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useApp } from "../AppContext";
 import { useT } from "../i18n";
-import { asset, fmtAmt, isActive, isFinalizing, isTerminal, roleLabel, settlementLeg, swapParties } from "../format";
+import { asset, fmtAmt, isActive, isFinalizing, isTerminal, settlementLeg, swapParties } from "../format";
 import { dumpSwap } from "../api/tauri";
 import { narrate } from "./narrate";
 import SwapProgressLine from "../components/SwapProgressLine";
@@ -41,11 +41,6 @@ const STATE_COLOR: Partial<Record<SwapState, string>> = {
 // field default to 0 → they sort last but keep their original list order
 // relative to each other (Array.prototype.sort is stable).
 const byNewest = (a: Swap, b: Swap) => (b.created_at ?? 0) - (a.created_at ?? 0);
-
-// Maker/Taker column headers (the two parties). Hoisted so the labels aren't
-// literal-string args inside JSX (jsx-only i18n lint). Maker = initiator.
-const MAKER_COL = roleLabel("initiator");
-const TAKER_COL = roleLabel("participant");
 
 export default function SwapsScreen() {
   const { swaps } = useApp();
@@ -113,8 +108,8 @@ function SwapSection({
           <TableRow>
             {[
               t("swaps.col.swap"),
-              MAKER_COL,
-              TAKER_COL,
+              t("swaps.maker"),
+              t("swaps.taker"),
               t("swaps.col.amounts"),
               t("swaps.col.state"),
               t("swaps.col.when"),

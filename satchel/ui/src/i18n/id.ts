@@ -482,6 +482,8 @@ export const id: Bundle = {
     notConnectedBody: "Tampilan relay membutuhkan engine yang berjalan — hubungkan merchant dulu.",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "Swap",
     hint: "Buku besar lengkap Anda — swap yang berjalan di atas, perdagangan selesai di bawah. Anda juga bisa bertindak pada swap aktif dari Corkboard.",
     activeTitle: "Sedang berjalan",

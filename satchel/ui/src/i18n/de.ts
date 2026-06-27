@@ -482,6 +482,8 @@ export const de: Bundle = {
     notConnectedBody: "Die Relay-Ansicht braucht eine laufende Engine — verbinde zuerst einen Merchant.",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "Swaps",
     hint: "Dein vollständiges Verzeichnis — laufende Swaps oben, abgeschlossene Trades darunter. Du kannst auch von der Corkboard aus auf laufende Swaps einwirken.",
     activeTitle: "Laufend",

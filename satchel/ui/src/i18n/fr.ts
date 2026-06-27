@@ -482,6 +482,8 @@ export const fr: Bundle = {
     notConnectedBody: "La vue des relays nécessite que le moteur tourne — connectez d'abord un merchant.",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "Swaps",
     hint: "Votre registre complet — les swaps en cours en haut, les échanges terminés en dessous. Vous pouvez aussi agir sur les swaps actifs depuis le Corkboard.",
     activeTitle: "En cours",

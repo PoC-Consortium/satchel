@@ -490,6 +490,11 @@ export const en = {
   },
   swaps: {
     title: "Swaps",
+    // The two market roles (Maker / Taker columns + the dock's maker↔taker
+    // arrow). Kept as the English trading terms by default — common loanwords on
+    // crypto venues — but localizable per language.
+    maker: "Maker",
+    taker: "Taker",
     hint: "Your full ledger — in-flight swaps on top, finished trades below. You can also act on live swaps from the Corkboard.",
     activeTitle: "In flight",
     historyTitle: "History",

@@ -482,6 +482,8 @@ export const hi: Bundle = {
     notConnectedBody: "relay व्यू के लिए engine का चलना आवश्यक है — पहले एक merchant कनेक्ट करें।",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "स्वैप",
     hint: "आपका पूरा ledger — चालू स्वैप ऊपर, समाप्त व्यापार नीचे। आप Corkboard से भी लाइव स्वैप पर कार्य कर सकते हैं।",
     activeTitle: "चालू",

@@ -3,16 +3,12 @@ import { useApp } from "../AppContext";
 import { useConfirm } from "../ui/ConfirmProvider";
 import { useT } from "../i18n";
 import { dumpSwap, errMsg, rpc } from "../api/tauri";
-import { asset, fmtAmt, isActive, isFinalizing, roleLabel, swapParties } from "../format";
+import { asset, fmtAmt, isActive, isFinalizing, swapParties } from "../format";
 import { narrate } from "../screens/narrate";
 import SwapProgressLine from "./SwapProgressLine";
 import CounterpartyTag from "./CounterpartyTag";
 import { C } from "../theme";
 import type { Swap } from "../api/types";
-
-// Slot labels for the two-party display: Maker = initiator, Taker = participant.
-const MAKER_SLOT = roleLabel("initiator");
-const TAKER_SLOT = roleLabel("participant");
 
 // The "your active swaps" dock — a static strip sitting directly above the
 // activity log (App.tsx), always in view rather than scrolling away with the
@@ -174,7 +170,7 @@ function ActiveSwapRow({
       {/* maker (left) ↔ taker (right); the arrow tooltip spells out the sides. */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
         <CounterpartyTag id={maker.id} you={maker.you} size={18} />
-        <Tooltip title={`${MAKER_SLOT} ↔ ${TAKER_SLOT}`}>
+        <Tooltip title={`${t("swaps.maker")} ↔ ${t("swaps.taker")}`}>
           <Typography sx={{ color: "text.disabled", fontSize: 15, cursor: "help" }}>↔</Typography>
         </Tooltip>
         <CounterpartyTag id={taker.id} you={taker.you} size={18} />

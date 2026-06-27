@@ -482,6 +482,8 @@ export const lt: Bundle = {
     notConnectedBody: "Relių rodiniui reikia veikiančio variklio — pirmiausia prijunkite prekiautoją.",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "Mainai",
     hint: "Jūsų visas žurnalas — vykstantys mainai viršuje, baigti sandoriai apačioje. Veiksmus su vykstančiais mainais taip pat galite atlikti iš Corkboard.",
     activeTitle: "Vykstantys",

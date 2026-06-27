@@ -482,6 +482,8 @@ export const sk: Bundle = {
     notConnectedBody: "Zobrazenie relay vyžaduje bežiaci engine — najprv pripojte obchodníka.",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "Swapy",
     hint: "Vaša úplná účtovná kniha — prebiehajúce swapy hore, dokončené obchody dole. Na aktívne swapy môžete reagovať aj z Corkboard.",
     activeTitle: "Prebieha",

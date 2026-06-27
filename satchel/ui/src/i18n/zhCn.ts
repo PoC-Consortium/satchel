@@ -482,6 +482,8 @@ export const zhCn: Bundle = {
     notConnectedBody: "中继视图需要引擎运行 — 请先连接商户。",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "交换",
     hint: "你的完整账本 — 进行中的交换在上方，已完成的交易在下方。你也可以从 Corkboard 对进行中的交换执行操作。",
     activeTitle: "进行中",

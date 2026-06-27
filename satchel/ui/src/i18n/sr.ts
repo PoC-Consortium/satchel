@@ -482,6 +482,8 @@ export const sr: Bundle = {
     notConnectedBody: "Приказ релеја захтева да engine ради — прво повежите трговца.",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "Свопови",
     hint: "Ваш потпуни регистар — свопови у току на врху, завршене трговине испод. Можете деловати на активне свопове и са Corkboard-а.",
     activeTitle: "У току",

@@ -482,6 +482,8 @@ export const fi: Bundle = {
     notConnectedBody: "Releenäkymä vaatii moottorin käynnissä — yhdistä ensin kauppias.",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "Swapit",
     hint: "Koko kirjanpitosi — käynnissä olevat swapit ylhäällä, valmiit kaupat alla. Voit myös toimia aktiivisten swapien suhteen Corkboardilta.",
     activeTitle: "Käynnissä",

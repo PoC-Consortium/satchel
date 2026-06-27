@@ -379,14 +379,6 @@ export function settlementLeg(role: Swap["role"], state: SwapState): "a" | "b" {
   return state === "refunded" ? fundedLeg : receiveLeg;
 }
 
-/** Market-facing role label. The offer maker initiates the swap (funds first);
- *  the taker participates — a 1:1 map of the protocol role (post → initiator =
- *  maker, take → participant = taker). Not localized (the role was never
- *  translated; same as before). Used for the Maker/Taker column headers. */
-export function roleLabel(role: Swap["role"]): string {
-  return role === "initiator" ? "Maker" : "Taker";
-}
-
 /** Who fills the maker and taker slots of a swap, given your own identity.
  *  Maker = initiator (posts/funds first), Taker = participant. Each slot is the
  *  party's pubkey + whether it's you — so the UI can label both sides explicitly

@@ -482,6 +482,8 @@ export const ptBR: Bundle = {
     notConnectedBody: "A visão de relays precisa da engine rodando — conecte um merchant primeiro.",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "Swaps",
     hint: "Seu registro completo — swaps em andamento no topo, negociações concluídas abaixo. Você também pode agir sobre swaps ativos pelo Corkboard.",
     activeTitle: "Em andamento",
