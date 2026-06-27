@@ -23,11 +23,19 @@ Each row shows:
 | Column | What it tells you |
 |---|---|
 | **swap** | The swap's short id. |
-| **role** | Whether you were the maker or the taker. |
-| **state** | Where the swap is in its lifecycle. |
+| **maker** | The party who posted the offer — shown as a small identicon and short public key. |
+| **taker** | The party who took it — likewise an identicon and short key. |
 | **gives → receives** | What you gave and what you got. |
+| **state** | Where the swap is in its lifecycle. |
 | **when** | The timestamp. |
 | **final tx** | The settling transaction once it completes. |
+
+Both parties are shown explicitly, side by side, rather than as a single "your
+role" label: the **maker** is whoever posted the offer and the **taker** is
+whoever took it, regardless of which one is you. Your own side is marked with a
+**(you)** tag next to its key, so you can always tell which party you are at a
+glance. A party Satchel hasn't recorded yet (occasionally the case for an older
+record) shows as **unknown**.
 
 Private swaps carry a **Private (Taproot)** chip so you can tell them apart at a
 glance.
@@ -95,8 +103,10 @@ to take your first offer.
 
 The Swaps page shows you everything but doesn't have buttons. The handful of
 actions a swap might ask of you live in the **active-swaps dock**, which is docked
-beneath every page. Each live swap gets a card there with its state, amounts,
-your role, the engine's narration, and a "refund *when*" note.
+beneath every page. Each live swap gets a card there with its state, the two
+parties shown as **maker ↔ taker** (each an identicon and short key, your own
+side tagged **(you)**; hover the arrow to see which side is which), the amounts,
+the engine's narration, and a "refund *when*" note.
 
 The action buttons appear **only when it's your turn**, gated by the swap's state:
 
@@ -157,3 +167,7 @@ Your choices:
 If instead you only have *offers* posted (no live swap), the exit gate is gentler:
 it lets you withdraw your offers and exit, or keep the engine running so
 counterparties can still take them while Satchel is closed.
+
+> **Note** — In **watch-only mode** the exit gate never appears: a watch-only
+> session holds no offer liveness and can hold no live swap, so there is nothing
+> to protect and the window simply closes.

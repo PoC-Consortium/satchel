@@ -141,7 +141,8 @@ Two panels are docked along the bottom of the content area, visible on every
 page:
 
 - **Your active swaps** — a live card for each swap in progress, showing its
-  state, the amounts, your role, a live confirmation-progress line, and — when
+  state, the two parties as **maker ↔ taker** (your own side tagged **(you)**),
+  the amounts, a live confirmation-progress line, and — when
   needed — the action buttons to push a swap along (redeem, cancel, refund;
   funding is always automatic, so there's no Fund button). These buttons appear
   only when it's your turn to act. The chapter on tracking your swaps explains

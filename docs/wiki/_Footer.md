@@ -1,1 +1,1 @@
-**Satchel / Pact** — trustless P2P atomic swaps · docs verified @ `e02a7f2` · [Repository](https://github.com/PoC-Consortium/satchel) · [License](https://github.com/PoC-Consortium/satchel/blob/master/LICENSE)
+**Satchel / Pact** — trustless P2P atomic swaps · docs verified @ `c48112b` · [Repository](https://github.com/PoC-Consortium/satchel) · [License](https://github.com/PoC-Consortium/satchel/blob/master/LICENSE)

@@ -55,6 +55,28 @@ bech32_hrp   = "rltc"
 > A `coins.toml` entry may also carry a `connection` sub-table with RPC defaults;
 > that is Satchel's concern and is ignored by the engine.
 
+### Per-coin minimum feerate
+
+pactd derives its funding and spend feerate from the node's `estimatesmartfee`,
+falling back to `1 sat/vB` (Bitcoin's floor) on a quiet or fresh chain. Some
+chains bake a higher wallet floor: litecoind's `-mintxfee` defaults to ~10
+sat/vB, and because that floor is exposed by **no RPC**, the engine cannot
+discover it at runtime — a spend below it is simply rejected (`-6`, "lower than
+the minimum fee rate setting"), so swaps on that coin can't fund at all.
+
+Carry the floor as data instead. Each `[coin.<network>]` block takes an optional
+**`min_feerate_sat_vb`** (integer sat/vB, default `1`); the engine floors every
+funding and spend feerate at it, so a coin's own floor always wins:
+
+```toml
+[coin.mainnet]
+min_feerate_sat_vb = 10   # litecoind's wallet floor; optional, defaults to 1
+consensus = { genesis_hash = "12a7…", bech32_hrp = "ltc", … }
+```
+
+The bundled `ltc` coin ships `min_feerate_sat_vb = 10` on mainnet, testnet, and
+regtest; the built-in `btc` and `btcx` coins use the `1` default.
+
 ### The `%NODEDIR%` datadir token
 
 A `connection` sub-table's `datadir` value may use a `%NODEDIR%/<Name>` token.
