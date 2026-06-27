@@ -56,7 +56,13 @@ Around that target, the loop applies three gates:
   the current feerate by the node's **incremental-relay fee** (`getmempoolinfo`
   → `incremental_relay_feerate`, `chain.rs:389`). If the market has not risen —
   or we are already paying enough — there is nothing relayable to do, so the
-  loop emits no replacement.
+  loop emits no replacement. When a bump *is* warranted, the replacement's
+  **absolute** fee is also floored at `old_fee + incremental_relay_feerate ×
+  vsize`: because `old_feerate` is a truncated `old_fee / vsize`, a target built
+  purely from the feerate can otherwise land just below the node's absolute Rule-4
+  minimum and be rejected (`-26`, "insufficient fee, rejecting replacement").
+  Flooring the absolute fee guarantees that a bump the engine decides to make is
+  one the node will accept.
 - **Evicted-only rebroadcast** (`reanchor_if_evicted`, `engine.rs:3457`). When
   no bump is warranted, the engine re-broadcasts the *same* transaction (same
   txid — invisible to the wallet) **only if it actually fell out of the
