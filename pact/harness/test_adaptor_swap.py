@@ -252,6 +252,10 @@ def test_adaptor_redeem_cpfp(h):
         # No child yet: the redeem output is present in the mempool.
         assert h.btc.rpc("gettxout", redeem_txid, 0) is not None, "redeem output missing pre-CPFP"
 
+        # The redeem's fee was sealed at the 1 sat/vB fallback; raise the market
+        # (regtest has none) so the nurse sees it under-priced and CPFP-bumps it.
+        alice.rpc("_settestfeerate", 10)
+
         # The unconfirmed redeem → a tick must CPFP-bump it with a child.
         cpfp = False
         for ev in alice.rpc("tick")["events"]:
@@ -327,6 +331,10 @@ def test_adaptor_redeem_cpfp_ltc(h):
         redeem_txid = rec["final_txid_b"]
         assert h.ltc.rpc("gettxout", redeem_txid, 0) is not None, "LTC redeem output missing pre-CPFP"
 
+        # The redeem's fee was sealed at litecoind's 10 sat/vB floor; raise the
+        # market above it so the nurse sees it under-priced and CPFP-bumps it.
+        alice.rpc("_settestfeerate", 20)
+
         # The unconfirmed LTC redeem → a tick must CPFP-bump it on litecoind.
         cpfp = False
         for ev in alice.rpc("tick")["events"]:
@@ -357,8 +365,8 @@ def test_adaptor_funding_cpfp(h):
     Reaching Signed with the funding still UNCONFIRMED is fine: signing commits the
     funding *outpoint* (txid:vout), known the moment adaptorfund broadcasts — no
     confirmation is needed until the reveal/redeem depth gate. That unconfirmed
-    window is exactly where the nurse acts. As in the v1 test we pin Alice's
-    funding wallet (~2 sat/vB) under the regtest fee fallback (~10 sat/vB)."""
+    window is exactly where the nurse acts. As in the v1 test we fund at the
+    regtest 1 sat/vB fallback, then raise the market via `_settestfeerate`."""
     alice = Party("adfc-alice", h, h.workdir, "alice_pocx", "alice_btc", auto_init=False).start()
     bob = Party("adfc-bob", h, h.workdir, "bob_pocx", "bob_btc", auto_init=False).start()
     try:
@@ -367,9 +375,6 @@ def test_adaptor_funding_cpfp(h):
         t2, t1 = regtest_timelocks(h)
         alice_btc_before = float(h.btc.rpc("getbalance", wallet="alice_btc"))
         bob_pocx_before = float(h.pocx.rpc("getbalance", wallet="bob_pocx"))
-
-        # Pin Alice's leg-A (PoCX) funding under the regtest "market".
-        h.pocx.rpc("settxfee", 0.00002, wallet="alice_pocx")  # ~2 sat/vB
 
         init = _env(alice.rpc("adaptorinit", GIVE_POCX, GET_BTC, t1, t2))
         sid = init["swap_id"]
@@ -393,6 +398,10 @@ def test_adaptor_funding_cpfp(h):
         bob.rpc("adaptorrecv", pa); alice.rpc("adaptorrecv", pb)
         alice.rpc("adaptorassemble", sid); bob.rpc("adaptorassemble", sid)
         assert alice.rpc("listadaptorswaps")[0]["state"] == "signed", "leg A should sign unconfirmed"
+
+        # Funding went out at the 1 sat/vB fallback; raise the market so the nurse
+        # sees it under-priced and CPFP-bumps it.
+        alice.rpc("_settestfeerate", 10)
 
         # The unconfirmed, under-priced leg-A funding → a tick CPFP-bumps it
         # (the nurse runs before the reveal logic, so it fires even though leg B
@@ -431,10 +440,6 @@ def test_adaptor_funding_cpfp(h):
             "Bob's leg-A redeem missed his core wallet"
         print("[e2e] funding-cpfp-bump (v2) OK: child bumped the lock, swap completed cleanly")
     finally:
-        try:
-            h.pocx.rpc("settxfee", 0, wallet="alice_pocx")
-        except Exception:
-            pass
         alice.stop()
         bob.stop()
 

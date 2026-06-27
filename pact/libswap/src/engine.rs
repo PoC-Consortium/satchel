@@ -2379,8 +2379,16 @@ impl Engine {
         let target = self
             .fee_bump
             .target_feerate(market, amount, REFUND_TX_VSIZE);
-        let new_fee = target.saturating_mul(REFUND_TX_VSIZE);
-        let bump_floor = old_feerate.saturating_add(backend.incremental_relay_feerate()?);
+        let incr = backend.incremental_relay_feerate()?;
+        // BIP125 Rule 4 also constrains the ABSOLUTE fee: the replacement must
+        // pay at least `incr * vsize` MORE than the tx it evicts. `target * vsize`
+        // can fall short of that when old_feerate was truncated (old_fee / vsize),
+        // so the node rejects the RBF (-26). Floor new_fee there; the feerate gate
+        // below still decides WHETHER a bump is worth making.
+        let new_fee = target
+            .saturating_mul(REFUND_TX_VSIZE)
+            .max(old_fee.saturating_add(incr.saturating_mul(REFUND_TX_VSIZE)));
+        let bump_floor = old_feerate.saturating_add(incr);
         let dustless = amount > new_fee + DUST_LIMIT_SAT;
         if target < bump_floor || !dustless {
             if backend.is_in_mempool(&old_txid)? {
@@ -3715,8 +3723,15 @@ impl Engine {
         // because the market hasn't risen, or we're already paying enough — there
         // is nothing to bump (the "already paying enough" no-op that escalate()
         // lacked). Re-anchor the existing tx only if it was evicted (step 5).
-        let new_fee = target.saturating_mul(vsize);
-        let bump_floor = old_feerate.saturating_add(backend.incremental_relay_feerate()?);
+        let incr = backend.incremental_relay_feerate()?;
+        // Rule 4 also constrains the ABSOLUTE fee: the replacement must pay at
+        // least `incr * vsize` more than the tx it evicts. `target * vsize` can
+        // fall short of that when old_feerate was truncated (old_fee / vsize), so
+        // floor new_fee there — otherwise the node rejects the RBF (-26).
+        let new_fee = target
+            .saturating_mul(vsize)
+            .max(old_fee.saturating_add(incr.saturating_mul(vsize)));
+        let bump_floor = old_feerate.saturating_add(incr);
         let dustless = amount > new_fee + DUST_LIMIT_SAT;
         if target < bump_floor || !dustless {
             return self.reanchor_if_evicted(rec, backend, &old_tx, &old_txid);

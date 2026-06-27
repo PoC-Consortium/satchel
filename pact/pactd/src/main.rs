@@ -810,6 +810,20 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             .await?;
             Ok(json!({ "events": serde_json::to_value(&events)? }))
         }
+        // Test-only (regtest): inject the market feerate (sat/vB) so the harness
+        // can create a market-vs-broadcast gap for the fee-bump nurse — the
+        // deterministic lever that replaces the now-removed settxfee. 0 clears it.
+        // Honored by libswap::chain::fee_rate_sat_per_vb ONLY on regtest; the gate
+        // here refuses it elsewhere so it can never perturb mainnet/testnet fees.
+        "_settestfeerate" => {
+            ensure!(
+                net == Network::Regtest,
+                "_settestfeerate is a regtest-only test hook"
+            );
+            let sat_vb = p.u32(0, "sat_vb")? as u64;
+            libswap::chain::set_test_feerate(sat_vb);
+            Ok(json!({ "test_feerate_sat_vb": sat_vb }))
+        }
         "boardlistoffers" => {
             // Optional board selector: list from the given board (an HTTP
             // corkboard URL or "nostr"), else the first configured. Reads via the

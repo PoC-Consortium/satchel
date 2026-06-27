@@ -523,6 +523,10 @@ def test_daemon_autopilot_swap(h):
         events = alice.tick()
         assert any(e["action"] == "auto-redeem" for e in events), f"no auto-redeem: {events}"
 
+        # The redeem went out at the 1 sat/vB fallback; raise the market (regtest
+        # has none) so the next scheduler pass sees it under-priced and RBF-bumps.
+        alice.rpc("_settestfeerate", 10)
+
         # While the redeem sits unconfirmed, the next pass must RBF-bump it.
         events = alice.tick()
         assert any(e["action"] == "fee-bump" for e in events), f"no fee-bump: {events}"
@@ -653,9 +657,10 @@ def test_funding_fee_bump_v1(h):
          scriptPubKey, not txid (Bob is never given the funded_a message — he
          discovers the BUMPED funding by its script).
 
-    Setup trick: regtest's fee estimator returns the ~10 sat/vB fallback, so we
-    pin Alice's funding wallet BELOW that (settxfee ~2 sat/vB). That gap (market
-    10 > broadcast 2) is exactly what the nurse reacts to."""
+    Setup: regtest has no fee market (estimatesmartfee returns nothing → pactd's
+    1 sat/vB fallback) and settxfee is gone in Core v31, so we inject the gap via
+    the regtest-only `_settestfeerate` hook — fund at the 1 sat/vB fallback, then
+    raise the market so the nurse sees broadcast(1) < market and RBF-bumps."""
     alice = Party("alicefb", h, h.workdir, "alice_pocx", "alice_btc").start()  # initiator
     bob = Party("bobfb", h, h.workdir, "bob_pocx", "bob_btc").start()          # participant
     try:
@@ -666,10 +671,6 @@ def test_funding_fee_bump_v1(h):
         # funded_a is written but NEVER delivered to Bob (chain-watched path).
         m_dump_a = msg(h.workdir, "fb_funded_a.json")
         m_dump_b = msg(h.workdir, "fb_funded_b.json")
-
-        # Pin Alice's POCX funding wallet under the regtest "market" (~10 sat/vB
-        # fallback) so the lock goes out under-priced.
-        h.pocx.rpc("settxfee", 0.00002, wallet="alice_pocx")  # ~2 sat/vB
 
         # Handshake only.
         alice.cli("offer", "--give", f"btcx:{GIVE_POCX}", "--get", f"btc:{GET_BTC}",
@@ -682,6 +683,10 @@ def test_funding_fee_bump_v1(h):
         # nurse can act.
         alice.cli("fund", "--swap", sid, "--out", m_dump_a)
         orig_txid, _ = outpoint_from(m_dump_a)
+
+        # Funding went out at the 1 sat/vB fallback; now raise the market so the
+        # nurse sees it as under-priced and RBF-bumps it.
+        alice.rpc("_settestfeerate", 10)
 
         # The scheduler RBF-bumps the unconfirmed, under-priced funding.
         events = drive_until(
@@ -720,28 +725,29 @@ def test_funding_fee_bump_v1(h):
             f"alice did not receive BTC after a bumped funding: {before} -> {after}"
         print("[e2e] funding-fee-bump (v1 RBF) scenario OK")
     finally:
-        # Restore estimator-driven fees so later scenarios are unaffected.
-        try:
-            h.pocx.rpc("settxfee", 0, wallet="alice_pocx")
-        except Exception:
-            pass
         alice.stop()
         bob.stop()
 
 
 def test_balance_validation(h):
-    """An offer you can't fund is refused up front (not left to fail at fund
-    time / pollute the board with un-fundable offers). The other scenarios
-    already prove a fundable offer is accepted, so this only checks rejection."""
+    """An offer you can't fund is refused up front, at the point it would be
+    advertised. `board post` runs the cumulative funds gate
+    (engine.ensure_can_fund_new_offer) so an un-fundable offer never reaches the
+    board / pollutes it. NOTE: the bare `offer` command is an offline envelope
+    builder and is intentionally ungated (engine.offer, "works offline") — the
+    funds gate lives only where money is actually committed: board-post, take and
+    fund. So this drives `board post`, the same gated path Satchel's "Post an
+    offer" uses (boardpostoffer). The other scenarios already prove a fundable
+    offer is accepted, so this only checks rejection."""
     alice = Party("alicebal", h, h.workdir, "alice_pocx", "alice_btc").start()
     try:
-        t2, t1 = regtest_timelocks(h)
-        m_init = msg(h.workdir, "bal_init.json")
-        # alice_pocx holds ~100 POCX; offering to GIVE a million is refused
-        # because the core wallet can't cover the leg we'd have to lock.
+        # alice_pocx holds ~100 POCX; advertising an offer to GIVE a million is
+        # refused because the core wallet can't cover the leg we'd lock when taken.
+        # The gate fires after the chains-live check but before any board is
+        # contacted, so this needs no Corkboard. Default board-post timelocks
+        # (12h/6h) satisfy validate_offer_offsets.
         err = expect_fail(alice, "over-balance offer",
-                          "offer", "--give", "btcx:1000000.0", "--get", "btc:0.001",
-                          "--t1", str(t1), "--t2", str(t2), "--out", m_init)
+                          "board", "post", "--give", "btcx:1000000.0", "--get", "btc:0.001")
         assert "insufficient" in err.lower(), f"expected insufficient-balance error, got: {err}"
         print("[e2e] balance-validation scenario OK")
     finally:

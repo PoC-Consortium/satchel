@@ -12,9 +12,25 @@ use anyhow::{bail, Context, Result};
 use bitcoin::{OutPoint, ScriptBuf, Transaction, Txid};
 use serde_json::{json, Value};
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::params::ChainParams;
+use crate::params::{ChainParams, Network};
 use crate::rpc::{RpcClient, RpcError};
+
+/// Test-only market-feerate override (sat/vB); 0 = unset. Set via the
+/// regtest-gated `_settestfeerate` RPC and honored by [`RpcBackend::fee_rate_sat_per_vb`]
+/// ONLY on regtest, so the harness can manufacture the market-vs-broadcast gap
+/// the fee-bump nurse reacts to. estimatesmartfee can't be primed cheaply on
+/// regtest and `settxfee` is gone in Core v31, so this is the only deterministic
+/// lever. NEVER consulted on mainnet/testnet.
+static TEST_FEERATE_OVERRIDE_SAT_VB: AtomicU64 = AtomicU64::new(0);
+
+/// Set the regtest-only market-feerate override (sat/vB; 0 clears it). Safe to
+/// call on any network — [`RpcBackend::fee_rate_sat_per_vb`] only reads it on
+/// regtest — but the `_settestfeerate` RPC additionally refuses off regtest.
+pub fn set_test_feerate(sat_vb: u64) {
+    TEST_FEERATE_OVERRIDE_SAT_VB.store(sat_vb, Ordering::Relaxed);
+}
 
 /// Is this broadcast error really "the tx is already in the chain / mempool"?
 /// Re-broadcasting an already-confirmed tx (a refund/redeem the scheduler keeps
@@ -371,14 +387,36 @@ impl ChainBackend for CoreRpcBackend {
         // The bump nurse covers the rare case where this later under-prices.
         const FALLBACK_SAT_PER_VB: u64 = 1;
         const MAX_SAT_PER_VB: u64 = 500; // sanity cap against estimator glitches
-        let rate = self
+
+        // Regtest-only test override: the harness injects a market feerate to
+        // create a market-vs-broadcast gap the bump nurse reacts to (see
+        // `set_test_feerate`). Never honored off regtest.
+        if self.params.network == Network::Regtest {
+            let ov = TEST_FEERATE_OVERRIDE_SAT_VB.load(Ordering::Relaxed);
+            if ov > 0 {
+                return Ok(ov
+                    .clamp(1, MAX_SAT_PER_VB)
+                    .max(self.params.min_feerate_sat_vb));
+            }
+        }
+        let estimate = self
             .rpc
             .call("estimatesmartfee", &[json!(6)])
             .ok()
             .and_then(|r| r["feerate"].as_f64()) // BTC per kvB
             .map(|btc_kvb| ((btc_kvb * 1e8) / 1000.0).ceil() as u64)
             .unwrap_or(FALLBACK_SAT_PER_VB);
-        Ok(rate.clamp(1, MAX_SAT_PER_VB))
+        // Never price below the coin's minimum. estimatesmartfee already honors the
+        // node's mempool/relay floor WHEN it returns an estimate (Core src/rpc/
+        // fees.cpp), but on a quiet/fresh chain it returns nothing and we fall back
+        // to 1 — and some wallets reject anything below a higher baked-in
+        // `-mintxfee` that no RPC exposes (Litecoin's is ~10 sat/vB), giving -6
+        // "lower than the minimum fee rate setting". `min_feerate_sat_vb` carries
+        // that per-coin floor (coins.toml for file coins, 1 for the built-ins).
+        // Applied AFTER the sanity clamp so the coin's floor always wins.
+        Ok(estimate
+            .clamp(1, MAX_SAT_PER_VB)
+            .max(self.params.min_feerate_sat_vb))
     }
 
     fn is_in_mempool(&self, txid: &str) -> Result<bool> {
