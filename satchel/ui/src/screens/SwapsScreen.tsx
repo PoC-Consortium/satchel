@@ -17,7 +17,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useApp } from "../AppContext";
 import { useT } from "../i18n";
-import { asset, fmtAmt, isActive, isFinalizing, isTerminal, roleLabel, settlementLeg } from "../format";
+import { asset, fmtAmt, isActive, isFinalizing, isTerminal, roleLabel, settlementLeg, swapParties } from "../format";
 import { dumpSwap } from "../api/tauri";
 import { narrate } from "./narrate";
 import SwapProgressLine from "../components/SwapProgressLine";
@@ -41,6 +41,11 @@ const STATE_COLOR: Partial<Record<SwapState, string>> = {
 // field default to 0 → they sort last but keep their original list order
 // relative to each other (Array.prototype.sort is stable).
 const byNewest = (a: Swap, b: Swap) => (b.created_at ?? 0) - (a.created_at ?? 0);
+
+// Maker/Taker column headers (the two parties). Hoisted so the labels aren't
+// literal-string args inside JSX (jsx-only i18n lint). Maker = initiator.
+const MAKER_COL = roleLabel("initiator");
+const TAKER_COL = roleLabel("participant");
 
 export default function SwapsScreen() {
   const { swaps } = useApp();
@@ -108,8 +113,8 @@ function SwapSection({
           <TableRow>
             {[
               t("swaps.col.swap"),
-              t("swaps.col.role"),
-              t("takeConfirm.counterparty"),
+              MAKER_COL,
+              TAKER_COL,
               t("swaps.col.amounts"),
               t("swaps.col.state"),
               t("swaps.col.when"),
@@ -136,6 +141,8 @@ function SwapSection({
 
 function SwapRow({ s }: { s: Swap }) {
   const t = useT();
+  const { identity } = useApp();
+  const { maker, taker } = swapParties(s, identity);
   const [open, setOpen] = useState(false);
   // While finalizing, the state is `completed` but it isn't done — show
   // "finalizing" and not the terminal (green) colour.
@@ -171,12 +178,10 @@ function SwapRow({ s }: { s: Swap }) {
           </Box>
         </TableCell>
         <TableCell>
-          <Tooltip title={s.role}>
-            <span>{roleLabel(s.role)}</span>
-          </Tooltip>
+          <CounterpartyTag id={maker.id} you={maker.you} />
         </TableCell>
         <TableCell>
-          <CounterpartyTag id={s.counterparty_identity} />
+          <CounterpartyTag id={taker.id} you={taker.you} />
         </TableCell>
         <TableCell>
           {fmtAmt(s.amount_a, asset(s.chain_a))} → {fmtAmt(s.amount_b, asset(s.chain_b))}

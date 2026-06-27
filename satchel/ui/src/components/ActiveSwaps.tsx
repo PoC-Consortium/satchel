@@ -3,12 +3,16 @@ import { useApp } from "../AppContext";
 import { useConfirm } from "../ui/ConfirmProvider";
 import { useT } from "../i18n";
 import { dumpSwap, errMsg, rpc } from "../api/tauri";
-import { asset, fmtAmt, isActive, isFinalizing, roleLabel } from "../format";
+import { asset, fmtAmt, isActive, isFinalizing, roleLabel, swapParties } from "../format";
 import { narrate } from "../screens/narrate";
 import SwapProgressLine from "./SwapProgressLine";
 import CounterpartyTag from "./CounterpartyTag";
 import { C } from "../theme";
 import type { Swap } from "../api/types";
+
+// Slot labels for the two-party display: Maker = initiator, Taker = participant.
+const MAKER_SLOT = roleLabel("initiator");
+const TAKER_SLOT = roleLabel("participant");
 
 // The "your active swaps" dock — a static strip sitting directly above the
 // activity log (App.tsx), always in view rather than scrolling away with the
@@ -148,6 +152,8 @@ function ActiveSwapRow({
   onDump: () => void;
 }) {
   const t = useT();
+  const { identity } = useApp();
+  const { maker, taker } = swapParties(s, identity);
   const refundAt = s.role === "initiator" ? s.t1 : s.t2;
   // While finalizing the state is `completed` but it isn't done — show "finalizing".
   const stateLabel = isFinalizing(s) ? "finalizing" : s.state;
@@ -165,12 +171,20 @@ function ActiveSwapRow({
         }}
       >
       <Chip label={stateLabel} size="small" sx={{ height: 20, bgcolor: "action.selected", fontSize: 11 }} />
-      <Tooltip title={s.role}>
-        <Typography sx={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.05em", color: "text.secondary" }}>
-          {roleLabel(s.role)}
-        </Typography>
-      </Tooltip>
-      <CounterpartyTag id={s.counterparty_identity} size={18} />
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <Typography sx={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", color: "text.disabled" }}>
+            {MAKER_SLOT}
+          </Typography>
+          <CounterpartyTag id={maker.id} you={maker.you} size={18} />
+        </Box>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <Typography sx={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", color: "text.disabled" }}>
+            {TAKER_SLOT}
+          </Typography>
+          <CounterpartyTag id={taker.id} you={taker.you} size={18} />
+        </Box>
+      </Box>
       <Typography sx={{ fontFamily: C.mono, fontWeight: 600, fontSize: 13 }}>
         {fmtAmt(s.amount_a, asset(s.chain_a))} → {fmtAmt(s.amount_b, asset(s.chain_b))}
       </Typography>

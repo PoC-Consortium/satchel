@@ -381,10 +381,21 @@ export function settlementLeg(role: Swap["role"], state: SwapState): "a" | "b" {
 
 /** Market-facing role label. The offer maker initiates the swap (funds first);
  *  the taker participates — a 1:1 map of the protocol role (post → initiator =
- *  maker, take → participant = taker). The raw protocol role stays in the row
- *  tooltip. Not localized (the role was never translated; same as before). */
+ *  maker, take → participant = taker). Not localized (the role was never
+ *  translated; same as before). Used for the Maker/Taker column headers. */
 export function roleLabel(role: Swap["role"]): string {
   return role === "initiator" ? "Maker" : "Taker";
+}
+
+/** Who fills the maker and taker slots of a swap, given your own identity.
+ *  Maker = initiator (posts/funds first), Taker = participant. Each slot is the
+ *  party's pubkey + whether it's you — so the UI can label both sides explicitly
+ *  ("Maker: you · Taker: 5278…") instead of the ambiguous "your role + their
+ *  hash". Rendered via CounterpartyTag (its `you` mode marks your side). */
+export function swapParties(s: Swap, youId: string | null | undefined) {
+  const me = { id: youId ?? null, you: true };
+  const them = { id: s.counterparty_identity ?? null, you: false };
+  return s.role === "initiator" ? { maker: me, taker: them } : { maker: them, taker: me };
 }
 
 /** Normalize a v1 `listswaps` record: copy the HTLC funding txids into the
