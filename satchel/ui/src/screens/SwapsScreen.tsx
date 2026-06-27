@@ -17,7 +17,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useApp } from "../AppContext";
 import { useT } from "../i18n";
-import { asset, fmtAmt, isActive, isFinalizing, isTerminal, settlementLeg } from "../format";
+import { asset, fmtAmt, isActive, isFinalizing, isTerminal, roleLabel, settlementLeg } from "../format";
 import { dumpSwap } from "../api/tauri";
 import { narrate } from "./narrate";
 import SwapProgressLine from "../components/SwapProgressLine";
@@ -110,8 +110,8 @@ function SwapSection({
               t("swaps.col.swap"),
               t("swaps.col.role"),
               t("takeConfirm.counterparty"),
-              t("swaps.col.state"),
               t("swaps.col.amounts"),
+              t("swaps.col.state"),
               t("swaps.col.when"),
               t("swaps.col.finalTx"),
             ].map((h, i) => (
@@ -170,9 +170,16 @@ function SwapRow({ s }: { s: Swap }) {
             )}
           </Box>
         </TableCell>
-        <TableCell>{s.role}</TableCell>
+        <TableCell>
+          <Tooltip title={s.role}>
+            <span>{roleLabel(s.role)}</span>
+          </Tooltip>
+        </TableCell>
         <TableCell>
           <CounterpartyTag id={s.counterparty_identity} />
+        </TableCell>
+        <TableCell>
+          {fmtAmt(s.amount_a, asset(s.chain_a))} → {fmtAmt(s.amount_b, asset(s.chain_b))}
         </TableCell>
         <TableCell>
           <Chip
@@ -185,9 +192,6 @@ function SwapRow({ s }: { s: Swap }) {
               fontSize: 12,
             }}
           />
-        </TableCell>
-        <TableCell>
-          {fmtAmt(s.amount_a, asset(s.chain_a))} → {fmtAmt(s.amount_b, asset(s.chain_b))}
         </TableCell>
         <TableCell sx={{ fontFamily: C.mono, fontSize: 13 }}>
           {s.created_at ? new Date(s.created_at * 1000).toLocaleString() : "—"}

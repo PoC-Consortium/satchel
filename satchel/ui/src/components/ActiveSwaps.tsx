@@ -3,7 +3,7 @@ import { useApp } from "../AppContext";
 import { useConfirm } from "../ui/ConfirmProvider";
 import { useT } from "../i18n";
 import { dumpSwap, errMsg, rpc } from "../api/tauri";
-import { asset, fmtAmt, isActive, isFinalizing } from "../format";
+import { asset, fmtAmt, isActive, isFinalizing, roleLabel } from "../format";
 import { narrate } from "../screens/narrate";
 import SwapProgressLine from "./SwapProgressLine";
 import CounterpartyTag from "./CounterpartyTag";
@@ -165,13 +165,15 @@ function ActiveSwapRow({
         }}
       >
       <Chip label={stateLabel} size="small" sx={{ height: 20, bgcolor: "action.selected", fontSize: 11 }} />
+      <Tooltip title={s.role}>
+        <Typography sx={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.05em", color: "text.secondary" }}>
+          {roleLabel(s.role)}
+        </Typography>
+      </Tooltip>
+      <CounterpartyTag id={s.counterparty_identity} size={18} />
       <Typography sx={{ fontFamily: C.mono, fontWeight: 600, fontSize: 13 }}>
         {fmtAmt(s.amount_a, asset(s.chain_a))} → {fmtAmt(s.amount_b, asset(s.chain_b))}
       </Typography>
-      <Typography sx={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.05em", color: "text.secondary" }}>
-        {s.role}
-      </Typography>
-      <CounterpartyTag id={s.counterparty_identity} size={18} />
 
       {/* The plain-language swap story (frontend narrate()) — kept verbatim,
           truncated with the full text in the tooltip to keep the dock compact. */}

@@ -379,6 +379,14 @@ export function settlementLeg(role: Swap["role"], state: SwapState): "a" | "b" {
   return state === "refunded" ? fundedLeg : receiveLeg;
 }
 
+/** Market-facing role label. The offer maker initiates the swap (funds first);
+ *  the taker participates — a 1:1 map of the protocol role (post → initiator =
+ *  maker, take → participant = taker). The raw protocol role stays in the row
+ *  tooltip. Not localized (the role was never translated; same as before). */
+export function roleLabel(role: Swap["role"]): string {
+  return role === "initiator" ? "Maker" : "Taker";
+}
+
 /** Normalize a v1 `listswaps` record: copy the HTLC funding txids into the
  *  canonical `fund_*` fields. `final_txid` is already our settlement. */
 export function v1ToSwap(r: V1SwapRecord): Swap {
