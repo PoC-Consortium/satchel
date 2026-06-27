@@ -387,13 +387,16 @@ impl ChainBackend for CoreRpcBackend {
         // The bump nurse covers the rare case where this later under-prices.
         const FALLBACK_SAT_PER_VB: u64 = 1;
         const MAX_SAT_PER_VB: u64 = 500; // sanity cap against estimator glitches
+
         // Regtest-only test override: the harness injects a market feerate to
         // create a market-vs-broadcast gap the bump nurse reacts to (see
         // `set_test_feerate`). Never honored off regtest.
         if self.params.network == Network::Regtest {
             let ov = TEST_FEERATE_OVERRIDE_SAT_VB.load(Ordering::Relaxed);
             if ov > 0 {
-                return Ok(ov.clamp(1, MAX_SAT_PER_VB).max(self.params.min_feerate_sat_vb));
+                return Ok(ov
+                    .clamp(1, MAX_SAT_PER_VB)
+                    .max(self.params.min_feerate_sat_vb));
             }
         }
         let estimate = self
