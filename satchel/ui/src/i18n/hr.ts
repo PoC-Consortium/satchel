@@ -482,6 +482,8 @@ export const hr: Bundle = {
     notConnectedBody: "Prikaz relaya treba pokrenuti engine — prvo povežite trgovca.",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "Swapovi",
     hint: "Vaša cjelovita knjiga — swapovi u tijeku na vrhu, dovršene trgovine ispod. Na aktivne swapove možete djelovati i s Corkboarda.",
     activeTitle: "U tijeku",

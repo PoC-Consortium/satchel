@@ -19,11 +19,12 @@ export default function CounterpartyTag({
 }) {
   const t = useT();
   return (
-    <Tooltip title={you ? t("counterparty.you") : id || t("counterparty.unknown")}>
+    <Tooltip title={id || t("counterparty.unknown")}>
       <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
         <Identicon id={id} size={size} />
         <Typography sx={{ fontFamily: C.mono, fontSize: 12, color: "text.secondary" }} noWrap>
-          {you ? t("counterparty.youShort") : shortId(id)}
+          {shortId(id)}
+          {you ? ` (${t("counterparty.youShort")})` : ""}
         </Typography>
       </Box>
     </Tooltip>

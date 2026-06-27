@@ -3,9 +3,10 @@ import { useApp } from "../AppContext";
 import { useConfirm } from "../ui/ConfirmProvider";
 import { useT } from "../i18n";
 import { dumpSwap, errMsg, rpc } from "../api/tauri";
-import { asset, fmtAmt, isActive, isFinalizing } from "../format";
+import { asset, fmtAmt, isActive, isFinalizing, swapParties } from "../format";
 import { narrate } from "../screens/narrate";
 import SwapProgressLine from "./SwapProgressLine";
+import CounterpartyTag from "./CounterpartyTag";
 import { C } from "../theme";
 import type { Swap } from "../api/types";
 
@@ -147,6 +148,8 @@ function ActiveSwapRow({
   onDump: () => void;
 }) {
   const t = useT();
+  const { identity } = useApp();
+  const { maker, taker } = swapParties(s, identity);
   const refundAt = s.role === "initiator" ? s.t1 : s.t2;
   // While finalizing the state is `completed` but it isn't done — show "finalizing".
   const stateLabel = isFinalizing(s) ? "finalizing" : s.state;
@@ -164,11 +167,16 @@ function ActiveSwapRow({
         }}
       >
       <Chip label={stateLabel} size="small" sx={{ height: 20, bgcolor: "action.selected", fontSize: 11 }} />
+      {/* maker (left) ↔ taker (right); the arrow tooltip spells out the sides. */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+        <CounterpartyTag id={maker.id} you={maker.you} size={18} />
+        <Tooltip title={`${t("swaps.maker")} ↔ ${t("swaps.taker")}`}>
+          <Typography sx={{ color: "text.disabled", fontSize: 15, cursor: "help" }}>↔</Typography>
+        </Tooltip>
+        <CounterpartyTag id={taker.id} you={taker.you} size={18} />
+      </Box>
       <Typography sx={{ fontFamily: C.mono, fontWeight: 600, fontSize: 13 }}>
         {fmtAmt(s.amount_a, asset(s.chain_a))} → {fmtAmt(s.amount_b, asset(s.chain_b))}
-      </Typography>
-      <Typography sx={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.05em", color: "text.secondary" }}>
-        {s.role}
       </Typography>
 
       {/* The plain-language swap story (frontend narrate()) — kept verbatim,

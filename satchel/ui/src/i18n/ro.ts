@@ -482,6 +482,8 @@ export const ro: Bundle = {
     notConnectedBody: "Vederea relay-urilor necesită engine-ul în funcțiune — conectează mai întâi un merchant.",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "Swap-uri",
     hint: "Registrul tău complet — swap-urile în desfășurare sus, tranzacțiile finalizate jos. Poți de asemenea acționa asupra swap-urilor active din Corkboard.",
     activeTitle: "În desfășurare",

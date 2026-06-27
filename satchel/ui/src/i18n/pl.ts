@@ -482,6 +482,8 @@ export const pl: Bundle = {
     notConnectedBody: "Widok relayów wymaga działającego silnika — najpierw połącz sprzedawcę.",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "Swapy",
     hint: "Twoja pełna księga — swapy w toku na górze, zakończone transakcje poniżej. Na aktywnych swapach możesz też działać z poziomu Corkboardu.",
     activeTitle: "W toku",

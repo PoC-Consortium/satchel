@@ -17,10 +17,11 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useApp } from "../AppContext";
 import { useT } from "../i18n";
-import { asset, fmtAmt, isActive, isFinalizing, isTerminal, settlementLeg } from "../format";
+import { asset, fmtAmt, isActive, isFinalizing, isTerminal, settlementLeg, swapParties } from "../format";
 import { dumpSwap } from "../api/tauri";
 import { narrate } from "./narrate";
 import SwapProgressLine from "../components/SwapProgressLine";
+import CounterpartyTag from "../components/CounterpartyTag";
 import { C } from "../theme";
 import type { Swap, SwapState } from "../api/types";
 
@@ -107,9 +108,10 @@ function SwapSection({
           <TableRow>
             {[
               t("swaps.col.swap"),
-              t("swaps.col.role"),
-              t("swaps.col.state"),
+              t("swaps.maker"),
+              t("swaps.taker"),
               t("swaps.col.amounts"),
+              t("swaps.col.state"),
               t("swaps.col.when"),
               t("swaps.col.finalTx"),
             ].map((h, i) => (
@@ -134,6 +136,8 @@ function SwapSection({
 
 function SwapRow({ s }: { s: Swap }) {
   const t = useT();
+  const { identity } = useApp();
+  const { maker, taker } = swapParties(s, identity);
   const [open, setOpen] = useState(false);
   // While finalizing, the state is `completed` but it isn't done — show
   // "finalizing" and not the terminal (green) colour.
@@ -168,7 +172,15 @@ function SwapRow({ s }: { s: Swap }) {
             )}
           </Box>
         </TableCell>
-        <TableCell>{s.role}</TableCell>
+        <TableCell>
+          <CounterpartyTag id={maker.id} you={maker.you} />
+        </TableCell>
+        <TableCell>
+          <CounterpartyTag id={taker.id} you={taker.you} />
+        </TableCell>
+        <TableCell>
+          {fmtAmt(s.amount_a, asset(s.chain_a))} → {fmtAmt(s.amount_b, asset(s.chain_b))}
+        </TableCell>
         <TableCell>
           <Chip
             label={stateLabel}
@@ -181,9 +193,6 @@ function SwapRow({ s }: { s: Swap }) {
             }}
           />
         </TableCell>
-        <TableCell>
-          {fmtAmt(s.amount_a, asset(s.chain_a))} → {fmtAmt(s.amount_b, asset(s.chain_b))}
-        </TableCell>
         <TableCell sx={{ fontFamily: C.mono, fontSize: 13 }}>
           {s.created_at ? new Date(s.created_at * 1000).toLocaleString() : "—"}
         </TableCell>
@@ -192,7 +201,7 @@ function SwapRow({ s }: { s: Swap }) {
         </TableCell>
       </TableRow>
       <TableRow>
-        <TableCell colSpan={6} sx={{ color: "text.secondary", fontSize: 12, pt: 0 }}>
+        <TableCell colSpan={7} sx={{ color: "text.secondary", fontSize: 12, pt: 0 }}>
           {/* pactd narration is shown VERBATIM (do not rewrite). */}
           <Typography sx={{ fontSize: 12, color: "text.secondary" }}>{narrate(s)}</Typography>
           {/* Live progress (observability) — additive, never replaces narrate(). */}

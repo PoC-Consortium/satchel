@@ -379,6 +379,17 @@ export function settlementLeg(role: Swap["role"], state: SwapState): "a" | "b" {
   return state === "refunded" ? fundedLeg : receiveLeg;
 }
 
+/** Who fills the maker and taker slots of a swap, given your own identity.
+ *  Maker = initiator (posts/funds first), Taker = participant. Each slot is the
+ *  party's pubkey + whether it's you — so the UI can label both sides explicitly
+ *  ("Maker: you · Taker: 5278…") instead of the ambiguous "your role + their
+ *  hash". Rendered via CounterpartyTag (its `you` mode marks your side). */
+export function swapParties(s: Swap, youId: string | null | undefined) {
+  const me = { id: youId ?? null, you: true };
+  const them = { id: s.counterparty_identity ?? null, you: false };
+  return s.role === "initiator" ? { maker: me, taker: them } : { maker: them, taker: me };
+}
+
 /** Normalize a v1 `listswaps` record: copy the HTLC funding txids into the
  *  canonical `fund_*` fields. `final_txid` is already our settlement. */
 export function v1ToSwap(r: V1SwapRecord): Swap {
@@ -403,6 +414,7 @@ export function pendingTakeToSwap(p: PendingTake): Swap {
     t2: 0,
     created_at: p.created_at,
     protocol: p.body.protocol,
+    counterparty_identity: p.from,
   };
 }
 
@@ -427,6 +439,7 @@ export function adaptorToSwap(r: AdaptorSwapRecord): Swap {
     fund_b_txid: r.funding_b_txid ?? null,
     final_txid: mySettle ?? null,
     protocol: "pact-htlc-v2",
+    counterparty_identity: r.counterparty_identity ?? null,
   };
 }
 

@@ -482,6 +482,8 @@ export const ja: Bundle = {
     notConnectedBody: "リレー表示にはエンジンの稼働が必要です — まずマーチャントを接続してください。",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "スワップ",
     hint: "あなたの全台帳です — 進行中のスワップが上、完了した取引が下に表示されます。Corkboard からもライブのスワップを操作できます。",
     activeTitle: "進行中",

@@ -482,6 +482,8 @@ export const gl: Bundle = {
     notConnectedBody: "A vista de relés precisa o motor en execución — conecta primeiro un comerciante.",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "Intercambios",
     hint: "O teu rexistro completo — intercambios en curso arriba, operacións rematadas embaixo. Tamén podes actuar sobre intercambios activos desde o Corkboard.",
     activeTitle: "En curso",

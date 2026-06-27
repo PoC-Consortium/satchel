@@ -482,6 +482,8 @@ export const ca: Bundle = {
     notConnectedBody: "La vista de relés necessita el motor en marxa — connecta primer un comerciant.",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "Intercanvis",
     hint: "El teu llibre complet — intercanvis en curs a dalt, tractes finalitzats a sota. També pots actuar sobre intercanvis actius des del Corkboard.",
     activeTitle: "En curs",

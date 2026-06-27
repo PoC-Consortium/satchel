@@ -482,6 +482,8 @@ export const tr: Bundle = {
     notConnectedBody: "Röle görünümü için motorun çalışıyor olması gerekir — önce bir satıcı bağlayın.",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "Takaslar",
     hint: "Tüm defteriniz — yürürlükteki takaslar üstte, biten işlemler altta. Canlı takaslar üzerinde Corkboard'dan da işlem yapabilirsiniz.",
     activeTitle: "Yürürlükte",

@@ -482,6 +482,8 @@ export const cs: Bundle = {
     notConnectedBody: "Pohled na relaye vyžaduje spuštěný engine — nejprve připojte merchanta.",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "Swapy",
     hint: "Vaše kompletní účetní kniha — probíhající swapy nahoře, dokončené obchody níže. Na živé swapy můžete také reagovat z Corkboardu.",
     activeTitle: "Probíhající",

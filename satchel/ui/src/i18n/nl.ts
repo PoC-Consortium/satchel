@@ -482,6 +482,8 @@ export const nl: Bundle = {
     notConnectedBody: "De relay-weergave vereist een draaiende engine — verbind eerst een merchant.",
   },
   swaps: {
+    maker: "Maker",
+    taker: "Taker",
     title: "Swaps",
     hint: "Je volledige grootboek — lopende swaps bovenaan, afgeronde handels eronder. Je kunt ook live swaps bedienen vanaf de Corkboard.",
     activeTitle: "Onderweg",
