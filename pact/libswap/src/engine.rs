@@ -3138,24 +3138,39 @@ impl Engine {
                     "their_lock",
                     None,
                 ),
-                None => rec
-                    .htlc_a_txid
-                    .as_ref()
-                    .and_then(|txid| {
-                        self.progress_confirming(
-                            &rec.swap_id,
-                            &rec.chain_a,
-                            txid.clone(),
-                            rec.htlc_a_vout,
-                            htlc_spk(true),
-                            rec.n_a,
-                            "our_lock",
-                            None,
-                        )
-                    })
-                    .or_else(|| {
+                // Our leg A is in; the taker won't lock B until it reaches `n_a`
+                // (enforced in `fund`). While it buries → determinate `our_lock`;
+                // once buried (taker still silent) → a liveness count anchored to
+                // its confirmations, so it survives a restart.
+                None => match rec.htlc_a_txid.as_deref() {
+                    Some(txid_a) => {
+                        let confs_a = self
+                            .lock_confs(&rec.chain_a, txid_a, rec.htlc_a_vout, htlc_spk(true))
+                            .unwrap_or(0);
+                        if confs_a < rec.n_a {
+                            self.progress_confirming(
+                                &rec.swap_id,
+                                &rec.chain_a,
+                                txid_a.to_string(),
+                                rec.htlc_a_vout,
+                                htlc_spk(true),
+                                rec.n_a,
+                                "our_lock",
+                                None,
+                            )
+                        } else {
+                            self.progress_awaiting_anchored(
+                                &rec.swap_id,
+                                &rec.chain_b,
+                                "awaiting_lock",
+                                confs_a - rec.n_a,
+                            )
+                        }
+                    }
+                    None => {
                         self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_lock", prev)
-                    }),
+                    }
+                },
             },
             (Initiator, RedeemedB) => self.progress_confirming(
                 &rec.swap_id,
@@ -3182,9 +3197,25 @@ impl Engine {
                 ),
                 None => self.progress_awaiting(&rec.swap_id, &rec.chain_a, "awaiting_lock", prev),
             },
-            (Participant, FundedA) | (Participant, FundedB) => {
-                self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_claim", prev)
-            }
+            // We've locked leg B; waiting for the maker's reveal. Anchor the
+            // liveness count to our lock's depth (`htlc_b_height`, persisted at
+            // funding) so it survives a restart instead of re-seeding to 0.
+            (Participant, FundedA) | (Participant, FundedB) => match rec.htlc_b_height {
+                Some(h) => {
+                    let tip = self
+                        .backend(&rec.chain_b)
+                        .ok()
+                        .and_then(|b| b.tip_height().ok())
+                        .unwrap_or(h);
+                    self.progress_awaiting_anchored(
+                        &rec.swap_id,
+                        &rec.chain_b,
+                        "awaiting_claim",
+                        tip.saturating_sub(h).min(u64::from(u32::MAX)) as u32,
+                    )
+                }
+                None => self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_claim", prev),
+            },
             (Participant, Completed) => self.progress_confirming(
                 &rec.swap_id,
                 &rec.chain_a,
@@ -3230,7 +3261,21 @@ impl Engine {
                     "their_lock",
                     None,
                 ),
-                None => self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_lock", prev),
+                // Anchor to our leg-A funding depth (chain-read) so the count
+                // survives a restart. v2 has no `n_a` fund-gate, so it's the raw
+                // confirmations since A landed.
+                None => match rec.funding_a_txid.as_deref() {
+                    Some(txid_a) => self.progress_awaiting_anchored(
+                        &rec.swap_id,
+                        &rec.chain_b,
+                        "awaiting_lock",
+                        self.lock_confs(&rec.chain_a, txid_a, rec.funding_a_vout, leg_spk(true))
+                            .unwrap_or(0),
+                    ),
+                    None => {
+                        self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_lock", prev)
+                    }
+                },
             },
             (Role::Initiator, RedeemedB) => self.progress_confirming(
                 &rec.swap_id,
@@ -3245,8 +3290,16 @@ impl Engine {
             // Taker: wait for the maker's A lock; after we lock B, wait for their
             // reveal; then secure our A redeem.
             (Role::Participant, Signed) => {
-                if rec.funding_b_txid.is_some() {
-                    self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_claim", prev)
+                if let Some(txid_b) = &rec.funding_b_txid {
+                    // We've locked leg B; waiting for the maker's reveal. Anchor
+                    // to our lock's depth (chain-read) so it survives a restart.
+                    self.progress_awaiting_anchored(
+                        &rec.swap_id,
+                        &rec.chain_b,
+                        "awaiting_claim",
+                        self.lock_confs(&rec.chain_b, txid_b, rec.funding_b_vout, leg_spk(false))
+                            .unwrap_or(0),
+                    )
                 } else if let Some(txid) = &rec.funding_a_txid {
                     self.progress_confirming(
                         &rec.swap_id,
@@ -3276,6 +3329,43 @@ impl Engine {
         }
     }
 
+    /// Confirmations of a leg's funding lock, read the robust way: scan the
+    /// unspent output by outpoint+spk (works even when the tx isn't in our
+    /// wallet or, on regtest, txindex is off), falling back to a wallet
+    /// `gettransaction` for our own spends. `None` if the backend is
+    /// unreachable; `0` while the output is unconfirmed or unseen. Used both for
+    /// the determinate `confs/needed` lines and to anchor the liveness counts.
+    fn lock_confs(
+        &self,
+        chain: &ChainRef,
+        txid: &str,
+        vout: Option<u32>,
+        spk: Option<ScriptBuf>,
+    ) -> Option<u32> {
+        let backend = self.backend(chain).ok()?;
+        let confs = match (vout, spk.as_ref()) {
+            // A funding lock — usually the COUNTERPARTY's tx, so it isn't in our
+            // wallet and (on regtest) txindex may be off, which makes
+            // `tx_confirmations` blind to it. Scan the unspent output by
+            // outpoint+spk instead, exactly as the tick does — while the lock is
+            // unspent (the wait is live) this returns its depth.
+            (Some(vout), Some(spk)) => bitcoin::Txid::from_str(txid)
+                .ok()
+                .and_then(|txid| {
+                    backend
+                        .get_txout(&OutPoint { txid, vout }, spk)
+                        .ok()
+                        .flatten()
+                })
+                .map(|o| o.confirmations)
+                .unwrap_or(0),
+            // Our own settlement tx is a wallet tx, so `gettransaction` finds it.
+            _ => backend.tx_confirmations(txid, spk.as_ref()).unwrap_or(0),
+        }
+        .min(u64::from(u32::MAX)) as u32;
+        Some(confs)
+    }
+
     /// A "confirming X/n" entry — a wait that is ours: the counterparty's lock
     /// burying (our gate before we act), or our own claim burying (settlement).
     /// `None` once `confs >= needed` (the leg is final, so the line disappears).
@@ -3290,27 +3380,7 @@ impl Engine {
         watching: &str,
         feerate: Option<u64>,
     ) -> Option<SwapProgress> {
-        let backend = self.backend(chain).ok()?;
-        let confs = match (vout, spk.as_ref()) {
-            // A funding lock — usually the COUNTERPARTY's tx, so it isn't in our
-            // wallet and (on regtest) txindex may be off, which makes
-            // `tx_confirmations` blind to it. Scan the unspent output by
-            // outpoint+spk instead, exactly as the tick does — while the lock is
-            // unspent (the wait is live) this returns its depth.
-            (Some(vout), Some(spk)) => bitcoin::Txid::from_str(&txid)
-                .ok()
-                .and_then(|txid| {
-                    backend
-                        .get_txout(&OutPoint { txid, vout }, spk)
-                        .ok()
-                        .flatten()
-                })
-                .map(|o| o.confirmations)
-                .unwrap_or(0),
-            // Our own settlement tx is a wallet tx, so `gettransaction` finds it.
-            _ => backend.tx_confirmations(&txid, spk.as_ref()).unwrap_or(0),
-        }
-        .min(u64::from(u32::MAX)) as u32;
+        let confs = self.lock_confs(chain, &txid, vout, spk)?;
         if confs >= needed {
             return None;
         }
@@ -3329,9 +3399,38 @@ impl Engine {
         })
     }
 
-    /// An "awaiting <counterparty action>" entry — no target, just a blocks-
-    /// elapsed liveness count. The phase-start tip is carried forward from the
-    /// prior snapshot while the phase is unchanged, so the count grows per block.
+    /// An "awaiting <counterparty action>" entry whose `blocks_elapsed` is
+    /// anchored to an on-chain fact the caller computed (a lock's depth) rather
+    /// than carried in the in-memory snapshot — so the count survives a restart.
+    /// Used once the relevant lock is on-chain; the pre-lock waits (nothing
+    /// on-chain to anchor to yet) still use [`Engine::progress_awaiting`].
+    fn progress_awaiting_anchored(
+        &self,
+        swap_id: &str,
+        chain: &ChainRef,
+        watching: &str,
+        blocks: u32,
+    ) -> Option<SwapProgress> {
+        Some(SwapProgress {
+            swap_id: swap_id.to_string(),
+            watching: watching.into(),
+            coin: coin_symbol(chain),
+            confs: 0,
+            needed: 0,
+            blocks_elapsed: Some(blocks),
+            feerate_sat_vb: None,
+            last_action: None,
+            last_detail: None,
+            updated_at: local_now(),
+            awaiting_since_height: None,
+        })
+    }
+
+    /// An "awaiting <counterparty action>" entry for the PRE-LOCK waits — no
+    /// on-chain anchor exists yet (the counterparty hasn't locked), so the
+    /// blocks-elapsed baseline is carried forward from the prior snapshot while
+    /// the phase is unchanged. This count re-seeds to 0 on a restart; the
+    /// lock/reveal waits avoid that via [`Engine::progress_awaiting_anchored`].
     fn progress_awaiting(
         &self,
         swap_id: &str,
