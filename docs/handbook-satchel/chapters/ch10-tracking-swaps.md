@@ -37,8 +37,10 @@ whoever took it, regardless of which one is you. Your own side is marked with a
 glance. A party Satchel hasn't recorded yet (occasionally the case for an older
 record) shows as **unknown**.
 
-Private swaps carry a **Private (Taproot)** chip so you can tell them apart at a
-glance.
+Every swap carries a **protocol chip** so you can tell the two kinds apart at a
+glance: a muted **Standard (HTLC)** chip for a classic swap, and a highlighted
+**Private (Taproot)** chip for a private one. The same chip appears on each card
+in the active-swaps dock.
 
 ### Reading the state
 
@@ -74,6 +76,11 @@ waiting for, you'll see one of:
   are waiting on the counterparty. There's no fixed target to count toward, so the
   bar is indeterminate and a small **+N blocks** shows how many blocks have passed
   while you wait.
+- **Your lock confirming · 2/6** — *your own* funding is burying toward the depth
+  your counterparty needs before they'll lock their side. You'll see this as the
+  maker of a classic swap: the wait is on your lock maturing, not on a slow
+  counterparty, so Satchel shows it honestly as a count on your own chain rather
+  than an indeterminate "awaiting their lock."
 - **Their lock confirming · 3/6** — their funding is burying toward the depth you
   need before you act. The numbers are *confirmations so far / confirmations
   needed*.

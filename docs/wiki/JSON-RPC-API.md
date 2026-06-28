@@ -38,6 +38,7 @@
 | `createmerchant` | Allocate next `m<N>` and make it active (nested mode). |
 | `listmerchants` | All merchants + which is active. |
 | `loadmerchant` | Switch active merchant (refused if current has a live swap). |
+| `renamemerchant` | Change a merchant's `label` (`id`, `label`); trimmed, non-empty. Label is the only mutable field, so it's safe even mid-swap. |
 | `unloadmerchant` | Unload active merchant (same fund-safety gate). |
 | `getmerchantinfo` | Metadata for one merchant (defaults to active). |
 
