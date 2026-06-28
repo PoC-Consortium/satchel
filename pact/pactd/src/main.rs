@@ -586,6 +586,12 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             kick_nostr(app);
             Ok(json!({ "id": meta.id, "label": meta.label }))
         }
+        "renamemerchant" => {
+            let id = p.str(0, "id")?;
+            let label = p.str(1, "label")?;
+            let meta = blocking_registry(app, move |r| r.set_label(&id, &label)).await?;
+            Ok(json!({ "id": meta.id, "label": meta.label }))
+        }
         "unloadmerchant" => {
             blocking_registry(app, |r| r.unload()).await?;
             Ok(json!({ "unloaded": true }))

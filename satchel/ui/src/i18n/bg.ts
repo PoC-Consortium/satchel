@@ -183,6 +183,7 @@ export const bg: Bundle = {
     thisMerchant: "този търговец",
     nameLabel: "Име на търговец",
     namePlaceholder: "напр. Основен",
+    rename: "Преименуване",
     introFirst:
       "Настройте първата си търговска самоличност („търговец“). Тя държи само горещи транзитни ключове за суапове в ход — основните ви монети остават в собствения ви портфейл.",
     introNew: "Новият търговец е свежа, отделна самоличност със собствен seed и история на суаповете.",
@@ -565,6 +566,8 @@ export const bg: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "само за преглед: {err}",
     switchedMerchant: "превключено към търговец {id}",
+    renamedMerchant: "търговецът преименуван на {name}",
+    renameMerchantError: "преименуване на търговец: {err}",
     switchMerchantError: "превключване на търговец: {err}",
     loadMerchantError: "зареждане на търговец: {err}",
     merchantCreated: "търговец {id} създаден",

@@ -183,6 +183,7 @@ export const id: Bundle = {
     thisMerchant: "merchant ini",
     nameLabel: "Nama merchant",
     namePlaceholder: "mis. Utama",
+    rename: "Ganti nama",
     introFirst:
       "Atur identitas dagang pertama Anda (sebuah “merchant”). Identitas ini hanya memegang kunci transit panas untuk swap yang berjalan — koin utama Anda tetap di dompet Anda sendiri.",
     introNew: "Merchant baru adalah identitas segar dan terpisah dengan seed dan riwayat swap-nya sendiri.",
@@ -565,6 +566,8 @@ export const id: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "hanya-pantau: {err}",
     switchedMerchant: "beralih ke merchant {id}",
+    renamedMerchant: "merchant diganti namanya menjadi {name}",
+    renameMerchantError: "ganti nama merchant: {err}",
     switchMerchantError: "beralih merchant: {err}",
     loadMerchantError: "muat merchant: {err}",
     merchantCreated: "merchant {id} dibuat",

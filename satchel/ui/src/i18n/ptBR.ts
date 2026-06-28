@@ -183,6 +183,7 @@ export const ptBR: Bundle = {
     thisMerchant: "este merchant",
     nameLabel: "Nome do merchant",
     namePlaceholder: "ex.: Principal",
+    rename: "Renomear",
     introFirst:
       "Configure sua primeira identidade de negociação (um “merchant”). Ela guarda apenas chaves quentes de trânsito para swaps em andamento — suas moedas principais ficam na sua própria carteira.",
     introNew: "Um novo merchant é uma identidade nova e separada, com sua própria seed e histórico de swaps.",
@@ -565,6 +566,8 @@ export const ptBR: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "somente visualização: {err}",
     switchedMerchant: "trocado para o merchant {id}",
+    renamedMerchant: "merchant renomeado para {name}",
+    renameMerchantError: "renomear merchant: {err}",
     switchMerchantError: "trocar merchant: {err}",
     loadMerchantError: "carregar merchant: {err}",
     merchantCreated: "merchant {id} criado",

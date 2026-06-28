@@ -183,6 +183,7 @@ export const ru: Bundle = {
     thisMerchant: "этот мерчант",
     nameLabel: "Имя мерчанта",
     namePlaceholder: "напр. Основной",
+    rename: "Переименовать",
     introFirst:
       "Настройте свою первую торговую личность («мерчанта»). Она хранит только горячие транзитные ключи для текущих свопов — ваши основные монеты остаются в вашем собственном кошельке.",
     introNew: "Новый мерчант — это свежая, отдельная личность с собственным сидом и историей свопов.",
@@ -565,6 +566,8 @@ export const ru: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "только просмотр: {err}",
     switchedMerchant: "переключено на мерчанта {id}",
+    renamedMerchant: "мерчант переименован в {name}",
+    renameMerchantError: "переименование мерчанта: {err}",
     switchMerchantError: "переключение мерчанта: {err}",
     loadMerchantError: "загрузка мерчанта: {err}",
     merchantCreated: "мерчант {id} создан",

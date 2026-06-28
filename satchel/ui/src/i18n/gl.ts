@@ -183,6 +183,7 @@ export const gl: Bundle = {
     thisMerchant: "este comerciante",
     nameLabel: "Nome do comerciante",
     namePlaceholder: "p. ex. Principal",
+    rename: "Renomear",
     introFirst:
       "Configura a túa primeira identidade de negociación (un «comerciante»). Só garda claves de tránsito en quente para intercambios en curso — as túas moedas principais quedan na túa propia carteira.",
     introNew: "Un novo comerciante é unha identidade nova e separada, coa súa propia semente e historial de intercambios.",
@@ -565,6 +566,8 @@ export const gl: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "só visualización: {err}",
     switchedMerchant: "cambiouse ao comerciante {id}",
+    renamedMerchant: "comerciante renomeado a {name}",
+    renameMerchantError: "renomear comerciante: {err}",
     switchMerchantError: "cambiar comerciante: {err}",
     loadMerchantError: "cargar comerciante: {err}",
     merchantCreated: "comerciante {id} creado",

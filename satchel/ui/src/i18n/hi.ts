@@ -183,6 +183,7 @@ export const hi: Bundle = {
     thisMerchant: "यह merchant",
     nameLabel: "Merchant नाम",
     namePlaceholder: "जैसे Main",
+    rename: "नाम बदलें",
     introFirst:
       "अपनी पहली व्यापारिक पहचान (एक “merchant”) सेट अप करें। यह केवल चालू स्वैप के लिए hot ट्रांज़िट keys रखता है — आपके मुख्य coins आपके अपने wallet में रहते हैं।",
     introNew: "एक नया merchant एक नई, अलग पहचान है जिसका अपना seed और स्वैप इतिहास होता है।",
@@ -565,6 +566,8 @@ export const hi: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "केवल-देखें: {err}",
     switchedMerchant: "merchant {id} पर स्विच किया गया",
+    renamedMerchant: "merchant का नाम बदलकर {name} किया गया",
+    renameMerchantError: "merchant का नाम बदलें: {err}",
     switchMerchantError: "merchant स्विच करें: {err}",
     loadMerchantError: "merchant लोड करें: {err}",
     merchantCreated: "merchant {id} बनाया गया",

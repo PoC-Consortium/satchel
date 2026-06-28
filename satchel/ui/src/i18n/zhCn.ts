@@ -183,6 +183,7 @@ export const zhCn: Bundle = {
     thisMerchant: "此商户",
     nameLabel: "商户名称",
     namePlaceholder: "例如：主账户",
+    rename: "重命名",
     introFirst:
       "设置你的第一个交易身份（一个“商户”）。它只持有用于进行中交换的中转热密钥 — 你的主要资金留在你自己的钱包里。",
     introNew: "新商户是一个全新、独立的身份，拥有自己的种子和交换历史。",
@@ -565,6 +566,8 @@ export const zhCn: Bundle = {
     listcoinsError: "listcoins：{err}",
     watchOnlyError: "仅查看：{err}",
     switchedMerchant: "已切换到商户 {id}",
+    renamedMerchant: "商户已重命名为 {name}",
+    renameMerchantError: "重命名商户：{err}",
     switchMerchantError: "切换商户：{err}",
     loadMerchantError: "加载商户：{err}",
     merchantCreated: "商户 {id} 已创建",

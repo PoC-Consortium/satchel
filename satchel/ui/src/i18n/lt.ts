@@ -183,6 +183,7 @@ export const lt: Bundle = {
     thisMerchant: "šis prekiautojas",
     nameLabel: "Prekiautojo pavadinimas",
     namePlaceholder: "pvz., Pagrindinis",
+    rename: "Pervadinti",
     introFirst:
       "Sukonfigūruokite savo pirmą prekybos tapatybę („prekiautoją“). Ji laiko tik karštuosius tranzito raktus vykstantiems mainams — pagrindinės jūsų monetos lieka jūsų pačių piniginėje.",
     introNew: "Naujas prekiautojas yra nauja, atskira tapatybė su savo sėkla ir mainų istorija.",
@@ -565,6 +566,8 @@ export const lt: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "tik stebėjimas: {err}",
     switchedMerchant: "perjungta į prekiautoją {id}",
+    renamedMerchant: "prekiautojas pervadintas į {name}",
+    renameMerchantError: "prekiautojo pervadinimas: {err}",
     switchMerchantError: "prekiautojo perjungimas: {err}",
     loadMerchantError: "prekiautojo įkėlimas: {err}",
     merchantCreated: "prekiautojas {id} sukurtas",

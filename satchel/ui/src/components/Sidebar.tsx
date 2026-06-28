@@ -6,12 +6,16 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  TextField,
   Tooltip,
   Typography,
   useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import CheckIcon from "@mui/icons-material/Check";
+import CloseIcon from "@mui/icons-material/Close";
 import CampaignOutlinedIcon from "@mui/icons-material/CampaignOutlined";
 import NoteAddOutlinedIcon from "@mui/icons-material/NoteAddOutlined";
 import ListAltOutlinedIcon from "@mui/icons-material/ListAltOutlined";
@@ -22,10 +26,11 @@ import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalance
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import StorefrontIcon from "@mui/icons-material/Storefront";
 import { useT } from "../i18n";
 import { useApp } from "../AppContext";
+import { errMsg, renameMerchant } from "../api/tauri";
 import { useUpdate } from "../update";
 import { useDialogs } from "../ui/dialogs";
 import Identicon from "./Identicon";
@@ -88,12 +93,45 @@ export default function Sidebar({
   const theme = useTheme();
   const narrow = useMediaQuery(theme.breakpoints.down("sm"));
   const t = useT();
-  const { activeMerchant, activeId, identity, ready, watchOnly } = useApp();
+  const { activeMerchant, activeId, identity, ready, watchOnly, boot, log } = useApp();
   const { version, showBadge, openDialog } = useUpdate();
   const { openMerchants } = useDialogs();
 
   const merchantLabel = activeMerchant?.label ?? (activeId ? activeId : t("header.noMerchant"));
   const merchantId = activeMerchant?.identity ?? identity ?? null;
+
+  // Inline rename of the active merchant (UI-5): click the name to edit it in
+  // place, no dialog. Only the label changes — id/identity/seed are immutable —
+  // so it's safe even mid-swap. Renaming targets the active merchant only (the
+  // one the sidebar shows); switching/other merchants stay in the manager.
+  const renameId = activeMerchant?.id ?? null;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const startEdit = () => {
+    setDraft(activeMerchant?.label ?? "");
+    setEditing(true);
+  };
+
+  const saveEdit = async () => {
+    const name = draft.trim();
+    if (!renameId || !name || name === activeMerchant?.label) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await renameMerchant(renameId, name);
+      await boot();
+      log(t("log.renamedMerchant", { name }));
+      setEditing(false);
+    } catch (e) {
+      log(t("log.renameMerchantError", { err: errMsg(e) }));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const go = (r: Route) => {
     onNavigate(r);
@@ -182,10 +220,59 @@ export default function Sidebar({
         ) : (
           <StorefrontIcon sx={{ color: "text.secondary", fontSize: 28 }} />
         )}
-        <Box sx={{ minWidth: 0, maxWidth: "100%", textAlign: "center" }}>
-          <Typography noWrap sx={{ fontWeight: 600, fontSize: 13 }}>
-            {merchantLabel}
-          </Typography>
+        <Box sx={{ minWidth: 0, maxWidth: "100%", width: "100%", textAlign: "center" }}>
+          {editing ? (
+            // Inline edit box: stop the click bubbling so the surrounding box's
+            // openMerchants doesn't fire. Enter saves, Esc cancels.
+            <Box
+              onClick={(e) => e.stopPropagation()}
+              sx={{ display: "flex", alignItems: "center", gap: 0.25 }}
+            >
+              <TextField
+                value={draft}
+                autoFocus
+                size="small"
+                disabled={saving}
+                placeholder={t("merchants.namePlaceholder")}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void saveEdit();
+                  else if (e.key === "Escape") setEditing(false);
+                }}
+                slotProps={{ htmlInput: { maxLength: 40, style: { textAlign: "center", fontWeight: 600, fontSize: 13, padding: "4px 6px" } } }}
+                sx={{ flex: 1, minWidth: 0 }}
+              />
+              <IconButton size="small" disabled={saving} aria-label={t("common.save")} onClick={() => void saveEdit()}>
+                <CheckIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+              <IconButton size="small" disabled={saving} aria-label={t("common.cancel")} onClick={() => setEditing(false)}>
+                <CloseIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Box>
+          ) : (
+            <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.25, maxWidth: "100%", "&:hover .renamePencil": { opacity: 1 } }}>
+              <Typography
+                noWrap
+                onClick={renameId ? (e) => { e.stopPropagation(); startEdit(); } : undefined}
+                sx={{ fontWeight: 600, fontSize: 13, cursor: renameId ? "text" : "inherit" }}
+              >
+                {merchantLabel}
+              </Typography>
+              {renameId && (
+                <Tooltip title={t("merchants.rename")}>
+                  <IconButton
+                    size="small"
+                    className="renamePencil"
+                    aria-label={t("merchants.rename")}
+                    onClick={(e) => { e.stopPropagation(); startEdit(); }}
+                    sx={{ p: 0.25, opacity: 0, transition: "opacity 0.15s", color: "text.disabled", "&:hover": { color: "primary.main" } }}
+                  >
+                    <EditOutlinedIcon sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
+          )}
           <Typography noWrap sx={{ fontSize: 11, color: "text.secondary", fontFamily: C.mono }}>
             {ready && merchantId ? shortId(merchantId) : t("header.noMerchant")}
           </Typography>

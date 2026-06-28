@@ -183,6 +183,7 @@ export const fi: Bundle = {
     thisMerchant: "tämä kauppias",
     nameLabel: "Kauppiaan nimi",
     namePlaceholder: "esim. Pää",
+    rename: "Nimeä uudelleen",
     introFirst:
       "Määritä ensimmäinen kaupankäynti-identiteettisi (”kauppias”). Se pitää hallussaan vain kuumia siirtoavaimia käynnissä oleviin swapeihin — pääkolikkosi pysyvät omassa lompakossasi.",
     introNew: "Uusi kauppias on tuore, erillinen identiteetti omalla seedillään ja swap-historiallaan.",
@@ -565,6 +566,8 @@ export const fi: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "vain katselu: {err}",
     switchedMerchant: "vaihdettu kauppiaaseen {id}",
+    renamedMerchant: "kauppias nimetty uudelleen: {name}",
+    renameMerchantError: "nimeä kauppias uudelleen: {err}",
     switchMerchantError: "vaihda kauppias: {err}",
     loadMerchantError: "lataa kauppias: {err}",
     merchantCreated: "kauppias {id} luotu",
