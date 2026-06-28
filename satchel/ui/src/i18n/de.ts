@@ -422,8 +422,6 @@ export const de: Bundle = {
     noOffers: "Derzeit keine Angebote, die du annehmen kannst",
     noOffersBody:
       "Angebote erscheinen hier, sobald ein Maker eins für ein von dir eingerichtetes Paar einstellt. Du kannst auch eigene einstellen.",
-    hiddenOffers:
-      "{count} weitere(s) Angebot(e) für Paare, die du nicht verbunden hast. Richte beide Coins ein, um sie zu handeln:",
     yourOffer: "dein Angebot",
     offerStaged: "wird eingestellt…",
     offerStagedTip:

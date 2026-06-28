@@ -422,8 +422,6 @@ export const fi: Bundle = {
     noOffers: "Ei tarjouksia, jotka voisit ottaa juuri nyt",
     noOffersBody:
       "Tarjoukset ilmestyvät tähän heti, kun tekijä julkaisee sellaisen parille, jonka olet määrittänyt. Voit myös julkaista omasi.",
-    hiddenOffers:
-      "{count} muuta tarjousta pareille, joita et ole yhdistänyt. Määritä molemmat kolikot käydäksesi niillä kauppaa:",
     yourOffer: "tarjouksesi",
     offerStaged: "julkaistaan…",
     offerStagedTip:

@@ -422,8 +422,6 @@ export const tr: Bundle = {
     noOffers: "Şu anda alabileceğiniz teklif yok",
     noOffersBody:
       "Kurduğunuz bir parite için bir maker teklif yayınlar yayınlamaz teklifler burada görünür. Kendi teklifinizi de yayınlayabilirsiniz.",
-    hiddenOffers:
-      "Bağlamadığınız pariteler için {count} teklif daha var. Onlarla işlem yapmak için her iki coin'i de kurun:",
     yourOffer: "sizin teklifiniz",
     offerStaged: "yayınlanıyor…",
     offerStagedTip:

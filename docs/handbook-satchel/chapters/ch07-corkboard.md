@@ -134,6 +134,7 @@ The Corkboard tells you clearly when there's nothing to show:
 - **No offers you can take right now** — the board is reachable but has no offers
   for a pair you've set up. They'll appear as soon as a maker posts one, and you
   can always post your own.
-- **More offers for pairs you haven't connected** — a note like "*N* more…
-  Settings → Coins" means there are offers out there for pairs whose coins you
-  haven't connected yet. Set up both coins to see and trade them.
+
+The Corkboard only shows offers for pairs whose coins you've connected — offers
+for other pairs simply don't appear. To trade a pair you don't yet see, set up
+both of its coins in **Settings → Coins**.

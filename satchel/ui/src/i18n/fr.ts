@@ -422,8 +422,6 @@ export const fr: Bundle = {
     noOffers: "Aucune offre que vous puissiez prendre pour le moment",
     noOffersBody:
       "Les offres apparaissent ici dès qu'un maker en publie une pour une paire que vous avez configurée. Vous pouvez aussi publier les vôtres.",
-    hiddenOffers:
-      "{count} offre(s) de plus pour des paires que vous n'avez pas connectées. Configurez les deux coins pour les trader :",
     yourOffer: "votre offre",
     offerStaged: "publication…",
     offerStagedTip:

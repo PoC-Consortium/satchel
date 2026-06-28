@@ -429,8 +429,6 @@ export const en = {
     noOffers: "No offers you can take right now",
     noOffersBody:
       "Offers show up here as soon as a maker posts one for a pair you've set up. You can also post your own.",
-    hiddenOffers:
-      "{count} more offer(s) for pairs you haven't connected. Set up both coins to trade them:",
     yourOffer: "your offer",
     offerStaged: "posting…",
     offerStagedTip:

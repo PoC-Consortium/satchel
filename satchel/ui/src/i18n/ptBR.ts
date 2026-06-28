@@ -422,8 +422,6 @@ export const ptBR: Bundle = {
     noOffers: "Nenhuma oferta que você possa aceitar agora",
     noOffersBody:
       "As ofertas aparecem aqui assim que um maker publicar uma para um par que você configurou. Você também pode publicar a sua.",
-    hiddenOffers:
-      "Mais {count} oferta(s) para pares que você não conectou. Configure ambas as moedas para negociá-las:",
     yourOffer: "sua oferta",
     offerStaged: "publicando…",
     offerStagedTip:

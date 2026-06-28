@@ -422,8 +422,6 @@ export const nl: Bundle = {
     noOffers: "Geen aanbiedingen die je nu kunt aannemen",
     noOffersBody:
       "Aanbiedingen verschijnen hier zodra een maker er een plaatst voor een paar dat je hebt ingesteld. Je kunt ook je eigen aanbod plaatsen.",
-    hiddenOffers:
-      "{count} aanbieding(en) meer voor paren die je niet hebt verbonden. Stel beide munten in om ze te verhandelen:",
     yourOffer: "jouw aanbod",
     offerStaged: "plaatsen…",
     offerStagedTip:

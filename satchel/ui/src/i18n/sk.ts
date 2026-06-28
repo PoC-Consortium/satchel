@@ -422,8 +422,6 @@ export const sk: Bundle = {
     noOffers: "Žiadne ponuky, ktoré môžete práve teraz prijať",
     noOffersBody:
       "Ponuky sa tu objavia hneď, ako maker zverejní niektorú pre pár, ktorý ste nastavili. Môžete tiež zverejniť svoju vlastnú.",
-    hiddenOffers:
-      "{count} ďalších ponúk pre páry, ktoré ste nepripojili. Nastavte obe mince, aby ste s nimi obchodovali:",
     yourOffer: "vaša ponuka",
     offerStaged: "zverejňuje sa…",
     offerStagedTip:

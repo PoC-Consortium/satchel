@@ -422,8 +422,6 @@ export const pl: Bundle = {
     noOffers: "Brak ofert, które możesz teraz przyjąć",
     noOffersBody:
       "Oferty pojawiają się tutaj, gdy tylko maker wystawi je dla pary, którą skonfigurowałeś. Możesz też wystawić własną.",
-    hiddenOffers:
-      "Jeszcze {count} ofert(a) dla par, których nie połączyłeś. Skonfiguruj obie monety, aby nimi handlować:",
     yourOffer: "Twoja oferta",
     offerStaged: "wystawianie…",
     offerStagedTip:
