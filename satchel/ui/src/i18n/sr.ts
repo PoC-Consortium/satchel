@@ -183,6 +183,7 @@ export const sr: Bundle = {
     thisMerchant: "овај трговац",
     nameLabel: "Име трговца",
     namePlaceholder: "нпр. Главни",
+    rename: "Преименуј",
     introFirst:
       "Подесите свој први трговачки идентитет („трговца”). Држи само вруће транзитне кључеве за свопове у току — ваши главни новчићи остају у вашем сопственом новчанику.",
     introNew: "Нови трговац је свеж, одвојен идентитет са сопственим семеном и историјом свопова.",
@@ -565,6 +566,8 @@ export const sr: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "само за преглед: {err}",
     switchedMerchant: "пребачено на трговца {id}",
+    renamedMerchant: "трговац преименован у {name}",
+    renameMerchantError: "преименуј трговца: {err}",
     switchMerchantError: "промена трговца: {err}",
     loadMerchantError: "учитавање трговца: {err}",
     merchantCreated: "трговац {id} направљен",

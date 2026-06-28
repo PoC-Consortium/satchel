@@ -183,6 +183,7 @@ export const de: Bundle = {
     thisMerchant: "dieser Merchant",
     nameLabel: "Merchant-Name",
     namePlaceholder: "z. B. Haupt",
+    rename: "Umbenennen",
     introFirst:
       "Richte deine erste Handelsidentität (einen „Merchant“) ein. Sie hält nur heiße Transit-Schlüssel für laufende Swaps — deine Haupt-Coins bleiben in deiner eigenen Wallet.",
     introNew: "Ein neuer Merchant ist eine frische, separate Identität mit eigenem Seed und eigener Swap-Historie.",
@@ -565,6 +566,8 @@ export const de: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "Nur-Beobachten: {err}",
     switchedMerchant: "zu Merchant {id} gewechselt",
+    renamedMerchant: "Händler umbenannt in {name}",
+    renameMerchantError: "Händler umbenennen: {err}",
     switchMerchantError: "Merchant wechseln: {err}",
     loadMerchantError: "Merchant laden: {err}",
     merchantCreated: "Merchant {id} erstellt",

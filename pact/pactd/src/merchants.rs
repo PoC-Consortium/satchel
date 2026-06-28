@@ -328,6 +328,26 @@ impl MerchantRegistry {
         self.meta_of(id).cloned().context("merchant vanished")
     }
 
+    /// `renamemerchant {id, label}` — change a merchant's user-facing label.
+    /// The label is the only mutable field; `id`/`identity`/the seed are
+    /// immutable. No engine reload (the manifest is the only thing touched), so
+    /// renaming the active merchant — even one with a live swap — is always safe.
+    pub fn set_label(&mut self, id: &str, label: &str) -> Result<MerchantMeta> {
+        let label = label.trim();
+        ensure!(!label.is_empty(), "merchant name cannot be empty");
+        {
+            let meta = self
+                .manifest
+                .merchants
+                .iter_mut()
+                .find(|m| m.id == id)
+                .with_context(|| format!("unknown merchant {id}"))?;
+            meta.label = label.to_string();
+        }
+        self.save()?;
+        self.meta_of(id).cloned().context("merchant vanished")
+    }
+
     /// `unloadmerchant` — drop the active merchant from memory (no merchant
     /// loaded afterward). Same fund-safety gate as `load`.
     pub fn unload(&mut self) -> Result<()> {
@@ -600,6 +620,26 @@ mod tests {
         let list = reg.list();
         assert_eq!(list["merchants"].as_array().unwrap().len(), 2);
         assert_eq!(list["active"], "m1");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn set_label_renames_and_persists() {
+        let dir = temp_dir("rename");
+        {
+            let mut reg = MerchantRegistry::open(&dir, cfg(), false, true).unwrap();
+            reg.create("Greedy").unwrap();
+            let renamed = reg.set_label("m1", "  Main Shop  ").unwrap();
+            assert_eq!(renamed.label, "Main Shop", "label trimmed + updated");
+            // Empty/whitespace labels are rejected (the UI also guards this).
+            assert!(reg.set_label("m1", "   ").is_err());
+            // Unknown id errors clearly.
+            assert!(reg.set_label("nope", "X").is_err());
+        }
+        // Reopen: the new label survived the manifest round-trip.
+        let reg = MerchantRegistry::open(&dir, cfg(), false, true).unwrap();
+        let list = reg.list();
+        assert_eq!(list["merchants"][0]["label"], "Main Shop");
         std::fs::remove_dir_all(&dir).ok();
     }
 

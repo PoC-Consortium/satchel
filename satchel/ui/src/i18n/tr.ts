@@ -183,6 +183,7 @@ export const tr: Bundle = {
     thisMerchant: "bu satıcı",
     nameLabel: "Satıcı adı",
     namePlaceholder: "örn. Ana",
+    rename: "Yeniden adlandır",
     introFirst:
       "İlk işlem kimliğinizi (bir “satıcı”) kurun. Yalnızca yürürlükteki takaslar için sıcak transit anahtarlarını tutar — ana coin'leriniz kendi cüzdanınızda kalır.",
     introNew: "Yeni bir satıcı, kendi seed'i ve takas geçmişi olan yeni, ayrı bir kimliktir.",
@@ -565,6 +566,8 @@ export const tr: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "yalnızca izleme: {err}",
     switchedMerchant: "{id} satıcısına geçildi",
+    renamedMerchant: "satıcı {name} olarak yeniden adlandırıldı",
+    renameMerchantError: "satıcıyı yeniden adlandır: {err}",
     switchMerchantError: "satıcı değiştir: {err}",
     loadMerchantError: "satıcı yükle: {err}",
     merchantCreated: "{id} satıcısı oluşturuldu",

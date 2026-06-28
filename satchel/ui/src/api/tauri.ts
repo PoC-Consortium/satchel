@@ -46,6 +46,12 @@ export const createMerchant = (label: string) =>
  *  merchant with a live swap (fund-safety gate) — surfaced as a thrown error. */
 export const selectMerchant = (id: string) => rpc<Merchant>("loadmerchant", [id]);
 
+/** Rename a merchant — changes only its user-facing label (id/identity/seed are
+ *  immutable). Touches just the manifest, so it's safe even mid-swap. Returns
+ *  the updated `{ id, label }`. */
+export const renameMerchant = (id: string, label: string) =>
+  rpc<Merchant>("renamemerchant", [id, label]);
+
 // ---- Satchel-native commands (persist daemon-level config + UI prefs) -------
 // Tauri converts these camelCase arg keys to the Rust snake_case params.
 

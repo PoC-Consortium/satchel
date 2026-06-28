@@ -183,6 +183,7 @@ export const nl: Bundle = {
     thisMerchant: "deze merchant",
     nameLabel: "Merchant-naam",
     namePlaceholder: "bijv. Hoofd",
+    rename: "Hernoemen",
     introFirst:
       "Stel je eerste handelsidentiteit in (een “merchant”). Hij houdt alleen hot transit-sleutels vast voor lopende swaps — je belangrijkste munten blijven in je eigen wallet.",
     introNew: "Een nieuwe merchant is een verse, aparte identiteit met een eigen seed en swap-geschiedenis.",
@@ -565,6 +566,8 @@ export const nl: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "alleen-bekijken: {err}",
     switchedMerchant: "overgeschakeld naar merchant {id}",
+    renamedMerchant: "handelaar hernoemd naar {name}",
+    renameMerchantError: "handelaar hernoemen: {err}",
     switchMerchantError: "merchant wisselen: {err}",
     loadMerchantError: "merchant laden: {err}",
     merchantCreated: "merchant {id} aangemaakt",

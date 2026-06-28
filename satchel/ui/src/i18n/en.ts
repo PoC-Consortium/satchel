@@ -191,6 +191,7 @@ export const en = {
     thisMerchant: "this merchant",
     nameLabel: "Merchant name",
     namePlaceholder: "e.g. Main",
+    rename: "Rename",
     introFirst:
       "Set up your first trading identity (a “merchant”). It holds only hot transit keys for in-flight swaps — your main coins stay in your own wallet.",
     introNew: "A new merchant is a fresh, separate identity with its own seed and swap history.",
@@ -575,6 +576,8 @@ export const en = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "watch-only: {err}",
     switchedMerchant: "switched to merchant {id}",
+    renamedMerchant: "renamed merchant to {name}",
+    renameMerchantError: "rename merchant: {err}",
     switchMerchantError: "switch merchant: {err}",
     loadMerchantError: "load merchant: {err}",
     merchantCreated: "merchant {id} created",

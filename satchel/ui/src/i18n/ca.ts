@@ -183,6 +183,7 @@ export const ca: Bundle = {
     thisMerchant: "aquest comerciant",
     nameLabel: "Nom del comerciant",
     namePlaceholder: "p. ex. Principal",
+    rename: "Reanomena",
     introFirst:
       "Configura la teva primera identitat de negociació (un «comerciant»). Només conté claus de trànsit calentes per a intercanvis en curs — les teves monedes principals queden a la teva pròpia cartera.",
     introNew: "Un comerciant nou és una identitat fresca i separada amb la seva pròpia llavor i historial d'intercanvis.",
@@ -565,6 +566,8 @@ export const ca: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "només visualització: {err}",
     switchedMerchant: "canviat al comerciant {id}",
+    renamedMerchant: "comerciant reanomenat a {name}",
+    renameMerchantError: "reanomena comerciant: {err}",
     switchMerchantError: "canvi de comerciant: {err}",
     loadMerchantError: "càrrega de comerciant: {err}",
     merchantCreated: "comerciant {id} creat",

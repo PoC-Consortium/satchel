@@ -183,6 +183,7 @@ export const ja: Bundle = {
     thisMerchant: "このマーチャント",
     nameLabel: "マーチャント名",
     namePlaceholder: "例: メイン",
+    rename: "名前を変更",
     introFirst:
       "最初の取引アイデンティティ（「マーチャント」）を設定します。進行中のスワップ用のホットな中継鍵のみを保持します — メインのコインはご自身のウォレットに残ります。",
     introNew: "新しいマーチャントは、独自のシードとスワップ履歴を持つ、まったく別個のアイデンティティです。",
@@ -565,6 +566,8 @@ export const ja: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "閲覧のみ: {err}",
     switchedMerchant: "マーチャント {id} に切り替えました",
+    renamedMerchant: "マーチャント名を {name} に変更しました",
+    renameMerchantError: "マーチャント名の変更: {err}",
     switchMerchantError: "マーチャント切り替え: {err}",
     loadMerchantError: "マーチャント読み込み: {err}",
     merchantCreated: "マーチャント {id} を作成しました",

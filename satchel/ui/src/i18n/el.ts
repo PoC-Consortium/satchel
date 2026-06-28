@@ -183,6 +183,7 @@ export const el: Bundle = {
     thisMerchant: "αυτός ο merchant",
     nameLabel: "Όνομα merchant",
     namePlaceholder: "π.χ. Κύριος",
+    rename: "Μετονομασία",
     introFirst:
       "Ρυθμίστε την πρώτη σας ταυτότητα διαπραγμάτευσης (έναν «merchant»). Κρατά μόνο θερμά κλειδιά διέλευσης για ανταλλαγές σε εξέλιξη — τα κύρια νομίσματά σας παραμένουν στο δικό σας πορτοφόλι.",
     introNew: "Ένας νέος merchant είναι μια φρέσκια, ξεχωριστή ταυτότητα με τον δικό της σπόρο και ιστορικό ανταλλαγών.",
@@ -565,6 +566,8 @@ export const el: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "μόνο παρακολούθηση: {err}",
     switchedMerchant: "έγινε εναλλαγή στον merchant {id}",
+    renamedMerchant: "ο έμπορος μετονομάστηκε σε {name}",
+    renameMerchantError: "μετονομασία εμπόρου: {err}",
     switchMerchantError: "εναλλαγή merchant: {err}",
     loadMerchantError: "φόρτωση merchant: {err}",
     merchantCreated: "δημιουργήθηκε ο merchant {id}",

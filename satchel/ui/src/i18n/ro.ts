@@ -183,6 +183,7 @@ export const ro: Bundle = {
     thisMerchant: "acest merchant",
     nameLabel: "Numele merchant-ului",
     namePlaceholder: "de ex. Principal",
+    rename: "Redenumește",
     introFirst:
       "Configurează prima ta identitate de tranzacționare (un „merchant”). Aceasta deține doar chei fierbinți de tranzit pentru swap-urile în desfășurare — monedele tale principale rămân în propriul portofel.",
     introNew: "Un merchant nou este o identitate proaspătă, separată, cu propriul seed și istoric de swap-uri.",
@@ -565,6 +566,8 @@ export const ro: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "doar-vizualizare: {err}",
     switchedMerchant: "s-a schimbat la merchant-ul {id}",
+    renamedMerchant: "comerciant redenumit în {name}",
+    renameMerchantError: "redenumire comerciant: {err}",
     switchMerchantError: "schimbare merchant: {err}",
     loadMerchantError: "încărcare merchant: {err}",
     merchantCreated: "merchant-ul {id} creat",

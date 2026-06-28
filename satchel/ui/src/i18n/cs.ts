@@ -183,6 +183,7 @@ export const cs: Bundle = {
     thisMerchant: "tento merchant",
     nameLabel: "Jméno merchanta",
     namePlaceholder: "např. Hlavní",
+    rename: "Přejmenovat",
     introFirst:
       "Nastavte si svou první obchodní identitu („merchanta“). Drží pouze horké tranzitní klíče pro probíhající swapy — vaše hlavní mince zůstávají ve vaší vlastní peněžence.",
     introNew: "Nový merchant je čerstvá, oddělená identita s vlastním seedem a historií swapů.",
@@ -565,6 +566,8 @@ export const cs: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "pouze sledování: {err}",
     switchedMerchant: "přepnuto na merchanta {id}",
+    renamedMerchant: "obchodník přejmenován na {name}",
+    renameMerchantError: "přejmenovat obchodníka: {err}",
     switchMerchantError: "přepnutí merchanta: {err}",
     loadMerchantError: "načtení merchanta: {err}",
     merchantCreated: "merchant {id} vytvořen",

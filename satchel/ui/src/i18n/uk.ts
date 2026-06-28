@@ -183,6 +183,7 @@ export const uk: Bundle = {
     thisMerchant: "цей мерчант",
     nameLabel: "Назва мерчанта",
     namePlaceholder: "напр. Основний",
+    rename: "Перейменувати",
     introFirst:
       "Налаштуйте свою першу торгову ідентичність («мерчанта»). Вона тримає лише гарячі транзитні ключі для активних свопів — ваші основні монети залишаються у вашому власному гаманці.",
     introNew: "Новий мерчант — це свіжа, окрема ідентичність зі своїм власним seed та історією свопів.",
@@ -565,6 +566,8 @@ export const uk: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "лише перегляд: {err}",
     switchedMerchant: "перемкнуто на мерчанта {id}",
+    renamedMerchant: "торговця перейменовано на {name}",
+    renameMerchantError: "перейменування торговця: {err}",
     switchMerchantError: "перемикання мерчанта: {err}",
     loadMerchantError: "завантаження мерчанта: {err}",
     merchantCreated: "мерчанта {id} створено",

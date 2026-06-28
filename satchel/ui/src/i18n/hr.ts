@@ -183,6 +183,7 @@ export const hr: Bundle = {
     thisMerchant: "ovaj trgovac",
     nameLabel: "Ime trgovca",
     namePlaceholder: "npr. Glavni",
+    rename: "Preimenuj",
     introFirst:
       "Postavite svoj prvi trgovački identitet („trgovca”). On drži samo vruće tranzitne ključeve za swapove u tijeku — vaše glavne kovanice ostaju u vašem vlastitom novčaniku.",
     introNew: "Novi trgovac je svjež, zaseban identitet s vlastitim seedom i poviješću swapova.",
@@ -565,6 +566,8 @@ export const hr: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "samo za pregled: {err}",
     switchedMerchant: "prebačeno na trgovca {id}",
+    renamedMerchant: "trgovac preimenovan u {name}",
+    renameMerchantError: "preimenuj trgovca: {err}",
     switchMerchantError: "zamjena trgovca: {err}",
     loadMerchantError: "učitavanje trgovca: {err}",
     merchantCreated: "trgovac {id} stvoren",

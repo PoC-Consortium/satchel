@@ -183,6 +183,7 @@ export const pl: Bundle = {
     thisMerchant: "ten sprzedawca",
     nameLabel: "Nazwa sprzedawcy",
     namePlaceholder: "np. Główny",
+    rename: "Zmień nazwę",
     introFirst:
       "Skonfiguruj swoją pierwszą tożsamość handlową („sprzedawcę”). Przechowuje ona tylko gorące klucze tranzytowe dla swapów w toku — Twoje główne monety pozostają w Twoim własnym portfelu.",
     introNew: "Nowy sprzedawca to świeża, osobna tożsamość z własnym seedem i historią swapów.",
@@ -565,6 +566,8 @@ export const pl: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "tylko podgląd: {err}",
     switchedMerchant: "przełączono na sprzedawcę {id}",
+    renamedMerchant: "zmieniono nazwę sprzedawcy na {name}",
+    renameMerchantError: "zmiana nazwy sprzedawcy: {err}",
     switchMerchantError: "przełączenie sprzedawcy: {err}",
     loadMerchantError: "wczytanie sprzedawcy: {err}",
     merchantCreated: "sprzedawca {id} utworzony",
