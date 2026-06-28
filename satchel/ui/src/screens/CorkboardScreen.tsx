@@ -173,8 +173,13 @@ export default function CorkboardScreen() {
       : [...available];
     return keys
       .map((key) => {
+        // Label base/quote (order-book convention) so the selector reads the same
+        // way as the book it drives — e.g. BTCX/LTC, never LTC/BTCX. The `key`
+        // stays alphabetical, so filtering + persisted selections are unaffected;
+        // this is display only.
         const [a, b] = key.split("|");
-        return { key, label: `${symOf(a)} ↔ ${symOf(b)}` };
+        const { base, quote } = baseQuote(a, b);
+        return { key, label: `${symOf(base)}/${symOf(quote)}` };
       })
       .sort((x, y) => x.label.localeCompare(y.label));
   }, [watchOnly, offers, available, symOf]);
