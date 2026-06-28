@@ -67,7 +67,8 @@ supports two layouts:
   `<data-dir>/merchants/<id>/`, with a `merchants.json` manifest in the parent.
   `pactd` owns an in-process registry; one merchant is *active* at a time, and
   the merchant RPCs (`createmerchant`, `listmerchants`, `loadmerchant`,
-  `unloadmerchant`, `getmerchantinfo`) create and switch between them at runtime.
+  `renamemerchant`, `unloadmerchant`, `getmerchantinfo`) create, rename, and
+  switch between them at runtime.
   This is the layout Satchel uses to manage several trading identities.
 
 > **Warning** — Switching identities has a fund-safety guard: `loadmerchant`

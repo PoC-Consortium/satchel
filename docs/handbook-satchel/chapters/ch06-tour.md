@@ -65,6 +65,12 @@ identicon, the merchant's name, and a shortened id. This always tells you which
 identity you're trading as. There's also a matching merchant chip on the right of
 the header.
 
+You can **rename the active merchant in place**: hover the name in the block and
+click the little pencil (or click the name) to edit it inline — type a new label
+and press **Enter** to save, **Esc** to cancel. Only the label changes; the
+merchant's id, identity, and seed are untouched, so a rename is safe even with a
+swap in flight.
+
 To switch, click either one. The merchant chip opens a dropdown with
 **Manage Merchants…** and a list of your other merchants. Choosing **Manage
 Merchants…** opens the full manager, where you can create a new merchant, import

@@ -13,9 +13,11 @@ price you want and take it yourself.
 
 ## The controls along the top
 
-- **Pair selector** — chooses which two coins you're looking at, shown as
-  `SYM ↔ SYM` (for example **BTCX ↔ BTC**). Only pairs whose coins you've set up
-  appear here. Your last choice is remembered.
+- **Pair selector** — chooses which two coins you're looking at, labelled
+  **base/quote** (for example **BTCX/BTC**) in the same orientation as the order
+  book it drives, so the selector and the book always read the same way round.
+  Only pairs whose coins you've set up appear here. Your last choice is
+  remembered.
 - **All / Mine** — **All** shows every offer on the board; **Mine** narrows it to
   just the offers you posted, so you can find and withdraw your own.
 - **Denomination toggle** — switches the display unit for the quote coin, so you
@@ -85,6 +87,8 @@ Each offer row shows:
   taker's side unlocks first, the maker's a little later, so nobody gets stuck.
 - **A freshness dot** — how recently the offer was seen, so you can favour live
   ones.
+- **A copyable offer id** — a short, muted id with a copy button, so you can
+  reference a specific offer when chatting with a counterparty.
 
 ![The detail pane: individual offers at one price level, with protocol chips and refund times.](images/processed/ch07-detail.png){width=80%}
 

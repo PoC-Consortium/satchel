@@ -115,8 +115,14 @@ across a relay round-trip:
 
 1. **`prep`** *(under the lock)* — read the active merchant's identity, pending
    `nostr_outbox` rows, and the offer/mailbox fetch cursors.
-2. **`round`** *(lock-free)* — publish the outbox to relays and fetch new offers
-   and gift-wrap mailbox events, with `FETCH_TIMEOUT` = 10s.
+2. **`round`** *(lock-free)* — **fetch first**, then publish the outbox, with
+   `FETCH_TIMEOUT` = 10s. The order matters: offers are addressable (replaceable)
+   state pulled back behind a high-water `since` cursor, so fetching *before* we
+   publish pins the cursor below anything we then send and guarantees the next
+   round re-catches our own just-published offer. Publishing first could let the
+   cursor skip past it (a busier maker's newer event, or a slow relay), so our own
+   live offer would fall off our own board and show a stuck "posting…" badge. Mail
+   and deletions are true append-only logs and are unaffected by the order.
 3. **`apply`** *(under the lock)* — mark outbox rows sent, insert inbox rows,
    upsert the offer cache, and advance the cursors.
 

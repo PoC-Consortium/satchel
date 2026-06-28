@@ -110,6 +110,7 @@ the **active** merchant. Nested mode (`--merchants`) lays out
 | `createmerchant` | `label?` | `{ id, label }` | yes | nested only |
 | `listmerchants` | — | `{ merchants:[…], active }` | no | any |
 | `loadmerchant` | `id` | `{ id, label }` | yes | any |
+| `renamemerchant` | `id`, `label` | `{ id, label }` | yes | nested only |
 | `unloadmerchant` | — | `{ unloaded }` | yes | nested only |
 | `getmerchantinfo` | `id?` | merchant metadata | no | any |
 
@@ -118,6 +119,10 @@ the **active** merchant. Nested mode (`--merchants`) lays out
   `{ id, label, identity?, created, encrypted, active, locked }`; `active`
   names the currently selected id.
 - `loadmerchant` — switches the active merchant in-process.
+- `renamemerchant` — changes a merchant's user-facing `label`; the label is
+  trimmed and an empty one is rejected. The label is the only mutable field
+  (`id`, `identity`, and the seed are immutable), so it touches only the manifest
+  with no engine reload — renaming is safe even for the active merchant mid-swap.
 - `unloadmerchant` — clears the active merchant.
 - `getmerchantinfo` — metadata for one merchant, defaulting to the active one.
 
