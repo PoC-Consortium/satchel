@@ -22,6 +22,7 @@ import { dumpSwap } from "../api/tauri";
 import { narrate } from "./narrate";
 import SwapProgressLine from "../components/SwapProgressLine";
 import CounterpartyTag from "../components/CounterpartyTag";
+import ProtocolChip from "../components/ProtocolChip";
 import { C } from "../theme";
 import type { Swap, SwapState } from "../api/types";
 
@@ -160,16 +161,9 @@ function SwapRow({ s }: { s: Swap }) {
               />
             </IconButton>
             {s.swap_id}
-            {s.protocol === "pact-htlc-v2" && (
-              <Tooltip title={t("coins.protoPrivateTip")}>
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  label={t("coins.protoPrivate")}
-                  sx={{ height: 20, color: "primary.main", borderColor: "primary.main", cursor: "help" }}
-                />
-              </Tooltip>
-            )}
+            {/* Every swap shows its type — Standard (HTLC) or Private
+                (Taproot) — mirroring the Corkboard offer rows. */}
+            <ProtocolChip protocol={s.protocol} />
           </Box>
         </TableCell>
         <TableCell>
