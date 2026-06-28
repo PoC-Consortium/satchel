@@ -627,11 +627,24 @@ impl Store {
         created: u64,
         expires: u64,
     ) -> Result<()> {
-        // Addressable semantics: a newer event for the same d_tag (swap_id)
-        // replaces the old listing.
+        // Addressable semantics: keep ONLY the freshest event per d_tag. A relay
+        // can serve a STALE copy of an addressable event, so events for one d_tag
+        // arrive out of order across the pool. The old `created < ?` delete left a
+        // DOUBLED listing whenever the newer event was applied before the older
+        // one (delete matched nothing, then the stale row was inserted alongside).
+        // Instead: ignore an event older than what we already hold, otherwise
+        // replace EVERY row for the d_tag — so a listing can never double.
+        let newest: Option<i64> = self.conn.query_row(
+            "SELECT MAX(created) FROM nostr_offer_cache WHERE d_tag = ?1",
+            params![d_tag],
+            |r| r.get::<_, Option<i64>>(0),
+        )?;
+        if matches!(newest, Some(c) if (created as i64) < c) {
+            return Ok(()); // a fresher event for this d_tag is already cached
+        }
         self.conn.execute(
-            "DELETE FROM nostr_offer_cache WHERE d_tag = ?1 AND created < ?2",
-            params![d_tag, created as i64],
+            "DELETE FROM nostr_offer_cache WHERE d_tag = ?1",
+            params![d_tag],
         )?;
         self.conn.execute(
             "INSERT OR REPLACE INTO nostr_offer_cache (event_id, d_tag, envelope, created, expires)
@@ -654,7 +667,13 @@ impl Store {
     pub fn nostr_offer_cache_active(&self, now: u64) -> Result<Vec<String>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT envelope FROM nostr_offer_cache WHERE expires = 0 OR expires > ?1")?;
+            .prepare(
+                // One row per d_tag (the freshest event), so any rows left doubled
+                // by an older build still render as a single listing.
+                "SELECT envelope FROM nostr_offer_cache c
+                 WHERE (c.expires = 0 OR c.expires > ?1)
+                   AND c.created = (SELECT MAX(created) FROM nostr_offer_cache WHERE d_tag = c.d_tag)",
+            )?;
         let rows = stmt.query_map(params![now as i64], |row| row.get::<_, String>(0))?;
         rows.map(|r| Ok(r?)).collect()
     }
@@ -1051,6 +1070,42 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("libswap-store-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
+    }
+
+    #[test]
+    fn offer_cache_keeps_one_row_per_dtag() {
+        let dir = temp_dir("offer-cache-dedup");
+        let store = Store::init(&dir, None).unwrap();
+        let far = 9_999_999_999; // far-future expiry: stays active for the test
+
+        // A newer event arrives FIRST, then a STALE older copy for the same d_tag
+        // (relays can serve addressable events out of order). The stale one is
+        // ignored — the listing must not double.
+        store
+            .nostr_offer_cache_upsert("evNew", "off1", "{\"v\":\"new\"}", 200, far)
+            .unwrap();
+        store
+            .nostr_offer_cache_upsert("evOld", "off1", "{\"v\":\"old\"}", 100, far)
+            .unwrap();
+        let active = store.nostr_offer_cache_active(0).unwrap();
+        assert_eq!(active.len(), 1, "one listing per d_tag");
+        assert!(active[0].contains("new"), "the freshest event wins");
+
+        // A genuinely newer event replaces the row in place (still one).
+        store
+            .nostr_offer_cache_upsert("evNewer", "off1", "{\"v\":\"newer\"}", 300, far)
+            .unwrap();
+        let active = store.nostr_offer_cache_active(0).unwrap();
+        assert_eq!(active.len(), 1);
+        assert!(active[0].contains("newer"));
+
+        // A different d_tag coexists; remove drops only its own listing.
+        store
+            .nostr_offer_cache_upsert("evB", "off2", "{\"v\":\"b\"}", 150, far)
+            .unwrap();
+        assert_eq!(store.nostr_offer_cache_active(0).unwrap().len(), 2);
+        store.nostr_offer_cache_remove("off1").unwrap();
+        assert_eq!(store.nostr_offer_cache_active(0).unwrap().len(), 1);
     }
 
     #[test]
