@@ -3096,9 +3096,12 @@ impl Engine {
 
     /// Progress for one v1 swap. Surfaces only waits that are OURS: the
     /// counterparty's lock burying toward `n` (our gate before we act) and our
-    /// own claim burying (settlement). Our own lock is never shown as a target —
-    /// the counterparty gates on it, not us — so after we lock we show an
-    /// `awaiting_claim` liveness count instead. `None` when nothing applies.
+    /// own claim burying (settlement). One nuance for the maker after it locks
+    /// A: the taker won't lock B until our A lock reaches `n_a` (enforced in
+    /// `fund`), so while it buries we surface that as a determinate `our_lock`
+    /// target — the wait there is genuinely on our own lock, not theirs. Only
+    /// once it's buried (taker still silent) do we fall through to the
+    /// `awaiting_lock` liveness count on their chain. `None` when nothing applies.
     fn swap_progress_v1(
         &self,
         rec: &SwapRecord,
@@ -3119,7 +3122,11 @@ impl Engine {
                 .map(|h| h.script_pubkey())
         };
         match (rec.role, rec.state) {
-            // Maker: wait for the taker's B lock to bury, then secure our B redeem.
+            // Maker: once the taker's B lock is in, wait for it to bury, then
+            // secure our B redeem. Before that, the taker won't lock B until our
+            // A lock reaches `n_a` — so while OUR lock buries show it as a
+            // determinate target; only once it's buried (taker still silent)
+            // does this become a liveness wait on their chain.
             (Initiator, FundedA) | (Initiator, FundedB) => match &rec.htlc_b_txid {
                 Some(txid) => self.progress_confirming(
                     &rec.swap_id,
@@ -3131,7 +3138,24 @@ impl Engine {
                     "their_lock",
                     None,
                 ),
-                None => self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_lock", prev),
+                None => rec
+                    .htlc_a_txid
+                    .as_ref()
+                    .and_then(|txid| {
+                        self.progress_confirming(
+                            &rec.swap_id,
+                            &rec.chain_a,
+                            txid.clone(),
+                            rec.htlc_a_vout,
+                            htlc_spk(true),
+                            rec.n_a,
+                            "our_lock",
+                            None,
+                        )
+                    })
+                    .or_else(|| {
+                        self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_lock", prev)
+                    }),
             },
             (Initiator, RedeemedB) => self.progress_confirming(
                 &rec.swap_id,

@@ -7,7 +7,8 @@ import type { SwapProgress } from "../api/types";
 // verbatim narrate() story. Two display kinds, fed from pactd's `swapprogress`:
 //   - awaiting_lock / awaiting_claim → waiting on the COUNTERPARTY (no target);
 //     an indeterminate bar + "+N blocks" liveness count.
-//   - their_lock / settlement → a wait that is OURS (their lock burying, or our
+//   - their_lock / our_lock / settlement → a wait that is OURS (their lock
+//     burying, our own lock burying toward the taker's required depth, or our
 //     own claim burying); a determinate bar + "confs/needed".
 // Never drives swap logic; renders nothing when there's nothing to report.
 //
@@ -18,6 +19,7 @@ const LABELS: Record<SwapProgress["watching"], string> = {
   awaiting_lock: "progress.awaitingLock",
   awaiting_claim: "progress.awaitingClaim",
   their_lock: "progress.theirLock",
+  our_lock: "progress.ourLock",
   settlement: "progress.securing", // rendered with {coin} via the special case below
 };
 

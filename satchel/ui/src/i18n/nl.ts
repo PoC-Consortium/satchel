@@ -635,6 +635,7 @@ export const nl: Bundle = {
     awaitingLock: "Wachten op hun vergrendeling",
     awaitingClaim: "Wachten op hun claim",
     theirLock: "Hun vergrendeling wordt bevestigd",
+    ourLock: "Jouw vergrendeling wordt bevestigd",
     securing: "Je {coin} beveiligen",
     blocks: "+{n} blokken",
     feeBumped: "Vergoeding verhoogd",

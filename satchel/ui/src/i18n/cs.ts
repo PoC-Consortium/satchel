@@ -635,6 +635,7 @@ export const cs: Bundle = {
     awaitingLock: "Čekání na jejich uzamčení",
     awaitingClaim: "Čekání na jejich nárok",
     theirLock: "Potvrzování jejich uzamčení",
+    ourLock: "Potvrzování vašeho uzamčení",
     securing: "Zabezpečuji vaše {coin}",
     blocks: "+{n} bloků",
     feeBumped: "Poplatek navýšen",

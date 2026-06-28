@@ -635,6 +635,7 @@ export const zhCn: Bundle = {
     awaitingLock: "等待对方锁定",
     awaitingClaim: "等待对方认领",
     theirLock: "正在确认对方锁定",
+    ourLock: "正在确认您的锁定",
     securing: "正在保全您的 {coin}",
     blocks: "+{n} 个区块",
     feeBumped: "已提高手续费",

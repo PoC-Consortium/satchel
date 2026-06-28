@@ -635,6 +635,7 @@ export const gl: Bundle = {
     awaitingLock: "Agardando o seu bloqueo",
     awaitingClaim: "Agardando a súa reclamación",
     theirLock: "Confirmando o seu bloqueo",
+    ourLock: "Confirmando o teu bloqueo",
     securing: "Asegurando os teus {coin}",
     blocks: "+{n} bloques",
     feeBumped: "Comisión aumentada",

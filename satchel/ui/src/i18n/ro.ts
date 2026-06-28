@@ -635,6 +635,7 @@ export const ro: Bundle = {
     awaitingLock: "Se așteaptă blocarea lor",
     awaitingClaim: "Se așteaptă revendicarea lor",
     theirLock: "Se confirmă blocarea lor",
+    ourLock: "Se confirmă blocarea ta",
     securing: "Se securizează {coin} tăi",
     blocks: "+{n} blocuri",
     feeBumped: "Comision majorat",

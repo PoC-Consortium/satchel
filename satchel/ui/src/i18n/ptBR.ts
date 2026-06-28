@@ -635,6 +635,7 @@ export const ptBR: Bundle = {
     awaitingLock: "Aguardando o bloqueio deles",
     awaitingClaim: "Aguardando o resgate deles",
     theirLock: "Confirmando o bloqueio deles",
+    ourLock: "Confirmando o seu bloqueio",
     securing: "Protegendo seus {coin}",
     blocks: "+{n} blocos",
     feeBumped: "Taxa aumentada",

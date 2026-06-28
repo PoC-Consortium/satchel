@@ -635,6 +635,7 @@ export const id: Bundle = {
     awaitingLock: "Menunggu penguncian mereka",
     awaitingClaim: "Menunggu klaim mereka",
     theirLock: "Mengonfirmasi penguncian mereka",
+    ourLock: "Mengonfirmasi penguncian Anda",
     securing: "Mengamankan {coin} Anda",
     blocks: "+{n} blok",
     feeBumped: "Biaya dinaikkan",

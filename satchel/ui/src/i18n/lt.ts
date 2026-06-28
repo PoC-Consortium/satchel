@@ -635,6 +635,7 @@ export const lt: Bundle = {
     awaitingLock: "Laukiama jų užrakinimo",
     awaitingClaim: "Laukiama jų atsiėmimo",
     theirLock: "Tvirtinamas jų užrakinimas",
+    ourLock: "Tvirtinamas jūsų užrakinimas",
     securing: "Saugomi jūsų {coin}",
     blocks: "+{n} blokų",
     feeBumped: "Mokestis padidintas",

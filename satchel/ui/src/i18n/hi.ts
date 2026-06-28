@@ -635,6 +635,7 @@ export const hi: Bundle = {
     awaitingLock: "उनके लॉक की प्रतीक्षा",
     awaitingClaim: "उनके दावे की प्रतीक्षा",
     theirLock: "उनका लॉक पुष्टि हो रहा",
+    ourLock: "आपका लॉक पुष्टि हो रहा",
     securing: "आपके {coin} सुरक्षित कर रहे",
     blocks: "+{n} ब्लॉक",
     feeBumped: "शुल्क बढ़ाया गया",
