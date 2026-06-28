@@ -635,6 +635,7 @@ export const fi: Bundle = {
     awaitingLock: "Odotetaan heidän lukitustaan",
     awaitingClaim: "Odotetaan heidän lunastustaan",
     theirLock: "Vahvistetaan heidän lukitustaan",
+    ourLock: "Vahvistetaan sinun lukitustasi",
     securing: "Turvataan {coin}",
     blocks: "+{n} lohkoa",
     feeBumped: "Maksua korotettu",

@@ -635,6 +635,7 @@ export const hr: Bundle = {
     awaitingLock: "Čekanje na njihovo zaključavanje",
     awaitingClaim: "Čekanje na njihovo preuzimanje",
     theirLock: "Potvrđivanje njihovog zaključavanja",
+    ourLock: "Potvrđivanje vašeg zaključavanja",
     securing: "Osiguravanje vaših {coin}",
     blocks: "+{n} blokova",
     feeBumped: "Naknada povećana",

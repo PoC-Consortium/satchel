@@ -635,6 +635,7 @@ export const tr: Bundle = {
     awaitingLock: "Onların kilidi bekleniyor",
     awaitingClaim: "Onların talebi bekleniyor",
     theirLock: "Onların kilidi onaylanıyor",
+    ourLock: "Sizin kilidiniz onaylanıyor",
     securing: "{coin} güvenceye alınıyor",
     blocks: "+{n} blok",
     feeBumped: "Ücret artırıldı",

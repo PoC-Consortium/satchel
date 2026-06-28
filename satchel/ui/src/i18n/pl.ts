@@ -635,6 +635,7 @@ export const pl: Bundle = {
     awaitingLock: "Oczekiwanie na ich blokadę",
     awaitingClaim: "Oczekiwanie na ich roszczenie",
     theirLock: "Potwierdzanie ich blokady",
+    ourLock: "Potwierdzanie twojej blokady",
     securing: "Zabezpieczanie Twoich {coin}",
     blocks: "+{n} bloków",
     feeBumped: "Opłata podniesiona",

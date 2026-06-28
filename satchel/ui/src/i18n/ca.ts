@@ -635,6 +635,7 @@ export const ca: Bundle = {
     awaitingLock: "A l'espera del seu bloqueig",
     awaitingClaim: "A l'espera de la seva reclamació",
     theirLock: "Confirmant el seu bloqueig",
+    ourLock: "Confirmant el teu bloqueig",
     securing: "Assegurant els teus {coin}",
     blocks: "+{n} blocs",
     feeBumped: "Comissió apujada",

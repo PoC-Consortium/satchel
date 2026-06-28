@@ -635,6 +635,7 @@ export const el: Bundle = {
     awaitingLock: "Αναμονή για το κλείδωμά τους",
     awaitingClaim: "Αναμονή για την εξαργύρωσή τους",
     theirLock: "Επιβεβαίωση του κλειδώματός τους",
+    ourLock: "Επιβεβαίωση του κλειδώματός σας",
     securing: "Διασφάλιση των {coin} σας",
     blocks: "+{n} μπλοκ",
     feeBumped: "Αύξηση τέλους",

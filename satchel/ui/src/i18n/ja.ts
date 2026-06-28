@@ -635,6 +635,7 @@ export const ja: Bundle = {
     awaitingLock: "相手のロックを待機中",
     awaitingClaim: "相手の請求を待機中",
     theirLock: "相手のロックを確認中",
+    ourLock: "自分のロックを確認中",
     securing: "{coin} を保全中",
     blocks: "+{n} ブロック",
     feeBumped: "手数料を引き上げ",

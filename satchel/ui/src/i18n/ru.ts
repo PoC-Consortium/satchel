@@ -635,6 +635,7 @@ export const ru: Bundle = {
     awaitingLock: "Ожидание их блокировки",
     awaitingClaim: "Ожидание их получения",
     theirLock: "Подтверждение их блокировки",
+    ourLock: "Подтверждение вашей блокировки",
     securing: "Защита ваших {coin}",
     blocks: "+{n} блоков",
     feeBumped: "Комиссия повышена",

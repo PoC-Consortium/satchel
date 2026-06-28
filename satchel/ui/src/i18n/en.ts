@@ -648,6 +648,7 @@ export const en = {
     awaitingLock: "Awaiting their lock",
     awaitingClaim: "Awaiting their claim",
     theirLock: "Their lock confirming",
+    ourLock: "Your lock confirming",
     securing: "Securing your {coin}",
     blocks: "+{n} blocks",
     feeBumped: "Fee-bumped",
