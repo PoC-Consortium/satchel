@@ -96,9 +96,9 @@ If the **Corkboard** screen is empty, it's usually one of these:
 - **You're browsing the wrong board.** The board selector at the top switches
   between your noticeboards. If your counterparty posted on a specific Corkboard,
   select that board.
-- **The wrong pair, or genuinely no offers.** The Corkboard filters to the trading
-  pair you've selected. Try another pair. A message like "{n} more… Settings →
-  Coins" means there are offers for pairs you haven't connected the coins for yet.
+- **The wrong pair, or coins you haven't connected.** The Corkboard filters to the
+  trading pair you've selected, and only shows pairs whose coins you've set up. Try
+  another pair, or connect more coins in **Settings → Coins** to see their offers.
 - **It's just quiet.** Sometimes nobody's posted recently. Consider posting your
   own offer — see the chapter on posting offers.
 

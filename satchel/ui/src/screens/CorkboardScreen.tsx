@@ -255,14 +255,12 @@ export default function CorkboardScreen() {
   }
 
   // Watch-only shows the whole board (no configured pairs to filter against);
-  // otherwise only offers for pairs whose coins are connected are takeable, and
-  // the rest fold into the "hidden" footer.
+  // otherwise only offers for pairs whose coins are connected are takeable.
+  // Offers for unconnected pairs are simply not shown — it's understood the
+  // board reflects what you've set up.
   const supported = watchOnly
     ? offers
     : offers.filter((o) => available.has(pairKey(o.body.give_asset, o.body.get_asset)));
-  const hidden = watchOnly
-    ? []
-    : offers.filter((o) => !available.has(pairKey(o.body.give_asset, o.body.get_asset)));
 
   const inFilter = (o: Offer) =>
     !effectivePair || pairKey(o.body.give_asset, o.body.get_asset) === effectivePair;
@@ -531,15 +529,6 @@ export default function CorkboardScreen() {
             )}
           </Box>
         </>
-      )}
-
-      {hidden.length > 0 && (
-        <Typography sx={{ color: "text.secondary", fontSize: 12, mt: 1.5 }}>
-          {t("corkboard.hiddenOffers", { count: hidden.length })}{" "}
-          <Link component="button" onClick={() => navigate("settings")} underline="hover">
-            {t("nav.settings")} → {t("nav.coins")}
-          </Link>
-        </Typography>
       )}
 
       {/* Active/taken swaps now live in a global dock above the activity log

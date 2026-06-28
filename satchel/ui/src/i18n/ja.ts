@@ -422,8 +422,6 @@ export const ja: Bundle = {
     noOffers: "今すぐ取れるオファーはありません",
     noOffersBody:
       "設定したペアにメーカーがオファーを投稿すると、すぐにここに表示されます。自分でオファーを投稿することもできます。",
-    hiddenOffers:
-      "接続していないペア向けのオファーがあと {count} 件あります。両方のコインを設定して取引してください:",
     yourOffer: "あなたのオファー",
     offerStaged: "投稿中…",
     offerStagedTip:

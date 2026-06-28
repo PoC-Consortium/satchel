@@ -422,8 +422,6 @@ export const id: Bundle = {
     noOffers: "Tidak ada penawaran yang bisa Anda ambil sekarang",
     noOffersBody:
       "Penawaran muncul di sini begitu seorang maker memasang satu untuk pasangan yang sudah Anda atur. Anda juga bisa memasang milik Anda sendiri.",
-    hiddenOffers:
-      "{count} penawaran lagi untuk pasangan yang belum Anda hubungkan. Atur kedua koin untuk memperdagangkannya:",
     yourOffer: "penawaran Anda",
     offerStaged: "memasang…",
     offerStagedTip:

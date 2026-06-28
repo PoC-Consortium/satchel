@@ -422,8 +422,6 @@ export const hi: Bundle = {
     noOffers: "अभी आप कोई offer नहीं ले सकते",
     noOffersBody:
       "जैसे ही कोई maker आपके द्वारा सेट अप किए गए किसी pair के लिए offer पोस्ट करता है, offers यहाँ दिखाई देते हैं। आप अपना खुद का भी पोस्ट कर सकते हैं।",
-    hiddenOffers:
-      "उन pairs के लिए {count} और offer(s) जिन्हें आपने कनेक्ट नहीं किया। उनका व्यापार करने के लिए दोनों coins सेट अप करें:",
     yourOffer: "आपका offer",
     offerStaged: "पोस्ट हो रहा है…",
     offerStagedTip:

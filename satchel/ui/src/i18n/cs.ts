@@ -422,8 +422,6 @@ export const cs: Bundle = {
     noOffers: "Žádné nabídky, které byste teď mohli přijmout",
     noOffersBody:
       "Nabídky se zde objeví, jakmile maker vystaví nějakou pro pár, který máte nastavený. Můžete také vystavit vlastní.",
-    hiddenOffers:
-      "{count} dalších nabídek pro páry, které jste nepřipojili. Nastavte obě mince, abyste je mohli obchodovat:",
     yourOffer: "vaše nabídka",
     offerStaged: "vystavuje se…",
     offerStagedTip:

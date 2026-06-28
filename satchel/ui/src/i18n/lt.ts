@@ -422,8 +422,6 @@ export const lt: Bundle = {
     noOffers: "Šiuo metu nėra pasiūlymų, kuriuos galėtumėte priimti",
     noOffersBody:
       "Pasiūlymai pasirodo čia, kai tik sudarytojas paskelbia vieną poros, kurią sukonfigūravote. Taip pat galite paskelbti savo.",
-    hiddenOffers:
-      "Dar {count} pasiūlym. (-ų) poroms, kurių neprijungėte. Sukonfigūruokite abi monetas, kad jomis prekiautumėte:",
     yourOffer: "jūsų pasiūlymas",
     offerStaged: "skelbiama…",
     offerStagedTip:

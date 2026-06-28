@@ -422,8 +422,6 @@ export const ca: Bundle = {
     noOffers: "No hi ha cap oferta que puguis acceptar ara mateix",
     noOffersBody:
       "Les ofertes apareixen aquí tan bon punt un maker en publica una per a un parell que hagis configurat. També pots publicar les teves.",
-    hiddenOffers:
-      "{count} oferta/es més per a parells que no has connectat. Configura les dues monedes per negociar-les:",
     yourOffer: "la teva oferta",
     offerStaged: "publicant…",
     offerStagedTip:

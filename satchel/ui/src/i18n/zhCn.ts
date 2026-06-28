@@ -422,8 +422,6 @@ export const zhCn: Bundle = {
     noOffers: "目前没有你可以接受的报价",
     noOffersBody:
       "一旦有做市方为你已设置的交易对发布报价，它就会显示在这里。你也可以发布自己的报价。",
-    hiddenOffers:
-      "还有 {count} 条报价属于你尚未连接的交易对。设置好这两种币即可交易：",
     yourOffer: "你的报价",
     offerStaged: "发布中…",
     offerStagedTip:

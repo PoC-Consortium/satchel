@@ -422,8 +422,6 @@ export const ro: Bundle = {
     noOffers: "Nicio ofertă pe care o poți accepta acum",
     noOffersBody:
       "Ofertele apar aici imediat ce un maker postează una pentru o pereche pe care ai configurat-o. Poți de asemenea să postezi propria ofertă.",
-    hiddenOffers:
-      "{count} ofertă(e) în plus pentru perechi pe care nu le-ai conectat. Configurează ambele monede pentru a le tranzacționa:",
     yourOffer: "oferta ta",
     offerStaged: "se postează…",
     offerStagedTip:

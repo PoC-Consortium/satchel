@@ -422,8 +422,6 @@ export const it: Bundle = {
     noOffers: "Nessuna offerta che puoi accettare in questo momento",
     noOffersBody:
       "Le offerte compaiono qui non appena un maker ne pubblica una per una coppia che hai configurato. Puoi anche pubblicare le tue.",
-    hiddenOffers:
-      "{count} altra/e offerta/e per coppie che non hai collegato. Configura entrambe le coin per scambiarle:",
     yourOffer: "la tua offerta",
     offerStaged: "pubblicazione…",
     offerStagedTip:

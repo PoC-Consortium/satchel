@@ -422,8 +422,6 @@ export const hr: Bundle = {
     noOffers: "Trenutno nema ponuda koje možete preuzeti",
     noOffersBody:
       "Ponude se pojavljuju ovdje čim maker objavi neku za par koji ste postavili. Možete objaviti i vlastitu.",
-    hiddenOffers:
-      "Još {count} ponuda za parove koje niste povezali. Postavite obje kovanice da njima trgujete:",
     yourOffer: "vaša ponuda",
     offerStaged: "objavljujem…",
     offerStagedTip:
