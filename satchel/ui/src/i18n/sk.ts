@@ -567,7 +567,7 @@ export const sk: Bundle = {
     watchOnlyError: "iba sledovanie: {err}",
     switchedMerchant: "prepnuté na obchodníka {id}",
     renamedMerchant: "obchodník premenovaný na {name}",
-    renameMerchantError: "premenovať obchodníka: {err}",
+    renameMerchantError: "premenovanie obchodníka: {err}",
     switchMerchantError: "prepnúť obchodníka: {err}",
     loadMerchantError: "načítať obchodníka: {err}",
     merchantCreated: "obchodník {id} vytvorený",

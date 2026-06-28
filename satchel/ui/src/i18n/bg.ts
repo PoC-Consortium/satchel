@@ -566,7 +566,7 @@ export const bg: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "само за преглед: {err}",
     switchedMerchant: "превключено към търговец {id}",
-    renamedMerchant: "търговецът е преименуван на {name}",
+    renamedMerchant: "търговецът преименуван на {name}",
     renameMerchantError: "преименуване на търговец: {err}",
     switchMerchantError: "превключване на търговец: {err}",
     loadMerchantError: "зареждане на търговец: {err}",

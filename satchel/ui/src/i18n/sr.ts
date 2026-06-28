@@ -567,7 +567,7 @@ export const sr: Bundle = {
     watchOnlyError: "само за преглед: {err}",
     switchedMerchant: "пребачено на трговца {id}",
     renamedMerchant: "трговац преименован у {name}",
-    renameMerchantError: "преименуј трговца: {err}",
+    renameMerchantError: "преименовање трговца: {err}",
     switchMerchantError: "промена трговца: {err}",
     loadMerchantError: "учитавање трговца: {err}",
     merchantCreated: "трговац {id} направљен",

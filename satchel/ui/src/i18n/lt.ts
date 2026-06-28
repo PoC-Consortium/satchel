@@ -567,7 +567,7 @@ export const lt: Bundle = {
     watchOnlyError: "tik stebėjimas: {err}",
     switchedMerchant: "perjungta į prekiautoją {id}",
     renamedMerchant: "prekiautojas pervadintas į {name}",
-    renameMerchantError: "pervadinti prekiautoją: {err}",
+    renameMerchantError: "prekiautojo pervadinimas: {err}",
     switchMerchantError: "prekiautojo perjungimas: {err}",
     loadMerchantError: "prekiautojo įkėlimas: {err}",
     merchantCreated: "prekiautojas {id} sukurtas",

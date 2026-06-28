@@ -566,7 +566,7 @@ export const fi: Bundle = {
     listcoinsError: "listcoins: {err}",
     watchOnlyError: "vain katselu: {err}",
     switchedMerchant: "vaihdettu kauppiaaseen {id}",
-    renamedMerchant: "kauppias nimettiin uudelleen: {name}",
+    renamedMerchant: "kauppias nimetty uudelleen: {name}",
     renameMerchantError: "nimeä kauppias uudelleen: {err}",
     switchMerchantError: "vaihda kauppias: {err}",
     loadMerchantError: "lataa kauppias: {err}",
