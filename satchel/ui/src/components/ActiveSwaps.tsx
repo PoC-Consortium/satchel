@@ -7,6 +7,7 @@ import { asset, fmtAmt, isActive, isFinalizing, swapParties } from "../format";
 import { narrate } from "../screens/narrate";
 import SwapProgressLine from "./SwapProgressLine";
 import CounterpartyTag from "./CounterpartyTag";
+import ProtocolChip from "./ProtocolChip";
 import { C } from "../theme";
 import type { Swap } from "../api/types";
 
@@ -167,6 +168,9 @@ function ActiveSwapRow({
         }}
       >
       <Chip label={stateLabel} size="small" sx={{ height: 20, bgcolor: "action.selected", fontSize: 11 }} />
+      {/* Swap type — Standard (HTLC) or Private (Taproot) — same badge the
+          Swaps ledger and Corkboard show, so the dock labels both. */}
+      <ProtocolChip protocol={s.protocol} />
       {/* maker (left) ↔ taker (right); the arrow tooltip spells out the sides. */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
         <CounterpartyTag id={maker.id} you={maker.you} size={18} />
