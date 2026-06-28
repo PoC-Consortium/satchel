@@ -14,6 +14,7 @@ import {
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useApp } from "../AppContext";
 import { useDenom } from "../denom";
 import { useNavigate } from "../ui/nav";
@@ -848,11 +849,22 @@ function OfferRow({
   onRevoke: () => void;
 }) {
   const t = useT();
+  const { showToast } = useApp();
   const b = o.body;
   const expiry = b.created ? b.created + (b.ttl_secs || 24 * 3600) : 0;
   const f = freshness(b.created || 0, expiry);
   const freshColor = f.cls === "expiring" ? C.bad : C.dim;
   const takeable = !mine && state === "open" && !legDown && !watchOnly;
+
+  // Copy the full offer id to the clipboard — handy for naming an offer in chat.
+  const copyId = async () => {
+    try {
+      await navigator.clipboard.writeText(o.swap_id);
+      showToast(t("makeOffer.copied"));
+    } catch {
+      /* clipboard blocked — the short id stays selectable inline */
+    }
+  };
 
   // One list row: who · state · amounts · timing · action.
   return (
@@ -920,6 +932,31 @@ function OfferRow({
         <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.625, fontSize: 12, color: freshColor, whiteSpace: "nowrap" }}>
           <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: f.cls === "expiring" ? C.bad : C.good }} />
           {f.label}
+        </Box>
+      </Tooltip>
+
+      {/* Subtle, copyable offer id — non-prominent, for referencing in chat. */}
+      <Tooltip title={t("makeOffer.copy")}>
+        <Box
+          component="button"
+          onClick={copyId}
+          sx={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 0.375,
+            p: 0,
+            border: "none",
+            background: "none",
+            cursor: "pointer",
+            fontFamily: C.mono,
+            fontSize: 11,
+            color: "text.secondary",
+            whiteSpace: "nowrap",
+            "&:hover": { color: "text.primary" },
+          }}
+        >
+          {o.swap_id.slice(0, 8)}
+          <ContentCopyIcon sx={{ fontSize: 12 }} />
         </Box>
       </Tooltip>
 
