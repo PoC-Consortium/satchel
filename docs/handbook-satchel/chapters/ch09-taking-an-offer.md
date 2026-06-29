@@ -26,7 +26,22 @@ your wallet can cover the **amount plus the funding fee** for your side, and if 
 can't, it shows a "Not enough … (amount + funding fee)" alert and blocks the take
 until you can.
 
+It also runs the same **wallet-lock check** posting does, on the coin you'd be
+**getting** (the side you fund): if that node wallet is encrypted and locked, the
+take is refused up front, asking you to unlock it first with `walletpassphrase`.
+
+> **Warning** — A locked wallet can read its balance but can't sign your funding
+> transaction, so taking with it locked would strand the swap at funding. Unlock
+> the get-coin's wallet before you take, and keep it unlocked until the swap
+> completes.
+
 ![The take-offer confirmation dialog.](images/processed/ch09-take-confirm.png){width=65%}
+
+If the offer was posted by someone you've marked **Blocked** in your contacts, the
+dialog also shows a warning — **"You blocked this counterparty"** — and asks you to
+confirm a second time. This does **not** hard-block the trade: blocking is only a
+personal reminder, and an atomic swap protects you regardless of who you trade
+with. See the chapter *"Contacts"*.
 
 Read it over and confirm. The swap is now under way.
 

@@ -37,6 +37,8 @@ Below the groups:
 
 - **Swaps** — your full trade history and the swaps currently running.
 - **Wallets** — read-only balances from your own coin nodes.
+- **Contacts** — your private nicknames and standings for the people you trade
+  with, kept only on this device.
 - **Relays** — a read-only monitor of your Nostr relays, so you can see at a
   glance which ones are connected and how healthy they are.
 

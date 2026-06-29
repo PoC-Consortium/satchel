@@ -102,6 +102,34 @@ Override `N` per coin via `Engine.coin_confirmations` (`satchel.json` →
 > conservative than the spec's floor; the spec value is a *minimum*, not the
 > shipped default.
 
+## The wallet-lock funding gate
+
+Before committing a trade, the engine verifies that the funding coin's node
+wallet is actually **unlocked** — a pre-flight check on the side that is about to
+spend. If the wallet is **encrypted and locked**, the engine **refuses up front**
+rather than accepting a trade it cannot fund: the taker's get-leg is refused at
+**take**, and the maker's give-leg is refused at **post**, each with a message
+telling the user to unlock the wallet (`walletpassphrase`) and keep it unlocked
+until the swap completes.
+
+The reason the balance check alone is not enough: a locked wallet still **reads**
+its balance, so the funds gate passes, but it **cannot sign** the funding
+transaction — `signrawtransactionwithwallet` returns RPC `-13`
+("wallet must be unlocked"). Without this gate that failure surfaced only at
+funding time, after the handshake, stranding the swap. The gate **fails open** on
+a transient `getwalletinfo` error (node reachability is already covered by the
+balance read), so a momentary RPC hiccup never blocks an otherwise-fundable
+trade.
+
+> **Note** — **Companion funding self-retry.** A v1 fund that fails to broadcast
+> *after the state has already advanced* — e.g. a wallet locked mid-swap — is
+> re-attempted on each scheduler tick. The retry is idempotent (it locates the
+> funding on-chain first, so it never double-funds) and self-heals the moment the
+> wallet is unlocked again; it composes with the pre-funding timeout-abort. v2
+> adaptor funding does **not** yet auto-retry on a tick: it fails closed into a
+> recoverable `Accepted` state, resumable via relay re-drive or a manual
+> `adaptor_fund`.
+
 ## Safety properties
 
 Pact's crypto core — the v1 witness construction, the v2 Taproot output and

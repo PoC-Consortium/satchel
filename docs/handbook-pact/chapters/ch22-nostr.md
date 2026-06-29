@@ -37,6 +37,14 @@ The reader (`offer_from_event`) verifies the Nostr event signature, confirms its
 author matches the inner `offer.from`, and returns the envelope; the engine still
 verifies the inner Pact signature and freshness before trusting terms.
 
+> **Note** — An addressable offer re-publishes with a **new `event_id` but the
+> same `d` tag**, and a relay pool can serve a **stale** copy out of order. The
+> `nostr_offer_cache` therefore keeps **exactly one row per `d` tag**: an incoming
+> event older than the cached one is ignored, otherwise it replaces every row for
+> that `d` tag, and reads collapse to the freshest event per `d` tag. So one offer
+> can never render as two cards on the board — the previous out-of-order arrival
+> could otherwise double a listing.
+
 ### Gift wraps — kind `1059`
 
 A relay message maps to a NIP-59-style gift wrap of kind `1059`:
@@ -91,6 +99,10 @@ relay keeps serving (NIP-09 ignored) never reappears. The effect: a taken or
 withdrawn offer leaves **every** board immediately, instead of lingering on other
 viewers' boards until its NIP-40 expiration lapses.
 
+When a deletion arrives for one of the engine's **own** offers, the engine also
+reconciles its `my_offers` view, so a self-revoked offer is cleared from the
+maker's own listing instead of lingering there in a "posting…" state.
+
 ## Subscription filters
 
 - **Offers:** `{ kinds: [31510] }` — subscribe by kind; pair/network filtering is
@@ -115,16 +127,25 @@ across a relay round-trip:
 
 1. **`prep`** *(under the lock)* — read the active merchant's identity, pending
    `nostr_outbox` rows, and the offer/mailbox fetch cursors.
-2. **`round`** *(lock-free)* — **fetch first**, then publish the outbox, with
-   `FETCH_TIMEOUT` = 10s. The order matters: offers are addressable (replaceable)
-   state pulled back behind a high-water `since` cursor, so fetching *before* we
-   publish pins the cursor below anything we then send and guarantees the next
-   round re-catches our own just-published offer. Publishing first could let the
-   cursor skip past it (a busier maker's newer event, or a slow relay), so our own
-   live offer would fall off our own board and show a stuck "posting…" badge. Mail
-   and deletions are true append-only logs and are unaffected by the order.
-3. **`apply`** *(under the lock)* — mark outbox rows sent, insert inbox rows,
-   upsert the offer cache, and advance the cursors.
+2. **`round`** *(lock-free)* — **publish the outbox first**, then fetch offers,
+   mail, and deletions, with `FETCH_TIMEOUT` = 10s. Publishing first reclaims
+   latency: outgoing swap-handshake gift-wraps don't wait on the fetch round, and
+   an own offer's "posting…" → "live" confirmation can land in the *same* round
+   (~30s sooner) instead of the next. The publish step is honest about delivery —
+   with **no relay connected**, outbox rows stay **queued** (not falsely marked
+   sent) and retry next round; a row is marked sent **only if the event reached at
+   least one relay**.
+3. **`apply`** *(under the lock)* — mark the delivered outbox rows sent, insert
+   inbox rows, upsert the offer cache, and advance the cursors.
+
+> **Note** — An earlier build ran this round **fetch-first**, as a mitigation for
+> a *theorized* cursor-stranding race (publishing first could in principle let a
+> high-water `since` cursor skip past our own just-published offer, leaving it
+> stuck on a "posting…" badge). That race was never observed in practice; the
+> real "posting… forever" symptom traced to a stale revocation tombstone (fixed
+> separately — see "Revocation"), so the ordering was reverted to publish-first.
+> If cursor-stranding is ever seen for real, the intended robust fix is a
+> windowed / author-scoped offer re-fetch, not reordering the round.
 
 Polling (fetch-per-tick) rather than long-lived subscriptions keeps this aligned
 with how the engine already drives the HTTP relay each tick and sidesteps

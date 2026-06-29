@@ -134,6 +134,31 @@ or for the other side to take their step. Swaps are not instant.
 > be running to finish or refund it. If you must shut down, choose **Keep running**
 > on the quit dialog so the engine continues in the background.
 
+## A swap is stuck at funding / my wallet was locked
+
+If a swap's progress line reads **"Locking your {coin} — unlock wallet if
+stalled"** with a **+N blocks** count that keeps climbing — or posting or taking an
+offer was refused with a message that the wallet is locked — the cause is almost
+always the same: the node's coin wallet is **encrypted and locked**. A locked
+wallet can still read its balance, but it can't sign the funding transaction, so
+your side of the swap can't lock.
+
+To fix it:
+
+1. **Unlock the node wallet.** Run `walletpassphrase` on the coin's node, and keep
+   it unlocked until the swap completes.
+2. **Let the swap self-heal.** For a **Standard (HTLC)** swap the engine retries the
+   fund automatically on every tick, so once the wallet is open the swap funds
+   itself on the next pass — there's nothing more to press. The retry is safe to
+   repeat; it won't double-fund.
+3. **Or fund it manually.** If you'd rather not wait, use the **fund** action on the
+   swap's card. A manual fund now also notifies the counterparty, exactly like the
+   automatic path, so the other side picks up from where you left off.
+
+> **Note** — A swap completes purely by **chain-watching** even if relay messages
+> are missed: once your funding is on chain, the engine settles it from what it sees
+> on the blockchain. The unlock is the only thing it needs from you.
+
 ## I can't take an offer
 
 If the **Take offer** button is disabled, or a take fails, the offer isn't

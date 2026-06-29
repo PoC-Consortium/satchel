@@ -92,6 +92,15 @@ Each offer row shows:
 
 ![The detail pane: individual offers at one price level, with protocol chips and refund times.](images/processed/ch07-detail.png){width=80%}
 
+## Knowing the maker: contacts on the board
+
+If you've saved a maker as a contact, the board recognises them: their **nickname**
+and a small **status dot** for their standing show on the offer's counterparty tag,
+so a familiar trader stands out from a stranger at a glance. And once you've blocked
+anyone, a **Hide blocked offers** toggle appears above the board — turn it on to
+drop blocked makers' offers off the ladder entirely. See the chapter *"Contacts"*
+for how to add a maker and what standing does (and, importantly, doesn't) do.
+
 ## Taking an offer
 
 When you've found an offer you like, click **Take offer** on its row. Satchel

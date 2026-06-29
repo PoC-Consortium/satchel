@@ -76,6 +76,13 @@ waiting for, you'll see one of:
   are waiting on the counterparty. There's no fixed target to count toward, so the
   bar is indeterminate and a small **+N blocks** shows how many blocks have passed
   while you wait.
+- **Locking your {coin} — unlock wallet if stalled** — *your own* funding of a leg
+  is pending or retrying: it hasn't broadcast or confirmed yet. The bar is
+  indeterminate, with a **+N blocks** liveness count beside it; a count that keeps
+  growing flags a fund that's genuinely stuck, most often because the give-coin's
+  node wallet is locked. This state is honest about *whose* action is outstanding —
+  it's yours. (Previously a stuck taker in this position mis-displayed as though it
+  were the maker's turn; now it names the wait correctly.)
 - **Your lock confirming · 2/6** — *your own* funding is burying toward the depth
   your counterparty needs before they'll lock their side. You'll see this as the
   maker of a classic swap: the wait is on your lock maturing, not on a slow
@@ -90,6 +97,16 @@ waiting for, you'll see one of:
 Where it's relevant, the line also shows the current settlement **feerate** (for
 example `· 2 sat/vB`), so any automatic fee-bumping is visible to you rather than
 hidden. It's purely informational — the engine drives the swap either way.
+
+> **Note** — If a funding transaction fails to broadcast — for instance because the
+> node wallet got locked partway through a swap — the engine **re-attempts it
+> automatically on every tick**. So if you see **"Locking your {coin}"** sitting
+> stuck, just unlock the wallet (`walletpassphrase`) and the swap **self-heals** on
+> the next pass, with no manual step from you. The retry is idempotent: it locates
+> any funding already on chain first, so it never double-funds. Classic
+> **Standard (HTLC)** swaps get this automatic retry; **Private (Taproot)** funding
+> instead fails into a recoverable state you can resume rather than auto-retrying on
+> a tick.
 
 ### On-chain detail
 
