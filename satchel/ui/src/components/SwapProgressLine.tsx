@@ -21,6 +21,7 @@ const LABELS: Record<SwapProgress["watching"], string> = {
   their_lock: "progress.theirLock",
   our_lock: "progress.ourLock",
   settlement: "progress.securing", // rendered with {coin} via the special case below
+  funding: "progress.funding", // ditto — our own funding pending/retrying (#3)
 };
 
 export default function SwapProgressLine({ p }: { p: SwapProgress }) {
@@ -28,7 +29,12 @@ export default function SwapProgressLine({ p }: { p: SwapProgress }) {
 
   const reorg = p.last_action === "reorg-alert";
   const bumped = p.last_action === "fee-bump";
-  const awaiting = p.watching === "awaiting_lock" || p.watching === "awaiting_claim";
+  // "funding" is also a no-target liveness wait (our own funding pending/retrying,
+  // #3): an indeterminate bar + "+N blocks", where a growing count flags a stall.
+  const awaiting =
+    p.watching === "awaiting_lock" ||
+    p.watching === "awaiting_claim" ||
+    p.watching === "funding";
 
   // A snapshot older than a few scheduler ticks (e.g. the daemon detached) is
   // greyed so it doesn't read as live.
@@ -38,7 +44,9 @@ export default function SwapProgressLine({ p }: { p: SwapProgress }) {
     ? t("progress.feeBumped")
     : p.watching === "settlement"
       ? t("progress.securing", { coin: p.coin })
-      : t(LABELS[p.watching]);
+      : p.watching === "funding"
+        ? t("progress.funding", { coin: p.coin })
+        : t(LABELS[p.watching]);
 
   // Awaiting → a "+N blocks" liveness count (no target). Confirming → confs/needed
   // (+ feerate on our settlement).

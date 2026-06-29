@@ -25,7 +25,42 @@ permissions:
   contents: write
 
 jobs:
+  # Pre-create ONE draft release up front so the parallel build matrix all upload
+  # to the SAME release. Without this, matrix jobs race to find-or-create the
+  # release by tag and can spawn DUPLICATE drafts (one with only a subset of
+  # assets), which then breaks "Tidy asset names" (it may patch assets on a
+  # different draft than a job uploaded to → 404). This bit the rc5 re-release.
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create.outputs.id }}
+    steps:
+      - name: Create or reuse the draft release
+        id: create
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ github.ref_name }}"
+          # Idempotent: reuse an existing draft for this tag on a re-run, else
+          # create exactly one. Hyphenated tags (rcN/alpha/beta) are pre-releases,
+          # matching the in-app updater's releases/latest filter.
+          rid="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+                   --jq "[.[] | select(.tag_name==\"$tag\")][0].id" || true)"
+          if [ -z "$rid" ] || [ "$rid" = "null" ]; then
+            prerelease=false
+            case "$tag" in *-*) prerelease=true ;; esac
+            rid="$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" \
+                     -f tag_name="$tag" -f name="Satchel $tag" \
+                     -F draft=true -F prerelease=$prerelease --jq '.id')"
+            echo "created draft release $rid for $tag"
+          else
+            echo "reusing existing draft release $rid for $tag"
+          fi
+          echo "id=$rid" >> "$GITHUB_OUTPUT"
+
   release:
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -110,13 +145,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: satchel
-          tagName: ${{ github.ref_name }}
-          releaseName: "Satchel ${{ github.ref_name }}"
-          releaseDraft: true
-          # Hyphenated tags are pre-releases (v0.1.0-rc1, -alpha, -beta); a clean
-          # vX.Y.Z is a full release. Pre-releases are excluded from
-          # releases/latest, so the in-app update check never offers an RC.
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          # Upload to the single pre-created draft (create-release job) rather than
+          # find-or-creating by tag — this is what removes the duplicate-draft race.
+          # Draft/prerelease flags now live on that job.
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: --target ${{ matrix.triple }}
 
       # Tauri's bundler emits inconsistent asset names (Satchel_0.1.0_x64-setup.exe,
@@ -135,14 +167,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LABEL: ${{ matrix.label }}
           ARTIFACTS: ${{ steps.build.outputs.artifactPaths }}
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
         run: |
           set -euo pipefail
           tag="${{ github.ref_name }}"
           ver="$(jq -r .version satchel/tauri.conf.json)"
-          # The draft release isn't returned by the get-by-tag endpoint; find it
-          # in the (draft-inclusive) list. Take the newest match for this tag.
-          rid="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-                   --jq "[.[] | select(.tag_name==\"$tag\")][0].id")"
+          # Target the single pre-created draft directly (no by-tag lookup, which
+          # could otherwise match a stray duplicate).
+          rid="$RELEASE_ID"
           assets="$(gh api "repos/$GITHUB_REPOSITORY/releases/$rid/assets?per_page=100")"
 
           echo "$ARTIFACTS" | jq -r '.[]' | while read -r art; do
