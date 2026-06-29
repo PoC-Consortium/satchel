@@ -250,27 +250,33 @@ export default function Sidebar({
               </IconButton>
             </Box>
           ) : (
-            <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.25, maxWidth: "100%", "&:hover .renamePencil": { opacity: 1 } }}>
-              <Typography
-                noWrap
-                onClick={renameId ? (e) => { e.stopPropagation(); startEdit(); } : undefined}
-                sx={{ fontWeight: 600, fontSize: 13, cursor: renameId ? "text" : "inherit" }}
-              >
-                {merchantLabel}
-              </Typography>
-              {renameId && (
-                <Tooltip title={t("merchants.rename")}>
-                  <IconButton
-                    size="small"
-                    className="renamePencil"
-                    aria-label={t("merchants.rename")}
-                    onClick={(e) => { e.stopPropagation(); startEdit(); }}
-                    sx={{ p: 0.25, opacity: 0, transition: "opacity 0.15s", color: "text.disabled", "&:hover": { color: "primary.main" } }}
-                  >
-                    <EditOutlinedIcon sx={{ fontSize: 14 }} />
-                  </IconButton>
-                </Tooltip>
-              )}
+            // Outer box centers the inner group in the full width. The inner box
+            // shrinks to the name's width (the pencil is out of flow), so the name
+            // ends up centered; the pencil is anchored to the name's right edge
+            // (left: 100%) so it sits right next to it without shifting centering.
+            <Box sx={{ width: "100%", display: "flex", justifyContent: "center", "&:hover .renamePencil": { opacity: 1 } }}>
+              <Box sx={{ position: "relative", display: "inline-flex", alignItems: "center", maxWidth: "100%" }}>
+                <Typography
+                  noWrap
+                  onClick={renameId ? (e) => { e.stopPropagation(); startEdit(); } : undefined}
+                  sx={{ fontWeight: 600, fontSize: 13, maxWidth: "100%", cursor: renameId ? "text" : "inherit" }}
+                >
+                  {merchantLabel}
+                </Typography>
+                {renameId && (
+                  <Tooltip title={t("merchants.rename")}>
+                    <IconButton
+                      size="small"
+                      className="renamePencil"
+                      aria-label={t("merchants.rename")}
+                      onClick={(e) => { e.stopPropagation(); startEdit(); }}
+                      sx={{ position: "absolute", left: "100%", top: "50%", transform: "translateY(-50%)", ml: 0.25, p: 0.25, opacity: 0, transition: "opacity 0.15s", color: "text.disabled", "&:hover": { color: "primary.main" } }}
+                    >
+                      <EditOutlinedIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
             </Box>
           )}
           <Typography noWrap sx={{ fontSize: 11, color: "text.secondary", fontFamily: C.mono }}>
