@@ -538,7 +538,6 @@ export const tr: Bundle = {
     none: "Henüz takas yok — Corkboard'da bir teklif alın.",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "iptal",
-    refund: "geri ödeme",
     dump: "günlükleri dök",
     dumpHint: "Bu takas için gizli bilgi içermeyen bir tanılama paketini (durum + günlük satırları) kopyalayarak geliştiricilere yapıştırın.",
     dumpCopied: "Tanılama kopyalandı — geliştiricilere yapıştırın.",
@@ -552,10 +551,6 @@ export const tr: Bundle = {
     cancelReason: "Satchel'da iptal edildi",
     cancelBody:
       "Bu, siz fonlamadan önce takası terk eder. Henüz size ait hiçbir şey kilitli değil, bu yüzden hiçbir şey kaybetmezsiniz — teklif yalnızca tamamlanmaz.",
-    refundTitle: "Fonlarınızı geri çekelim mi?",
-    refundConfirm: "Geri öde",
-    refundBody:
-      "Güvenlik zaman kilidi geçti, bu yüzden kilitlediğiniz fonları geri talep edebilirsiniz. Bu, geri ödemenizi şimdi yayınlar; motor ayrıca son tarihten sonra bunu otomatik olarak da yapar.",
     col: {
       swap: "takas",
       role: "rol",

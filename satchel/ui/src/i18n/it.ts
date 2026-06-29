@@ -538,7 +538,6 @@ export const it: Bundle = {
     none: "Ancora nessuno swap — accetta un'offerta sul Corkboard.",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "annulla",
-    refund: "rimborsa",
     dump: "esporta log",
     dumpHint: "Copia un pacchetto diagnostico privo di segreti (stato + righe di log) per questo swap, da incollare agli sviluppatori.",
     dumpCopied: "Diagnostica copiata — incollala agli sviluppatori.",
@@ -552,10 +551,6 @@ export const it: Bundle = {
     cancelReason: "annullato in Satchel",
     cancelBody:
       "Questo abbandona lo swap prima che tu abbia effettuato il funding. Nulla di tuo è ancora bloccato, quindi non perdi nulla — l'offerta semplicemente non si completerà.",
-    refundTitle: "Recuperare i tuoi fondi?",
-    refundConfirm: "Rimborsa",
-    refundBody:
-      "Il timelock di sicurezza è scaduto, quindi puoi reclamare i fondi che hai bloccato. Questo trasmette ora il tuo rimborso; l'engine lo fa anche automaticamente dopo la scadenza.",
     col: {
       swap: "swap",
       role: "ruolo",

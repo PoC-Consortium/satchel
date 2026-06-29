@@ -554,7 +554,6 @@ export const en = {
     none: "No swaps yet — take an offer on the Corkboard.",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "cancel",
-    refund: "refund",
     dump: "dump logs",
     dumpHint: "Copy a secret-free diagnostics bundle (state + log lines) for this swap, to paste to the developers.",
     dumpCopied: "Diagnostics copied — paste to the developers.",
@@ -568,10 +567,6 @@ export const en = {
     cancelReason: "cancelled in Satchel",
     cancelBody:
       "This abandons the swap before you've funded. Nothing of yours is locked yet, so you lose nothing — the offer just won't complete.",
-    refundTitle: "Pull your funds back?",
-    refundConfirm: "Refund",
-    refundBody:
-      "The safety timelock has passed, so you can reclaim the funds you locked. This broadcasts your refund now; the engine also does it automatically after the deadline.",
     col: {
       swap: "swap",
       role: "role",

@@ -538,7 +538,6 @@ export const nl: Bundle = {
     none: "Nog geen swaps — neem een aanbod aan op de Corkboard.",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "annuleren",
-    refund: "refund",
     dump: "logs dumpen",
     dumpHint: "Kopieer een geheim-vrije diagnostiek-bundel (status + logregels) voor deze swap, om naar de ontwikkelaars te plakken.",
     dumpCopied: "Diagnostiek gekopieerd — plak naar de ontwikkelaars.",
@@ -552,10 +551,6 @@ export const nl: Bundle = {
     cancelReason: "geannuleerd in Satchel",
     cancelBody:
       "Dit verlaat de swap voordat je hebt gefund. Niets van jou is nog vergrendeld, dus je verliest niets — het aanbod komt alleen niet tot stand.",
-    refundTitle: "Je fondsen terughalen?",
-    refundConfirm: "Refund",
-    refundBody:
-      "De veiligheids-timelock is verstreken, dus je kunt de fondsen die je vergrendelde terugvorderen. Dit verstuurt je refund nu; de engine doet het ook automatisch na de deadline.",
     col: {
       swap: "swap",
       role: "rol",

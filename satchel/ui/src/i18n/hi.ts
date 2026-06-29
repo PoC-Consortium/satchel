@@ -538,7 +538,6 @@ export const hi: Bundle = {
     none: "अभी कोई स्वैप नहीं — Corkboard पर एक offer लें।",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "रद्द करें",
-    refund: "refund",
     dump: "लॉग डंप करें",
     dumpHint: "इस स्वैप के लिए एक secret-मुक्त डायग्नोस्टिक्स बंडल (state + लॉग लाइनें) कॉपी करें, डेवलपर्स को पेस्ट करने के लिए।",
     dumpCopied: "डायग्नोस्टिक्स कॉपी हो गए — डेवलपर्स को पेस्ट करें।",
@@ -552,10 +551,6 @@ export const hi: Bundle = {
     cancelReason: "Satchel में रद्द किया गया",
     cancelBody:
       "यह फंडिंग से पहले स्वैप को छोड़ देता है। अभी आपका कुछ भी लॉक नहीं है, इसलिए आप कुछ नहीं खोते — offer बस पूरा नहीं होगा।",
-    refundTitle: "अपने funds वापस खींचें?",
-    refundConfirm: "Refund",
-    refundBody:
-      "सुरक्षा timelock बीत चुका है, इसलिए आप अपने लॉक किए funds वापस ले सकते हैं। यह अभी आपका refund प्रसारित करता है; engine डेडलाइन के बाद इसे अपने आप भी करता है।",
     col: {
       swap: "स्वैप",
       role: "भूमिका",

@@ -538,7 +538,6 @@ export const pl: Bundle = {
     none: "Brak swapów — przyjmij ofertę na Corkboardzie.",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "anuluj",
-    refund: "zwróć",
     dump: "zrzuć logi",
     dumpHint: "Skopiuj pozbawiony sekretów pakiet diagnostyczny (stan + linie logów) dla tego swapa, do wklejenia deweloperom.",
     dumpCopied: "Diagnostyka skopiowana — wklej deweloperom.",
@@ -552,10 +551,6 @@ export const pl: Bundle = {
     cancelReason: "anulowano w Satchel",
     cancelBody:
       "To porzuca swap, zanim wniosłeś środki. Nic Twojego nie jest jeszcze zablokowane, więc nic nie tracisz — oferta po prostu się nie sfinalizuje.",
-    refundTitle: "Wycofać swoje środki?",
-    refundConfirm: "Zwróć",
-    refundBody:
-      "Timelock bezpieczeństwa minął, więc możesz odzyskać zablokowane środki. To rozgłasza Twój zwrot teraz; silnik robi to również automatycznie po upływie terminu.",
     col: {
       swap: "swap",
       role: "rola",

@@ -538,7 +538,6 @@ export const lt: Bundle = {
     none: "Mainų dar nėra — priimkite pasiūlymą Corkboard lentoje.",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "atšaukti",
-    refund: "grąžinti",
     dump: "išgauti žurnalus",
     dumpHint: "Nukopijuokite be paslapčių diagnostikos rinkinį (būsena + žurnalo eilutės) šiems mainams, kad įklijuotumėte kūrėjams.",
     dumpCopied: "Diagnostika nukopijuota — įklijuokite kūrėjams.",
@@ -552,10 +551,6 @@ export const lt: Bundle = {
     cancelReason: "atšaukta Satchel programoje",
     cancelBody:
       "Tai atsisako mainų prieš jums finansuojant. Niekas jūsų dar neužrakinta, todėl nieko neprarandate — pasiūlymas tiesiog nebus įvykdytas.",
-    refundTitle: "Susigrąžinti savo lėšas?",
-    refundConfirm: "Grąžinti",
-    refundBody:
-      "Saugumo laiko užraktas praėjo, todėl galite atgauti užrakintas lėšas. Tai dabar transliuoja jūsų grąžinimą; variklis taip pat tai padaro automatiškai po termino.",
     col: {
       swap: "mainai",
       role: "vaidmuo",
