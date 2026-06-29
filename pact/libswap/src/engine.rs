@@ -3380,15 +3380,32 @@ impl Engine {
             // reveal; then secure our A redeem.
             (Role::Participant, Signed) => {
                 if let Some(txid_b) = &rec.funding_b_txid {
-                    // We've locked leg B; waiting for the maker's reveal. Anchor
-                    // to our lock's depth (chain-read) so it survives a restart.
-                    self.progress_awaiting_anchored(
-                        &rec.swap_id,
-                        &rec.chain_b,
-                        "awaiting_claim",
-                        self.lock_confs(&rec.chain_b, txid_b, rec.funding_b_vout, leg_spk(false))
-                            .unwrap_or(0),
-                    )
+                    // Symmetry with the maker: while OUR leg B buries toward n_b
+                    // show a determinate "your lock confirming · confs/n_b" (the
+                    // maker can't reveal until then); once n_b-deep, the awaiting-
+                    // their-claim wait. confs are a chain read (resumable).
+                    let confs_b = self
+                        .lock_confs(&rec.chain_b, txid_b, rec.funding_b_vout, leg_spk(false))
+                        .unwrap_or(0);
+                    if confs_b < rec.n_b {
+                        self.progress_confirming(
+                            &rec.swap_id,
+                            &rec.chain_b,
+                            txid_b.clone(),
+                            rec.funding_b_vout,
+                            leg_spk(false),
+                            rec.n_b,
+                            "our_lock",
+                            None,
+                        )
+                    } else {
+                        self.progress_awaiting_anchored(
+                            &rec.swap_id,
+                            &rec.chain_b,
+                            "awaiting_claim",
+                            confs_b.saturating_sub(rec.n_b),
+                        )
+                    }
                 } else if let Some(txid) = &rec.funding_a_txid {
                     self.progress_confirming(
                         &rec.swap_id,
