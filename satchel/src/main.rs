@@ -608,10 +608,7 @@ fn get_contacts(state: tauri::State<AppState>) -> serde_json::Value {
 /// change (it's small and single-user), so there's no per-entry patching here —
 /// Satchel just persists what it's handed.
 #[tauri::command]
-fn set_contacts(
-    state: tauri::State<AppState>,
-    contacts: serde_json::Value,
-) -> Result<(), String> {
+fn set_contacts(state: tauri::State<AppState>, contacts: serde_json::Value) -> Result<(), String> {
     let mut cfg = state.config.lock().unwrap();
     cfg.contacts = contacts;
     save_config(&state.config_dir, &cfg).map_err(|e| format!("{e:#}"))
