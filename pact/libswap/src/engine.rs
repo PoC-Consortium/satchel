@@ -3261,7 +3261,18 @@ impl Engine {
             // We've locked leg B; waiting for the maker's reveal. Anchor the
             // liveness count to our lock's depth (`htlc_b_height`, persisted at
             // funding) so it survives a restart instead of re-seeding to 0.
-            (Participant, FundedA) | (Participant, FundedB) => match rec.htlc_b_height {
+            // #3: leg A is verified; now WE fund leg B. While that funding is
+            // pending/retrying (e.g. a locked wallet, #2) our OWN action is
+            // outstanding — show "funding", NOT "awaiting_claim" (which would
+            // imply it's the maker's turn). A growing count here flags a stuck
+            // fund (unlock the wallet). On success we advance to FundedB.
+            (Participant, FundedA) => {
+                self.progress_awaiting(&rec.swap_id, &rec.chain_b, "funding", prev)
+            }
+            // Leg B is locked (`htlc_b_height` persisted at funding); wait for the
+            // maker's reveal, anchoring the liveness count to our lock's depth so
+            // it survives a restart instead of re-seeding to 0.
+            (Participant, FundedB) => match rec.htlc_b_height {
                 Some(h) => {
                     let tip = self
                         .backend(&rec.chain_b)
@@ -3631,6 +3642,25 @@ impl Engine {
                             return event(
                                 "funded-b",
                                 "chain-B HTLC confirmed (chain-watched)".into(),
+                            );
+                        }
+                        // #6: record the leg-B funding pointer on FIRST chain
+                        // detection (before n_b), so the maker's progress shows
+                        // `their_lock confs/n_b` — parity with the relay path, which
+                        // sets it from the `funded` message. State stays FundedA (the
+                        // redeem still gates on n_b above). Not redundant derived
+                        // state: htlc_b_txid is the core leg-B pointer the message
+                        // path persists too — we just discovered it from chain.
+                        if rec.htlc_b_txid.is_none() {
+                            let mut updated = rec.clone();
+                            updated.htlc_b_txid = Some(outpoint.txid.to_string());
+                            updated.htlc_b_vout = Some(outpoint.vout);
+                            updated.htlc_b_height =
+                                Some(backend_b.tip_height()?.saturating_sub(confs));
+                            self.store.put(&updated)?;
+                            return event(
+                                "their-lock",
+                                "chain-B HTLC seen; burying to n_b (chain-watched)".into(),
                             );
                         }
                     }
@@ -4270,6 +4300,20 @@ impl Engine {
         } else {
             Err(last_err.unwrap_or_else(|| anyhow::anyhow!("no boards")))
         }
+    }
+
+    /// Fund our leg AND relay the resulting `funded` envelope to the
+    /// counterparty — what the auto-fund path does. The plain [`Engine::fund`]
+    /// only broadcasts and RETURNS the envelope; a manual fund (e.g. a recovery
+    /// via the `fund` RPC) must also notify, else the maker is never told and
+    /// falls back to chain-watch (#5). Best-effort relay: the counterparty also
+    /// chain-watches, so a relay hiccup doesn't strand the swap.
+    pub fn fund_and_notify(&self, swap: &str) -> Result<(SwapRecord, Envelope)> {
+        let (record, envelope) = self.fund(swap)?;
+        if let Some(cp) = record.counterparty_identity.clone() {
+            let _ = self.relay_send_all(&cp, &envelope);
+        }
+        Ok((record, envelope))
     }
 
     fn identity(&self) -> Result<String> {
@@ -5403,8 +5447,10 @@ pub struct SwapProgress {
     /// - `awaiting_lock` / `awaiting_claim` — waiting on the COUNTERPARTY to act
     ///   (their lock to appear, or their claim/reveal). No target; show
     ///   `blocks_elapsed` as a liveness count.
-    /// - `their_lock` — their lock burying toward `needed` (our gate before we
-    ///   act). Show `confs/needed`.
+    /// - `their_lock` / `our_lock` — a lock burying toward `needed` (their lock
+    ///   as our gate, or our own lock confirming). Show `confs/needed`.
+    /// - `funding` — OUR funding of this leg is pending/retrying (#3); show
+    ///   `blocks_elapsed` (a growing count flags a stuck fund, e.g. a locked wallet).
     /// - `settlement` — our own claim burying ("Securing your {coin}").
     ///   Show `confs/needed` (+ `feerate_sat_vb`).
     pub watching: String,
@@ -5416,7 +5462,7 @@ pub struct SwapProgress {
     /// Required depth for this leg (`n_a`/`n_b`); `0` for the awaiting phases.
     pub needed: u32,
     /// Blocks elapsed in the current awaiting phase (liveness cue, no deadline).
-    /// Present only for `awaiting_lock`/`awaiting_claim`.
+    /// Present only for `awaiting_lock`/`awaiting_claim`/`funding`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blocks_elapsed: Option<u32>,
     /// Current feerate of our settlement tx (sat/vB); `settlement` phase only.
