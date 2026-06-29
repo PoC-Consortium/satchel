@@ -779,7 +779,9 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         }
         "fund" => {
             let id = p.str(0, "swap_id")?;
-            let (record, envelope) = blocking(app, move |e| e.fund(&id)).await?;
+            // #5: relay the `funded` envelope (fund_and_notify), so a manual /
+            // recovery fund notifies the maker like the auto-fund path does.
+            let (record, envelope) = blocking(app, move |e| e.fund_and_notify(&id)).await?;
             Ok(
                 json!({ "record": serde_json::to_value(&record)?, "envelope": serde_json::to_value(&envelope)? }),
             )

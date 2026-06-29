@@ -650,6 +650,7 @@ export const en = {
     theirLock: "Their lock confirming",
     ourLock: "Your lock confirming",
     securing: "Securing your {coin}",
+    funding: "Locking your {coin} — unlock wallet if stalled",
     blocks: "+{n} blocks",
     feeBumped: "Fee-bumped",
     reorg: "Reorg detected — re-checking",
@@ -696,4 +697,11 @@ export const en = {
   },
 };
 
-export type Bundle = typeof en;
+// `progress.funding` (#3) is OPTIONAL in Bundle so a new phase label can ship in
+// en.ts without re-translating all 26 bundles at once — a locale missing it falls
+// back to English at runtime (see the i18n index `t`). Translators fill it in later.
+type EnBundle = typeof en;
+export type Bundle = Omit<EnBundle, "progress"> & {
+  progress: Omit<EnBundle["progress"], "funding"> &
+    Partial<Pick<EnBundle["progress"], "funding">>;
+};
