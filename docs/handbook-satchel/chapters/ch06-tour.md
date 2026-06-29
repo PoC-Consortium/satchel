@@ -150,11 +150,11 @@ page:
 
 - **Your active swaps** — a live card for each swap in progress, showing its
   state, the two parties as **maker ↔ taker** (your own side tagged **(you)**),
-  the amounts, a live confirmation-progress line, and — when
-  needed — the action buttons to push a swap along (redeem, cancel, refund;
-  funding is always automatic, so there's no Fund button). These buttons appear
-  only when it's your turn to act. The chapter on tracking your swaps explains
-  each one.
+  the amounts, a live confirmation-progress line, and — while nothing of yours is
+  locked yet — a **cancel** button to back out before funding. Funding, redeeming,
+  and refunding all happen automatically, so there are no buttons for them; a
+  **dump logs** button is always there for diagnostics. The chapter on tracking
+  your swaps explains them.
 - **Activity log** — a running, collapsible feed of what the engine is doing,
   narrated in plain language. You don't need to watch it, but it's reassuring to
   glance at when a swap is mid-flight.

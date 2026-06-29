@@ -69,8 +69,9 @@ cryptography:
 
 > **Note** — The whole flow is automatic: after you take an offer you won't touch
 > a button at all — funding, redeeming, and (if needed) refunding all happen on
-> their own. The **fund** and **refund** actions still appear in the active-swaps
-> dock if you ever want to act manually — see the chapter on tracking your swaps.
+> their own. The only manual control in the active-swaps dock is **cancel**, to
+> back out *before* you've funded; once your funds are committed the engine sees
+> the swap through — see the chapter on tracking your swaps.
 
 ## You don't have to babysit it — but keep the app running
 
