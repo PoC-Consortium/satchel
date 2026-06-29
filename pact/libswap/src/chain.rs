@@ -133,6 +133,14 @@ pub trait ChainBackend {
     /// (HTLC funding is a normal send, spec §6.1).
     fn wallet_send(&self, address: &str, amount_sat: u64) -> Result<String>;
 
+    /// Whether the node's wallet is encrypted AND currently locked — it can read
+    /// balances but cannot SIGN, so a funding `wallet_send` would fail with RPC
+    /// -13 ("walletpassphrase first"). `Ok(false)` for unencrypted wallets or
+    /// backends with no wallet concept (only the Core primary overrides this).
+    fn wallet_locked(&self) -> Result<bool> {
+        Ok(false)
+    }
+
     /// Sign `tx`'s input(s) with the node wallet and broadcast it, given the
     /// value + scriptPubKey of its single prevout so a segwit/taproot input can
     /// be signed before that prevout confirms. Used to CPFP-bump an unconfirmed
@@ -491,6 +499,14 @@ impl ChainBackend for CoreRpcBackend {
         let balance = self.rpc.call("getbalance", &[])?;
         let coins = balance.as_f64().context("getbalance: non-numeric")?;
         Ok((coins * 1e8).round() as u64)
+    }
+
+    fn wallet_locked(&self) -> Result<bool> {
+        // `unlocked_until` is ABSENT on an unencrypted wallet, `0` when encrypted
+        // and locked, and a future timestamp when encrypted and unlocked. Only a
+        // hard `0` means "can read balance but cannot sign".
+        let info = self.rpc.call("getwalletinfo", &[])?;
+        Ok(info.get("unlocked_until").and_then(|v| v.as_u64()) == Some(0))
     }
 
     fn wallet_sign_send(
@@ -1132,6 +1148,10 @@ impl ChainBackend for MultiBackend {
 
     fn wallet_balance(&self) -> Result<u64> {
         self.primary().wallet_balance()
+    }
+
+    fn wallet_locked(&self) -> Result<bool> {
+        self.primary().wallet_locked()
     }
 
     fn wallet_sign_send(

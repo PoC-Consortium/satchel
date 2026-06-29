@@ -734,6 +734,25 @@ impl Engine {
             "insufficient {coin_id} balance to fund this swap: have {balance} sat, \
              need ~{needed} sat ({amount} to lock + ~{fee_headroom} funding-fee headroom)"
         );
+        self.ensure_wallet_unlocked(&chain)?;
+        Ok(())
+    }
+
+    /// Gate: refuse if the node's wallet is encrypted+locked. It would pass the
+    /// balance read above but fail to SIGN the funding tx (RPC -13), stranding
+    /// the swap at fund time. Checked at take (taker's get-leg) and post (maker's
+    /// give-leg) so neither side commits to a swap it can't fund.
+    fn ensure_wallet_unlocked(&self, chain: &ChainRef) -> Result<()> {
+        // Fail-open on a probe error: the balance read already gates node
+        // reachability, so don't block trading on a transient getwalletinfo hiccup.
+        let locked = self.backend(chain)?.wallet_locked().unwrap_or(false);
+        ensure!(
+            !locked,
+            "your {} wallet is locked — unlock it (walletpassphrase) before trading \
+             and keep it unlocked until the swap completes. A locked wallet can read \
+             your balance but cannot sign the funding transaction.",
+            chain.coin_id
+        );
         Ok(())
     }
 
@@ -826,6 +845,7 @@ impl Engine {
              across {n_live} live offer(s) + ~funding-fee headroom). Withdraw or let some \
              offers expire first."
         );
+        self.ensure_wallet_unlocked(&chain)?;
         Ok(())
     }
 
@@ -1884,6 +1904,15 @@ impl Engine {
         };
         // Signed: drive redeem/refund. RedeemedB/Completed/Refunded: keep the
         // broadcast spend moving until it confirms. Anything else is inert.
+        //
+        // rc6 #2 NOTE: v2 funding intentionally has NO tick retry (yet). Unlike
+        // v1, a failed v2 funding leaves an HONEST, recoverable `Accepted`
+        // (funding=None) — resumable by a relay re-drive or a manual `adaptor_fund`
+        // RPC — so it is a liveness gap, not a stranding bug. A correct tick retry
+        // needs the counterparty identity threaded into the tick (not on
+        // `AdaptorSwapRecord` today) to relay `funding_ready`, plus a locate-first
+        // idempotency guard on the Taproot funding (today's is pointer-based).
+        // Deferred to a focused follow-up.
         if !matches!(rec.state, Signed | RedeemedB | Completed | Refunded) {
             return Ok(None);
         }
@@ -2610,9 +2639,24 @@ impl Engine {
             );
         }
 
-        let address = htlc.address(backend.params())?;
-        let txid = backend.wallet_send(&address, amount)?;
-        let vout = backend.find_vout(&txid, &hex::encode(htlc.script_pubkey().as_bytes()))?;
+        // Idempotency / retry-safety: if this leg is ALREADY funded on chain — a
+        // prior attempt's broadcast we never persisted (a crash, or a fund retry
+        // after a transient signing failure like a locked wallet → RPC -13) —
+        // adopt that output instead of broadcasting a SECOND funding (which would
+        // double-fund, real loss). `locate_funding` matches the HTLC by
+        // script+amount (scantxoutset / stored pointer); confirmed-only, so the
+        // residual double-fund window is just a crash in the seconds between
+        // broadcast and the `put` below, before the tx is mined.
+        let (txid, vout) = match self.locate_funding(&rec, leg)? {
+            Some((op, _)) => (op.txid.to_string(), op.vout),
+            None => {
+                let address = htlc.address(backend.params())?;
+                let txid = backend.wallet_send(&address, amount)?;
+                let vout =
+                    backend.find_vout(&txid, &hex::encode(htlc.script_pubkey().as_bytes()))?;
+                (txid, vout)
+            }
+        };
 
         // L2: persist the funding pointer IMMEDIATELY after the broadcast,
         // before the refund-building RPCs below. A crash between `wallet_send`
@@ -2994,6 +3038,23 @@ impl Engine {
         let window = u64::from(rec.t2).saturating_sub(rec.created_at);
         let deadline = rec.created_at + window / 4;
         local_now() >= deadline
+    }
+
+    /// True once the §7.4 chain-B fund deadline (T2 − fund_margin) has passed:
+    /// the taker can no longer safely fund leg B (mirrors the gate in `fund()`).
+    /// Conservative — if the clock can't be read, return false so a transient
+    /// node hiccup never aborts a still-fundable swap.
+    fn fund_deadline_passed(&self, rec: &SwapRecord) -> bool {
+        let net = rec.chain_b.network;
+        let (fund_margin, _, _) = action_margins(net);
+        let Ok(backend) = self.backend(&rec.chain_b) else {
+            return false;
+        };
+        let Ok(mtp) = backend.tip_median_time() else {
+            return false;
+        };
+        let now = deadline_clock(net, local_now(), mtp);
+        !action_safe(now, fund_margin, rec.t2)
     }
 
     pub fn tick(&self) -> Vec<TickEvent> {
@@ -3704,6 +3765,33 @@ impl Engine {
                 }
                 Ok(None)
             }
+            // Retry the taker's leg-B funding (rc6 #2): the fund may have failed
+            // to BROADCAST after the state advanced to FundedA — e.g. a locked
+            // wallet (RPC -13) — stranding the swap with no retry. Re-attempt each
+            // tick so it self-heals once the wallet is unlocked; fund() is
+            // idempotent (adopts an on-chain funding rather than double-funding).
+            (Role::Participant, State::FundedA) => {
+                if !self.auto_fund {
+                    return Ok(None);
+                }
+                // Past the §7.4 fund deadline leg B can never be safely funded, and
+                // nothing is locked on our side — abort cleanly (maker refunds A at T1).
+                if self.fund_deadline_passed(rec) {
+                    self.abort(
+                        &rec.swap_id,
+                        "missed the chain-B fund deadline (wallet locked too long?)",
+                    )?;
+                    return event(
+                        "abort-fund-deadline",
+                        "too late to fund chain B; aborted (nothing locked on our side)".into(),
+                    );
+                }
+                let (funded, env) = self.fund(&rec.swap_id)?;
+                if let Some(cp) = funded.counterparty_identity.clone() {
+                    let _ = self.relay_send_all(&cp, &env);
+                }
+                event("auto-fund", "retried chain-B funding".into())
+            }
             // C8: a swap stalled in a PRE-FUNDING state (`created`/`accepted`)
             // past the timeout is auto-aborted. Nothing is locked on-chain
             // before funding, so this loses no money — it just clears a
@@ -3722,6 +3810,21 @@ impl Engine {
                     "abort-timeout",
                     format!("no funding within {PRE_FUNDING_TIMEOUT_SECS}s; aborted"),
                 )
+            }
+            // Retry the maker's leg-A funding (rc6 #2), mirroring the taker's
+            // FundedA retry. The recv-driven fund may have failed to broadcast
+            // (locked wallet → -13) with the state left at Accepted. Re-attempt
+            // each tick; the C8 timeout-abort above matches first once expired,
+            // so this only runs inside the pre-funding window. Idempotent fund().
+            (Role::Initiator, State::Accepted) => {
+                if !self.auto_fund {
+                    return Ok(None);
+                }
+                let (funded, env) = self.fund(&rec.swap_id)?;
+                if let Some(cp) = funded.counterparty_identity.clone() {
+                    let _ = self.relay_send_all(&cp, &env);
+                }
+                event("auto-fund", "retried chain-A funding".into())
             }
             _ => Ok(None),
         }
