@@ -3272,22 +3272,39 @@ impl Engine {
             // Leg B is locked (`htlc_b_height` persisted at funding); wait for the
             // maker's reveal, anchoring the liveness count to our lock's depth so
             // it survives a restart instead of re-seeding to 0.
-            (Participant, FundedB) => match rec.htlc_b_height {
-                Some(h) => {
-                    let tip = self
-                        .backend(&rec.chain_b)
-                        .ok()
-                        .and_then(|b| b.tip_height().ok())
-                        .unwrap_or(h);
+            // Symmetry with the maker's (Initiator, FundedA): while OUR leg B
+            // buries toward n_b show a determinate "your lock confirming · confs/
+            // n_b" — the maker cannot claim (reveal) until then. Once n_b-deep,
+            // switch to the awaiting-their-claim liveness wait. confs are read
+            // from chain each time (resumable, no persisted anchor).
+            (Participant, FundedB) => {
+                let confs_b = rec
+                    .htlc_b_txid
+                    .as_deref()
+                    .and_then(|txid| {
+                        self.lock_confs(&rec.chain_b, txid, rec.htlc_b_vout, htlc_spk(false))
+                    })
+                    .unwrap_or(0);
+                if confs_b < rec.n_b {
+                    self.progress_confirming(
+                        &rec.swap_id,
+                        &rec.chain_b,
+                        rec.htlc_b_txid.clone()?,
+                        rec.htlc_b_vout,
+                        htlc_spk(false),
+                        rec.n_b,
+                        "our_lock",
+                        None,
+                    )
+                } else {
                     self.progress_awaiting_anchored(
                         &rec.swap_id,
                         &rec.chain_b,
                         "awaiting_claim",
-                        tip.saturating_sub(h).min(u64::from(u32::MAX)) as u32,
+                        confs_b.saturating_sub(rec.n_b),
                     )
                 }
-                None => self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_claim", prev),
-            },
+            }
             (Participant, Completed) => self.progress_confirming(
                 &rec.swap_id,
                 &rec.chain_a,
