@@ -205,7 +205,13 @@ export interface SwapProgress {
    *  - `our_lock` — our own lock burying toward the depth the taker requires
    *    before they lock (v1 maker only); show `confs/needed`.
    *  - `settlement` — our own claim burying ("Securing your {coin}"). */
-  watching: "awaiting_lock" | "awaiting_claim" | "their_lock" | "our_lock" | "settlement";
+  watching:
+    | "awaiting_lock"
+    | "awaiting_claim"
+    | "their_lock"
+    | "our_lock"
+    | "settlement"
+    | "funding";
   /** Display symbol of the watched leg (e.g. "BTC"). */
   coin: string;
   /** Confirmations so far (0 for the awaiting phases). */
