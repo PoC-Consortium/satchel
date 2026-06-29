@@ -95,6 +95,15 @@ pub fn apply(store: &Store, a: &Apply) -> Result<()> {
     for swap_id in &a.revoked {
         store.meta_set(&format!("nostr_revoked:{swap_id}"), "1")?;
         store.nostr_offer_cache_remove(swap_id)?;
+        // Reconcile our OWN ledger. A deletion for one of our still-live offers
+        // is a (same-key) withdrawal — honor it everywhere by marking the offer
+        // revoked, so refresh/readvertise stop republishing it. Without this,
+        // `my_offers` keeps it "live" and re-advertises a fresh event ON TOP of
+        // the deletion every cycle — resurrecting it for other sessions while our
+        // own tombstone hides it from us: a split-brain "posting…" limbo. No-op
+        // for foreign offers (not in `my_offers`) or already-terminal ones
+        // (`my_offer_mark_revoked` only touches rows still in state `live`).
+        store.my_offer_mark_revoked(swap_id)?;
     }
     for (event_id, d_tag, envelope, created, expires) in &a.offers {
         if store.meta_get(&format!("nostr_revoked:{d_tag}"))?.is_some() {
@@ -425,6 +434,49 @@ mod tests {
         let kp = maker.store.seed().unwrap().identity_keypair().unwrap();
         pact_proto::envelope::sign(&mut env, &kp).unwrap();
         env
+    }
+
+    #[test]
+    fn received_deletion_revokes_our_own_live_offer() {
+        // A relay round delivered deletions for one of OUR live offers and for a
+        // stranger's. apply() must reconcile our ledger: mark our own revoked (so
+        // refresh/readvertise stop republishing it), and no-op the foreign one.
+        let p = party("reconcile-del");
+        p.store
+            .my_offer_put("mineLive", "{\"e\":1}", 1_700_000_000, 1800, 1_700_000_000)
+            .unwrap();
+        assert_eq!(p.store.my_offers_live().unwrap().len(), 1);
+
+        let a = Apply {
+            revoked: vec!["mineLive".into(), "notMine".into()],
+            ..Apply::default()
+        };
+        apply(&p.store, &a).unwrap();
+
+        // Our offer left the live set and is now terminal `revoked`.
+        assert!(p.store.my_offers_live().unwrap().is_empty());
+        let mine = p
+            .store
+            .my_offers_all()
+            .unwrap()
+            .into_iter()
+            .find(|o| o.offer_id == "mineLive")
+            .unwrap();
+        assert_eq!(mine.state, "revoked");
+
+        // Both ids are tombstoned; the foreign one never created a my_offers row.
+        assert!(p
+            .store
+            .meta_get("nostr_revoked:mineLive")
+            .unwrap()
+            .is_some());
+        assert!(p.store.meta_get("nostr_revoked:notMine").unwrap().is_some());
+        assert!(p
+            .store
+            .my_offers_all()
+            .unwrap()
+            .iter()
+            .all(|o| o.offer_id != "notMine"));
     }
 
     #[test]
