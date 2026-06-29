@@ -15,7 +15,9 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import BlockIcon from "@mui/icons-material/Block";
 import { useApp } from "../AppContext";
+import { useContacts } from "../contacts";
 import { useDenom } from "../denom";
 import { useNavigate } from "../ui/nav";
 import { useT } from "../i18n";
@@ -47,6 +49,9 @@ type Leg = (sats: number, coin: string) => string;
 // preference, like the denom toggle) — leaving and returning to the Corkboard
 // keeps your pair instead of snapping back to the first one.
 const PAIR_KEY = "satchel.corkboard.pair";
+// "Hide blocked offers" is a pure view preference (like the pair + denom), so it
+// rides in localStorage rather than satchel.json.
+const HIDE_BLOCKED_KEY = "satchel.corkboard.hideBlocked";
 
 // One row from pactd `listmyoffers` — the maker's own offers from the local
 // store (the `offer` envelope is Offer-shaped: swap_id / from / body).
@@ -63,6 +68,7 @@ export default function CorkboardScreen() {
   // refuses too — this is the friendly up-front block).
   const coinLive = (id?: string) => !!coins.find((c) => c.id === id && c.status === "ok");
   const { denom, setDenom } = useDenom();
+  const { get: contactOf, book: contactBook } = useContacts();
   const confirmTake = useTakeConfirm();
   const navigate = useNavigate();
   const t = useT();
@@ -83,6 +89,13 @@ export default function CorkboardScreen() {
   }); // pairKey; "" → first (persisted across navigation)
   const [boardSel, setBoardSel] = useState<string>(""); // selected board URL; "" → first
   const [mineOnly, setMineOnly] = useState(false); // All vs Mine (own offers)
+  const [hideBlocked, setHideBlocked] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(HIDE_BLOCKED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [selected, setSelected] = useState<string | null>(null); // "side:priceKey"
   // Offers we just took, hidden optimistically so the line vanishes the instant
   // you confirm (before the take RPC + refresh land). Cleared if the take fails.
@@ -280,10 +293,30 @@ export default function CorkboardScreen() {
     // book immediately (optimistic justTook on click, then confirmed once the
     // pending take makes offerState "taken-by-us") rather than lingering badged.
     .filter((o) => !justTook.has(o.swap_id))
+    // Local blacklist: drop offers from makers you've blocked (own offers are
+    // never blocked-out). Purely your own view — the offer still exists for
+    // everyone else; this just removes it from your ladder.
+    .filter((o) => !hideBlocked || o.from === myId || contactOf(o.from)?.status !== "blocked")
     .filter((o) => {
       const st = offerState(o, mySwapIds);
       return st !== "revoked" && st !== "taken-by-us";
     });
+
+  // Show the "hide blocked" toggle only once at least one contact is blocked, so
+  // it stays out of the way until it's meaningful.
+  const hasBlocked = Object.values(contactBook).some((c) => c.status === "blocked");
+
+  const toggleHideBlocked = () => {
+    setHideBlocked((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(HIDE_BLOCKED_KEY, next ? "1" : "0");
+      } catch {
+        /* best-effort persist */
+      }
+      return next;
+    });
+  };
 
   // Pick a stable base/quote for the selected pair and project every offer onto
   // a single price axis (quote per base). Bids and asks are exact-rate levels;
@@ -364,6 +397,21 @@ export default function CorkboardScreen() {
           <ToggleButton value="all">{t("corkboard.filterAll")}</ToggleButton>
           <ToggleButton value="mine">{t("corkboard.filterMine")}</ToggleButton>
         </ToggleButtonGroup>
+
+        {hasBlocked && (
+          <Tooltip title={t("contacts.hideBlocked")}>
+            <ToggleButton
+              size="small"
+              value="hideBlocked"
+              selected={hideBlocked}
+              onChange={toggleHideBlocked}
+              aria-label={t("contacts.hideBlocked")}
+              sx={{ px: 1 }}
+            >
+              <BlockIcon fontSize="small" sx={{ color: hideBlocked ? C.bad : "text.secondary" }} />
+            </ToggleButton>
+          </Tooltip>
+        )}
 
         {quote && (
           <Tooltip title={t("corkboard.book.denomTip", { coin: quoteSym })}>

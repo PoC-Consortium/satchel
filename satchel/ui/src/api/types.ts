@@ -32,6 +32,30 @@ export interface UiPrefs {
   nav_open: boolean;
 }
 
+/** A local-only contact's standing. `trusted` = a counterparty you vouch for
+ *  (whitelist); `blocked` = one you'd rather not deal with (blacklist) — both
+ *  are purely your own view/warnings, never protocol-enforced. */
+export type ContactStatus = "trusted" | "neutral" | "blocked";
+
+/** One entry in the local contact book. Keyed by — and bound to — the
+ *  counterparty's BIP340 hex pubkey: the nick is a display *alias* shown
+ *  ALONGSIDE the spoof-proof fingerprint, never a replacement for it. Stored
+ *  only on this machine (satchel.json), never published. */
+export interface Contact {
+  /** BIP340 hex pubkey — the map key; immutable. */
+  id: string;
+  /** User-chosen alias; may be empty. */
+  nick: string;
+  /** Freeform notes (e.g. how to reach them, trade history). */
+  note?: string;
+  status: ContactStatus;
+  /** epoch ms when first added. */
+  added: number;
+}
+
+/** The whole local contact book: hex pubkey → Contact. */
+export type ContactBook = Record<string, Contact>;
+
 /** One configured coin connection from Satchel's satchel.json. The structured
  *  fields are absent on a pre-v2 (chain_data-only) config. */
 export interface CoinConn {

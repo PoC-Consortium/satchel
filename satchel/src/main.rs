@@ -198,6 +198,12 @@ struct Config {
     tick_secs: u64,
     /// Per-install UI preferences (UI-1), persisted here instead of localStorage.
     ui: UiPrefs,
+    /// Local-only contact book: an opaque map the webview owns — hex pubkey →
+    /// { nick, note, status, added }. Satchel just persists the blob it's handed;
+    /// the engine never sees it. Kept here (not the webview's localStorage) so it
+    /// survives a cache clear. The container `#[serde(default)]` fills it with
+    /// `Null` (an empty book) for a satchel.json written before this field.
+    contacts: serde_json::Value,
 }
 
 impl Default for Config {
@@ -213,6 +219,7 @@ impl Default for Config {
             listen: default_listen().into(),
             tick_secs: 30,
             ui: UiPrefs::default(),
+            contacts: serde_json::Value::Null,
         }
     }
 }
@@ -585,6 +592,25 @@ fn set_ui_prefs(
     if let Some(nav_open) = nav_open {
         cfg.ui.nav_open = nav_open;
     }
+    save_config(&state.config_dir, &cfg).map_err(|e| format!("{e:#}"))
+}
+
+/// Read the local-only contact book (hex pubkey → nick/note/status). An opaque
+/// blob the webview owns — the engine never sees contacts. Returns `Null` (an
+/// empty book) until the UI has written one.
+#[tauri::command]
+fn get_contacts(state: tauri::State<AppState>) -> serde_json::Value {
+    let cfg = state.config.lock().unwrap();
+    cfg.contacts.clone()
+}
+
+/// Replace the whole contact book. The UI writes the entire map through on every
+/// change (it's small and single-user), so there's no per-entry patching here —
+/// Satchel just persists what it's handed.
+#[tauri::command]
+fn set_contacts(state: tauri::State<AppState>, contacts: serde_json::Value) -> Result<(), String> {
+    let mut cfg = state.config.lock().unwrap();
+    cfg.contacts = contacts;
     save_config(&state.config_dir, &cfg).map_err(|e| format!("{e:#}"))
 }
 
@@ -1144,6 +1170,8 @@ fn main() {
             quit_app,
             get_ui_prefs,
             set_ui_prefs,
+            get_contacts,
+            set_contacts,
             list_coin_config,
             list_coin_templates,
             compose_coin_url,

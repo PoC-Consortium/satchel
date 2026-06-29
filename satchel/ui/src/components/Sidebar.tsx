@@ -23,6 +23,7 @@ import MoveToInboxOutlinedIcon from "@mui/icons-material/MoveToInboxOutlined";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import SensorsOutlinedIcon from "@mui/icons-material/SensorsOutlined";
 import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
+import ContactsOutlinedIcon from "@mui/icons-material/ContactsOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
@@ -51,6 +52,7 @@ export type Route =
   | "swaps"
   | "relays"
   | "wallets"
+  | "contacts"
   | "settings";
 
 const WIDTH = 224;
@@ -77,6 +79,7 @@ const ACTIVITY: NavDef[] = [
   { route: "swaps", labelKey: "nav.swaps", icon: <SwapHorizIcon /> },
   { route: "relays", labelKey: "nav.relays", icon: <SensorsOutlinedIcon /> },
   { route: "wallets", labelKey: "nav.wallets", icon: <AccountBalanceWalletOutlinedIcon /> },
+  { route: "contacts", labelKey: "nav.contacts", icon: <ContactsOutlinedIcon /> },
 ];
 
 export default function Sidebar({
