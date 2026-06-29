@@ -76,6 +76,13 @@ waiting for, you'll see one of:
   are waiting on the counterparty. There's no fixed target to count toward, so the
   bar is indeterminate and a small **+N blocks** shows how many blocks have passed
   while you wait.
+- **Locking your {coin} — unlock wallet if stalled** — *your own* funding of a leg
+  is pending or retrying: it hasn't broadcast or confirmed yet. The bar is
+  indeterminate, with a **+N blocks** liveness count beside it; a count that keeps
+  growing flags a fund that's genuinely stuck, most often because the give-coin's
+  node wallet is locked. This state is honest about *whose* action is outstanding —
+  it's yours. (Previously a stuck taker in this position mis-displayed as though it
+  were the maker's turn; now it names the wait correctly.)
 - **Your lock confirming · 2/6** — *your own* funding is burying toward the depth
   your counterparty needs before they'll lock their side. You'll see this as the
   maker of a classic swap: the wait is on your lock maturing, not on a slow
@@ -90,6 +97,16 @@ waiting for, you'll see one of:
 Where it's relevant, the line also shows the current settlement **feerate** (for
 example `· 2 sat/vB`), so any automatic fee-bumping is visible to you rather than
 hidden. It's purely informational — the engine drives the swap either way.
+
+> **Note** — If a funding transaction fails to broadcast — for instance because the
+> node wallet got locked partway through a swap — the engine **re-attempts it
+> automatically on every tick**. So if you see **"Locking your {coin}"** sitting
+> stuck, just unlock the wallet (`walletpassphrase`) and the swap **self-heals** on
+> the next pass, with no manual step from you. The retry is idempotent: it locates
+> any funding already on chain first, so it never double-funds. Classic
+> **Standard (HTLC)** swaps get this automatic retry; **Private (Taproot)** funding
+> instead fails into a recoverable state you can resume rather than auto-retrying on
+> a tick.
 
 ### On-chain detail
 
@@ -115,28 +132,30 @@ parties shown as **maker ↔ taker** (each an identicon and short key, your own
 side tagged **(you)**; hover the arrow to see which side is which), the amounts,
 the engine's narration, and a "refund *when*" note.
 
-The action buttons appear **only when it's your turn**, gated by the swap's state:
+The dock keeps just one action button, plus diagnostics:
 
 | Button | When it appears | What it does |
 |---|---|---|
-| **redeem** | When the other side has funded and you can claim | Claims your coins. |
-| **cancel** | Before you've funded anything | Abandons the swap; you lose nothing, since nothing of yours is locked. |
-| **refund** | After the safety timelock has passed on a leg you funded | Pulls your locked funds back now. |
+| **cancel** | While nothing of yours is locked yet (no funding on either leg) | Abandons the swap; you lose nothing, since nothing of yours is locked. |
+| **dump logs** | Always | Copies a secret-free diagnostics bundle for support (see below). |
 
-Each button shows a confirmation dialog first. In normal operation the engine
-handles **funding, redeeming, and refunding automatically** — you'll rarely press
-anything. **Funding is always automatic**, so there is no Fund button: your side
-of a swap is locked for you as soon as the trade begins. The buttons that remain
-are there for the cases where you want to act manually — to cancel early, nudge a
-claim, or refund the instant the timelock allows rather than waiting for the
-engine's automatic pass.
+There is no **redeem**, **refund**, or **fund** button. Funding, redeeming, and
+refunding are all automatic — the engine funds your side as the trade begins,
+auto-redeems the instant it's safe, and auto-refunds anything past its timelock.
+Every one of those steps is also **chain-gated** (by confirmations and timelocks),
+so a manual button could never make them happen sooner or differently — only fail
+or double-act. The one genuinely human decision is backing *out* before any funds
+are committed, which is what **cancel** is for. It shows a confirmation dialog
+first.
 
-> **Note** — **cancel** is only offered while nothing of yours is locked, so it's
-> always safe — the offer simply won't complete. **refund** only appears once the
-> timelock has passed, and the engine also fires it automatically after the
-> deadline, so you're covered either way.
+> **Note** — **cancel** is offered only while nothing of yours is locked yet, so
+> it's always safe — the offer simply won't complete. It's gated on there being no
+> funding on either leg (not on a particular state name), so it behaves correctly
+> for both **Standard (HTLC)** and **Private (Taproot)** swaps. Once a leg is
+> funded, your safety net is the **"refunds at *when*"** time shown on the card:
+> the engine reclaims your funds automatically after that deadline.
 
-![The active-swaps dock, with state-gated action buttons.](images/processed/ch10-dock.png){width=85%}
+![The active-swaps dock, with its cancel and dump-logs buttons.](images/processed/ch10-dock.png){width=85%}
 
 ### Dump logs: diagnostics for support
 

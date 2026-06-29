@@ -126,6 +126,18 @@ not quite enough to also pay the miner.
 > or trade. The only cost is the ordinary on-chain mining fee you'd pay for any
 > Bitcoin-style transaction, and that's only paid once a swap actually runs.
 
+### The wallet-lock check
+
+Satchel also checks, before it posts, that the node wallet for the coin you're
+**giving** isn't locked. If that wallet is encrypted and currently locked, posting
+is refused up front with a clear message telling you to **unlock it first** — run
+`walletpassphrase` on the node — and to keep it unlocked until the swap completes.
+
+> **Warning** — A locked wallet can still *read* its balance but cannot *sign* the
+> funding transaction. Without this check the offer could be taken and then strand
+> at funding, unable to lock your side. Unlock the give-coin's wallet before you
+> post, and leave it unlocked for the life of the swap.
+
 ## What happens after you post
 
 Your offer **fans out to all of your noticeboards at once** — every Corkboard and

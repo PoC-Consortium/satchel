@@ -79,7 +79,11 @@ blocks (initiator and counterparty legs respectively).
 - `acceptoffer` — accepts a counterparty's offer `envelope`, returning a reply
   `envelope`.
 - `recv` — ingests a counterparty envelope (e.g. an acceptance reply).
-- `fund` — builds and broadcasts our HTLC funding transaction.
+- `fund` — builds and broadcasts our HTLC funding transaction, then **relays the
+  `funded` envelope to the counterparty** (via the engine's notify path), so a
+  manually or hand-recovered swap notifies the maker exactly like the automatic
+  auto-fund path does. (Previously the RPC just returned the envelope without
+  relaying it.)
 - `redeem` — spends the counterparty's funded HTLC, revealing the preimage.
 - `refund` — reclaims our own funded HTLC once its timelock has expired.
 - `abort` — cancels the swap; `reason` defaults to `"user aborted"`.
@@ -91,6 +95,12 @@ blocks (initiator and counterparty legs respectively).
 > counterparty's leg) or `refund` (after your timelock expires). Aborting a
 > funded swap is not an option because the coins are already committed
 > on-chain.
+
+> **Note** — The `funded` envelope `fund` relays is an *accelerator*, not a
+> requirement. Even if the relay message never reaches the maker, the swap still
+> completes via chain-watching: both sides detect each other's legs on-chain and
+> drive to redemption regardless. The relayed `funded` / `redeemed` messages only
+> shave latency off that chain-watched path.
 
 ## Diagnostics
 

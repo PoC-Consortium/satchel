@@ -81,7 +81,7 @@ We use a few simple conventions throughout.
 ## What this edition tracks
 
 Rather than a release-version number, this handbook tracks the **source revision**
-it was checked against: it was verified against commit `fc9db88` (June 2026). The
+it was checked against: it was verified against commit `1767197` (June 2026). The
 commit hash on the copyright page is the single status marker — when the code
 moves, the hash is bumped and the affected pages are updated.
 

@@ -61,7 +61,7 @@
 | `offer` | Start a swap as initiator (`give`/`get` = `coin:amount`, `t1`/`t2`). |
 | `acceptoffer` | Accept an offer envelope. |
 | `recv` | Receive/ingest a counterparty envelope. |
-| `fund` | Fund our HTLC leg (broadcasts). |
+| `fund` | Fund our HTLC leg (broadcasts), then **relays the `funded` envelope to the counterparty** — so a manually-recovered swap notifies the maker just like the automatic auto-fund path (it previously only returned the envelope). The swap still completes via chain-watching even without this message; relay envelopes are accelerators. |
 | `redeem` | Redeem the counterparty leg (broadcasts). |
 | `refund` | Refund our funded leg after timeout (broadcasts). |
 | `abort` | Abort before our leg is funded. |

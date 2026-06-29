@@ -3,7 +3,7 @@
 This folder holds the project's documentation. It comes in three forms, all
 kept in sync and checked against the code.
 
-> **Status** — these docs were verified against commit `fc9db88`. The docs track
+> **Status** — these docs were verified against commit `1767197`. The docs track
 > the code by **commit hash** rather than a release version; when the code moves,
 > the hash (in each handbook's front-matter and the wiki footer) is bumped and
 > the affected pages are updated.

@@ -27,17 +27,18 @@ $inputs = @(
     "chapters/ch09-taking-an-offer.md",
     "chapters/ch10-tracking-swaps.md",
     "chapters/ch11-wallets.md",
-    "chapters/ch12-private-offers.md",
+    "chapters/ch12-contacts.md",
+    "chapters/ch13-private-offers.md",
     "chapters/part3.md",
-    "chapters/ch13-transports.md",
-    "chapters/ch14-settings.md",
+    "chapters/ch14-transports.md",
+    "chapters/ch15-settings.md",
     "chapters/part4.md",
-    "chapters/ch15-safety.md",
-    "chapters/ch16-understanding-swaps.md",
-    "chapters/ch17-troubleshooting.md",
-    "chapters/ch18-faq.md",
-    "chapters/ch19-glossary.md",
-    "chapters/ch20-help.md"
+    "chapters/ch16-safety.md",
+    "chapters/ch17-understanding-swaps.md",
+    "chapters/ch18-troubleshooting.md",
+    "chapters/ch19-faq.md",
+    "chapters/ch20-glossary.md",
+    "chapters/ch21-help.md"
 )
 
 $missing = $inputs | Where-Object { -not (Test-Path $_) }
