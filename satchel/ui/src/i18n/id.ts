@@ -538,7 +538,6 @@ export const id: Bundle = {
     none: "Belum ada swap — ambil penawaran di Corkboard.",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "batalkan",
-    refund: "refund",
     dump: "dump log",
     dumpHint: "Salin bundel diagnostik bebas-rahasia (state + baris log) untuk swap ini, untuk ditempel ke pengembang.",
     dumpCopied: "Diagnostik tersalin — tempel ke pengembang.",
@@ -552,10 +551,6 @@ export const id: Bundle = {
     cancelReason: "dibatalkan di Satchel",
     cancelBody:
       "Ini meninggalkan swap sebelum Anda mendanai. Tidak ada milik Anda yang dikunci, jadi Anda tidak kehilangan apa pun — penawaran hanya tidak akan selesai.",
-    refundTitle: "Tarik kembali dana Anda?",
-    refundConfirm: "Refund",
-    refundBody:
-      "Timelock pengaman sudah lewat, jadi Anda bisa mengambil kembali dana yang Anda kunci. Ini menyiarkan refund Anda sekarang; engine juga melakukannya otomatis setelah batas waktu.",
     col: {
       swap: "swap",
       role: "peran",

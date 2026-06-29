@@ -538,7 +538,6 @@ export const zhCn: Bundle = {
     none: "尚无交换 — 去 Corkboard 接受一条报价吧。",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "取消",
-    refund: "退款",
     dump: "导出日志",
     dumpHint: "复制此交换的一份不含私密信息的诊断包（状态 + 日志行），以便粘贴给开发者。",
     dumpCopied: "诊断信息已复制 — 粘贴给开发者。",
@@ -552,10 +551,6 @@ export const zhCn: Bundle = {
     cancelReason: "在 Satchel 中取消",
     cancelBody:
       "这会在你注资之前放弃该交换。你的任何资金都尚未锁定，因此你不会损失任何东西 — 只是该报价不会完成。",
-    refundTitle: "取回你的资金？",
-    refundConfirm: "退款",
-    refundBody:
-      "安全时间锁已过，因此你可以取回你锁定的资金。这会立即广播你的退款；引擎也会在截止时间过后自动执行。",
     col: {
       swap: "交换",
       role: "角色",

@@ -17,17 +17,18 @@ import type { Swap } from "../api/types";
 // when there's something to act on. Swap LOGIC stays in pactd — these buttons
 // just call its RPCs.
 
-// Funding is automatic (--auto-fund), so there's no manual fund button — it was
-// redundant and a double-fund footgun (a second click re-sends funds). Redeem
-// stays as a manual "claim now" nudge; auto-redeem still runs and the engine
-// guards it by state. Pre-funding abort = Cancel; post-funding exit = Refund.
-function primaryAction(s: Swap): "redeem" | null {
-  if (s.state === "funded_b") return "redeem";
-  return null;
-}
-const canRefund = (s: Swap) => ["funded_a", "funded_b", "redeemed_b"].includes(s.state);
-const canCancel = (s: Swap) =>
-  ["created", "accepted"].includes(s.state) || (s.state === "funded_a" && s.role === "participant");
+// Funding, redeem and refund are all automatic (--auto-fund + the scheduler) and
+// chain-gated (confirmations, timelocks) — a manual button can never make them
+// happen sooner or differently, only fail or double-act. So the only genuine human
+// action is backing out BEFORE any funds are committed (Cancel = abort the
+// handshake); everything else is surfaced as status (the live progress line + the
+// "refunds at X" time). Redeem/Refund buttons were removed: auto-redeem fires the
+// instant it's safe, and pact auto-refunds anything past its timelock.
+//
+// Cancel is gated on "nothing locked yet" (no funding on EITHER leg) rather than a
+// state name, so it's correct for both v1 (htlc_*) and v2 (funding_*, which can lock
+// a leg while the record is still `accepted`). Dump (diagnostics) stays always-on.
+const canCancel = (s: Swap) => !s.fund_a_txid && !s.fund_b_txid;
 
 export default function ActiveSwaps() {
   const { swaps, refreshSwaps, log } = useApp();
@@ -54,15 +55,6 @@ export default function ActiveSwaps() {
       cancelLabel: t("swaps.cancelKeep"),
     });
     if (ok) void act("abort", id);
-  }
-
-  async function refund(id: string) {
-    const ok = await confirm({
-      title: t("swaps.refundTitle"),
-      body: t("swaps.refundBody"),
-      confirmLabel: t("swaps.refundConfirm"),
-    });
-    if (ok) void act("refund", id);
   }
 
   // RC2 #3b: copy a secret-free diagnostics bundle (record + log lines) for this
@@ -119,10 +111,7 @@ export default function ActiveSwaps() {
             key={s.swap_id}
             s={s}
             first={i === 0}
-            action={primaryAction(s)}
-            onAction={(a) => void act(a, s.swap_id)}
             onCancel={() => void cancel(s.swap_id)}
-            onRefund={() => void refund(s.swap_id)}
             onDump={() => void dump(s.swap_id)}
           />
         ))}
@@ -134,18 +123,12 @@ export default function ActiveSwaps() {
 function ActiveSwapRow({
   s,
   first,
-  action,
-  onAction,
   onCancel,
-  onRefund,
   onDump,
 }: {
   s: Swap;
   first: boolean;
-  action: "redeem" | null;
-  onAction: (a: string) => void;
   onCancel: () => void;
-  onRefund: () => void;
   onDump: () => void;
 }) {
   const t = useT();
@@ -198,19 +181,9 @@ function ActiveSwapRow({
       </Typography>
 
       <Stack direction="row" spacing={0.75}>
-        {action && (
-          <Button size="small" variant="contained" onClick={() => onAction(action)}>
-            {action}
-          </Button>
-        )}
         {canCancel(s) && (
           <Button size="small" variant="outlined" color="inherit" onClick={onCancel}>
             {t("swaps.cancel")}
-          </Button>
-        )}
-        {canRefund(s) && (
-          <Button size="small" variant="outlined" color="inherit" onClick={onRefund}>
-            {t("swaps.refund")}
           </Button>
         )}
         <Tooltip title={t("swaps.dumpHint")}>

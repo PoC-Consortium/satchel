@@ -538,7 +538,6 @@ export const de: Bundle = {
     none: "Noch keine Swaps — nimm ein Angebot auf der Corkboard an.",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "abbrechen",
-    refund: "erstatten",
     dump: "Logs ausgeben",
     dumpHint: "Kopiere ein geheimnisfreies Diagnose-Paket (Status + Log-Zeilen) für diesen Swap, um es den Entwicklern zu schicken.",
     dumpCopied: "Diagnose kopiert — an die Entwickler schicken.",
@@ -552,10 +551,6 @@ export const de: Bundle = {
     cancelReason: "in Satchel abgebrochen",
     cancelBody:
       "Dies bricht den Swap ab, bevor du finanziert hast. Noch ist nichts von dir gesperrt, du verlierst also nichts — das Angebot wird nur nicht abgeschlossen.",
-    refundTitle: "Deine Mittel zurückholen?",
-    refundConfirm: "Erstatten",
-    refundBody:
-      "Der Sicherheits-Timelock ist abgelaufen, du kannst also die von dir gesperrten Mittel zurückfordern. Dies sendet deine Erstattung jetzt; die Engine tut dies nach der Frist auch automatisch.",
     col: {
       swap: "Swap",
       role: "Rolle",

@@ -538,7 +538,6 @@ export const hr: Bundle = {
     none: "Još nema swapova — preuzmite ponudu na Corkboardu.",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "otkaži",
-    refund: "povrat",
     dump: "ispiši logove",
     dumpHint: "Kopirajte dijagnostički paket bez tajni (stanje + retke loga) za ovaj swap, za prosljeđivanje developerima.",
     dumpCopied: "Dijagnostika kopirana — proslijedite developerima.",
@@ -552,10 +551,6 @@ export const hr: Bundle = {
     cancelReason: "otkazano u Satchelu",
     cancelBody:
       "Ovo napušta swap prije nego što ste financirali. Ništa vaše još nije zaključano, pa ne gubite ništa — ponuda se jednostavno neće dovršiti.",
-    refundTitle: "Povući svoja sredstva natrag?",
-    refundConfirm: "Povrat",
-    refundBody:
-      "Sigurnosni timelock je prošao, pa možete povratiti sredstva koja ste zaključali. Ovo emitira vaš povrat sada; engine to također radi automatski nakon roka.",
     col: {
       swap: "swap",
       role: "uloga",

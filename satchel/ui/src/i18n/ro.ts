@@ -538,7 +538,6 @@ export const ro: Bundle = {
     none: "Niciun swap încă — acceptă o ofertă pe Corkboard.",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "anulează",
-    refund: "rambursează",
     dump: "extrage jurnale",
     dumpHint: "Copiază un pachet de diagnosticare fără secrete (stare + linii de jurnal) pentru acest swap, pentru a-l lipi dezvoltatorilor.",
     dumpCopied: "Diagnosticare copiată — lipește-o dezvoltatorilor.",
@@ -552,10 +551,6 @@ export const ro: Bundle = {
     cancelReason: "anulat în Satchel",
     cancelBody:
       "Aceasta abandonează swap-ul înainte să fi finanțat. Nimic de-al tău nu este blocat încă, deci nu pierzi nimic — doar că oferta nu se va finaliza.",
-    refundTitle: "Îți retragi fondurile înapoi?",
-    refundConfirm: "Rambursează",
-    refundBody:
-      "Timelock-ul de siguranță a trecut, deci poți recupera fondurile pe care le-ai blocat. Aceasta difuzează rambursarea ta acum; engine-ul o face de asemenea automat după termenul-limită.",
     col: {
       swap: "swap",
       role: "rol",

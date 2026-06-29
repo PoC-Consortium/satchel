@@ -538,7 +538,6 @@ export const fi: Bundle = {
     none: "Ei vielä swapeja — ota tarjous Corkboardilta.",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "peruuta",
-    refund: "palauta",
     dump: "vedosta lokit",
     dumpHint: "Kopioi salaisuudeton diagnostiikkapaketti (tila + lokirivit) tälle swapille kehittäjille liitettäväksi.",
     dumpCopied: "Diagnostiikka kopioitu — liitä kehittäjille.",
@@ -552,10 +551,6 @@ export const fi: Bundle = {
     cancelReason: "peruutettu Satchelissa",
     cancelBody:
       "Tämä hylkää swapin ennen kuin olet rahoittanut. Mitään sinun ei ole vielä lukittu, joten et menetä mitään — tarjous ei vain valmistu.",
-    refundTitle: "Vedetäänkö varasi takaisin?",
-    refundConfirm: "Palauta",
-    refundBody:
-      "Turvallisuus-timelock on kulunut, joten voit lunastaa lukitsemasi varat takaisin. Tämä lähettää palautuksesi nyt; moottori tekee sen myös automaattisesti määräajan jälkeen.",
     col: {
       swap: "swap",
       role: "rooli",

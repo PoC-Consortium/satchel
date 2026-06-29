@@ -538,7 +538,6 @@ export const ja: Bundle = {
     none: "スワップはまだありません — Corkboard でオファーを取ってください。",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "キャンセル",
-    refund: "返金",
     dump: "ログを出力",
     dumpHint: "このスワップの秘密情報を含まない診断バンドル（状態 + ログ行）をコピーし、開発者に貼り付けて渡します。",
     dumpCopied: "診断情報をコピーしました — 開発者に貼り付けてください。",
@@ -552,10 +551,6 @@ export const ja: Bundle = {
     cancelReason: "Satchel でキャンセル",
     cancelBody:
       "これは資金を入れる前にスワップを放棄します。あなたのものはまだ何もロックされていないので、損失はありません — オファーが完了しないだけです。",
-    refundTitle: "資金を引き戻しますか？",
-    refundConfirm: "返金",
-    refundBody:
-      "安全タイムロックが経過したので、ロックした資金を取り戻せます。これは今すぐ返金をブロードキャストします。期限後にはエンジンも自動的に行います。",
     col: {
       swap: "スワップ",
       role: "役割",

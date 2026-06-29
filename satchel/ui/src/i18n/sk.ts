@@ -538,7 +538,6 @@ export const sk: Bundle = {
     none: "Zatiaľ žiadne swapy — prijmite ponuku na Corkboard.",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "zrušiť",
-    refund: "vrátiť",
     dump: "vypísať logy",
     dumpHint: "Skopírujte diagnostický balík bez tajomstiev (stav + riadky logu) pre tento swap, na vloženie vývojárom.",
     dumpCopied: "Diagnostika skopírovaná — vložte vývojárom.",
@@ -552,10 +551,6 @@ export const sk: Bundle = {
     cancelReason: "zrušené v Satchel",
     cancelBody:
       "Toto opúšťa swap skôr, než ste podfinancovali. Nič z vášho nie je ešte zamknuté, takže nič nestratíte — ponuka sa len nedokončí.",
-    refundTitle: "Stiahnuť svoje prostriedky späť?",
-    refundConfirm: "Vrátiť",
-    refundBody:
-      "Bezpečnostný timelock uplynul, takže si môžete prevziať prostriedky, ktoré ste zamkli. Toto vysiela vaše vrátenie teraz; engine to po uplynutí termínu urobí aj automaticky.",
     col: {
       swap: "swap",
       role: "rola",

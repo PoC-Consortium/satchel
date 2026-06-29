@@ -538,7 +538,6 @@ export const gl: Bundle = {
     none: "Aínda non hai intercambios — toma unha oferta no Corkboard.",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "cancelar",
-    refund: "reembolsar",
     dump: "exportar rexistros",
     dumpHint: "Copia un paquete de diagnóstico sen segredos (estado + liñas de rexistro) deste intercambio, para pegar aos desenvolvedores.",
     dumpCopied: "Diagnóstico copiado — pégao aos desenvolvedores.",
@@ -552,10 +551,6 @@ export const gl: Bundle = {
     cancelReason: "cancelado en Satchel",
     cancelBody:
       "Isto abandona o intercambio antes de que financiaras. Aínda non se bloqueou nada teu, así que non perdes nada — simplemente a oferta non se completará.",
-    refundTitle: "Recuperar os teus fondos?",
-    refundConfirm: "Reembolsar",
-    refundBody:
-      "O bloqueo temporal de seguranza xa pasou, así que podes recuperar os fondos que bloqueaches. Isto emite o teu reembolso agora; o motor tamén o fai automaticamente tras o prazo.",
     col: {
       swap: "intercambio",
       role: "rol",

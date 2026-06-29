@@ -538,7 +538,6 @@ export const ca: Bundle = {
     none: "Encara no hi ha intercanvis — accepta una oferta al Corkboard.",
     // Active-swaps dock action buttons + the refund-time label.
     cancel: "cancel·la",
-    refund: "reemborsa",
     dump: "bolca registres",
     dumpHint: "Copia un paquet de diagnòstic sense secrets (estat + línies de registre) d'aquest intercanvi, per enganxar-lo als desenvolupadors.",
     dumpCopied: "Diagnòstic copiat — enganxa'l als desenvolupadors.",
@@ -552,10 +551,6 @@ export const ca: Bundle = {
     cancelReason: "cancel·lat a Satchel",
     cancelBody:
       "Això abandona l'intercanvi abans que hagis finançat. Encara no es bloqueja res teu, així que no perds res — simplement l'oferta no es completarà.",
-    refundTitle: "Vols recuperar els teus fons?",
-    refundConfirm: "Reemborsa",
-    refundBody:
-      "El timelock de seguretat ja ha passat, així que pots reclamar els fons que vas bloquejar. Això difon el teu reemborsament ara; el motor també ho fa automàticament després del termini.",
     col: {
       swap: "intercanvi",
       role: "rol",
