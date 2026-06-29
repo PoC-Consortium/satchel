@@ -8,8 +8,10 @@
 
 import { useCallback, type ReactNode } from "react";
 import { Box, Divider, Typography } from "@mui/material";
+import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
 import { useConfirm } from "../ui/ConfirmProvider";
 import { useApp } from "../AppContext";
+import { useContacts } from "../contacts";
 import { useT } from "../i18n";
 import { useDenom } from "../denom";
 import CounterpartyTag from "../components/CounterpartyTag";
@@ -32,6 +34,7 @@ export type ConfirmTake = (b: OfferBody, ctx?: TakeCtx) => Promise<boolean>;
  *  resolves to the user's decision. Callers do the actual RPC. */
 export function useTakeConfirm(): ConfirmTake {
   const { symOf } = useApp();
+  const { get } = useContacts();
   const { denom } = useDenom();
   const confirm = useConfirm();
   const t = useT();
@@ -56,6 +59,10 @@ export function useTakeConfirm(): ConfirmTake {
       // funds so the summary warns + disables before the boardtake RPC does.
       const funds = await assessLockFunds(b.get_asset, b.give_asset, b.get_amount);
 
+      // Local "blocked" standing is a personal reminder only — it never stops the
+      // trade (atomicity is what protects you), so we warn, not gate.
+      const blocked = ctx?.from ? get(ctx.from)?.status === "blocked" : false;
+
       const row = (label: string, value: ReactNode, valueColor = "text.primary") => (
         <>
           <Typography sx={{ fontSize: 12, color: "text.secondary" }}>{label}</Typography>
@@ -76,7 +83,31 @@ export function useTakeConfirm(): ConfirmTake {
                 <Typography sx={{ fontSize: 12, color: "text.secondary", mr: 0.5 }}>
                   {t("takeConfirm.counterparty")}
                 </Typography>
-                <CounterpartyTag id={ctx.from} />
+                <CounterpartyTag id={ctx.from} interactive={false} />
+              </Box>
+            )}
+
+            {/* You blocked this counterparty — a personal reminder, not a gate. */}
+            {blocked && (
+              <Box
+                sx={{
+                  display: "flex",
+                  gap: 1,
+                  p: 1.25,
+                  borderRadius: 1.5,
+                  border: `1px solid ${C.bad}`,
+                  bgcolor: "color-mix(in srgb, var(--mui-palette-error-main) 8%, transparent)",
+                }}
+              >
+                <WarningAmberOutlinedIcon sx={{ color: C.bad, fontSize: 20, flex: "none", mt: 0.1 }} />
+                <Box>
+                  <Typography sx={{ fontSize: 13, fontWeight: 600, color: C.bad }}>
+                    {t("contacts.blockedWarning")}
+                  </Typography>
+                  <Typography sx={{ fontSize: 12.5, color: "text.secondary" }}>
+                    {t("contacts.blockedWarningBody")}
+                  </Typography>
+                </Box>
               </Box>
             )}
 
@@ -118,6 +149,6 @@ export function useTakeConfirm(): ConfirmTake {
         ),
       });
     },
-    [confirm, symOf, denom, t],
+    [confirm, symOf, denom, t, get],
   );
 }

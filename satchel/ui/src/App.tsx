@@ -4,6 +4,7 @@ import { useApp } from "./AppContext";
 import { usePrefs } from "./prefs";
 import { useT } from "./i18n";
 import { DenomProvider } from "./denom";
+import { ContactsProvider } from "./contacts";
 import { UpdateProvider } from "./update";
 import UpdateDialog from "./components/UpdateDialog";
 import { ConfirmProvider } from "./ui/ConfirmProvider";
@@ -23,6 +24,7 @@ import PrivateCreateScreen from "./screens/PrivateCreateScreen";
 import PrivateSlipsScreen from "./screens/PrivateSlipsScreen";
 import PrivateReceiveScreen from "./screens/PrivateReceiveScreen";
 import WalletScreen from "./screens/WalletScreen";
+import ContactsScreen from "./screens/ContactsScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import Wizard from "./dialogs/Wizard";
 import SeedProvision from "./dialogs/SeedProvision";
@@ -84,6 +86,8 @@ export default function App() {
         return <RelaysScreen />;
       case "wallets":
         return <WalletScreen />;
+      case "contacts":
+        return <ContactsScreen />;
       case "settings":
         return <SettingsScreen />;
     }
@@ -91,6 +95,7 @@ export default function App() {
 
   return (
     <DenomProvider>
+    <ContactsProvider>
     <UpdateProvider>
     <ConfirmProvider>
       <NavCtx.Provider value={setRoute}>
@@ -162,6 +167,7 @@ export default function App() {
       </NavCtx.Provider>
     </ConfirmProvider>
     </UpdateProvider>
+    </ContactsProvider>
     </DenomProvider>
   );
 }

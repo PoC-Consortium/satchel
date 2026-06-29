@@ -9,6 +9,7 @@ import type {
   CoinConfig,
   CoinConnInput,
   CoinTemplateList,
+  ContactBook,
   Merchant,
   MerchantList,
   PrivateOffer,
@@ -65,6 +66,15 @@ export const setUiPrefs = (patch: Partial<UiPrefs>) =>
     language: patch.language ?? null,
     navOpen: patch.nav_open ?? null,
   }) as Promise<void>;
+
+/** Read the local-only contact book from satchel.json. Returns null until the
+ *  UI has written one (an empty book). */
+export const getContacts = () => invoke("get_contacts") as Promise<ContactBook | null>;
+
+/** Persist the whole contact book (the UI writes the full map through on every
+ *  change — it's small and single-user). Local only; never leaves the machine. */
+export const setContacts = (contacts: ContactBook) =>
+  invoke("set_contacts", { contacts }) as Promise<void>;
 
 export const listCoinConfig = () => invoke("list_coin_config") as Promise<CoinConfig>;
 
