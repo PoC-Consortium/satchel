@@ -1178,6 +1178,8 @@ impl Engine {
             final_tx_a_hex: None,
             final_tx_b_hex: None,
             last_action_height: 0,
+            funding_b_tx_hex: None,
+            funding_b_broadcast: false,
         };
         self.store.put_adaptor(&rec)?;
         let envelope = self.signed_envelope("init", &id, serde_json::to_value(&body)?)?;
@@ -1312,6 +1314,8 @@ impl Engine {
             final_tx_a_hex: None,
             final_tx_b_hex: None,
             last_action_height: 0,
+            funding_b_tx_hex: None,
+            funding_b_broadcast: false,
         };
         self.store.put_adaptor(&rec)?;
         let envelope =
@@ -1711,15 +1715,6 @@ impl Engine {
     /// nodes (the in-process flow is covered by `adaptor_funding_ready`).
     pub fn adaptor_fund(&self, swap: &str) -> Result<Envelope> {
         let rec = self.store.get_adaptor(swap)?;
-        // Idempotency guard: never broadcast a second funding tx for a leg we've
-        // already funded. The auto-fund path gates on this at the call site; a
-        // direct call (e.g. a manual retry) must too, or we'd wallet_send again
-        // and strand the first output in a leg the record then forgets.
-        let already = match rec.role {
-            Role::Initiator => rec.funding_a_txid.is_some(),
-            Role::Participant => rec.funding_b_txid.is_some(),
-        };
-        ensure!(!already, "leg already funded for swap {swap}");
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let p = self.adaptor_params(&rec)?;
         let (chain, leg, amount) = match rec.role {
@@ -1727,10 +1722,107 @@ impl Engine {
             Role::Participant => (rec.chain_b.clone(), p.leg_b(&secp)?, rec.amount_b),
         };
         let backend = self.backend(&chain)?;
+        let leg_spk = leg.script_pubkey(&secp)?;
+
+        // Idempotency guard 1: a recorded pointer means we already funded/built
+        // this leg — re-announce it, never fund twice (this also covers the
+        // still-unconfirmed window that the confirmed-only find_funding below
+        // cannot see).
+        let recorded = match rec.role {
+            Role::Initiator => (rec.funding_a_txid.clone(), rec.funding_a_vout),
+            Role::Participant => (rec.funding_b_txid.clone(), rec.funding_b_vout),
+        };
+        if let (Some(txid), Some(vout)) = recorded {
+            return self.adaptor_funding_ready(swap, &txid, vout);
+        }
+        // Idempotency guard 2 (locate-first, rc6 #2): adopt an existing confirmed
+        // output at the leg address instead of funding again — covers a crash
+        // between broadcast and the pointer persist, so a retry never double-funds.
+        if let Some((op, info)) = backend.find_funding(&leg_spk)? {
+            if info.value_sat == amount {
+                return self.adaptor_funding_ready(swap, &op.txid.to_string(), op.vout);
+            }
+        }
+
+        // Broadcast now. This is the low-level manual primitive; the SAFE
+        // board-autopilot participant path is `adaptor_build_leg_b` (build first,
+        // broadcast only post-Signed + leg-A-verified). A manual caller driving
+        // the RPCs by hand is responsible for ordering (sign before funding leg B)
+        // — a counterparty cannot force this path.
         let address = leg.address(&secp, backend.params())?;
         let txid = backend.wallet_send(&address, amount)?;
-        let vout = backend.find_vout(&txid, &hex::encode(leg.script_pubkey(&secp)?.as_bytes()))?;
+        let vout = backend.find_vout(&txid, &hex::encode(leg_spk.as_bytes()))?;
         self.adaptor_funding_ready(swap, &txid, vout)
+    }
+
+    /// CRITICAL two-phase leg-B funding for the board autopilot (spec v2 §7,
+    /// xmr-btc-swap ordering): the participant BUILDS its leg-B funding tx but
+    /// does NOT broadcast it. The redeems are pre-signed over this outpoint; the
+    /// scheduler broadcasts it only after the swap is `Signed` (so the taker holds
+    /// a verified σ_A) AND leg A is verified on-chain `n_a`-deep
+    /// (`adaptor_tick_one`) — so the taker never commits leg B before it can
+    /// guarantee claiming leg A. Persist the pointer AND the exact signed tx in
+    /// one write so a crash between build and broadcast rebroadcasts the tx the
+    /// adaptor signatures commit to, never a freshly re-selected one. Idempotent:
+    /// a recorded pointer or an existing on-chain output is re-adopted.
+    fn adaptor_build_leg_b(&self, swap: &str) -> Result<Envelope> {
+        let rec = self.store.get_adaptor(swap)?;
+        debug_assert_eq!(rec.role, Role::Participant);
+        let secp = bitcoin::secp256k1::Secp256k1::new();
+        let p = self.adaptor_params(&rec)?;
+        let leg = p.leg_b(&secp)?;
+        let backend = self.backend(&rec.chain_b)?;
+        let leg_spk = leg.script_pubkey(&secp)?;
+        // Idempotency: already built/broadcast (pointer set), or already on-chain.
+        if let (Some(txid), Some(vout)) = (rec.funding_b_txid.clone(), rec.funding_b_vout) {
+            return self.adaptor_funding_ready(swap, &txid, vout);
+        }
+        if let Some((op, info)) = backend.find_funding(&leg_spk)? {
+            if info.value_sat == rec.amount_b {
+                return self.adaptor_funding_ready(swap, &op.txid.to_string(), op.vout);
+            }
+        }
+        let address = leg.address(&secp, backend.params())?;
+        let (txid, vout, tx_hex) = backend.wallet_build_funding(&address, rec.amount_b)?;
+        let mut rec2 = self.store.get_adaptor(swap)?;
+        rec2.funding_b_txid = Some(txid.clone());
+        rec2.funding_b_vout = Some(vout);
+        rec2.funding_b_tx_hex = Some(tx_hex);
+        self.store.put_adaptor(&rec2)?;
+        let body = crate::messages::FundingReadyV2Body {
+            chain: "b".into(),
+            txid,
+            vout,
+        };
+        self.signed_envelope("funding_ready", swap, serde_json::to_value(&body)?)
+    }
+
+    /// CRITICAL gate (spec v2 §6.1/§8, xmr-btc-swap ordering): is the initiator's
+    /// leg A on-chain as the P2TR we reconstructed locally, paying exactly
+    /// `amount_a`, and buried `n_a` deep? The participant gates BOTH building leg
+    /// B (so it never pre-signs a redeem for a leg that may not exist) AND
+    /// broadcasting it on this — it must be certain it can claim leg A before it
+    /// commits leg B. A bare `funding_ready(A)` pointer is NOT enough: it is
+    /// untrusted, and a 0-conf leg A can be double-spent out from under us.
+    fn adaptor_leg_a_confirmed(&self, rec: &AdaptorSwapRecord) -> Result<bool> {
+        let (Some(txid), Some(vout)) = (rec.funding_a_txid.as_deref(), rec.funding_a_vout) else {
+            return Ok(false);
+        };
+        let secp = bitcoin::secp256k1::Secp256k1::new();
+        let p = self.adaptor_params(rec)?;
+        let spk_a = p.leg_a(&secp)?.script_pubkey(&secp)?;
+        let op = OutPoint {
+            txid: bitcoin::Txid::from_str(txid)?,
+            vout,
+        };
+        Ok(match self.backend(&rec.chain_a)?.get_txout(&op, &spk_a)? {
+            Some(txout) => {
+                txout.confirmations >= u64::from(rec.n_a.max(1))
+                    && txout.script_pubkey_hex == hex::encode(spk_a.as_bytes())
+                    && txout.value_sat == rec.amount_a
+            }
+            None => false,
+        })
     }
 
     /// Bounded block-scan start for watching the counterparty's redeem of OUR
@@ -2132,6 +2224,30 @@ impl Engine {
                 Ok(None)
             }
             Role::Participant => {
+                // CRITICAL two-phase broadcast (spec v2 §7): once the swap is
+                // `Signed` (we hold a verified σ_A) AND leg A is verified on-chain
+                // n_a-deep, broadcast our pre-built leg B. Until BOTH hold, leg B
+                // stays unbroadcast — the taker never commits leg B before it is
+                // certain it can claim leg A.
+                if rec.state == Signed && !rec.funding_b_broadcast {
+                    if let Some(hex) = rec.funding_b_tx_hex.as_deref() {
+                        if !self.adaptor_leg_a_confirmed(rec)? {
+                            return Ok(None); // wait for leg A before committing leg B
+                        }
+                        let tx: bitcoin::Transaction =
+                            bitcoin::consensus::encode::deserialize(&hex::decode(hex)?)
+                                .context("corrupt funding_b_tx_hex")?;
+                        let txid = self.backend(&rec.chain_b)?.broadcast(&tx)?;
+                        let mut updated = rec.clone();
+                        updated.funding_b_broadcast = true;
+                        self.store.put_adaptor(&updated)?;
+                        return Ok(Some(TickEvent {
+                            swap_id: rec.swap_id.clone(),
+                            action: "adaptor-fund-b".into(),
+                            detail: format!("broadcast leg B {txid} (σ_A held, leg A confirmed)"),
+                        }));
+                    }
+                }
                 // Nurse our own (leg-B) funding while unconfirmed.
                 if rec.state == Signed {
                     if let Some(ev) = self.maybe_bump_funding_v2(rec, "b")? {
@@ -5183,12 +5299,27 @@ impl Engine {
         if !self.adaptor_my_leg_funded(rec) {
             let ready = match rec.role {
                 Role::Initiator => msg_type == "accept",
+                // The participant BUILDS + pre-signs leg B on the funding_ready(A)
+                // pointer (commits no funds — just a local unbroadcast tx and the
+                // adaptor sigs). The CRITICAL safety gate is on the BROADCAST of
+                // leg B (adaptor_tick_one): only once the swap is Signed (σ_A held)
+                // AND leg A is verified on-chain n_a-deep. Alice cannot use σ_B
+                // until B is on-chain, which the participant controls.
                 Role::Participant => rec.funding_a_txid.is_some(),
             };
             if ready {
-                let fr = self.adaptor_fund(swap)?;
+                let (fr, detail) = if rec.role == Role::Initiator {
+                    (self.adaptor_fund(swap)?, "broadcast leg A + funding_ready")
+                } else {
+                    // Build (do NOT broadcast) leg B; the scheduler broadcasts it
+                    // post-Signed once leg A is verified n_a-deep.
+                    (
+                        self.adaptor_build_leg_b(swap)?,
+                        "built leg B (unbroadcast) + funding_ready",
+                    )
+                };
                 self.relay_send_all(counterparty, &fr)?;
-                return ev("adaptor-fund", "broadcast + funding_ready".into());
+                return ev("adaptor-fund", detail.into());
             }
         }
 

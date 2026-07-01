@@ -144,6 +144,21 @@ pub trait ChainBackend {
     /// (HTLC funding is a normal send, spec §6.1).
     fn wallet_send(&self, address: &str, amount_sat: u64) -> Result<String>;
 
+    /// Build + sign (but DO NOT broadcast) a funding tx paying `amount_sat` to
+    /// `address`, returning `(txid, vout, signed_tx_hex)`. The selected inputs
+    /// are locked so nothing else spends them before we broadcast. Used by the v2
+    /// two-phase funding (spec v2 §7): the funding txid must be known to pre-sign
+    /// the redeems, but real funds are committed only at broadcast — after the
+    /// adaptor signatures verify and (for the participant) the counterparty leg is
+    /// confirmed. Default: unsupported (only the Core wallet backend builds txs).
+    fn wallet_build_funding(
+        &self,
+        _address: &str,
+        _amount_sat: u64,
+    ) -> Result<(String, u32, String)> {
+        bail!("this backend cannot build funding transactions without broadcasting")
+    }
+
     /// Whether the node's wallet is encrypted AND currently locked — it can read
     /// balances but cannot SIGN, so a funding `wallet_send` would fail with RPC
     /// -13 ("walletpassphrase first"). `Ok(false)` for unencrypted wallets or
@@ -528,6 +543,66 @@ impl ChainBackend for CoreRpcBackend {
             .as_str()
             .context("sendtoaddress: non-string")?
             .to_string())
+    }
+
+    fn wallet_build_funding(
+        &self,
+        address: &str,
+        amount_sat: u64,
+    ) -> Result<(String, u32, String)> {
+        let amount = format!(
+            "{}.{:08}",
+            amount_sat / 100_000_000,
+            amount_sat % 100_000_000
+        );
+        let fee_rate = self.fee_rate_sat_per_vb()?;
+        // 1. raw tx carrying only the funding output (no inputs yet). The output
+        //    key is the funding address, so build the object with a dynamic key.
+        let mut outputs = serde_json::Map::new();
+        outputs.insert(address.to_string(), json!(amount));
+        let raw = self.rpc.call(
+            "createrawtransaction",
+            &[json!([]), Value::Object(outputs)],
+        )?;
+        let raw_hex = raw.as_str().context("createrawtransaction: non-string")?;
+        // 2. select inputs + change; lock the inputs so nothing else spends them
+        //    before we broadcast; RBF-signal; our explicit funding feerate.
+        let funded = self.rpc.call(
+            "fundrawtransaction",
+            &[
+                json!(raw_hex),
+                json!({ "lockUnspents": true, "fee_rate": fee_rate, "replaceable": true }),
+            ],
+        )?;
+        let funded_hex = funded["hex"]
+            .as_str()
+            .context("fundrawtransaction: no hex")?;
+        // 3. sign with the wallet — the txid is final once fully signed.
+        let signed = self
+            .rpc
+            .call("signrawtransactionwithwallet", &[json!(funded_hex)])?;
+        anyhow::ensure!(
+            signed["complete"].as_bool() == Some(true),
+            "funding tx did not sign to completion"
+        );
+        let signed_hex = signed["hex"]
+            .as_str()
+            .context("signrawtransactionwithwallet: no hex")?
+            .to_string();
+        // 4. decode locally to recover the txid and the vout paying `address` —
+        //    fundrawtransaction inserts change at a random position, so match the
+        //    output by scriptPubKey rather than assuming an index.
+        let tx: Transaction =
+            bitcoin::consensus::encode::deserialize(&hex::decode(&signed_hex)?)
+                .context("decode built funding tx")?;
+        let want_spk = self.params.parse_address(address)?;
+        let vout = tx
+            .output
+            .iter()
+            .position(|o| o.script_pubkey == want_spk)
+            .context("built funding tx has no output paying the funding address")?
+            as u32;
+        Ok((tx.compute_txid().to_string(), vout, signed_hex))
     }
 
     fn wallet_balance(&self) -> Result<u64> {
@@ -1182,6 +1257,15 @@ impl ChainBackend for MultiBackend {
 
     fn wallet_send(&self, address: &str, amount_sat: u64) -> Result<String> {
         self.primary().wallet_send(address, amount_sat)
+    }
+
+    fn wallet_build_funding(
+        &self,
+        address: &str,
+        amount_sat: u64,
+    ) -> Result<(String, u32, String)> {
+        // Wallet op: the primary (Core) backend owns the funding UTXOs.
+        self.primary().wallet_build_funding(address, amount_sat)
     }
 
     fn wallet_balance(&self) -> Result<u64> {

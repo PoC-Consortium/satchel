@@ -165,6 +165,19 @@ pub struct AdaptorSwapRecord {
     /// to 0 (pre-existing records / fresh swaps → first tick may act).
     #[serde(default)]
     pub last_action_height: u64,
+    /// The participant's leg-B funding tx, BUILT but not yet broadcast (spec v2
+    /// §7 two-phase: the redeems are signed over its outpoint, and it is
+    /// broadcast only after the swap is `Signed` and leg A is verified on-chain
+    /// `n_a`-deep — so the participant never commits leg B before it can claim
+    /// leg A). Persisted so a crash between build and broadcast rebroadcasts the
+    /// exact tx the adaptor signatures commit to. `None` for the initiator (which
+    /// funds leg A directly).
+    #[serde(default)]
+    pub funding_b_tx_hex: Option<String>,
+    /// Set once the participant has broadcast its pre-built leg-B funding, so the
+    /// scheduler broadcasts it exactly once.
+    #[serde(default)]
+    pub funding_b_broadcast: bool,
 }
 
 pub struct Store {
