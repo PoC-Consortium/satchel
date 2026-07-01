@@ -1873,9 +1873,10 @@ impl Engine {
         let dest = backend
             .params()
             .parse_address(&backend.wallet_new_address()?)?;
-        // A1: initial spend priced at the unified value-capped target.
+        // A1: initial spend priced at the value-capped claim target (refund is a
+        // claim spend — bounded by the leg value, not the funding fee ceiling).
         let fee = spend_fee_sat(
-            self.fee_bump.target_feerate(
+            self.fee_bump.claim_feerate(
                 backend.fee_rate_sat_per_vb()?,
                 amount,
                 crate::taproot::SCRIPTPATH_REFUND_VSIZE,
@@ -2231,10 +2232,14 @@ impl Engine {
         let parent_out = &parent.output[0];
         let parent_value = parent_out.value.to_sat();
         let parent_fee = amount.saturating_sub(parent_value);
-        // Chase market, but never above the policy ceiling.
-        let target = backend
-            .fee_rate_sat_per_vb()?
-            .min(self.fee_bump.max_feerate_sat_vb);
+        // Redeem CPFP is a claim spend: chase market bounded by the value at risk
+        // (the leg amount), NOT the funding fee ceiling — near the redeem deadline
+        // a spike above 500 sat/vB must still be payable (spec v2 §8). The CPFP
+        // child is funded out of the sweep output, so the package fee is also
+        // implicitly hard-capped by `parent_value` (the dust check below).
+        let target = self
+            .fee_bump
+            .claim_feerate(backend.fee_rate_sat_per_vb()?, amount, crate::taproot::KEYPATH_REDEEM_VSIZE);
         let Some(child_fee) =
             cpfp_child_fee(parent_fee, crate::taproot::KEYPATH_REDEEM_VSIZE, target)
         else {
@@ -2436,7 +2441,7 @@ impl Engine {
         let market = backend.fee_rate_sat_per_vb()?;
         let target = self
             .fee_bump
-            .target_feerate(market, amount, REFUND_TX_VSIZE);
+            .claim_feerate(market, amount, REFUND_TX_VSIZE);
         let incr = backend.incremental_relay_feerate()?;
         // BIP125 Rule 4 also constrains the ABSOLUTE fee: the replacement must
         // pay at least `incr * vsize` MORE than the tx it evicts. `target * vsize`
@@ -2725,7 +2730,7 @@ impl Engine {
         // first broadcast is competitive and the nurse is a rare safety net.
         let fee = spend_fee_sat(
             self.fee_bump
-                .target_feerate(backend.fee_rate_sat_per_vb()?, amount, REFUND_TX_VSIZE),
+                .claim_feerate(backend.fee_rate_sat_per_vb()?, amount, REFUND_TX_VSIZE),
             REFUND_TX_VSIZE,
         );
         let refund_tx = build_refund_tx(&htlc, outpoint, amount, destination, fee, &key)?;
@@ -2797,7 +2802,7 @@ impl Engine {
                     .parse_address(&backend.wallet_new_address()?)?;
                 // A1: initial spend priced at the unified value-capped target.
                 let fee = spend_fee_sat(
-                    self.fee_bump.target_feerate(
+                    self.fee_bump.claim_feerate(
                         backend.fee_rate_sat_per_vb()?,
                         rec.amount_b,
                         REDEEM_TX_VSIZE,
@@ -2875,7 +2880,7 @@ impl Engine {
                     .parse_address(&backend_a.wallet_new_address()?)?;
                 // A1: initial spend priced at the unified value-capped target.
                 let fee = spend_fee_sat(
-                    self.fee_bump.target_feerate(
+                    self.fee_bump.claim_feerate(
                         backend_a.fee_rate_sat_per_vb()?,
                         rec.amount_a,
                         REDEEM_TX_VSIZE,
@@ -2979,7 +2984,7 @@ impl Engine {
                     .parse_address(&backend.wallet_new_address()?)?;
                 // A1: initial spend priced at the unified value-capped target.
                 let fee = spend_fee_sat(
-                    self.fee_bump.target_feerate(
+                    self.fee_bump.claim_feerate(
                         backend.fee_rate_sat_per_vb()?,
                         amount,
                         REFUND_TX_VSIZE,
@@ -4033,9 +4038,10 @@ impl Engine {
         let old_fee = amount.saturating_sub(old_tx.output[0].value.to_sat());
         let old_feerate = old_fee / vsize.max(1);
 
-        // Step 3: market-tracking, value-capped target.
+        // Step 3: market-tracking, value-capped target. This nurses redeem and
+        // refund (both claim spends) → value-capped, NOT the funding fee ceiling.
         let market = backend.fee_rate_sat_per_vb()?;
-        let target = self.fee_bump.target_feerate(market, amount, vsize);
+        let target = self.fee_bump.claim_feerate(market, amount, vsize);
 
         // Step 4 gate: a replacement must clear BIP125 Rule 4 (beat the old
         // feerate by the node's incremental relay fee). If the target doesn't —

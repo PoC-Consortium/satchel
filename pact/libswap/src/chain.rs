@@ -103,9 +103,20 @@ pub trait ChainBackend {
     /// required by Electrum backends, which can only search by script.
     fn tx_confirmations(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64>;
 
-    /// Feerate in sat/vB from the node's estimator, with a conservative
-    /// fallback when the estimator has no data (fresh chains, regtest).
-    fn fee_rate_sat_per_vb(&self) -> Result<u64>;
+    /// Feerate in sat/vB from the node's estimator for a given confirmation
+    /// target and estimate mode, with a conservative fallback when the estimator
+    /// has no data (fresh chains, regtest). A tighter `conf_target` (and
+    /// `conservative = true`, Core's CONSERVATIVE vs ECONOMICAL mode) yields the
+    /// going rate for faster confirmation — the lever the deadline-aware redeem
+    /// nurse escalates as a timelock approaches. Backends without a mode
+    /// distinction (Electrum) ignore `conservative`.
+    fn fee_rate_for(&self, conf_target: u16, conservative: bool) -> Result<u64>;
+
+    /// Feerate for the default "normal" target (6 blocks, economical) — the
+    /// baseline every non-deadline-pressured nurse and estimate uses.
+    fn fee_rate_sat_per_vb(&self) -> Result<u64> {
+        self.fee_rate_for(6, false)
+    }
 
     /// Whether `txid` is currently in this node's mempool. The bump loop uses
     /// `!is_in_mempool` as the *only* trigger to re-broadcast an unchanged tx
@@ -407,12 +418,17 @@ impl ChainBackend for CoreRpcBackend {
         }
     }
 
-    fn fee_rate_sat_per_vb(&self) -> Result<u64> {
+    fn fee_rate_for(&self, conf_target: u16, conservative: bool) -> Result<u64> {
         // No estimate (empty/low-traffic mempool, or the node can't estimate) →
         // the fee market is effectively empty, so the relay minimum suffices.
         // The bump nurse covers the rare case where this later under-prices.
         const FALLBACK_SAT_PER_VB: u64 = 1;
-        const MAX_SAT_PER_VB: u64 = 500; // sanity cap against estimator glitches
+        // Overflow/glitch guard only — NOT the fee ceiling. The real caps live
+        // downstream: funding is bounded by the policy ceiling
+        // (`FeeBumpPolicy::target_feerate`), while redeem/refund are bounded by
+        // the value at risk (`FeeBumpPolicy::claim_feerate`) so a genuine mainnet
+        // spike above 500 sat/vB can still confirm a leg near its deadline.
+        const SANITY_MAX_SAT_PER_VB: u64 = 10_000;
 
         // Regtest-only test override: the harness injects a market feerate to
         // create a market-vs-broadcast gap the bump nurse reacts to (see
@@ -421,13 +437,14 @@ impl ChainBackend for CoreRpcBackend {
             let ov = TEST_FEERATE_OVERRIDE_SAT_VB.load(Ordering::Relaxed);
             if ov > 0 {
                 return Ok(ov
-                    .clamp(1, MAX_SAT_PER_VB)
+                    .clamp(1, SANITY_MAX_SAT_PER_VB)
                     .max(self.params.min_feerate_sat_vb));
             }
         }
+        let mode = if conservative { "CONSERVATIVE" } else { "ECONOMICAL" };
         let estimate = self
             .rpc
-            .call("estimatesmartfee", &[json!(6)])
+            .call("estimatesmartfee", &[json!(conf_target), json!(mode)])
             .ok()
             .and_then(|r| r["feerate"].as_f64()) // BTC per kvB
             .map(|btc_kvb| ((btc_kvb * 1e8) / 1000.0).ceil() as u64)
@@ -441,7 +458,7 @@ impl ChainBackend for CoreRpcBackend {
         // that per-coin floor (coins.toml for file coins, 1 for the built-ins).
         // Applied AFTER the sanity clamp so the coin's floor always wins.
         Ok(estimate
-            .clamp(1, MAX_SAT_PER_VB)
+            .clamp(1, SANITY_MAX_SAT_PER_VB)
             .max(self.params.min_feerate_sat_vb))
     }
 
@@ -903,23 +920,26 @@ impl ChainBackend for ElectrumBackend {
         Ok(0)
     }
 
-    fn fee_rate_sat_per_vb(&self) -> Result<u64> {
+    fn fee_rate_for(&self, conf_target: u16, _conservative: bool) -> Result<u64> {
         // No estimate (empty/low-traffic mempool, or the node can't estimate) →
         // the fee market is effectively empty, so the relay minimum suffices.
         // The bump nurse covers the rare case where this later under-prices.
+        // Electrum's estimatefee takes only a block target (no economical/
+        // conservative distinction), so `_conservative` is honored via the
+        // tighter `conf_target` alone.
         const FALLBACK_SAT_PER_VB: u64 = 1;
-        const MAX_SAT_PER_VB: u64 = 500;
+        const SANITY_MAX_SAT_PER_VB: u64 = 10_000; // overflow guard, not the fee ceiling
         let rate = self
             .raw(
                 "blockchain.estimatefee",
-                vec![electrum_client::Param::Usize(6)],
+                vec![electrum_client::Param::Usize(conf_target as usize)],
             )
             .ok()
             .and_then(|v| v.as_f64())
             .filter(|btc_kb| *btc_kb > 0.0) // -1 = no estimate available
             .map(|btc_kb| ((btc_kb * 1e8) / 1000.0).ceil() as u64)
             .unwrap_or(FALLBACK_SAT_PER_VB);
-        Ok(rate.clamp(1, MAX_SAT_PER_VB))
+        Ok(rate.clamp(1, SANITY_MAX_SAT_PER_VB))
     }
 
     fn wallet_new_address(&self) -> Result<String> {
@@ -1135,10 +1155,10 @@ impl ChainBackend for MultiBackend {
         Ok(best)
     }
 
-    fn fee_rate_sat_per_vb(&self) -> Result<u64> {
+    fn fee_rate_for(&self, conf_target: u16, conservative: bool) -> Result<u64> {
         let mut best = 1;
         for backend in &self.backends {
-            best = best.max(backend.fee_rate_sat_per_vb()?);
+            best = best.max(backend.fee_rate_for(conf_target, conservative)?);
         }
         Ok(best)
     }

@@ -244,7 +244,7 @@ mod tests {
         fn tx_confirmations(&self, _txid: &str, _spk: Option<&ScriptBuf>) -> Result<u64> {
             Ok(1)
         }
-        fn fee_rate_sat_per_vb(&self) -> Result<u64> {
+        fn fee_rate_for(&self, _conf_target: u16, _conservative: bool) -> Result<u64> {
             Ok(1)
         }
         fn wallet_new_address(&self) -> Result<String> {

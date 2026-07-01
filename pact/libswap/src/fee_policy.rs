@@ -169,6 +169,21 @@ impl FeeBumpPolicy {
             .min(self.max_feerate_sat_vb)
             .max(1)
     }
+
+    /// Bump target for a **claim** spend (redeem / refund / redeem-CPFP) — bounded
+    /// by the value at risk ONLY, NOT by [`Self::max_feerate_sat_vb`]. Rationale
+    /// (spec §7.4 "MUST fee-bump aggressively", v2 §8): near a redeem/refund
+    /// timelock, failing to confirm means losing the whole leg, so paying the real
+    /// going rate — even above the 500 sat/vB operator ceiling during a genuine
+    /// mainnet spike — is value-justified insurance. The value cap
+    /// (`FEE_CAP_PCT` of the amount) still guarantees we never pay more than the
+    /// leg is worth, which is the only backstop a claim needs. The flat ceiling is
+    /// reserved for **funding** ([`Self::target_feerate`]), a pre-commitment spend
+    /// with no counterparty-refund race. Never below 1.
+    pub fn claim_feerate(&self, market_sat_vb: u64, value_at_risk: u64, vsize: u64) -> u64 {
+        let value_cap = value_at_risk.saturating_mul(FEE_CAP_PCT) / 100 / vsize.max(1);
+        market_sat_vb.min(value_cap).max(1)
+    }
 }
 
 #[cfg(test)]
@@ -203,6 +218,22 @@ mod tests {
         assert_eq!(p.target_feerate(400, 30_000, VSIZE), 30_000 / VSIZE);
         // Absolute ceiling still binds when the claim is large.
         assert_eq!(p.target_feerate(900, 10_000_000, VSIZE), 500);
+    }
+
+    #[test]
+    fn claim_feerate_ignores_ceiling_bounded_by_value() {
+        let p = FeeBumpPolicy::default(); // ceiling 500
+                                          // Quiet market: tracks market like funding.
+        assert_eq!(p.claim_feerate(8, 206_250, VSIZE), 8);
+        // Small claim: still value-capped (never pay more than the leg is worth).
+        assert_eq!(p.claim_feerate(400, 30_000, VSIZE), 30_000 / VSIZE);
+        // The KEY difference from `target_feerate`: a genuine spike above the 500
+        // ceiling IS payable for a claim when the leg is worth it (deadline
+        // insurance, spec §7.4 / v2 §8) — here 900 sat/vB clears the 500 ceiling.
+        assert_eq!(p.claim_feerate(900, 10_000_000, VSIZE), 900);
+        // …but the value cap still binds: a 900 market on a leg worth only
+        // ~500 sat/vB of value is clamped to the value, not paid in full.
+        assert_eq!(p.claim_feerate(900, 100_000, VSIZE), 100_000 / VSIZE);
     }
 
     #[test]
