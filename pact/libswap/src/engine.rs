@@ -2211,7 +2211,16 @@ impl Engine {
         } else {
             rec.amount_a
         };
-        match self.adaptor_cpfp_bump(&backend, &tx, amount) {
+        // Deadline-aware CPFP target (#48): initiator leg-B redeem confirms by T2;
+        // participant leg-A redeem by T1 − redeem-a margin. Escalate as it nears.
+        let deadline = if chain.coin_id == rec.chain_b.coin_id {
+            u64::from(rec.t2)
+        } else {
+            u64::from(rec.t1).saturating_sub(action_margins(chain.network).2)
+        };
+        let now = deadline_clock(chain.network, local_now(), backend.tip_median_time()?);
+        let (conf_target, conservative) = redeem_conf_target(deadline.saturating_sub(now));
+        match self.adaptor_cpfp_bump(&backend, &tx, amount, conf_target, conservative) {
             Ok(Some(child)) => {
                 let mut updated = rec.clone();
                 updated.last_action_height = tip_height;
@@ -2247,27 +2256,46 @@ impl Engine {
         backend: &MultiBackend,
         parent: &bitcoin::Transaction,
         amount: u64,
+        conf_target: u16,
+        conservative: bool,
     ) -> Result<Option<bitcoin::Txid>> {
         let parent_out = &parent.output[0];
         let parent_value = parent_out.value.to_sat();
         let parent_fee = amount.saturating_sub(parent_value);
         // Redeem CPFP is a claim spend: chase market bounded by the value at risk
         // (the leg amount), NOT the funding fee ceiling — near the redeem deadline
-        // a spike above 500 sat/vB must still be payable (spec v2 §8). The CPFP
-        // child is funded out of the sweep output, so the package fee is also
-        // implicitly hard-capped by `parent_value` (the dust check below).
-        let target = self
-            .fee_bump
-            .claim_feerate(backend.fee_rate_sat_per_vb()?, amount, crate::taproot::KEYPATH_REDEEM_VSIZE);
+        // a spike above 500 sat/vB must still be payable (spec v2 §8). The market
+        // estimate is deadline-aware (#48): `(conf_target, conservative)` escalate
+        // as the redeem timelock nears, computed by the caller. The CPFP child is
+        // funded out of the sweep output, so the package fee is also implicitly
+        // hard-capped by `parent_value` (the dust check below).
+        let target = self.fee_bump.claim_feerate(
+            backend.fee_rate_for(conf_target, conservative)?,
+            amount,
+            crate::taproot::KEYPATH_REDEEM_VSIZE,
+        );
         let Some(child_fee) =
             cpfp_child_fee(parent_fee, crate::taproot::KEYPATH_REDEEM_VSIZE, target)
         else {
             return Ok(None); // parent already clears the target unaided
         };
+        // CPFP budget is the sweep output value. If the child can't be funded to
+        // the desired target, surface it — a silent under-bump near a deadline
+        // otherwise reads as "we did everything" (#48 open question).
         let Some(child_value) = parent_value.checked_sub(child_fee) else {
+            eprintln!(
+                "warning: v2 redeem CPFP budget-limited (parent {}): sweep output {parent_value} sat \
+                 cannot fund a child to reach {target} sat/vB (need {child_fee} sat)",
+                parent.compute_txid()
+            );
             return Ok(None); // output can't cover the child fee
         };
         if child_value <= DUST_LIMIT_SAT {
+            eprintln!(
+                "warning: v2 redeem CPFP budget-limited (parent {}): child would be dust at \
+                 {target} sat/vB (sweep output {parent_value} sat)",
+                parent.compute_txid()
+            );
             return Ok(None);
         }
         let dest = backend
