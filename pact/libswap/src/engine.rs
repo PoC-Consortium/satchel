@@ -1127,6 +1127,11 @@ impl Engine {
             self.confirmations_for(&chain_a)?,
             self.confirmations_for(&chain_b)?,
         );
+        // v2 inherits v1 §7.3: enforce the full timelock profile (δ = T1−T2 ≥ 4h
+        // is the safety-critical one — the window in which the participant must
+        // confirm its unbumpable key-path leg-A redeem after the secret is
+        // revealed), not just T2 < T1. Matches v1's take/accept discipline.
+        validate_profile(network, t1, t2, n_a, n_b)?;
         let rec = AdaptorSwapRecord {
             swap_id: id.clone(),
             role: Role::Initiator,
@@ -1254,6 +1259,13 @@ impl Engine {
             self.confirmations_for(&body.chain_a)?,
             self.confirmations_for(&body.chain_b)?,
         );
+        // SECURITY BOUNDARY (spec v2 §8 inherits v1 §7.3 / §8.3): the participant
+        // holds real funds against an untrusted counterparty, so it MUST validate
+        // the absolute t1/t2 in the received init against its own clock — above
+        // all δ = T1−T2 ≥ 4h. Without this a hostile maker could send a normal T2
+        // but a tiny δ; the participant would fund leg B and then be unable to
+        // confirm its unbumpable leg-A redeem before T1 → loses leg B.
+        validate_profile(body.chain_a.network, body.t1, body.t2, n_a, n_b)?;
         let rec = AdaptorSwapRecord {
             swap_id: init.swap_id.clone(),
             role: Role::Participant,
