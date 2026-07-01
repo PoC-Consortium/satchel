@@ -1939,6 +1939,34 @@ impl Engine {
         Ok(rec)
     }
 
+    /// Unattended auto-refund for a funded-but-unfinished v2 swap (spec §9.5):
+    /// if OUR leg is funded and its single-key CLTV timelock has matured, sweep
+    /// it back. Covers the case where funding was broadcast but the handshake
+    /// then stalled before `Signed` — `adaptor_tick_one` otherwise ignores such
+    /// records, leaving the leg locked until a human intervenes. No adaptor
+    /// signature exists in that state, so neither leg can be cooperatively spent:
+    /// the refund races nothing. Returns `None` when our leg was never funded
+    /// (nothing to reclaim) or the timelock is not yet mature.
+    fn adaptor_refund_if_due(&self, rec: &AdaptorSwapRecord) -> Result<Option<TickEvent>> {
+        let (chain, txid_o, timelock) = match rec.role {
+            Role::Initiator => (&rec.chain_a, &rec.funding_a_txid, rec.t1),
+            Role::Participant => (&rec.chain_b, &rec.funding_b_txid, rec.t2),
+        };
+        if txid_o.is_none() {
+            return Ok(None); // our leg was never funded — nothing to reclaim
+        }
+        let mtp = self.backend(chain)?.tip_median_time_min()?;
+        if mtp < u64::from(timelock) {
+            return Ok(None); // timelock not yet mature — keep waiting
+        }
+        let r = self.adaptor_refund(&rec.swap_id)?;
+        Ok(Some(TickEvent {
+            swap_id: rec.swap_id.clone(),
+            action: "adaptor-refund".into(),
+            detail: format!("stalled swap refunded; state {:?}", r.state),
+        }))
+    }
+
     /// Scheduler step for one v2 swap (called from [`Self::tick`]) — mirrors
     /// the v1 `tick_one` policy: redeem while safe, else refund after the
     /// timelock, and keep an unconfirmed spend moving (spec v2 §8, inheriting
@@ -1975,7 +2003,10 @@ impl Engine {
         // idempotency guard on the Taproot funding (today's is pointer-based).
         // Deferred to a focused follow-up.
         if !matches!(rec.state, Signed | RedeemedB | Completed | Refunded) {
-            return Ok(None);
+            // Not yet Signed (e.g. funded, then the handshake stalled). We can't
+            // drive the redeem, but we MUST still auto-refund our own funded leg
+            // once its timelock matures — unattended-recovery invariant (§9.5).
+            return self.adaptor_refund_if_due(rec);
         }
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let p = self.adaptor_params(rec)?;
