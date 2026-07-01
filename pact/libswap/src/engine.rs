@@ -260,6 +260,11 @@ fn validate_profile(network: Network, t1: u32, t2: u32, n_a: u32, n_b: u32) -> R
         return Ok(());
     }
     let now = local_now();
+    // Guard the ordering BEFORE the `t1 - t2` subtraction below: without it a
+    // caller with t2 >= t1 (e.g. a misconfigured offer builder) underflows the
+    // u32 in release builds and wraps to a huge value that passes the ≥ 4h check,
+    // silently accepting an inverted (unsafe) timelock ordering.
+    ensure!(t2 < t1, "spec §7.1: T2 must be < T1");
     ensure!(
         u64::from(t2) >= now + 3 * 3600,
         "spec §7.3: T2 must be at least 3h away (got {}s)",
