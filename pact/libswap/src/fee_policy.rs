@@ -73,10 +73,13 @@ pub struct FundingPolicy {
 #[serde(default, deny_unknown_fields)]
 pub struct RedeemPolicy {
     /// v2: multiplier on the live feerate baked into the adaptor signature at
-    /// funding time. Fixed per swap at funding → applies to NEW swaps only.
-    /// Default 1 (commit at market; the CPFP child chases market up if it rises
-    /// while the redeem is pending). Raise it for an unattended floor — a higher
-    /// commit confirms on its own even if the scheduler never runs to CPFP-bump.
+    /// funding time. Fixed per swap at funding → applies to NEW swaps only. The
+    /// key-path redeem is NOT RBF-bumpable, so spec protocol-v2.md §8 requires a
+    /// **generous** fee committed at signing (the CPFP child is a secondary lever
+    /// and can fail when the sweep output is small or a fallback address the
+    /// wallet doesn't own). Default 2 (commit at 2× market) so the signed redeem
+    /// carries margin and confirms on its own even if the scheduler never runs to
+    /// CPFP-bump; the value cap at the use site still bounds it.
     pub committed_mult: u64,
     /// v1: percent the fee escalates per scheduler tick. Default 50.
     pub step_pct: u64,
@@ -113,7 +116,7 @@ impl Default for FundingPolicy {
 impl Default for RedeemPolicy {
     fn default() -> Self {
         Self {
-            committed_mult: 1,
+            committed_mult: 2,
             step_pct: 50,
         }
     }
@@ -199,8 +202,9 @@ mod tests {
         assert_eq!(p.max_feerate_sat_vb, 500);
         assert_eq!(p.min_fee_sat, crate::swap::MIN_SPEND_FEE_SAT);
         assert_eq!(p.funding.reservation_mult, 3);
-        // committed_mult lowered 2 → 1: commit at market, CPFP nurse bumps up.
-        assert_eq!(p.redeem.committed_mult, 1);
+        // committed_mult 2: generous v2 redeem fee at signing (spec v2 §8) since
+        // the key-path redeem is not RBF-bumpable; CPFP nurse is the secondary lever.
+        assert_eq!(p.redeem.committed_mult, 2);
         assert_eq!(p.redeem.step_pct, 50);
         assert_eq!(p.refund.step_pct, 50);
         // Default policy is valid.
