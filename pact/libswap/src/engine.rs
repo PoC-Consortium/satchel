@@ -316,6 +316,25 @@ pub(crate) fn deadline_clock(network: Network, local: u64, chain_mtp: u64) -> u6
     }
 }
 
+/// Deadline-aware market estimate parameters for a **redeem** bump (spec §7.4
+/// "MUST fee-bump aggressively"; issues #47/#48). Given the time remaining until
+/// the redeem's confirm-by deadline, pick the estimator's `(conf_target,
+/// conservative)`: keep the cheap "normal" tier (6, economical) when there is
+/// plenty of time, and escalate to tighter/robuster targets as the timelock
+/// nears — because a redeem that fails to confirm before its deadline loses the
+/// leg, so the going fast rate is value-justified insurance, not overpay (the
+/// value cap in `claim_feerate` still bounds the absolute fee). `conf_target = 1`
+/// is notoriously flaky in Core, so it is reserved for the final stretch; the
+/// middle bands use 3/2 with the conservative estimate mode for a robust bump.
+pub(crate) fn redeem_conf_target(remaining_secs: u64) -> (u16, bool) {
+    match remaining_secs {
+        r if r > 6 * 3600 => (6, false), // plenty of time: today's cheap baseline
+        r if r > 2 * 3600 => (3, true),  // closer: robust conservative estimate
+        r if r > 3600 => (2, true),      // closer still
+        _ => (1, true),                  // final stretch: fastest, worth almost any fee
+    }
+}
+
 /// Is an action whose lead margin is `margin` still safe to broadcast at
 /// conservative time `clock`, given absolute deadline `deadline`? True iff
 /// `clock + margin < deadline`. Pure (no clock/backend) so the §7.4 timing
@@ -4040,7 +4059,22 @@ impl Engine {
 
         // Step 3: market-tracking, value-capped target. This nurses redeem and
         // refund (both claim spends) → value-capped, NOT the funding fee ceiling.
-        let market = backend.fee_rate_sat_per_vb()?;
+        // For REDEEM (#47) the market estimate is deadline-aware: escalate the
+        // conf_target as the redeem's confirm-by deadline nears (Initiator leg-B
+        // → T2; Participant leg-A → T1 − redeem-a margin), because a redeem that
+        // misses its timelock loses the leg. Refunds keep the cheap baseline (we
+        // are the only spender — no counterparty race).
+        let (conf_target, conservative) = if is_redeem {
+            let deadline = match rec.role {
+                Role::Initiator => u64::from(rec.t2),
+                _ => u64::from(rec.t1).saturating_sub(action_margins(chain.network).2),
+            };
+            let now = deadline_clock(chain.network, local_now(), backend.tip_median_time()?);
+            redeem_conf_target(deadline.saturating_sub(now))
+        } else {
+            (6, false)
+        };
+        let market = backend.fee_rate_for(conf_target, conservative)?;
         let target = self.fee_bump.claim_feerate(market, amount, vsize);
 
         // Step 4 gate: a replacement must clear BIP125 Rule 4 (beat the old
@@ -5917,6 +5951,21 @@ mod tests {
         // Regtest margin 0 collapses to the old "now < deadline" rule.
         assert!(action_safe(u64::from(t2) - 1, 0, t2));
         assert!(!action_safe(u64::from(t2), 0, t2));
+    }
+
+    #[test]
+    fn redeem_conf_target_escalates_as_deadline_nears() {
+        // #47/#48: plenty of time → today's cheap economical "normal" (6, false).
+        assert_eq!(redeem_conf_target(12 * 3600), (6, false));
+        assert_eq!(redeem_conf_target(6 * 3600 + 1), (6, false));
+        // Under 6h → robust conservative middle bands.
+        assert_eq!(redeem_conf_target(6 * 3600), (3, true));
+        assert_eq!(redeem_conf_target(2 * 3600 + 1), (3, true));
+        assert_eq!(redeem_conf_target(2 * 3600), (2, true));
+        assert_eq!(redeem_conf_target(3600 + 1), (2, true));
+        // Final stretch → fastest target (worth almost any fee, value-capped).
+        assert_eq!(redeem_conf_target(3600), (1, true));
+        assert_eq!(redeem_conf_target(0), (1, true));
     }
 
     #[test]
