@@ -2060,14 +2060,25 @@ impl Engine {
                         let op_b = outpoint(&rec.funding_b_txid, rec.funding_b_vout)?;
                         let spk_b = p.leg_b(&secp)?.script_pubkey(&secp)?;
                         match backend_b.get_txout(&op_b, &spk_b)? {
-                            Some(txout) if txout.confirmations >= u64::from(rec.n_b.max(1)) => {
+                            // §6.1 parity with v1: verify the located output is the
+                            // leg-B P2TR we reconstructed AND pays exactly amount_b,
+                            // AND is n_b deep — before revealing t. (The pre-signed
+                            // key-path sighash already binds script+amount, so a
+                            // mismatch is self-protecting, but check explicitly so a
+                            // mis-funding aborts cleanly instead of looping — and so
+                            // `t` is never revealed against a wrong output.)
+                            Some(txout)
+                                if txout.confirmations >= u64::from(rec.n_b.max(1))
+                                    && txout.script_pubkey_hex == hex::encode(spk_b.as_bytes())
+                                    && txout.value_sat == rec.amount_b =>
+                            {
                                 let r = self.adaptor_redeem(&rec.swap_id)?;
                                 return ev(
                                     "adaptor-redeem-b",
                                     format!("revealed t; state {:?}", r.state),
                                 );
                             }
-                            Some(_) => return Ok(None), // funding present but too shallow — wait
+                            Some(_) => return Ok(None), // shallow / wrong script or value — wait
                             None => return Ok(None), // not yet funded/visible — wait (T1 protects leg A)
                         }
                     }
