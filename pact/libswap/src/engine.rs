@@ -1697,6 +1697,24 @@ impl Engine {
         self.adaptor_funding_ready(swap, &txid, vout)
     }
 
+    /// Bounded block-scan start for watching the counterparty's redeem of OUR
+    /// funding (`find_spend_witness` fallback). The funding is our own wallet tx,
+    /// so its confirmations are readable without `-txindex` (and stay readable
+    /// after its output is spent) — turn that into the funding's block height so
+    /// the block scan covers `[funding_height, tip]` instead of scanning from
+    /// genesis (which `from_height = 0` would do on mainnet). Falls back to the
+    /// tip when the funding isn't confirmed yet (no mined spend can exist then).
+    fn funding_scan_from_height(
+        &self,
+        backend: &MultiBackend,
+        funding_txid: &str,
+        spk: &ScriptBuf,
+    ) -> Result<u64> {
+        let tip = backend.tip_height()?;
+        let confs = backend.tx_confirmations(funding_txid, Some(spk))?;
+        Ok(tip.saturating_sub(confs.saturating_sub(1)))
+    }
+
     /// Redeem: the initiator adapts leg B with her secret `t` and broadcasts
     /// (revealing `t`); the participant extracts `t` from Alice's on-chain
     /// leg-B signature and redeems leg A. Chain-touching.
@@ -1773,8 +1791,14 @@ impl Engine {
                     vout: rec.funding_b_vout.context("no leg-B vout")?,
                 };
                 let backend_b = self.backend(&rec.chain_b)?;
+                let leg_b_spk = leg_b.script_pubkey(&secp)?;
+                let from_b = self.funding_scan_from_height(
+                    &backend_b,
+                    rec.funding_b_txid.as_deref().context("no leg-B funding")?,
+                    &leg_b_spk,
+                )?;
                 let witness = backend_b
-                    .find_spend_witness(&outpoint_b, &leg_b.script_pubkey(&secp)?, 0)?
+                    .find_spend_witness(&outpoint_b, &leg_b_spk, from_b)?
                     .context("leg B not yet redeemed by the initiator — `t` not on chain")?;
                 let sig_b = crate::adaptor_engine::adaptor_sig_from_hex(
                     rec.adaptor_sig_b
@@ -2052,9 +2076,14 @@ impl Engine {
                     if action_safe(now, redeem_a_margin, rec.t1) {
                         let op_b = outpoint(&rec.funding_b_txid, rec.funding_b_vout)?;
                         let spk_b = p.leg_b(&secp)?.script_pubkey(&secp)?;
-                        if self
-                            .backend(&rec.chain_b)?
-                            .find_spend_witness(&op_b, &spk_b, 0)?
+                        let backend_b = self.backend(&rec.chain_b)?;
+                        let from_b = self.funding_scan_from_height(
+                            &backend_b,
+                            rec.funding_b_txid.as_deref().context("no leg-B funding")?,
+                            &spk_b,
+                        )?;
+                        if backend_b
+                            .find_spend_witness(&op_b, &spk_b, from_b)?
                             .is_some()
                         {
                             let r = self.adaptor_redeem(&rec.swap_id)?;

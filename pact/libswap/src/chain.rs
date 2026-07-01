@@ -329,22 +329,40 @@ impl ChainBackend for CoreRpcBackend {
     fn find_spend_witness(
         &self,
         outpoint: &OutPoint,
-        _watch_spk: &ScriptBuf,
+        watch_spk: &ScriptBuf,
         from_height: u64,
     ) -> Result<Option<Vec<Vec<u8>>>> {
-        // Mempool first: the spend may not be mined yet.
+        // Cheap gate: while the HTLC output is still unspent — the whole wait,
+        // hours of ticks — `gettxout` (include_mempool) answers in ONE call, so we
+        // never enumerate the mempool. It needs no -txindex (reads the UTXO set),
+        // and only returns `None` once the output is actually spent (mempool OR a
+        // block). Only then do we do the heavier search for the spending witness.
+        if self.get_txout(outpoint, watch_spk)?.is_some() {
+            return Ok(None);
+        }
+        // Mempool first: with frequent polling the reveal is normally caught here,
+        // still unconfirmed, before it is mined. Tolerate the eviction race — a
+        // txid from the `getrawmempool` snapshot can be mined/evicted before we
+        // fetch it, and `getrawtransaction` then returns -5 ("No such mempool
+        // transaction") with no -txindex; skip that tx instead of aborting the
+        // whole scan (which would never reach the block fallback below).
         let mempool = self.rpc.call("getrawmempool", &[])?;
         for txid in mempool.as_array().cloned().unwrap_or_default() {
-            let tx = self
+            let Ok(tx) = self
                 .rpc
-                .call("getrawtransaction", &[txid.clone(), json!(true)])?;
+                .call("getrawtransaction", &[txid.clone(), json!(true)])
+            else {
+                continue; // evicted/mined since the snapshot — not the spend we seek
+            };
             for vin in tx["vin"].as_array().cloned().unwrap_or_default() {
                 if Self::vin_matches(&vin, outpoint) {
                     return Ok(Some(Self::witness_of(&vin)?));
                 }
             }
         }
-        // Then blocks from the HTLC's funding height to the tip.
+        // Fallback: the spend is already mined (we were down/slow during the
+        // unconfirmed window). Scan blocks from the HTLC's funding height to the
+        // tip — full blocks include witnesses, so this needs no -txindex either.
         let tip = self.tip_height()?;
         for height in from_height..=tip {
             let hash = self.rpc.call("getblockhash", &[json!(height)])?;
