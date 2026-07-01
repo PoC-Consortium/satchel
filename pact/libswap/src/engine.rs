@@ -2082,7 +2082,10 @@ impl Engine {
                             rec.funding_b_txid.as_deref().context("no leg-B funding")?,
                             &spk_b,
                         )?;
-                        if backend_b.find_spend_witness(&op_b, &spk_b, from_b)?.is_some() {
+                        if backend_b
+                            .find_spend_witness(&op_b, &spk_b, from_b)?
+                            .is_some()
+                        {
                             let r = self.adaptor_redeem(&rec.swap_id)?;
                             return ev(
                                 "adaptor-redeem-a",
