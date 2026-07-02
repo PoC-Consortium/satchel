@@ -103,9 +103,21 @@ pub trait ChainBackend {
     /// required by Electrum backends, which can only search by script.
     fn tx_confirmations(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64>;
 
-    /// Feerate in sat/vB from the node's estimator, with a conservative
-    /// fallback when the estimator has no data (fresh chains, regtest).
-    fn fee_rate_sat_per_vb(&self) -> Result<u64>;
+    /// Feerate in sat/vB from the node's estimator for a given confirmation
+    /// target and estimate mode, with a conservative fallback when the estimator
+    /// has no data (fresh chains, regtest). `conservative = false` preserves the
+    /// original baseline exactly (Core's default estimate_mode); `conservative =
+    /// true` requests Core's CONSERVATIVE mode for a robuster (higher) estimate —
+    /// the lever the deadline-aware redeem nurse escalates, together with a tighter
+    /// `conf_target`, as a timelock approaches. Backends without a mode distinction
+    /// (Electrum) ignore `conservative`.
+    fn fee_rate_for(&self, conf_target: u16, conservative: bool) -> Result<u64>;
+
+    /// Feerate for the default "normal" target (6 blocks, economical) — the
+    /// baseline every non-deadline-pressured nurse and estimate uses.
+    fn fee_rate_sat_per_vb(&self) -> Result<u64> {
+        self.fee_rate_for(6, false)
+    }
 
     /// Whether `txid` is currently in this node's mempool. The bump loop uses
     /// `!is_in_mempool` as the *only* trigger to re-broadcast an unchanged tx
@@ -132,6 +144,21 @@ pub trait ChainBackend {
     /// Fund `address` with exactly `amount_sat` via the core wallet
     /// (HTLC funding is a normal send, spec §6.1).
     fn wallet_send(&self, address: &str, amount_sat: u64) -> Result<String>;
+
+    /// Build + sign (but DO NOT broadcast) a funding tx paying `amount_sat` to
+    /// `address`, returning `(txid, vout, signed_tx_hex)`. The selected inputs
+    /// are locked so nothing else spends them before we broadcast. Used by the v2
+    /// two-phase funding (spec v2 §7): the funding txid must be known to pre-sign
+    /// the redeems, but real funds are committed only at broadcast — after the
+    /// adaptor signatures verify and (for the participant) the counterparty leg is
+    /// confirmed. Default: unsupported (only the Core wallet backend builds txs).
+    fn wallet_build_funding(
+        &self,
+        _address: &str,
+        _amount_sat: u64,
+    ) -> Result<(String, u32, String)> {
+        bail!("this backend cannot build funding transactions without broadcasting")
+    }
 
     /// Whether the node's wallet is encrypted AND currently locked — it can read
     /// balances but cannot SIGN, so a funding `wallet_send` would fail with RPC
@@ -407,12 +434,17 @@ impl ChainBackend for CoreRpcBackend {
         }
     }
 
-    fn fee_rate_sat_per_vb(&self) -> Result<u64> {
+    fn fee_rate_for(&self, conf_target: u16, conservative: bool) -> Result<u64> {
         // No estimate (empty/low-traffic mempool, or the node can't estimate) →
         // the fee market is effectively empty, so the relay minimum suffices.
         // The bump nurse covers the rare case where this later under-prices.
         const FALLBACK_SAT_PER_VB: u64 = 1;
-        const MAX_SAT_PER_VB: u64 = 500; // sanity cap against estimator glitches
+        // Overflow/glitch guard only — NOT the fee ceiling. The real caps live
+        // downstream: funding is bounded by the policy ceiling
+        // (`FeeBumpPolicy::target_feerate`), while redeem/refund are bounded by
+        // the value at risk (`FeeBumpPolicy::claim_feerate`) so a genuine mainnet
+        // spike above 500 sat/vB can still confirm a leg near its deadline.
+        const SANITY_MAX_SAT_PER_VB: u64 = 10_000;
 
         // Regtest-only test override: the harness injects a market feerate to
         // create a market-vs-broadcast gap the bump nurse reacts to (see
@@ -421,13 +453,21 @@ impl ChainBackend for CoreRpcBackend {
             let ov = TEST_FEERATE_OVERRIDE_SAT_VB.load(Ordering::Relaxed);
             if ov > 0 {
                 return Ok(ov
-                    .clamp(1, MAX_SAT_PER_VB)
+                    .clamp(1, SANITY_MAX_SAT_PER_VB)
                     .max(self.params.min_feerate_sat_vb));
             }
         }
+        // Preserve the original baseline EXACTLY: `estimatesmartfee(conf_target)`
+        // with no mode arg → Core's default estimate. Only the deadline-escalated
+        // bands pass an explicit CONSERVATIVE mode for a robuster (higher) estimate.
+        let args = if conservative {
+            vec![json!(conf_target), json!("CONSERVATIVE")]
+        } else {
+            vec![json!(conf_target)]
+        };
         let estimate = self
             .rpc
-            .call("estimatesmartfee", &[json!(6)])
+            .call("estimatesmartfee", &args)
             .ok()
             .and_then(|r| r["feerate"].as_f64()) // BTC per kvB
             .map(|btc_kvb| ((btc_kvb * 1e8) / 1000.0).ceil() as u64)
@@ -441,7 +481,7 @@ impl ChainBackend for CoreRpcBackend {
         // that per-coin floor (coins.toml for file coins, 1 for the built-ins).
         // Applied AFTER the sanity clamp so the coin's floor always wins.
         Ok(estimate
-            .clamp(1, MAX_SAT_PER_VB)
+            .clamp(1, SANITY_MAX_SAT_PER_VB)
             .max(self.params.min_feerate_sat_vb))
     }
 
@@ -511,6 +551,64 @@ impl ChainBackend for CoreRpcBackend {
             .as_str()
             .context("sendtoaddress: non-string")?
             .to_string())
+    }
+
+    fn wallet_build_funding(
+        &self,
+        address: &str,
+        amount_sat: u64,
+    ) -> Result<(String, u32, String)> {
+        let amount = format!(
+            "{}.{:08}",
+            amount_sat / 100_000_000,
+            amount_sat % 100_000_000
+        );
+        let fee_rate = self.fee_rate_sat_per_vb()?;
+        // 1. raw tx carrying only the funding output (no inputs yet). The output
+        //    key is the funding address, so build the object with a dynamic key.
+        let mut outputs = serde_json::Map::new();
+        outputs.insert(address.to_string(), json!(amount));
+        let raw = self
+            .rpc
+            .call("createrawtransaction", &[json!([]), Value::Object(outputs)])?;
+        let raw_hex = raw.as_str().context("createrawtransaction: non-string")?;
+        // 2. select inputs + change; lock the inputs so nothing else spends them
+        //    before we broadcast; RBF-signal; our explicit funding feerate.
+        let funded = self.rpc.call(
+            "fundrawtransaction",
+            &[
+                json!(raw_hex),
+                json!({ "lockUnspents": true, "fee_rate": fee_rate, "replaceable": true }),
+            ],
+        )?;
+        let funded_hex = funded["hex"]
+            .as_str()
+            .context("fundrawtransaction: no hex")?;
+        // 3. sign with the wallet — the txid is final once fully signed.
+        let signed = self
+            .rpc
+            .call("signrawtransactionwithwallet", &[json!(funded_hex)])?;
+        anyhow::ensure!(
+            signed["complete"].as_bool() == Some(true),
+            "funding tx did not sign to completion"
+        );
+        let signed_hex = signed["hex"]
+            .as_str()
+            .context("signrawtransactionwithwallet: no hex")?
+            .to_string();
+        // 4. decode locally to recover the txid and the vout paying `address` —
+        //    fundrawtransaction inserts change at a random position, so match the
+        //    output by scriptPubKey rather than assuming an index.
+        let tx: Transaction = bitcoin::consensus::encode::deserialize(&hex::decode(&signed_hex)?)
+            .context("decode built funding tx")?;
+        let want_spk = self.params.parse_address(address)?;
+        let vout = tx
+            .output
+            .iter()
+            .position(|o| o.script_pubkey == want_spk)
+            .context("built funding tx has no output paying the funding address")?
+            as u32;
+        Ok((tx.compute_txid().to_string(), vout, signed_hex))
     }
 
     fn wallet_balance(&self) -> Result<u64> {
@@ -903,23 +1001,26 @@ impl ChainBackend for ElectrumBackend {
         Ok(0)
     }
 
-    fn fee_rate_sat_per_vb(&self) -> Result<u64> {
+    fn fee_rate_for(&self, conf_target: u16, _conservative: bool) -> Result<u64> {
         // No estimate (empty/low-traffic mempool, or the node can't estimate) →
         // the fee market is effectively empty, so the relay minimum suffices.
         // The bump nurse covers the rare case where this later under-prices.
+        // Electrum's estimatefee takes only a block target (no economical/
+        // conservative distinction), so `_conservative` is honored via the
+        // tighter `conf_target` alone.
         const FALLBACK_SAT_PER_VB: u64 = 1;
-        const MAX_SAT_PER_VB: u64 = 500;
+        const SANITY_MAX_SAT_PER_VB: u64 = 10_000; // overflow guard, not the fee ceiling
         let rate = self
             .raw(
                 "blockchain.estimatefee",
-                vec![electrum_client::Param::Usize(6)],
+                vec![electrum_client::Param::Usize(conf_target as usize)],
             )
             .ok()
             .and_then(|v| v.as_f64())
             .filter(|btc_kb| *btc_kb > 0.0) // -1 = no estimate available
             .map(|btc_kb| ((btc_kb * 1e8) / 1000.0).ceil() as u64)
             .unwrap_or(FALLBACK_SAT_PER_VB);
-        Ok(rate.clamp(1, MAX_SAT_PER_VB))
+        Ok(rate.clamp(1, SANITY_MAX_SAT_PER_VB))
     }
 
     fn wallet_new_address(&self) -> Result<String> {
@@ -1135,10 +1236,10 @@ impl ChainBackend for MultiBackend {
         Ok(best)
     }
 
-    fn fee_rate_sat_per_vb(&self) -> Result<u64> {
+    fn fee_rate_for(&self, conf_target: u16, conservative: bool) -> Result<u64> {
         let mut best = 1;
         for backend in &self.backends {
-            best = best.max(backend.fee_rate_sat_per_vb()?);
+            best = best.max(backend.fee_rate_for(conf_target, conservative)?);
         }
         Ok(best)
     }
@@ -1162,6 +1263,15 @@ impl ChainBackend for MultiBackend {
 
     fn wallet_send(&self, address: &str, amount_sat: u64) -> Result<String> {
         self.primary().wallet_send(address, amount_sat)
+    }
+
+    fn wallet_build_funding(
+        &self,
+        address: &str,
+        amount_sat: u64,
+    ) -> Result<(String, u32, String)> {
+        // Wallet op: the primary (Core) backend owns the funding UTXOs.
+        self.primary().wallet_build_funding(address, amount_sat)
     }
 
     fn wallet_balance(&self) -> Result<u64> {

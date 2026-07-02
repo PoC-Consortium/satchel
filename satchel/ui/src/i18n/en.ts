@@ -676,9 +676,9 @@ export const en = {
     noncesExchanged:
       "Setting up the private swap — exchanging signing material. Nothing is locked yet.",
     signedMaker:
-      "Both sides signed. Your daemon locks the {a}, then claims the {b} automatically. If anything stalls, your {a} returns at {t1}.",
+      "Both sides signed and your {a} is locked. Your daemon claims the {b} automatically once the other side locks and confirms it. If anything stalls, your {a} returns at {t1}.",
     signedTaker:
-      "Both sides signed. Your daemon locks the {b} and claims the {a} the moment the other side moves. Safety net: refund at {t2}.",
+      "Both sides signed. Once their {a} is confirmed, your daemon locks your {b}, then claims the {a} automatically. Once your {b} is locked, it returns at {t2} if anything stalls.",
     fundedAMaker:
       "Your {a} is locked. Waiting for the other side to lock their {b}. If they never do, your {a} returns automatically at {t1}.",
     fundedATaker:

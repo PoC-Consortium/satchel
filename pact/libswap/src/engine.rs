@@ -24,9 +24,7 @@ use crate::adaptor_swap::AdaptorState;
 use crate::chain::{ChainBackend, MultiBackend};
 use crate::htlc::extract_preimage;
 use crate::keys::{hash_preimage, swap_id};
-use crate::messages::{
-    self, AbortBody, AcceptBody, ChainRef, Envelope, FundedBody, InitBody, RedeemedBody,
-};
+use crate::messages::{self, AbortBody, AcceptBody, ChainRef, Envelope, FundedBody, InitBody};
 use crate::params::{ChainParams, Network};
 use crate::registry;
 use crate::store::{AdaptorSwapRecord, Store, SwapRecord};
@@ -260,6 +258,11 @@ fn validate_profile(network: Network, t1: u32, t2: u32, n_a: u32, n_b: u32) -> R
         return Ok(());
     }
     let now = local_now();
+    // Guard the ordering BEFORE the `t1 - t2` subtraction below: without it a
+    // caller with t2 >= t1 (e.g. a misconfigured offer builder) underflows the
+    // u32 in release builds and wraps to a huge value that passes the ≥ 4h check,
+    // silently accepting an inverted (unsafe) timelock ordering.
+    ensure!(t2 < t1, "spec §7.1: T2 must be < T1");
     ensure!(
         u64::from(t2) >= now + 3 * 3600,
         "spec §7.3: T2 must be at least 3h away (got {}s)",
@@ -313,6 +316,25 @@ pub(crate) fn deadline_clock(network: Network, local: u64, chain_mtp: u64) -> u6
         chain_mtp
     } else {
         local.max(chain_mtp)
+    }
+}
+
+/// Deadline-aware market estimate parameters for a **redeem** bump (spec §7.4
+/// "MUST fee-bump aggressively"; issues #47/#48). Given the time remaining until
+/// the redeem's confirm-by deadline, pick the estimator's `(conf_target,
+/// conservative)`: keep the cheap "normal" tier (6, economical) when there is
+/// plenty of time, and escalate to tighter/robuster targets as the timelock
+/// nears — because a redeem that fails to confirm before its deadline loses the
+/// leg, so the going fast rate is value-justified insurance, not overpay (the
+/// value cap in `claim_feerate` still bounds the absolute fee). `conf_target = 1`
+/// is notoriously flaky in Core, so it is reserved for the final stretch; the
+/// middle bands use 3/2 with the conservative estimate mode for a robust bump.
+pub(crate) fn redeem_conf_target(remaining_secs: u64) -> (u16, bool) {
+    match remaining_secs {
+        r if r > 6 * 3600 => (6, false), // plenty of time: today's cheap baseline
+        r if r > 2 * 3600 => (3, true),  // closer: robust conservative estimate
+        r if r > 3600 => (2, true),      // closer still
+        _ => (1, true),                  // final stretch: fastest, worth almost any fee
     }
 }
 
@@ -1108,6 +1130,11 @@ impl Engine {
             self.confirmations_for(&chain_a)?,
             self.confirmations_for(&chain_b)?,
         );
+        // v2 inherits v1 §7.3: enforce the full timelock profile (δ = T1−T2 ≥ 4h
+        // is the safety-critical one — the window in which the participant must
+        // confirm its unbumpable key-path leg-A redeem after the secret is
+        // revealed), not just T2 < T1. Matches v1's take/accept discipline.
+        validate_profile(network, t1, t2, n_a, n_b)?;
         let rec = AdaptorSwapRecord {
             swap_id: id.clone(),
             role: Role::Initiator,
@@ -1149,6 +1176,8 @@ impl Engine {
             final_tx_a_hex: None,
             final_tx_b_hex: None,
             last_action_height: 0,
+            funding_b_tx_hex: None,
+            funding_b_broadcast: false,
         };
         self.store.put_adaptor(&rec)?;
         let envelope = self.signed_envelope("init", &id, serde_json::to_value(&body)?)?;
@@ -1235,6 +1264,13 @@ impl Engine {
             self.confirmations_for(&body.chain_a)?,
             self.confirmations_for(&body.chain_b)?,
         );
+        // SECURITY BOUNDARY (spec v2 §8 inherits v1 §7.3 / §8.3): the participant
+        // holds real funds against an untrusted counterparty, so it MUST validate
+        // the absolute t1/t2 in the received init against its own clock — above
+        // all δ = T1−T2 ≥ 4h. Without this a hostile maker could send a normal T2
+        // but a tiny δ; the participant would fund leg B and then be unable to
+        // confirm its unbumpable leg-A redeem before T1 → loses leg B.
+        validate_profile(body.chain_a.network, body.t1, body.t2, n_a, n_b)?;
         let rec = AdaptorSwapRecord {
             swap_id: init.swap_id.clone(),
             role: Role::Participant,
@@ -1276,6 +1312,8 @@ impl Engine {
             final_tx_a_hex: None,
             final_tx_b_hex: None,
             last_action_height: 0,
+            funding_b_tx_hex: None,
+            funding_b_broadcast: false,
         };
         self.store.put_adaptor(&rec)?;
         let envelope =
@@ -1675,26 +1713,114 @@ impl Engine {
     /// nodes (the in-process flow is covered by `adaptor_funding_ready`).
     pub fn adaptor_fund(&self, swap: &str) -> Result<Envelope> {
         let rec = self.store.get_adaptor(swap)?;
-        // Idempotency guard: never broadcast a second funding tx for a leg we've
-        // already funded. The auto-fund path gates on this at the call site; a
-        // direct call (e.g. a manual retry) must too, or we'd wallet_send again
-        // and strand the first output in a leg the record then forgets.
-        let already = match rec.role {
-            Role::Initiator => rec.funding_a_txid.is_some(),
-            Role::Participant => rec.funding_b_txid.is_some(),
-        };
-        ensure!(!already, "leg already funded for swap {swap}");
+        // CRITICAL: the participant NEVER broadcasts leg B here — not even on the
+        // manual RPC path. It builds + pre-signs leg B; the scheduler broadcasts it
+        // only once the swap is `Signed` (σ_A held) AND leg A is verified on-chain
+        // n_a-deep. This makes a hand-driven taker fail-SAFE: the obvious manual
+        // order (fund → nonces → sign → assemble) would otherwise commit leg B
+        // before σ_A exists — the exact fund-loss the autopilot fix closes. If a
+        // manual taker never triggers the broadcast (`tick`), the swap merely
+        // stalls and both refund; nothing is committed prematurely.
+        if rec.role == Role::Participant {
+            return self.adaptor_build_leg_b(swap);
+        }
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let p = self.adaptor_params(&rec)?;
-        let (chain, leg, amount) = match rec.role {
-            Role::Initiator => (rec.chain_a.clone(), p.leg_a(&secp)?, rec.amount_a),
-            Role::Participant => (rec.chain_b.clone(), p.leg_b(&secp)?, rec.amount_b),
-        };
-        let backend = self.backend(&chain)?;
+        let leg = p.leg_a(&secp)?;
+        let backend = self.backend(&rec.chain_a)?;
+        let leg_spk = leg.script_pubkey(&secp)?;
+
+        // Idempotency guard 1: a recorded pointer means leg A is already funded —
+        // re-announce it, never fund twice (this also covers the still-unconfirmed
+        // window that the confirmed-only find_funding below cannot see).
+        if let (Some(txid), Some(vout)) = (rec.funding_a_txid.clone(), rec.funding_a_vout) {
+            return self.adaptor_funding_ready(swap, &txid, vout);
+        }
+        // Idempotency guard 2 (locate-first, rc6 #2): adopt an existing confirmed
+        // output at the leg address instead of funding again — covers a crash
+        // between broadcast and the pointer persist, so a retry never double-funds.
+        if let Some((op, info)) = backend.find_funding(&leg_spk)? {
+            if info.value_sat == rec.amount_a {
+                return self.adaptor_funding_ready(swap, &op.txid.to_string(), op.vout);
+            }
+        }
+
+        // Initiator: broadcast leg A now. Safe — leg A is only claimable after the
+        // initiator reveals `t` (which only it can do) and its refund is intact.
         let address = leg.address(&secp, backend.params())?;
-        let txid = backend.wallet_send(&address, amount)?;
-        let vout = backend.find_vout(&txid, &hex::encode(leg.script_pubkey(&secp)?.as_bytes()))?;
+        let txid = backend.wallet_send(&address, rec.amount_a)?;
+        let vout = backend.find_vout(&txid, &hex::encode(leg_spk.as_bytes()))?;
         self.adaptor_funding_ready(swap, &txid, vout)
+    }
+
+    /// CRITICAL two-phase leg-B funding for the board autopilot (spec v2 §7,
+    /// xmr-btc-swap ordering): the participant BUILDS its leg-B funding tx but
+    /// does NOT broadcast it. The redeems are pre-signed over this outpoint; the
+    /// scheduler broadcasts it only after the swap is `Signed` (so the taker holds
+    /// a verified σ_A) AND leg A is verified on-chain `n_a`-deep
+    /// (`adaptor_tick_one`) — so the taker never commits leg B before it can
+    /// guarantee claiming leg A. Persist the pointer AND the exact signed tx in
+    /// one write so a crash between build and broadcast rebroadcasts the tx the
+    /// adaptor signatures commit to, never a freshly re-selected one. Idempotent:
+    /// a recorded pointer or an existing on-chain output is re-adopted.
+    fn adaptor_build_leg_b(&self, swap: &str) -> Result<Envelope> {
+        let rec = self.store.get_adaptor(swap)?;
+        debug_assert_eq!(rec.role, Role::Participant);
+        let secp = bitcoin::secp256k1::Secp256k1::new();
+        let p = self.adaptor_params(&rec)?;
+        let leg = p.leg_b(&secp)?;
+        let backend = self.backend(&rec.chain_b)?;
+        let leg_spk = leg.script_pubkey(&secp)?;
+        // Idempotency: already built/broadcast (pointer set), or already on-chain.
+        if let (Some(txid), Some(vout)) = (rec.funding_b_txid.clone(), rec.funding_b_vout) {
+            return self.adaptor_funding_ready(swap, &txid, vout);
+        }
+        if let Some((op, info)) = backend.find_funding(&leg_spk)? {
+            if info.value_sat == rec.amount_b {
+                return self.adaptor_funding_ready(swap, &op.txid.to_string(), op.vout);
+            }
+        }
+        let address = leg.address(&secp, backend.params())?;
+        let (txid, vout, tx_hex) = backend.wallet_build_funding(&address, rec.amount_b)?;
+        let mut rec2 = self.store.get_adaptor(swap)?;
+        rec2.funding_b_txid = Some(txid.clone());
+        rec2.funding_b_vout = Some(vout);
+        rec2.funding_b_tx_hex = Some(tx_hex);
+        self.store.put_adaptor(&rec2)?;
+        let body = crate::messages::FundingReadyV2Body {
+            chain: "b".into(),
+            txid,
+            vout,
+        };
+        self.signed_envelope("funding_ready", swap, serde_json::to_value(&body)?)
+    }
+
+    /// CRITICAL gate (spec v2 §6.1/§8, xmr-btc-swap ordering): is the initiator's
+    /// leg A on-chain as the P2TR we reconstructed locally, paying exactly
+    /// `amount_a`, and buried `n_a` deep? The participant gates BOTH building leg
+    /// B (so it never pre-signs a redeem for a leg that may not exist) AND
+    /// broadcasting it on this — it must be certain it can claim leg A before it
+    /// commits leg B. A bare `funding_ready(A)` pointer is NOT enough: it is
+    /// untrusted, and a 0-conf leg A can be double-spent out from under us.
+    fn adaptor_leg_a_confirmed(&self, rec: &AdaptorSwapRecord) -> Result<bool> {
+        let (Some(txid), Some(vout)) = (rec.funding_a_txid.as_deref(), rec.funding_a_vout) else {
+            return Ok(false);
+        };
+        let secp = bitcoin::secp256k1::Secp256k1::new();
+        let p = self.adaptor_params(rec)?;
+        let spk_a = p.leg_a(&secp)?.script_pubkey(&secp)?;
+        let op = OutPoint {
+            txid: bitcoin::Txid::from_str(txid)?,
+            vout,
+        };
+        Ok(match self.backend(&rec.chain_a)?.get_txout(&op, &spk_a)? {
+            Some(txout) => {
+                txout.confirmations >= u64::from(rec.n_a.max(1))
+                    && txout.script_pubkey_hex == hex::encode(spk_a.as_bytes())
+                    && txout.value_sat == rec.amount_a
+            }
+            None => false,
+        })
     }
 
     /// Bounded block-scan start for watching the counterparty's redeem of OUR
@@ -1873,9 +1999,10 @@ impl Engine {
         let dest = backend
             .params()
             .parse_address(&backend.wallet_new_address()?)?;
-        // A1: initial spend priced at the unified value-capped target.
+        // A1: initial spend priced at the value-capped claim target (refund is a
+        // claim spend — bounded by the leg value, not the funding fee ceiling).
         let fee = spend_fee_sat(
-            self.fee_bump.target_feerate(
+            self.fee_bump.claim_feerate(
                 backend.fee_rate_sat_per_vb()?,
                 amount,
                 crate::taproot::SCRIPTPATH_REFUND_VSIZE,
@@ -1900,6 +2027,34 @@ impl Engine {
         rec.state = AdaptorState::Refunded;
         self.store.put_adaptor(&rec)?;
         Ok(rec)
+    }
+
+    /// Unattended auto-refund for a funded-but-unfinished v2 swap (spec §9.5):
+    /// if OUR leg is funded and its single-key CLTV timelock has matured, sweep
+    /// it back. Covers the case where funding was broadcast but the handshake
+    /// then stalled before `Signed` — `adaptor_tick_one` otherwise ignores such
+    /// records, leaving the leg locked until a human intervenes. No adaptor
+    /// signature exists in that state, so neither leg can be cooperatively spent:
+    /// the refund races nothing. Returns `None` when our leg was never funded
+    /// (nothing to reclaim) or the timelock is not yet mature.
+    fn adaptor_refund_if_due(&self, rec: &AdaptorSwapRecord) -> Result<Option<TickEvent>> {
+        let (chain, txid_o, timelock) = match rec.role {
+            Role::Initiator => (&rec.chain_a, &rec.funding_a_txid, rec.t1),
+            Role::Participant => (&rec.chain_b, &rec.funding_b_txid, rec.t2),
+        };
+        if txid_o.is_none() {
+            return Ok(None); // our leg was never funded — nothing to reclaim
+        }
+        let mtp = self.backend(chain)?.tip_median_time_min()?;
+        if mtp < u64::from(timelock) {
+            return Ok(None); // timelock not yet mature — keep waiting
+        }
+        let r = self.adaptor_refund(&rec.swap_id)?;
+        Ok(Some(TickEvent {
+            swap_id: rec.swap_id.clone(),
+            action: "adaptor-refund".into(),
+            detail: format!("stalled swap refunded; state {:?}", r.state),
+        }))
     }
 
     /// Scheduler step for one v2 swap (called from [`Self::tick`]) — mirrors
@@ -1938,7 +2093,10 @@ impl Engine {
         // idempotency guard on the Taproot funding (today's is pointer-based).
         // Deferred to a focused follow-up.
         if !matches!(rec.state, Signed | RedeemedB | Completed | Refunded) {
-            return Ok(None);
+            // Not yet Signed (e.g. funded, then the handshake stalled). We can't
+            // drive the redeem, but we MUST still auto-refund our own funded leg
+            // once its timelock matures — unattended-recovery invariant (§9.5).
+            return self.adaptor_refund_if_due(rec);
         }
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let p = self.adaptor_params(rec)?;
@@ -2023,14 +2181,25 @@ impl Engine {
                         let op_b = outpoint(&rec.funding_b_txid, rec.funding_b_vout)?;
                         let spk_b = p.leg_b(&secp)?.script_pubkey(&secp)?;
                         match backend_b.get_txout(&op_b, &spk_b)? {
-                            Some(txout) if txout.confirmations >= u64::from(rec.n_b.max(1)) => {
+                            // §6.1 parity with v1: verify the located output is the
+                            // leg-B P2TR we reconstructed AND pays exactly amount_b,
+                            // AND is n_b deep — before revealing t. (The pre-signed
+                            // key-path sighash already binds script+amount, so a
+                            // mismatch is self-protecting, but check explicitly so a
+                            // mis-funding aborts cleanly instead of looping — and so
+                            // `t` is never revealed against a wrong output.)
+                            Some(txout)
+                                if txout.confirmations >= u64::from(rec.n_b.max(1))
+                                    && txout.script_pubkey_hex == hex::encode(spk_b.as_bytes())
+                                    && txout.value_sat == rec.amount_b =>
+                            {
                                 let r = self.adaptor_redeem(&rec.swap_id)?;
                                 return ev(
                                     "adaptor-redeem-b",
                                     format!("revealed t; state {:?}", r.state),
                                 );
                             }
-                            Some(_) => return Ok(None), // funding present but too shallow — wait
+                            Some(_) => return Ok(None), // shallow / wrong script or value — wait
                             None => return Ok(None), // not yet funded/visible — wait (T1 protects leg A)
                         }
                     }
@@ -2053,6 +2222,30 @@ impl Engine {
                 Ok(None)
             }
             Role::Participant => {
+                // CRITICAL two-phase broadcast (spec v2 §7): once the swap is
+                // `Signed` (we hold a verified σ_A) AND leg A is verified on-chain
+                // n_a-deep, broadcast our pre-built leg B. Until BOTH hold, leg B
+                // stays unbroadcast — the taker never commits leg B before it is
+                // certain it can claim leg A.
+                if rec.state == Signed && !rec.funding_b_broadcast {
+                    if let Some(hex) = rec.funding_b_tx_hex.as_deref() {
+                        if !self.adaptor_leg_a_confirmed(rec)? {
+                            return Ok(None); // wait for leg A before committing leg B
+                        }
+                        let tx: bitcoin::Transaction =
+                            bitcoin::consensus::encode::deserialize(&hex::decode(hex)?)
+                                .context("corrupt funding_b_tx_hex")?;
+                        let txid = self.backend(&rec.chain_b)?.broadcast(&tx)?;
+                        let mut updated = rec.clone();
+                        updated.funding_b_broadcast = true;
+                        self.store.put_adaptor(&updated)?;
+                        return Ok(Some(TickEvent {
+                            swap_id: rec.swap_id.clone(),
+                            action: "adaptor-fund-b".into(),
+                            detail: format!("broadcast leg B {txid} (σ_A held, leg A confirmed)"),
+                        }));
+                    }
+                }
                 // Nurse our own (leg-B) funding while unconfirmed.
                 if rec.state == Signed {
                     if let Some(ev) = self.maybe_bump_funding_v2(rec, "b")? {
@@ -2191,7 +2384,16 @@ impl Engine {
         } else {
             rec.amount_a
         };
-        match self.adaptor_cpfp_bump(&backend, &tx, amount) {
+        // Deadline-aware CPFP target (#48): initiator leg-B redeem confirms by T2;
+        // participant leg-A redeem by T1 − redeem-a margin. Escalate as it nears.
+        let deadline = if chain.coin_id == rec.chain_b.coin_id {
+            u64::from(rec.t2)
+        } else {
+            u64::from(rec.t1).saturating_sub(action_margins(chain.network).2)
+        };
+        let now = deadline_clock(chain.network, local_now(), backend.tip_median_time()?);
+        let (conf_target, conservative) = redeem_conf_target(deadline.saturating_sub(now));
+        match self.adaptor_cpfp_bump(&backend, &tx, amount, conf_target, conservative) {
             Ok(Some(child)) => {
                 let mut updated = rec.clone();
                 updated.last_action_height = tip_height;
@@ -2227,23 +2429,46 @@ impl Engine {
         backend: &MultiBackend,
         parent: &bitcoin::Transaction,
         amount: u64,
+        conf_target: u16,
+        conservative: bool,
     ) -> Result<Option<bitcoin::Txid>> {
         let parent_out = &parent.output[0];
         let parent_value = parent_out.value.to_sat();
         let parent_fee = amount.saturating_sub(parent_value);
-        // Chase market, but never above the policy ceiling.
-        let target = backend
-            .fee_rate_sat_per_vb()?
-            .min(self.fee_bump.max_feerate_sat_vb);
+        // Redeem CPFP is a claim spend: chase market bounded by the value at risk
+        // (the leg amount), NOT the funding fee ceiling — near the redeem deadline
+        // a spike above 500 sat/vB must still be payable (spec v2 §8). The market
+        // estimate is deadline-aware (#48): `(conf_target, conservative)` escalate
+        // as the redeem timelock nears, computed by the caller. The CPFP child is
+        // funded out of the sweep output, so the package fee is also implicitly
+        // hard-capped by `parent_value` (the dust check below).
+        let target = self.fee_bump.claim_feerate(
+            backend.fee_rate_for(conf_target, conservative)?,
+            amount,
+            crate::taproot::KEYPATH_REDEEM_VSIZE,
+        );
         let Some(child_fee) =
             cpfp_child_fee(parent_fee, crate::taproot::KEYPATH_REDEEM_VSIZE, target)
         else {
             return Ok(None); // parent already clears the target unaided
         };
+        // CPFP budget is the sweep output value. If the child can't be funded to
+        // the desired target, surface it — a silent under-bump near a deadline
+        // otherwise reads as "we did everything" (#48 open question).
         let Some(child_value) = parent_value.checked_sub(child_fee) else {
+            eprintln!(
+                "warning: v2 redeem CPFP budget-limited (parent {}): sweep output {parent_value} sat \
+                 cannot fund a child to reach {target} sat/vB (need {child_fee} sat)",
+                parent.compute_txid()
+            );
             return Ok(None); // output can't cover the child fee
         };
         if child_value <= DUST_LIMIT_SAT {
+            eprintln!(
+                "warning: v2 redeem CPFP budget-limited (parent {}): child would be dust at \
+                 {target} sat/vB (sweep output {parent_value} sat)",
+                parent.compute_txid()
+            );
             return Ok(None);
         }
         let dest = backend
@@ -2434,9 +2659,7 @@ impl Engine {
         // value-capped target, bump only when it clears BIP125 Rule 4, else
         // re-anchor the same tx only if it was evicted.
         let market = backend.fee_rate_sat_per_vb()?;
-        let target = self
-            .fee_bump
-            .target_feerate(market, amount, REFUND_TX_VSIZE);
+        let target = self.fee_bump.claim_feerate(market, amount, REFUND_TX_VSIZE);
         let incr = backend.incremental_relay_feerate()?;
         // BIP125 Rule 4 also constrains the ABSOLUTE fee: the replacement must
         // pay at least `incr * vsize` MORE than the tx it evicts. `target * vsize`
@@ -2583,16 +2806,12 @@ impl Engine {
                     }
                 }
             }
-            "redeemed" => {
-                let body: RedeemedBody = serde_json::from_value(envelope.body.clone())
-                    .context("malformed redeemed body")?;
-                let preimage = parse_hash(&body.preimage)?;
-                ensure!(
-                    hash_preimage(&preimage) == parse_hash(&rec.hash_h)?,
-                    "redeemed: preimage does not hash to H"
-                );
-                rec.preimage = Some(body.preimage);
-            }
+            // Advisory courtesy (spec §8.6). The preimage is authoritatively
+            // extracted from the on-chain redeem witness (`extract_preimage`),
+            // never trusted from a message — so this implementation neither sends
+            // nor consumes it. Accept and ignore for interop: a third-party client
+            // MAY still send it, and dropping it is safe (we learn `s` from chain).
+            "redeemed" => {}
             "abort" => {
                 let body: AbortBody =
                     serde_json::from_value(envelope.body.clone()).unwrap_or(AbortBody {
@@ -2725,7 +2944,7 @@ impl Engine {
         // first broadcast is competitive and the nurse is a rare safety net.
         let fee = spend_fee_sat(
             self.fee_bump
-                .target_feerate(backend.fee_rate_sat_per_vb()?, amount, REFUND_TX_VSIZE),
+                .claim_feerate(backend.fee_rate_sat_per_vb()?, amount, REFUND_TX_VSIZE),
             REFUND_TX_VSIZE,
         );
         let refund_tx = build_refund_tx(&htlc, outpoint, amount, destination, fee, &key)?;
@@ -2797,7 +3016,7 @@ impl Engine {
                     .parse_address(&backend.wallet_new_address()?)?;
                 // A1: initial spend priced at the unified value-capped target.
                 let fee = spend_fee_sat(
-                    self.fee_bump.target_feerate(
+                    self.fee_bump.claim_feerate(
                         backend.fee_rate_sat_per_vb()?,
                         rec.amount_b,
                         REDEEM_TX_VSIZE,
@@ -2875,7 +3094,7 @@ impl Engine {
                     .parse_address(&backend_a.wallet_new_address()?)?;
                 // A1: initial spend priced at the unified value-capped target.
                 let fee = spend_fee_sat(
-                    self.fee_bump.target_feerate(
+                    self.fee_bump.claim_feerate(
                         backend_a.fee_rate_sat_per_vb()?,
                         rec.amount_a,
                         REDEEM_TX_VSIZE,
@@ -2979,7 +3198,7 @@ impl Engine {
                     .parse_address(&backend.wallet_new_address()?)?;
                 // A1: initial spend priced at the unified value-capped target.
                 let fee = spend_fee_sat(
-                    self.fee_bump.target_feerate(
+                    self.fee_bump.claim_feerate(
                         backend.fee_rate_sat_per_vb()?,
                         amount,
                         REFUND_TX_VSIZE,
@@ -3344,6 +3563,34 @@ impl Engine {
                 "settlement",
                 feerate_of(rec.final_tx_hex.as_deref(), rec.amount_a),
             ),
+            // Maker just accepted; funding leg A (about to broadcast / retrying).
+            // A growing count here flags a stuck fund (e.g. a locked wallet, #2).
+            (Initiator, Accepted) => {
+                self.progress_awaiting(&rec.swap_id, &rec.chain_a, "funding", prev)
+            }
+            // A broadcast refund burying — surface it as securing (parity with the
+            // redeem `settlement`) so a refund's wait is never a blank line. Each
+            // side refunds its OWN leg: initiator leg A, participant leg B.
+            (Initiator, Refunded) => self.progress_confirming(
+                &rec.swap_id,
+                &rec.chain_a,
+                rec.final_txid.clone()?,
+                None,
+                spend_spk(rec),
+                rec.n_a,
+                "settlement",
+                feerate_of(rec.final_tx_hex.as_deref(), rec.amount_a),
+            ),
+            (Participant, Refunded) => self.progress_confirming(
+                &rec.swap_id,
+                &rec.chain_b,
+                rec.final_txid.clone()?,
+                None,
+                spend_spk(rec),
+                rec.n_b,
+                "settlement",
+                feerate_of(rec.final_tx_hex.as_deref(), rec.amount_b),
+            ),
             _ => None,
         }
     }
@@ -3408,34 +3655,44 @@ impl Engine {
             // Taker: wait for the maker's A lock; after we lock B, wait for their
             // reveal; then secure our A redeem.
             (Role::Participant, Signed) => {
-                if let Some(txid_b) = &rec.funding_b_txid {
-                    // Symmetry with the maker: while OUR leg B buries toward n_b
-                    // show a determinate "your lock confirming · confs/n_b" (the
-                    // maker can't reveal until then); once n_b-deep, the awaiting-
-                    // their-claim wait. confs are a chain read (resumable).
-                    let confs_b = self
-                        .lock_confs(&rec.chain_b, txid_b, rec.funding_b_vout, leg_spk(false))
-                        .unwrap_or(0);
-                    if confs_b < rec.n_b {
-                        self.progress_confirming(
-                            &rec.swap_id,
-                            &rec.chain_b,
-                            txid_b.clone(),
-                            rec.funding_b_vout,
-                            leg_spk(false),
-                            rec.n_b,
-                            "our_lock",
-                            None,
-                        )
+                // Two-phase (spec §7): leg B is BUILT (funding_b_txid set) at accept
+                // time but BROADCAST only after leg A is n_a-deep. So the honest
+                // wait until we broadcast is on THEIR leg A burying — show that, not
+                // a misleading "our lock 0/n_b" for a tx that isn't on-chain yet.
+                if rec.funding_b_broadcast {
+                    if let Some(txid_b) = &rec.funding_b_txid {
+                        // OUR leg B is live and burying toward n_b (the maker can't
+                        // reveal until then); once n_b-deep, the awaiting-their-claim
+                        // wait. confs are a chain read (resumable).
+                        let confs_b = self
+                            .lock_confs(&rec.chain_b, txid_b, rec.funding_b_vout, leg_spk(false))
+                            .unwrap_or(0);
+                        if confs_b < rec.n_b {
+                            self.progress_confirming(
+                                &rec.swap_id,
+                                &rec.chain_b,
+                                txid_b.clone(),
+                                rec.funding_b_vout,
+                                leg_spk(false),
+                                rec.n_b,
+                                "our_lock",
+                                None,
+                            )
+                        } else {
+                            self.progress_awaiting_anchored(
+                                &rec.swap_id,
+                                &rec.chain_b,
+                                "awaiting_claim",
+                                confs_b.saturating_sub(rec.n_b),
+                            )
+                        }
                     } else {
-                        self.progress_awaiting_anchored(
-                            &rec.swap_id,
-                            &rec.chain_b,
-                            "awaiting_claim",
-                            confs_b.saturating_sub(rec.n_b),
-                        )
+                        self.progress_awaiting(&rec.swap_id, &rec.chain_a, "awaiting_lock", prev)
                     }
                 } else if let Some(txid) = &rec.funding_a_txid {
+                    // Leg B built, not yet broadcast: we are waiting for the maker's
+                    // leg A to bury n_a-deep before we commit leg B — "their lock
+                    // confirming · confs/n_a".
                     self.progress_confirming(
                         &rec.swap_id,
                         &rec.chain_a,
@@ -3459,6 +3716,48 @@ impl Engine {
                 rec.n_a,
                 "settlement",
                 Some(rec.redeem_feerate_a),
+            ),
+            // Pre-Signed (handshake) parity with v1: the maker is funding leg A +
+            // negotiating the adaptor sigs; the taker has built leg B and is
+            // waiting on the maker's leg A — same phases v1 shows from Accepted, so
+            // neither side sees a blank during the (brief) handshake.
+            (Role::Initiator, Accepted | NoncesExchanged) => {
+                self.progress_awaiting(&rec.swap_id, &rec.chain_a, "funding", prev)
+            }
+            (Role::Participant, Accepted | NoncesExchanged) => match &rec.funding_a_txid {
+                Some(txid) => self.progress_confirming(
+                    &rec.swap_id,
+                    &rec.chain_a,
+                    txid.clone(),
+                    rec.funding_a_vout,
+                    leg_spk(true),
+                    rec.n_a,
+                    "their_lock",
+                    None,
+                ),
+                None => self.progress_awaiting(&rec.swap_id, &rec.chain_a, "awaiting_lock", prev),
+            },
+            // A broadcast refund burying — surface as securing (parity with the
+            // redeem `settlement`). Each side refunds its OWN leg.
+            (Role::Initiator, Refunded) => self.progress_confirming(
+                &rec.swap_id,
+                &rec.chain_a,
+                rec.final_txid_a.clone()?,
+                None,
+                first_output_spk(rec.final_tx_a_hex.as_deref()),
+                rec.n_a,
+                "settlement",
+                None,
+            ),
+            (Role::Participant, Refunded) => self.progress_confirming(
+                &rec.swap_id,
+                &rec.chain_b,
+                rec.final_txid_b.clone()?,
+                None,
+                first_output_spk(rec.final_tx_b_hex.as_deref()),
+                rec.n_b,
+                "settlement",
+                None,
             ),
             _ => None,
         }
@@ -4033,9 +4332,25 @@ impl Engine {
         let old_fee = amount.saturating_sub(old_tx.output[0].value.to_sat());
         let old_feerate = old_fee / vsize.max(1);
 
-        // Step 3: market-tracking, value-capped target.
-        let market = backend.fee_rate_sat_per_vb()?;
-        let target = self.fee_bump.target_feerate(market, amount, vsize);
+        // Step 3: market-tracking, value-capped target. This nurses redeem and
+        // refund (both claim spends) → value-capped, NOT the funding fee ceiling.
+        // For REDEEM (#47) the market estimate is deadline-aware: escalate the
+        // conf_target as the redeem's confirm-by deadline nears (Initiator leg-B
+        // → T2; Participant leg-A → T1 − redeem-a margin), because a redeem that
+        // misses its timelock loses the leg. Refunds keep the cheap baseline (we
+        // are the only spender — no counterparty race).
+        let (conf_target, conservative) = if is_redeem {
+            let deadline = match rec.role {
+                Role::Initiator => u64::from(rec.t2),
+                _ => u64::from(rec.t1).saturating_sub(action_margins(chain.network).2),
+            };
+            let now = deadline_clock(chain.network, local_now(), backend.tip_median_time()?);
+            redeem_conf_target(deadline.saturating_sub(now))
+        } else {
+            (6, false)
+        };
+        let market = backend.fee_rate_for(conf_target, conservative)?;
+        let target = self.fee_bump.claim_feerate(market, amount, vsize);
 
         // Step 4 gate: a replacement must clear BIP125 Rule 4 (beat the old
         // feerate by the node's incremental relay fee). If the target doesn't —
@@ -5056,12 +5371,26 @@ impl Engine {
         if !self.adaptor_my_leg_funded(rec) {
             let ready = match rec.role {
                 Role::Initiator => msg_type == "accept",
+                // The participant BUILDS + pre-signs leg B on the funding_ready(A)
+                // pointer (commits no funds — just a local unbroadcast tx and the
+                // adaptor sigs). The CRITICAL safety gate is on the BROADCAST of
+                // leg B (adaptor_tick_one): only once the swap is Signed (σ_A held)
+                // AND leg A is verified on-chain n_a-deep. Alice cannot use σ_B
+                // until B is on-chain, which the participant controls.
                 Role::Participant => rec.funding_a_txid.is_some(),
             };
             if ready {
+                // adaptor_fund routes by role: initiator broadcasts leg A;
+                // participant BUILDS leg B unbroadcast (scheduler broadcasts it
+                // post-Signed once leg A is verified n_a-deep).
                 let fr = self.adaptor_fund(swap)?;
                 self.relay_send_all(counterparty, &fr)?;
-                return ev("adaptor-fund", "broadcast + funding_ready".into());
+                let detail = if rec.role == Role::Initiator {
+                    "broadcast leg A + funding_ready"
+                } else {
+                    "built leg B (unbroadcast) + funding_ready"
+                };
+                return ev("adaptor-fund", detail.into());
             }
         }
 
@@ -5911,6 +6240,21 @@ mod tests {
         // Regtest margin 0 collapses to the old "now < deadline" rule.
         assert!(action_safe(u64::from(t2) - 1, 0, t2));
         assert!(!action_safe(u64::from(t2), 0, t2));
+    }
+
+    #[test]
+    fn redeem_conf_target_escalates_as_deadline_nears() {
+        // #47/#48: plenty of time → today's cheap economical "normal" (6, false).
+        assert_eq!(redeem_conf_target(12 * 3600), (6, false));
+        assert_eq!(redeem_conf_target(6 * 3600 + 1), (6, false));
+        // Under 6h → robust conservative middle bands.
+        assert_eq!(redeem_conf_target(6 * 3600), (3, true));
+        assert_eq!(redeem_conf_target(2 * 3600 + 1), (3, true));
+        assert_eq!(redeem_conf_target(2 * 3600), (2, true));
+        assert_eq!(redeem_conf_target(3600 + 1), (2, true));
+        // Final stretch → fastest target (worth almost any fee, value-capped).
+        assert_eq!(redeem_conf_target(3600), (1, true));
+        assert_eq!(redeem_conf_target(0), (1, true));
     }
 
     #[test]

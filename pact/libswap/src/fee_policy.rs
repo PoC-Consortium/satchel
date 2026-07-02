@@ -73,10 +73,12 @@ pub struct FundingPolicy {
 #[serde(default, deny_unknown_fields)]
 pub struct RedeemPolicy {
     /// v2: multiplier on the live feerate baked into the adaptor signature at
-    /// funding time. Fixed per swap at funding → applies to NEW swaps only.
-    /// Default 1 (commit at market; the CPFP child chases market up if it rises
-    /// while the redeem is pending). Raise it for an unattended floor — a higher
-    /// commit confirms on its own even if the scheduler never runs to CPFP-bump.
+    /// funding time. Fixed per swap at funding → applies to NEW swaps only. The
+    /// key-path redeem is NOT RBF-bumpable; rather than over-provision every swap
+    /// up front, default 1 (commit at market) and rely on the **deadline-aware
+    /// CPFP nurse** (#48) to escalate the child fee as the timelock nears. Raise it
+    /// for a baked-in unattended floor if you would rather not depend on the
+    /// scheduler reaching the CPFP path (spec v2 §8 "generous at signing").
     pub committed_mult: u64,
     /// v1: percent the fee escalates per scheduler tick. Default 50.
     pub step_pct: u64,
@@ -169,6 +171,21 @@ impl FeeBumpPolicy {
             .min(self.max_feerate_sat_vb)
             .max(1)
     }
+
+    /// Bump target for a **claim** spend (redeem / refund / redeem-CPFP) — bounded
+    /// by the value at risk ONLY, NOT by [`Self::max_feerate_sat_vb`]. Rationale
+    /// (spec §7.4 "MUST fee-bump aggressively", v2 §8): near a redeem/refund
+    /// timelock, failing to confirm means losing the whole leg, so paying the real
+    /// going rate — even above the 500 sat/vB operator ceiling during a genuine
+    /// mainnet spike — is value-justified insurance. The value cap
+    /// (`FEE_CAP_PCT` of the amount) still guarantees we never pay more than the
+    /// leg is worth, which is the only backstop a claim needs. The flat ceiling is
+    /// reserved for **funding** ([`Self::target_feerate`]), a pre-commitment spend
+    /// with no counterparty-refund race. Never below 1.
+    pub fn claim_feerate(&self, market_sat_vb: u64, value_at_risk: u64, vsize: u64) -> u64 {
+        let value_cap = value_at_risk.saturating_mul(FEE_CAP_PCT) / 100 / vsize.max(1);
+        market_sat_vb.min(value_cap).max(1)
+    }
 }
 
 #[cfg(test)]
@@ -184,7 +201,8 @@ mod tests {
         assert_eq!(p.max_feerate_sat_vb, 500);
         assert_eq!(p.min_fee_sat, crate::swap::MIN_SPEND_FEE_SAT);
         assert_eq!(p.funding.reservation_mult, 3);
-        // committed_mult lowered 2 → 1: commit at market, CPFP nurse bumps up.
+        // committed_mult 1: commit the v2 redeem at market; the deadline-aware
+        // CPFP nurse (#48) escalates the child fee as the timelock nears.
         assert_eq!(p.redeem.committed_mult, 1);
         assert_eq!(p.redeem.step_pct, 50);
         assert_eq!(p.refund.step_pct, 50);
@@ -203,6 +221,22 @@ mod tests {
         assert_eq!(p.target_feerate(400, 30_000, VSIZE), 30_000 / VSIZE);
         // Absolute ceiling still binds when the claim is large.
         assert_eq!(p.target_feerate(900, 10_000_000, VSIZE), 500);
+    }
+
+    #[test]
+    fn claim_feerate_ignores_ceiling_bounded_by_value() {
+        let p = FeeBumpPolicy::default(); // ceiling 500
+                                          // Quiet market: tracks market like funding.
+        assert_eq!(p.claim_feerate(8, 206_250, VSIZE), 8);
+        // Small claim: still value-capped (never pay more than the leg is worth).
+        assert_eq!(p.claim_feerate(400, 30_000, VSIZE), 30_000 / VSIZE);
+        // The KEY difference from `target_feerate`: a genuine spike above the 500
+        // ceiling IS payable for a claim when the leg is worth it (deadline
+        // insurance, spec §7.4 / v2 §8) — here 900 sat/vB clears the 500 ceiling.
+        assert_eq!(p.claim_feerate(900, 10_000_000, VSIZE), 900);
+        // …but the value cap still binds: a 900 market on a leg worth only
+        // ~500 sat/vB of value is clamped to the value, not paid in full.
+        assert_eq!(p.claim_feerate(900, 100_000, VSIZE), 100_000 / VSIZE);
     }
 
     #[test]

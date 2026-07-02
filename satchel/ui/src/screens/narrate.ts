@@ -25,8 +25,24 @@ export function narrate(s: Swap): string {
     // automatically from "signed"; the timelock refund is the safety net.
     case "nonces_exchanged":
       return tr("narrate.noncesExchanged");
-    case "signed":
-      return tr(maker ? "narrate.signedMaker" : "narrate.signedTaker", v);
+    // v2 "signed" is a single state spanning the whole execution phase, so a
+    // flat story freezes there while only the progress bar moves. Sub-divide it
+    // by the progress sub-phase the tick already computes, so it steps through
+    // checkpoints like v1's funded_a/funded_b. Reuses existing keys (no new copy):
+    //   maker: waiting for the taker to lock B (signedMaker) → both locked,
+    //          claiming their B (fundedBMaker).
+    //   taker: waiting on the maker's A, about to lock B (signedTaker) → both
+    //          locked, awaiting their claim (fundedBTaker).
+    case "signed": {
+      const w = s.progress?.watching;
+      if (maker) {
+        return tr(w === "their_lock" ? "narrate.fundedBMaker" : "narrate.signedMaker", v);
+      }
+      return tr(
+        w === "our_lock" || w === "awaiting_claim" ? "narrate.fundedBTaker" : "narrate.signedTaker",
+        v,
+      );
+    }
     case "funded_a":
       return tr(maker ? "narrate.fundedAMaker" : "narrate.fundedATaker", v);
     case "funded_b":

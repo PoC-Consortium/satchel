@@ -165,6 +165,19 @@ pub struct AdaptorSwapRecord {
     /// to 0 (pre-existing records / fresh swaps → first tick may act).
     #[serde(default)]
     pub last_action_height: u64,
+    /// The participant's leg-B funding tx, BUILT but not yet broadcast (spec v2
+    /// §7 two-phase: the redeems are signed over its outpoint, and it is
+    /// broadcast only after the swap is `Signed` and leg A is verified on-chain
+    /// `n_a`-deep — so the participant never commits leg B before it can claim
+    /// leg A). Persisted so a crash between build and broadcast rebroadcasts the
+    /// exact tx the adaptor signatures commit to. `None` for the initiator (which
+    /// funds leg A directly).
+    #[serde(default)]
+    pub funding_b_tx_hex: Option<String>,
+    /// Set once the participant has broadcast its pre-built leg-B funding, so the
+    /// scheduler broadcasts it exactly once.
+    #[serde(default)]
+    pub funding_b_broadcast: bool,
 }
 
 pub struct Store {
@@ -902,10 +915,36 @@ impl Store {
 
     /// Advance `revealed → consumed`, recording the produced partial signature
     /// so a later request re-sends it rather than signing again. Forward only.
+    ///
+    /// One-signature-per-nonce is enforced HERE, at the store — not merely via the
+    /// engine's call ordering (spec v2 §3.2: a secret nonce used for two different
+    /// messages leaks the MuSig2 signing key). A second consume on an already-
+    /// consumed slot is accepted ONLY if it carries the byte-identical partial (an
+    /// idempotent re-send after a restart); a *differing* partial is refused, so
+    /// no future caller can ever coax two signatures out of one nonce.
     pub fn nonce_consume(&self, swap_id: &str, leg: &str, partial_sig: &[u8]) -> Result<()> {
+        let existing: Option<Vec<u8>> = match self.conn.query_row(
+            "SELECT partial_sig FROM nonce_sessions
+             WHERE swap_id = ?1 AND leg = ?2 AND state = 'consumed'",
+            params![swap_id, leg],
+            |r| r.get::<_, Option<Vec<u8>>>(0),
+        ) {
+            Ok(v) => v,
+            Err(rusqlite::Error::QueryReturnedNoRows) => None,
+            Err(e) => return Err(e.into()),
+        };
+        if let Some(prev) = existing {
+            anyhow::ensure!(
+                prev == partial_sig,
+                "nonce session {swap_id}/{leg} already consumed with a DIFFERENT partial \
+                 signature — refusing (one-signature-per-nonce; reuse would leak the \
+                 MuSig2 signing key, spec v2 §3.2)"
+            );
+            return Ok(()); // idempotent re-send of the identical partial
+        }
         let updated = self.conn.execute(
             "UPDATE nonce_sessions SET state = 'consumed', partial_sig = ?3
-             WHERE swap_id = ?1 AND leg = ?2 AND state IN ('revealed', 'consumed')",
+             WHERE swap_id = ?1 AND leg = ?2 AND state = 'revealed'",
             params![swap_id, leg, partial_sig],
         )?;
         if updated == 0 {
@@ -1432,6 +1471,32 @@ mod tests {
                 .unwrap()
                 .secnonce,
             vec![0x01; 132]
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn nonce_consume_rejects_differing_partial() {
+        // One-signature-per-nonce (spec v2 §3.2): re-consuming a slot with the
+        // SAME partial is an idempotent no-op (restart re-send), but a DIFFERENT
+        // partial must be refused — two partials under one nonce leak the key.
+        let dir = temp_dir("nonce-consume-reuse");
+        let store = Store::init(&dir, None).unwrap();
+        store.nonce_commit("s", "redeem_a", &[0x09; 132]).unwrap();
+        store.nonce_reveal("s", "redeem_a").unwrap();
+        store.nonce_consume("s", "redeem_a", &[0xAA; 32]).unwrap();
+        // Idempotent re-send of the identical partial: accepted.
+        store.nonce_consume("s", "redeem_a", &[0xAA; 32]).unwrap();
+        // A different partial under the same consumed nonce: refused.
+        assert!(store.nonce_consume("s", "redeem_a", &[0xBB; 32]).is_err());
+        // The originally recorded partial is untouched.
+        assert_eq!(
+            store
+                .nonce_session("s", "redeem_a")
+                .unwrap()
+                .unwrap()
+                .partial_sig,
+            Some(vec![0xAA; 32])
         );
         std::fs::remove_dir_all(&dir).ok();
     }
