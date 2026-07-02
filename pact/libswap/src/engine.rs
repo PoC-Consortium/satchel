@@ -1715,42 +1715,42 @@ impl Engine {
     /// nodes (the in-process flow is covered by `adaptor_funding_ready`).
     pub fn adaptor_fund(&self, swap: &str) -> Result<Envelope> {
         let rec = self.store.get_adaptor(swap)?;
+        // CRITICAL: the participant NEVER broadcasts leg B here — not even on the
+        // manual RPC path. It builds + pre-signs leg B; the scheduler broadcasts it
+        // only once the swap is `Signed` (σ_A held) AND leg A is verified on-chain
+        // n_a-deep. This makes a hand-driven taker fail-SAFE: the obvious manual
+        // order (fund → nonces → sign → assemble) would otherwise commit leg B
+        // before σ_A exists — the exact fund-loss the autopilot fix closes. If a
+        // manual taker never triggers the broadcast (`tick`), the swap merely
+        // stalls and both refund; nothing is committed prematurely.
+        if rec.role == Role::Participant {
+            return self.adaptor_build_leg_b(swap);
+        }
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let p = self.adaptor_params(&rec)?;
-        let (chain, leg, amount) = match rec.role {
-            Role::Initiator => (rec.chain_a.clone(), p.leg_a(&secp)?, rec.amount_a),
-            Role::Participant => (rec.chain_b.clone(), p.leg_b(&secp)?, rec.amount_b),
-        };
-        let backend = self.backend(&chain)?;
+        let leg = p.leg_a(&secp)?;
+        let backend = self.backend(&rec.chain_a)?;
         let leg_spk = leg.script_pubkey(&secp)?;
 
-        // Idempotency guard 1: a recorded pointer means we already funded/built
-        // this leg — re-announce it, never fund twice (this also covers the
-        // still-unconfirmed window that the confirmed-only find_funding below
-        // cannot see).
-        let recorded = match rec.role {
-            Role::Initiator => (rec.funding_a_txid.clone(), rec.funding_a_vout),
-            Role::Participant => (rec.funding_b_txid.clone(), rec.funding_b_vout),
-        };
-        if let (Some(txid), Some(vout)) = recorded {
+        // Idempotency guard 1: a recorded pointer means leg A is already funded —
+        // re-announce it, never fund twice (this also covers the still-unconfirmed
+        // window that the confirmed-only find_funding below cannot see).
+        if let (Some(txid), Some(vout)) = (rec.funding_a_txid.clone(), rec.funding_a_vout) {
             return self.adaptor_funding_ready(swap, &txid, vout);
         }
         // Idempotency guard 2 (locate-first, rc6 #2): adopt an existing confirmed
         // output at the leg address instead of funding again — covers a crash
         // between broadcast and the pointer persist, so a retry never double-funds.
         if let Some((op, info)) = backend.find_funding(&leg_spk)? {
-            if info.value_sat == amount {
+            if info.value_sat == rec.amount_a {
                 return self.adaptor_funding_ready(swap, &op.txid.to_string(), op.vout);
             }
         }
 
-        // Broadcast now. This is the low-level manual primitive; the SAFE
-        // board-autopilot participant path is `adaptor_build_leg_b` (build first,
-        // broadcast only post-Signed + leg-A-verified). A manual caller driving
-        // the RPCs by hand is responsible for ordering (sign before funding leg B)
-        // — a counterparty cannot force this path.
+        // Initiator: broadcast leg A now. Safe — leg A is only claimable after the
+        // initiator reveals `t` (which only it can do) and its refund is intact.
         let address = leg.address(&secp, backend.params())?;
-        let txid = backend.wallet_send(&address, amount)?;
+        let txid = backend.wallet_send(&address, rec.amount_a)?;
         let vout = backend.find_vout(&txid, &hex::encode(leg_spk.as_bytes()))?;
         self.adaptor_funding_ready(swap, &txid, vout)
     }
@@ -5308,17 +5308,16 @@ impl Engine {
                 Role::Participant => rec.funding_a_txid.is_some(),
             };
             if ready {
-                let (fr, detail) = if rec.role == Role::Initiator {
-                    (self.adaptor_fund(swap)?, "broadcast leg A + funding_ready")
-                } else {
-                    // Build (do NOT broadcast) leg B; the scheduler broadcasts it
-                    // post-Signed once leg A is verified n_a-deep.
-                    (
-                        self.adaptor_build_leg_b(swap)?,
-                        "built leg B (unbroadcast) + funding_ready",
-                    )
-                };
+                // adaptor_fund routes by role: initiator broadcasts leg A;
+                // participant BUILDS leg B unbroadcast (scheduler broadcasts it
+                // post-Signed once leg A is verified n_a-deep).
+                let fr = self.adaptor_fund(swap)?;
                 self.relay_send_all(counterparty, &fr)?;
+                let detail = if rec.role == Role::Initiator {
+                    "broadcast leg A + funding_ready"
+                } else {
+                    "built leg B (unbroadcast) + funding_ready"
+                };
                 return ev("adaptor-fund", detail.into());
             }
         }

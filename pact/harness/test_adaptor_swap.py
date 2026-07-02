@@ -36,6 +36,19 @@ def _env(result):
     return result["envelope"]
 
 
+def _broadcast_leg_b(bob, chain, wallet, confs=1):
+    """Two-phase v2 (spec §7, the CRITICAL fix): `adaptorfund` now BUILDS the
+    taker's leg B but does NOT broadcast it. The taker's scheduler broadcasts it
+    only once the swap is `Signed` (it holds a verified σ_A) AND leg A is verified
+    on-chain n_a-deep — so it never commits leg B before it can claim leg A. Drive
+    Bob's `tick` to broadcast the pre-built leg B, then mine `confs` block(s)."""
+    evs = bob.rpc("tick")["events"]
+    assert any(e["action"] == "adaptor-fund-b" for e in evs), \
+        f"leg B was not broadcast post-Signed: {[e['action'] for e in evs]}"
+    if confs:
+        chain.generate(confs, wallet)
+
+
 def test_adaptor_swap(h):
     # auto_init=False: start seedless so setup_seed()'s createseed can run (the
     # default auto_init would create a seed on boot → createseed then conflicts).
@@ -61,8 +74,7 @@ def test_adaptor_swap(h):
         fa = _env(alice.rpc("adaptorfund", sid))
         h.pocx.generate(1, "alice_pocx")
         bob.rpc("adaptorrecv", fa)
-        fb = _env(bob.rpc("adaptorfund", sid))
-        h.btc.generate(1, "bob_btc")
+        fb = _env(bob.rpc("adaptorfund", sid))   # BUILDS leg B (unbroadcast)
         alice.rpc("adaptorrecv", fb)
 
         # Nonce exchange (both redeem sessions).
@@ -82,6 +94,10 @@ def test_adaptor_swap(h):
         br = bob.rpc("adaptorassemble", sid)["record"]
         assert ar["state"] == "signed", ar["state"]
         assert br["state"] == "signed", br["state"]
+
+        # Two-phase (spec §7): now that both hold verified adaptor sigs and leg A
+        # is confirmed, the taker broadcasts its pre-built leg B.
+        _broadcast_leg_b(bob, h.btc, "bob_btc")
 
         # Funding outpoints, from the funding_ready bodies.
         a_txid, a_vout = fa["body"]["txid"], fa["body"]["vout"]   # leg A (PoCX)
@@ -131,12 +147,21 @@ def test_adaptor_refund(h):
         accept = _env(bob.rpc("adaptoraccept", init))
         alice.rpc("adaptorrecv", accept)
 
-        # Both fund, then the swap stalls (no nonces/sign/redeem).
+        # Both fund. Under two-phase (spec §7) the taker only broadcasts leg B
+        # once Signed + leg A confirmed, so drive the handshake to Signed and
+        # broadcast leg B; THEN the swap stalls at the redeem step and each side
+        # reclaims its own funded leg via the CLTV tapleaf.
         fa = _env(alice.rpc("adaptorfund", sid))
         h.pocx.generate(1, "alice_pocx")
         bob.rpc("adaptorrecv", fa)
-        fb = _env(bob.rpc("adaptorfund", sid))
-        h.btc.generate(1, "bob_btc")
+        fb = _env(bob.rpc("adaptorfund", sid))   # BUILDS leg B (unbroadcast)
+        alice.rpc("adaptorrecv", fb)
+        na = _env(alice.rpc("adaptornonces", sid)); nb = _env(bob.rpc("adaptornonces", sid))
+        bob.rpc("adaptorrecv", na); alice.rpc("adaptorrecv", nb)
+        pa = _env(alice.rpc("adaptorsign", sid)); pb = _env(bob.rpc("adaptorsign", sid))
+        bob.rpc("adaptorrecv", pa); alice.rpc("adaptorrecv", pb)
+        alice.rpc("adaptorassemble", sid); bob.rpc("adaptorassemble", sid)
+        _broadcast_leg_b(bob, h.btc, "bob_btc")
         a_txid, a_vout = fa["body"]["txid"], fa["body"]["vout"]   # leg A (PoCX, T1)
         b_txid, b_vout = fb["body"]["txid"], fb["body"]["vout"]   # leg B (BTC, T2)
 
@@ -229,8 +254,7 @@ def test_adaptor_redeem_cpfp(h):
         fa = _env(alice.rpc("adaptorfund", sid))
         h.pocx.generate(1, "alice_pocx")
         bob.rpc("adaptorrecv", fa)
-        fb = _env(bob.rpc("adaptorfund", sid))
-        h.btc.generate(1, "bob_btc")
+        fb = _env(bob.rpc("adaptorfund", sid))   # BUILDS leg B (unbroadcast)
         alice.rpc("adaptorrecv", fb)
         na = _env(alice.rpc("adaptornonces", sid))
         nb = _env(bob.rpc("adaptornonces", sid))
@@ -242,6 +266,7 @@ def test_adaptor_redeem_cpfp(h):
         alice.rpc("adaptorrecv", pb)
         alice.rpc("adaptorassemble", sid)
         bob.rpc("adaptorassemble", sid)
+        _broadcast_leg_b(bob, h.btc, "bob_btc")   # two-phase: broadcast leg B post-Signed
         b_txid, b_vout = fb["body"]["txid"], fb["body"]["vout"]   # leg B (BTC)
 
         # Alice redeems leg B but we do NOT mine it — it sits unconfirmed.
@@ -309,8 +334,7 @@ def test_adaptor_redeem_cpfp_ltc(h):
         fa = _env(alice.rpc("adaptorfund", sid))
         h.pocx.generate(1, "alice_pocx")
         bob.rpc("adaptorrecv", fa)
-        fb = _env(bob.rpc("adaptorfund", sid))
-        h.ltc.generate(1, "bob_ltc")          # leg B 1 conf (regtest n_b = 1)
+        fb = _env(bob.rpc("adaptorfund", sid))   # BUILDS leg B (unbroadcast)
         alice.rpc("adaptorrecv", fb)
         na = _env(alice.rpc("adaptornonces", sid))
         nb = _env(bob.rpc("adaptornonces", sid))
@@ -322,6 +346,7 @@ def test_adaptor_redeem_cpfp_ltc(h):
         alice.rpc("adaptorrecv", pb)
         alice.rpc("adaptorassemble", sid)
         bob.rpc("adaptorassemble", sid)
+        _broadcast_leg_b(bob, h.ltc, "bob_ltc")   # two-phase: broadcast leg B post-Signed
         b_txid, b_vout = fb["body"]["txid"], fb["body"]["vout"]   # leg B (LTC)
 
         # Alice redeems leg B on LTC but we do NOT mine it.
@@ -387,8 +412,7 @@ def test_adaptor_funding_cpfp(h):
         # nurse). Bob funds leg B and confirms it.
         fa = _env(alice.rpc("adaptorfund", sid))
         bob.rpc("adaptorrecv", fa)
-        fb = _env(bob.rpc("adaptorfund", sid))
-        h.btc.generate(1, "bob_btc")
+        fb = _env(bob.rpc("adaptorfund", sid))   # BUILDS leg B (unbroadcast)
         alice.rpc("adaptorrecv", fb)
         a_txid, a_vout = fa["body"]["txid"], fa["body"]["vout"]   # leg A (PoCX)
         b_txid, b_vout = fb["body"]["txid"], fb["body"]["vout"]   # leg B (BTC)
@@ -426,6 +450,10 @@ def test_adaptor_funding_cpfp(h):
         # Mine the package, then complete the swap — proving the adaptor sigs over
         # the unchanged outpoint still redeem.
         h.pocx.generate(1, "alice_pocx")
+        # Two-phase: leg A is confirmed now, so the taker broadcasts its pre-built
+        # leg B (it stayed unbroadcast while leg A was unconfirmed — exactly the
+        # protection: never commit leg B against a still-bumpable/unconfirmed leg A).
+        _broadcast_leg_b(bob, h.btc, "bob_btc")
         for ev in alice.rpc("tick")["events"]:   # reveal t (redeem leg B)
             print(f"[e2e]   v2[alice]: {ev['action']} {ev['detail'][:60]}")
         assert alice.rpc("listadaptorswaps")[0]["state"] == "redeemed_b", "Alice did not reveal/redeem B"
@@ -467,9 +495,7 @@ def test_adaptor_depth_gate(h):
         fa = _env(alice.rpc("adaptorfund", sid))
         h.pocx.generate(1, "alice_pocx")
         bob.rpc("adaptorrecv", fa)
-        fb = _env(bob.rpc("adaptorfund", sid))
-        # Leg B (BTC) gets exactly ONE confirmation — below the configured 2.
-        h.btc.generate(1, "bob_btc")
+        fb = _env(bob.rpc("adaptorfund", sid))   # BUILDS leg B (unbroadcast)
         alice.rpc("adaptorrecv", fb)
         b_txid, b_vout = fb["body"]["txid"], fb["body"]["vout"]
 
@@ -479,6 +505,9 @@ def test_adaptor_depth_gate(h):
         pa = _env(alice.rpc("adaptorsign", sid)); pb = _env(bob.rpc("adaptorsign", sid))
         bob.rpc("adaptorrecv", pa); alice.rpc("adaptorrecv", pb)
         alice.rpc("adaptorassemble", sid); bob.rpc("adaptorassemble", sid)
+        # Two-phase: broadcast the pre-built leg B post-Signed, mined to exactly
+        # ONE confirmation — below the configured n_b=2, so the reveal gate holds.
+        _broadcast_leg_b(bob, h.btc, "bob_btc", confs=1)
 
         # At 1 conf (< n_b=2) the reveal gate holds: tick does NOT redeem.
         for ev in alice.rpc("tick")["events"]:
