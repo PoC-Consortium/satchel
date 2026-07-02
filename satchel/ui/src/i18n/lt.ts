@@ -660,9 +660,9 @@ export const lt: Bundle = {
     noncesExchanged:
       "Ruošiami privatūs mainai — keičiamasi pasirašymo medžiaga. Niekas dar neužrakinta.",
     signedMaker:
-      "Abi pusės pasirašė. Jūsų demonas užrakina {a}, tada automatiškai pasiima {b}. Jei kas užstringa, jūsų {a} grįžta {t1}.",
+      "Abi pusės pasirašė ir jūsų {a} užrakinti. Jūsų demonas automatiškai pasiima {b}, kai tik kita pusė užrakina ir patvirtina savo pusę. Jei kas užstringa, jūsų {a} grįžta {t1}.",
     signedTaker:
-      "Abi pusės pasirašė. Jūsų demonas užrakina {b} ir pasiima {a}, kai tik kita pusė pajuda. Apsauga: grąžinimas {t2}.",
+      "Abi pusės pasirašė. Kai tik jų {a} patvirtinami, jūsų demonas užrakina jūsų {b}, tada automatiškai pasiima {a}. Kai jūsų {b} užrakinti, jie grįžta {t2}, jei kas užstringa.",
     fundedAMaker:
       "Jūsų {a} užrakinta. Laukiama, kol kita pusė užrakins savo {b}. Jei jie to niekada nepadarys, jūsų {a} grįžta automatiškai {t1}.",
     fundedATaker:

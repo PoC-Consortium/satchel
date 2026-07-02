@@ -660,9 +660,9 @@ export const ptBR: Bundle = {
     noncesExchanged:
       "Configurando o swap privado — trocando material de assinatura. Nada está bloqueado ainda.",
     signedMaker:
-      "Ambos os lados assinaram. Seu daemon bloqueia o {a} e depois reivindica o {b} automaticamente. Se algo travar, seu {a} retorna às {t1}.",
+      "Ambos os lados assinaram e seu {a} está bloqueado. Seu daemon reivindica o {b} automaticamente assim que o outro lado bloqueia e confirma. Se algo travar, seu {a} retorna às {t1}.",
     signedTaker:
-      "Ambos os lados assinaram. Seu daemon bloqueia o {b} e reivindica o {a} no instante em que o outro lado se mover. Rede de segurança: refund às {t2}.",
+      "Ambos os lados assinaram. Assim que o {a} deles for confirmado, seu daemon bloqueia seu {b} e depois reivindica o {a} automaticamente. Assim que seu {b} estiver bloqueado, ele retorna às {t2} se algo travar.",
     fundedAMaker:
       "Seu {a} está bloqueado. Aguardando o outro lado bloquear o {b} dele. Se ele nunca o fizer, seu {a} retorna automaticamente às {t1}.",
     fundedATaker:

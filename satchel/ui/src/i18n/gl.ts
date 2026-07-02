@@ -660,9 +660,9 @@ export const gl: Bundle = {
     noncesExchanged:
       "Configurando o intercambio privado — intercambiando material de sinatura. Aínda non se bloqueou nada.",
     signedMaker:
-      "Ambas as partes asinaron. O teu daemon bloquea os {a}, despois reclama os {b} automaticamente. Se algo se atasca, os teus {a} retornan ás {t1}.",
+      "Ambas as partes asinaron e os teus {a} están bloqueados. O teu daemon reclama os {b} automaticamente en canto a outra parte bloquea e o confirma. Se algo se atasca, os teus {a} retornan ás {t1}.",
     signedTaker:
-      "Ambas as partes asinaron. O teu daemon bloquea os {b} e reclama os {a} no momento en que a outra parte se move. Rede de seguranza: reembolso ás {t2}.",
+      "Ambas as partes asinaron. Unha vez confirmados os seus {a}, o teu daemon bloquea os teus {b} e despois reclama os {a} automaticamente. Unha vez bloqueados os teus {b}, retornan ás {t2} se algo se atasca.",
     fundedAMaker:
       "Os teus {a} están bloqueados. Agardando a que a outra parte bloquee os seus {b}. Se nunca o fan, os teus {a} retornan automaticamente ás {t1}.",
     fundedATaker:

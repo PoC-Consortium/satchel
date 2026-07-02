@@ -660,9 +660,9 @@ export const ro: Bundle = {
     noncesExchanged:
       "Se pregătește swap-ul privat — se schimbă materialul de semnare. Nimic nu este blocat încă.",
     signedMaker:
-      "Ambele părți au semnat. Daemon-ul tău blochează {a}, apoi revendică {b} automat. Dacă ceva se blochează, {a} se întoarce la {t1}.",
+      "Ambele părți au semnat și {a} sunt blocate. Daemon-ul tău revendică {b} automat de îndată ce cealaltă parte blochează și confirmă. Dacă ceva se blochează, {a} se întorc la {t1}.",
     signedTaker:
-      "Ambele părți au semnat. Daemon-ul tău blochează {b} și revendică {a} în momentul în care cealaltă parte se mișcă. Plasă de siguranță: rambursare la {t2}.",
+      "Ambele părți au semnat. Odată ce {a} lor este confirmat, daemon-ul tău blochează {b}, apoi revendică {a} automat. Odată ce {b} sunt blocate, se întorc la {t2} dacă ceva se blochează.",
     fundedAMaker:
       "{a} este blocat. Se așteaptă ca cealaltă parte să-și blocheze {b}. Dacă nu o fac niciodată, {a} se întoarce automat la {t1}.",
     fundedATaker:

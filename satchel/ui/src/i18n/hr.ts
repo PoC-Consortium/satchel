@@ -660,9 +660,9 @@ export const hr: Bundle = {
     noncesExchanged:
       "Postavljanje privatnog swapa — razmjena materijala za potpisivanje. Ništa još nije zaključano.",
     signedMaker:
-      "Obje strane potpisale. Vaš daemon zaključava {a}, zatim automatski preuzima {b}. Ako išta zapne, vaš {a} se vraća u {t1}.",
+      "Obje strane potpisale i vaš {a} je zaključan. Vaš daemon automatski preuzima {b} čim druga strana zaključa i potvrdi svoju stranu. Ako išta zapne, vaš {a} se vraća u {t1}.",
     signedTaker:
-      "Obje strane potpisale. Vaš daemon zaključava {b} i preuzima {a} u trenutku kad druga strana krene. Sigurnosna mreža: povrat u {t2}.",
+      "Obje strane potpisale. Čim se njihov {a} potvrdi, vaš daemon zaključava vaš {b}, a zatim automatski preuzima {a}. Čim je vaš {b} zaključan, vraća se u {t2} ako išta zapne.",
     fundedAMaker:
       "Vaš {a} je zaključan. Čeka se da druga strana zaključa svoj {b}. Ako nikad ne zaključa, vaš {a} se automatski vraća u {t1}.",
     fundedATaker:

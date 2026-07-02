@@ -660,9 +660,9 @@ export const fi: Bundle = {
     noncesExchanged:
       "Määritetään yksityistä swapia — vaihdetaan allekirjoitusmateriaalia. Mitään ei vielä lukita.",
     signedMaker:
-      "Molemmat osapuolet allekirjoittivat. Daemonisi lukitsee {a}, sitten lunastaa {b} automaattisesti. Jos jokin jumiutuu, {a} palautuu ajankohtana {t1}.",
+      "Molemmat osapuolet allekirjoittivat ja {a} on lukittu. Kun toinen osapuoli lukitsee ja vahvistaa sen, daemonisi lunastaa {b} automaattisesti. Jos jokin jumiutuu, {a} palautuu ajankohtana {t1}.",
     signedTaker:
-      "Molemmat osapuolet allekirjoittivat. Daemonisi lukitsee {b} ja lunastaa {a} heti kun toinen osapuoli toimii. Turvaverkko: palautus ajankohtana {t2}.",
+      "Molemmat osapuolet allekirjoittivat. Kun heidän {a} on vahvistettu, daemonisi lukitsee {b} ja lunastaa sitten {a} automaattisesti. Kun {b} on lukittu, se palautuu ajankohtana {t2}, jos jokin jumiutuu.",
     fundedAMaker:
       "{a} on lukittu. Odotetaan toista osapuolta lukitsemaan {b}. Jos he eivät koskaan tee niin, {a} palautuu automaattisesti ajankohtana {t1}.",
     fundedATaker:
