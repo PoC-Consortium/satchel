@@ -105,11 +105,12 @@ pub trait ChainBackend {
 
     /// Feerate in sat/vB from the node's estimator for a given confirmation
     /// target and estimate mode, with a conservative fallback when the estimator
-    /// has no data (fresh chains, regtest). A tighter `conf_target` (and
-    /// `conservative = true`, Core's CONSERVATIVE vs ECONOMICAL mode) yields the
-    /// going rate for faster confirmation — the lever the deadline-aware redeem
-    /// nurse escalates as a timelock approaches. Backends without a mode
-    /// distinction (Electrum) ignore `conservative`.
+    /// has no data (fresh chains, regtest). `conservative = false` preserves the
+    /// original baseline exactly (Core's default estimate_mode); `conservative =
+    /// true` requests Core's CONSERVATIVE mode for a robuster (higher) estimate —
+    /// the lever the deadline-aware redeem nurse escalates, together with a tighter
+    /// `conf_target`, as a timelock approaches. Backends without a mode distinction
+    /// (Electrum) ignore `conservative`.
     fn fee_rate_for(&self, conf_target: u16, conservative: bool) -> Result<u64>;
 
     /// Feerate for the default "normal" target (6 blocks, economical) — the
@@ -456,10 +457,17 @@ impl ChainBackend for CoreRpcBackend {
                     .max(self.params.min_feerate_sat_vb));
             }
         }
-        let mode = if conservative { "CONSERVATIVE" } else { "ECONOMICAL" };
+        // Preserve the original baseline EXACTLY: `estimatesmartfee(conf_target)`
+        // with no mode arg → Core's default estimate. Only the deadline-escalated
+        // bands pass an explicit CONSERVATIVE mode for a robuster (higher) estimate.
+        let args = if conservative {
+            vec![json!(conf_target), json!("CONSERVATIVE")]
+        } else {
+            vec![json!(conf_target)]
+        };
         let estimate = self
             .rpc
-            .call("estimatesmartfee", &[json!(conf_target), json!(mode)])
+            .call("estimatesmartfee", &args)
             .ok()
             .and_then(|r| r["feerate"].as_f64()) // BTC per kvB
             .map(|btc_kvb| ((btc_kvb * 1e8) / 1000.0).ceil() as u64)
