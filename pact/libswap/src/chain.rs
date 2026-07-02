@@ -568,10 +568,9 @@ impl ChainBackend for CoreRpcBackend {
         //    key is the funding address, so build the object with a dynamic key.
         let mut outputs = serde_json::Map::new();
         outputs.insert(address.to_string(), json!(amount));
-        let raw = self.rpc.call(
-            "createrawtransaction",
-            &[json!([]), Value::Object(outputs)],
-        )?;
+        let raw = self
+            .rpc
+            .call("createrawtransaction", &[json!([]), Value::Object(outputs)])?;
         let raw_hex = raw.as_str().context("createrawtransaction: non-string")?;
         // 2. select inputs + change; lock the inputs so nothing else spends them
         //    before we broadcast; RBF-signal; our explicit funding feerate.
@@ -600,9 +599,8 @@ impl ChainBackend for CoreRpcBackend {
         // 4. decode locally to recover the txid and the vout paying `address` —
         //    fundrawtransaction inserts change at a random position, so match the
         //    output by scriptPubKey rather than assuming an index.
-        let tx: Transaction =
-            bitcoin::consensus::encode::deserialize(&hex::decode(&signed_hex)?)
-                .context("decode built funding tx")?;
+        let tx: Transaction = bitcoin::consensus::encode::deserialize(&hex::decode(&signed_hex)?)
+            .context("decode built funding tx")?;
         let want_spk = self.params.parse_address(address)?;
         let vout = tx
             .output

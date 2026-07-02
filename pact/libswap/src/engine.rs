@@ -2659,9 +2659,7 @@ impl Engine {
         // value-capped target, bump only when it clears BIP125 Rule 4, else
         // re-anchor the same tx only if it was evicted.
         let market = backend.fee_rate_sat_per_vb()?;
-        let target = self
-            .fee_bump
-            .claim_feerate(market, amount, REFUND_TX_VSIZE);
+        let target = self.fee_bump.claim_feerate(market, amount, REFUND_TX_VSIZE);
         let incr = backend.incremental_relay_feerate()?;
         // BIP125 Rule 4 also constrains the ABSOLUTE fee: the replacement must
         // pay at least `incr * vsize` MORE than the tx it evicts. `target * vsize`
