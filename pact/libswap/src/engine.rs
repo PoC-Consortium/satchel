@@ -3635,34 +3635,44 @@ impl Engine {
             // Taker: wait for the maker's A lock; after we lock B, wait for their
             // reveal; then secure our A redeem.
             (Role::Participant, Signed) => {
-                if let Some(txid_b) = &rec.funding_b_txid {
-                    // Symmetry with the maker: while OUR leg B buries toward n_b
-                    // show a determinate "your lock confirming · confs/n_b" (the
-                    // maker can't reveal until then); once n_b-deep, the awaiting-
-                    // their-claim wait. confs are a chain read (resumable).
-                    let confs_b = self
-                        .lock_confs(&rec.chain_b, txid_b, rec.funding_b_vout, leg_spk(false))
-                        .unwrap_or(0);
-                    if confs_b < rec.n_b {
-                        self.progress_confirming(
-                            &rec.swap_id,
-                            &rec.chain_b,
-                            txid_b.clone(),
-                            rec.funding_b_vout,
-                            leg_spk(false),
-                            rec.n_b,
-                            "our_lock",
-                            None,
-                        )
+                // Two-phase (spec §7): leg B is BUILT (funding_b_txid set) at accept
+                // time but BROADCAST only after leg A is n_a-deep. So the honest
+                // wait until we broadcast is on THEIR leg A burying — show that, not
+                // a misleading "our lock 0/n_b" for a tx that isn't on-chain yet.
+                if rec.funding_b_broadcast {
+                    if let Some(txid_b) = &rec.funding_b_txid {
+                        // OUR leg B is live and burying toward n_b (the maker can't
+                        // reveal until then); once n_b-deep, the awaiting-their-claim
+                        // wait. confs are a chain read (resumable).
+                        let confs_b = self
+                            .lock_confs(&rec.chain_b, txid_b, rec.funding_b_vout, leg_spk(false))
+                            .unwrap_or(0);
+                        if confs_b < rec.n_b {
+                            self.progress_confirming(
+                                &rec.swap_id,
+                                &rec.chain_b,
+                                txid_b.clone(),
+                                rec.funding_b_vout,
+                                leg_spk(false),
+                                rec.n_b,
+                                "our_lock",
+                                None,
+                            )
+                        } else {
+                            self.progress_awaiting_anchored(
+                                &rec.swap_id,
+                                &rec.chain_b,
+                                "awaiting_claim",
+                                confs_b.saturating_sub(rec.n_b),
+                            )
+                        }
                     } else {
-                        self.progress_awaiting_anchored(
-                            &rec.swap_id,
-                            &rec.chain_b,
-                            "awaiting_claim",
-                            confs_b.saturating_sub(rec.n_b),
-                        )
+                        self.progress_awaiting(&rec.swap_id, &rec.chain_a, "awaiting_lock", prev)
                     }
                 } else if let Some(txid) = &rec.funding_a_txid {
+                    // Leg B built, not yet broadcast: we are waiting for the maker's
+                    // leg A to bury n_a-deep before we commit leg B — "their lock
+                    // confirming · confs/n_a".
                     self.progress_confirming(
                         &rec.swap_id,
                         &rec.chain_a,
