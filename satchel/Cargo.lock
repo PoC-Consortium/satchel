@@ -2690,7 +2690,7 @@ dependencies = [
 
 [[package]]
 name = "satchel"
-version = "0.1.0-rc6"
+version = "0.1.0-rc7"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",
