@@ -91,8 +91,9 @@ waiting for, you'll see one of:
 - **Their lock confirming · 3/6** — their funding is burying toward the depth you
   need before you act. The numbers are *confirmations so far / confirmations
   needed*.
-- **Securing your BTC · 2/6** — your own claim is burying toward final. When this
-  reaches the needed depth the swap flips to **Completed**.
+- **Securing your BTC · 2/6** — your own claim — a redeem *or* a refund — is
+  burying toward final. When it reaches the needed depth the swap flips to
+  **Completed** (or **Refunded**).
 
 Where it's relevant, the line also shows the current settlement **feerate** (for
 example `· 2 sat/vB`), so any automatic fee-bumping is visible to you rather than
@@ -102,11 +103,14 @@ hidden. It's purely informational — the engine drives the swap either way.
 > node wallet got locked partway through a swap — the engine **re-attempts it
 > automatically on every tick**. So if you see **"Locking your {coin}"** sitting
 > stuck, just unlock the wallet (`walletpassphrase`) and the swap **self-heals** on
-> the next pass, with no manual step from you. The retry is idempotent: it locates
-> any funding already on chain first, so it never double-funds. Classic
-> **Standard (HTLC)** swaps get this automatic retry; **Private (Taproot)** funding
-> instead fails into a recoverable state you can resume rather than auto-retrying on
-> a tick.
+> the next pass, with no manual step from you. The retry is idempotent — it
+> locates any funding already on chain first, so it never double-funds — and this
+> locate-first guard now covers **both** Standard (HTLC) and Private (Taproot)
+> swaps. A **Standard** swap also auto-retries its funding on every tick. A
+> **Private (Taproot)** swap instead broadcasts *your* leg only once both sides
+> have signed **and** the counterparty's leg is confirmed on-chain — so you never
+> lock first-in-the-dark — and a Taproot swap that funds and then stalls
+> auto-refunds at its timelock, so nothing strands unattended either way.
 
 ### On-chain detail
 

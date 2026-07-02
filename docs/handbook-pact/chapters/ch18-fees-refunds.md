@@ -25,25 +25,30 @@ redeem ratcheted **159 → 358 sat/vB** into a roughly **1 sat/vB** market — a
 was. The unified strategy fixes that by tracking the live estimate and gating on
 block height and mempool state.
 
-**Market-tracking, value-capped target** (`FeeBumpPolicy::target_feerate`,
-`fee_policy.rs:160`):
+**Two value-capped targets — funding vs. claim** (`FeeBumpPolicy::target_feerate`
+and `::claim_feerate`, `fee_policy.rs`). They differ only in the ceiling:
 
 ```text
-target = min(market,
-             value_at_risk × FEE_CAP_PCT / vsize,
-             max_feerate_sat_vb).max(1)
+funding: target = min(market, value_at_risk × FEE_CAP_PCT / vsize, max_feerate_sat_vb).max(1)
+claim:   target = min(market, value_at_risk × FEE_CAP_PCT / vsize).max(1)
 ```
 
 - `market` is the backend's live feerate estimate, so the bump **never bids
   above what the network is charging** — the storm is impossible by
   construction.
 - `value_at_risk × FEE_CAP_PCT / vsize` is the **value-at-risk cap**: with
-  `FEE_CAP_PCT = 100` (a hardcoded constant, `fee_policy.rs:28`, *not* a knob)
+  `FEE_CAP_PCT = 100` (a hardcoded constant, `fee_policy.rs`, *not* a knob)
   the absolute fee can never exceed the amount being claimed. This is Eclair's
   rule — "it wouldn't make sense to pay more in fees than the amount we're
-  trying to claim on-chain." It is a last-resort backstop, not the working term;
-  the `market` term is what keeps real fees low.
-- `max_feerate_sat_vb` (default 500) is the absolute local ceiling.
+  trying to claim on-chain."
+- **The `max_feerate_sat_vb` ceiling (default 500) applies to FUNDING only.** A
+  redeem or refund that fails to confirm before its timelock loses the whole leg,
+  so near a deadline paying the real going rate — even above 500 sat/vB during a
+  genuine mainnet spike — is value-justified insurance, bounded only by the value
+  cap (`claim_feerate`). Funding is a pre-commitment spend with no counterparty-
+  refund race, so it keeps the flat ceiling. The estimator's own sanity clamp was
+  correspondingly raised to 10 000 sat/vB (an overflow guard, **not** the fee
+  cap) so a real spike shows through to the claim path.
 - The result is floored at 1 sat/vB.
 
 Around that target, the loop applies three gates:
@@ -72,6 +77,20 @@ Around that target, the loop applies three gates:
 A dust guard still applies: a target whose `new_fee` would push the swept output
 below `DUST_LIMIT_SAT = 546` (`swap.rs:20`) is treated as "no bump" and falls
 through to the evicted-only rebroadcast path rather than dusting the output.
+
+**Deadline-aware redeem escalation.** The market-tracking baseline keeps fees
+cheap when there is time, but a pure market follower never reacts to the *clock*:
+in a flat market a marginal redeem can sit unconfirmed into its timelock and lose
+the leg. So the **redeem** nurse (v1 RBF and v2 CPFP alike) is deadline-aware —
+as the redeem's confirm-by deadline nears it escalates the estimator's
+confirmation target, `conf_target` 6 → 3 → 2 → 1 (with Core's CONSERVATIVE
+estimate mode in the tighter bands), keyed off absolute time-to-deadline
+thresholds (`redeem_conf_target`, `engine.rs`). Deadlines: the initiator's leg-B
+redeem → `T2`; the participant's leg-A redeem → `T1 − redeem-a margin`. This only
+raises the *market* term — the value-at-risk cap still bounds the absolute fee,
+so it is insurance, never overpay. Refunds keep the cheap baseline (we are the
+only spender — no counterparty race). The baseline itself is unchanged
+(`estimatesmartfee(6)`); regtest is exempt (test-feerate override).
 
 ## v1 fee-bumping (RBF)
 
@@ -139,6 +158,11 @@ through with a child-pays-for-parent transaction (`adaptor_cpfp_bump`,
 - The child signals RBF, so the *child* itself can be bumped further.
 - Child vsize is `CPFP_CHILD_VSIZE = 150` (`engine.rs`).
 - It emits `adaptor-cpfp` / `adaptor-rebroadcast` events.
+- The child's package target is **deadline-aware** (see "Deadline-aware redeem
+  escalation" above): as `T2` (initiator) or `T1 − margin` (participant) nears it
+  escalates `conf_target`, and it is bounded by the sweep output's value — if that
+  output is too small to fund the child to the target, the shortfall is logged
+  rather than silently under-bumped.
 
 This is a **plain CPFP** (no `submitpackage` / package relay): the parent
 redeem stays relayable on its own, so a normal CPFP child suffices to drag it
@@ -291,7 +315,7 @@ funding time).
 
 | Field | Default | Meaning |
 |---|---|---|
-| `max_feerate_sat_vb` | 500 sat/vB | ceiling for every local bump; also the hard system max (the estimator is clamped to 500), settable `1..=500` |
+| `max_feerate_sat_vb` | 500 sat/vB | ceiling for **funding** bumps only (redeem/refund are bounded by the value-at-risk cap instead, so they can exceed it near a deadline); settable `1..=500`. The estimator's own sanity clamp is a separate 10 000 sat/vB overflow guard. |
 | `funding.reservation_mult` | 3× | funds-gate headroom + funding-nurse bound (`× old_feerate`) |
 | `redeem.committed_mult` | 1× | v2 committed-redeem multiplier over live market (1 = commit at market, no padding; CPFP lifts it if the market climbs) |
 
