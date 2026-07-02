@@ -218,6 +218,80 @@ pub fn revoked_offer_from_event(event: &Event) -> Option<String> {
     None
 }
 
+// ---- Encrypted swap-state snapshots (seed-only cross-machine rescue) ----
+//
+// A party backs up its in-flight swap state to the relays, encrypted to
+// ITSELF, so a machine restored from the seed alone can rediscover and resume
+// (or refund) live swaps. Shape: an addressable (NIP-33) event under the
+// party's own identity key, `d` = an OPAQUE per-swap tag (so a relay can't
+// link the snapshot to the party's public offer for the same swap), content =
+// a `PACTSEALED1:` blob sealed to the party's own identity key (so only they
+// can read it). Replaceable → the relay keeps only the latest per swap;
+// tombstoned via NIP-09 on terminal. See issue #54 / the safety handbook.
+
+/// Addressable encrypted swap-state snapshot, one per `(our pubkey, swap)`.
+/// Distinct kind from offers so the two never collide.
+pub const SNAPSHOT_KIND: u16 = 31512;
+
+/// The opaque, deterministic `d`-tag for a swap's snapshot. Derived from the
+/// `swap_id` so every update to the same swap REPLACES the prior event, but
+/// opaque so a relay cannot correlate it with the public offer (kind 31510,
+/// `d = swap_id`) for the same swap. We never need to reverse it: rescue
+/// fetches all our snapshots by author+kind and reads the swap_id from inside
+/// the (decrypted) payload.
+pub fn snapshot_dtag(swap_id: &str) -> String {
+    hex::encode(pact_proto::crypto::tagged_hash("pact/rescue/dtag/v1", swap_id.as_bytes()))
+}
+
+/// Build a signed addressable snapshot event carrying a `PACTSEALED1:` blob
+/// (sealed to our own identity via `pact_proto::seal::seal_envelope`). `keys`
+/// MUST be our identity key. No NIP-40 expiration: a live swap's snapshot must
+/// persist until we tombstone it on completion, and we publish sparsely (at
+/// accept and, for v2, at signing) rather than refreshing on a timer.
+pub fn snapshot_event(sealed_blob: &str, dtag: &str, keys: &Keys) -> Result<Event> {
+    EventBuilder::new(Kind::Custom(SNAPSHOT_KIND), sealed_blob.to_string())
+        .tag(Tag::identifier(dtag.to_string()))
+        .sign_with_keys(keys)
+        .context("sign snapshot event")
+}
+
+/// NIP-09 deletion for one of our snapshots (coordinate
+/// `SNAPSHOT_KIND:<our pubkey>:<dtag>`), published when the swap reaches a
+/// terminal state so a rescued machine never resurrects a finished swap.
+pub fn snapshot_tombstone_event(dtag: &str, keys: &Keys) -> Result<Event> {
+    let coordinate = format!("{SNAPSHOT_KIND}:{}:{dtag}", keys.public_key().to_hex());
+    EventBuilder::new(Kind::EventDeletion, "")
+        .tag(Tag::parse(["a", &coordinate])?)
+        .sign_with_keys(keys)
+        .context("sign snapshot tombstone event")
+}
+
+/// Filter to fetch all OUR snapshots on rescue: our own addressable snapshot
+/// events (by author + kind). Content is opened with our identity key.
+pub fn my_snapshots_filter(me_xonly_hex: &str) -> Result<Filter> {
+    let me = PublicKey::from_hex(me_xonly_hex).context("invalid identity pubkey")?;
+    Ok(Filter::new().kind(Kind::Custom(SNAPSHOT_KIND)).author(me))
+}
+
+/// Verify a snapshot event and return its sealed blob for
+/// `pact_proto::seal::open_envelope`. Checks the event signature and that its
+/// author is us (`me_xonly_hex`) — a foreign snapshot event is ignored.
+pub fn snapshot_blob_from_event(event: &Event, me_xonly_hex: &str) -> Result<String> {
+    ensure!(
+        event.kind.as_u16() == SNAPSHOT_KIND,
+        "not a snapshot event (kind {})",
+        event.kind.as_u16()
+    );
+    event
+        .verify()
+        .map_err(|e| anyhow::anyhow!("bad nostr event signature: {e}"))?;
+    ensure!(
+        event.pubkey.to_hex() == me_xonly_hex,
+        "snapshot event author is not us"
+    );
+    Ok(event.content.clone())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -346,5 +420,35 @@ mod tests {
             .sign_with_keys(&a_keys)
             .unwrap();
         assert_eq!(revoked_offer_from_event(&forged), None);
+    }
+
+    #[test]
+    fn snapshot_event_seals_to_self_and_roundtrips() {
+        let (kp, keys, xonly) = identity(0x51);
+        // A swap-state snapshot is an envelope sealed to OUR OWN identity.
+        let snap = signed_offer(&kp); // any signed envelope works as the payload
+        let blob = pact_proto::seal::seal_envelope(&xonly, &snap).unwrap();
+        let dtag = snapshot_dtag(&snap.swap_id);
+        let ev = snapshot_event(&blob, &dtag, &keys).unwrap();
+
+        assert_eq!(ev.kind.as_u16(), SNAPSHOT_KIND);
+        assert_eq!(ev.pubkey.to_hex(), xonly); // authored by us (not ephemeral)
+        let tags: Vec<Vec<String>> = ev.tags.iter().map(|t| t.clone().to_vec()).collect();
+        assert!(tags.iter().any(|t| t[0] == "d" && t[1] == dtag));
+        // The d-tag is opaque — it is NOT the swap_id (so a relay can't link it
+        // to our public offer for the same swap).
+        assert_ne!(dtag, snap.swap_id);
+        assert_eq!(dtag, snapshot_dtag(&snap.swap_id)); // deterministic
+
+        // Only we can open it; the recovered blob decrypts to the snapshot.
+        let got = snapshot_blob_from_event(&ev, &xonly).unwrap();
+        assert_eq!(pact_proto::seal::open_envelope(&kp, &got).unwrap(), snap);
+
+        // A foreign author's snapshot event is rejected.
+        assert!(snapshot_blob_from_event(&ev, &identity(0x52).2).is_err());
+
+        // Tombstone references our snapshot coordinate.
+        let tomb = snapshot_tombstone_event(&dtag, &keys).unwrap();
+        assert_eq!(tomb.kind, Kind::EventDeletion);
     }
 }
