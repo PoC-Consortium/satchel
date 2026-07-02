@@ -3571,6 +3571,34 @@ impl Engine {
                 "settlement",
                 feerate_of(rec.final_tx_hex.as_deref(), rec.amount_a),
             ),
+            // Maker just accepted; funding leg A (about to broadcast / retrying).
+            // A growing count here flags a stuck fund (e.g. a locked wallet, #2).
+            (Initiator, Accepted) => {
+                self.progress_awaiting(&rec.swap_id, &rec.chain_a, "funding", prev)
+            }
+            // A broadcast refund burying — surface it as securing (parity with the
+            // redeem `settlement`) so a refund's wait is never a blank line. Each
+            // side refunds its OWN leg: initiator leg A, participant leg B.
+            (Initiator, Refunded) => self.progress_confirming(
+                &rec.swap_id,
+                &rec.chain_a,
+                rec.final_txid.clone()?,
+                None,
+                spend_spk(rec),
+                rec.n_a,
+                "settlement",
+                feerate_of(rec.final_tx_hex.as_deref(), rec.amount_a),
+            ),
+            (Participant, Refunded) => self.progress_confirming(
+                &rec.swap_id,
+                &rec.chain_b,
+                rec.final_txid.clone()?,
+                None,
+                spend_spk(rec),
+                rec.n_b,
+                "settlement",
+                feerate_of(rec.final_tx_hex.as_deref(), rec.amount_b),
+            ),
             _ => None,
         }
     }
@@ -3696,6 +3724,48 @@ impl Engine {
                 rec.n_a,
                 "settlement",
                 Some(rec.redeem_feerate_a),
+            ),
+            // Pre-Signed (handshake) parity with v1: the maker is funding leg A +
+            // negotiating the adaptor sigs; the taker has built leg B and is
+            // waiting on the maker's leg A — same phases v1 shows from Accepted, so
+            // neither side sees a blank during the (brief) handshake.
+            (Role::Initiator, Accepted | NoncesExchanged) => {
+                self.progress_awaiting(&rec.swap_id, &rec.chain_a, "funding", prev)
+            }
+            (Role::Participant, Accepted | NoncesExchanged) => match &rec.funding_a_txid {
+                Some(txid) => self.progress_confirming(
+                    &rec.swap_id,
+                    &rec.chain_a,
+                    txid.clone(),
+                    rec.funding_a_vout,
+                    leg_spk(true),
+                    rec.n_a,
+                    "their_lock",
+                    None,
+                ),
+                None => self.progress_awaiting(&rec.swap_id, &rec.chain_a, "awaiting_lock", prev),
+            },
+            // A broadcast refund burying — surface as securing (parity with the
+            // redeem `settlement`). Each side refunds its OWN leg.
+            (Role::Initiator, Refunded) => self.progress_confirming(
+                &rec.swap_id,
+                &rec.chain_a,
+                rec.final_txid_a.clone()?,
+                None,
+                first_output_spk(rec.final_tx_a_hex.as_deref()),
+                rec.n_a,
+                "settlement",
+                None,
+            ),
+            (Role::Participant, Refunded) => self.progress_confirming(
+                &rec.swap_id,
+                &rec.chain_b,
+                rec.final_txid_b.clone()?,
+                None,
+                first_output_spk(rec.final_tx_b_hex.as_deref()),
+                rec.n_b,
+                "settlement",
+                None,
             ),
             _ => None,
         }
