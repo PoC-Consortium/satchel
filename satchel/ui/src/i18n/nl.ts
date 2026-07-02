@@ -660,9 +660,9 @@ export const nl: Bundle = {
     noncesExchanged:
       "De privé swap opzetten — ondertekeningsmateriaal uitwisselen. Er is nog niets vergrendeld.",
     signedMaker:
-      "Beide kanten hebben ondertekend. Je daemon vergrendelt de {a} en claimt vervolgens automatisch de {b}. Als er iets vastloopt, komt je {a} terug om {t1}.",
+      "Beide kanten hebben ondertekend en je {a} is vergrendeld. Je daemon claimt de {b} automatisch zodra de andere kant vergrendelt en bevestigt. Als er iets vastloopt, komt je {a} terug om {t1}.",
     signedTaker:
-      "Beide kanten hebben ondertekend. Je daemon vergrendelt de {b} en claimt de {a} zodra de andere kant beweegt. Vangnet: refund om {t2}.",
+      "Beide kanten hebben ondertekend. Zodra hun {a} is bevestigd, vergrendelt je daemon je {b} en claimt vervolgens automatisch de {a}. Zodra je {b} is vergrendeld, komt het terug om {t2} als er iets vastloopt.",
     fundedAMaker:
       "Je {a} is vergrendeld. Wachten tot de andere kant zijn {b} vergrendelt. Als zij dat nooit doen, komt je {a} automatisch terug om {t1}.",
     fundedATaker:

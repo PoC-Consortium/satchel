@@ -660,9 +660,9 @@ export const it: Bundle = {
     noncesExchanged:
       "Configurazione dello swap privato — scambio del materiale di firma. Nulla è ancora bloccato.",
     signedMaker:
-      "Entrambe le parti hanno firmato. Il tuo daemon blocca i {a}, poi reclama i {b} automaticamente. Se qualcosa si blocca, i tuoi {a} tornano alle {t1}.",
+      "Entrambe le parti hanno firmato e i tuoi {a} sono bloccati. Il tuo daemon reclama i {b} automaticamente non appena l'altra parte blocca e conferma. Se qualcosa si blocca, i tuoi {a} tornano alle {t1}.",
     signedTaker:
-      "Entrambe le parti hanno firmato. Il tuo daemon blocca i {b} e reclama i {a} nel momento in cui l'altra parte si muove. Rete di sicurezza: rimborso alle {t2}.",
+      "Entrambe le parti hanno firmato. Una volta confermati i loro {a}, il tuo daemon blocca i tuoi {b}, poi reclama i {a} automaticamente. Una volta bloccati i tuoi {b}, tornano alle {t2} se qualcosa si blocca.",
     fundedAMaker:
       "I tuoi {a} sono bloccati. In attesa che l'altra parte blocchi i suoi {b}. Se non lo fanno mai, i tuoi {a} tornano automaticamente alle {t1}.",
     fundedATaker:

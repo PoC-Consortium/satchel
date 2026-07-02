@@ -660,9 +660,9 @@ export const fr: Bundle = {
     noncesExchanged:
       "Mise en place du swap privé — échange du matériel de signature. Rien n'est encore verrouillé.",
     signedMaker:
-      "Les deux côtés ont signé. Votre daemon verrouille les {a}, puis réclame les {b} automatiquement. Si quelque chose se bloque, vos {a} reviennent à {t1}.",
+      "Les deux côtés ont signé et vos {a} sont verrouillés. Votre daemon réclame les {b} automatiquement dès que l'autre côté verrouille et confirme. Si quelque chose se bloque, vos {a} reviennent à {t1}.",
     signedTaker:
-      "Les deux côtés ont signé. Votre daemon verrouille les {b} et réclame les {a} dès que l'autre côté bouge. Filet de sécurité : remboursement à {t2}.",
+      "Les deux côtés ont signé. Une fois leurs {a} confirmés, votre daemon verrouille vos {b}, puis réclame les {a} automatiquement. Une fois vos {b} verrouillés, ils reviennent à {t2} si quelque chose se bloque.",
     fundedAMaker:
       "Vos {a} sont verrouillés. En attente que l'autre côté verrouille ses {b}. S'il ne le fait jamais, vos {a} reviennent automatiquement à {t1}.",
     fundedATaker:

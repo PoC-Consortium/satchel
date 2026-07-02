@@ -660,9 +660,9 @@ export const cs: Bundle = {
     noncesExchanged:
       "Nastavování soukromého swapu — výměna podpisového materiálu. Zatím není nic uzamčeno.",
     signedMaker:
-      "Obě strany podepsaly. Váš daemon uzamkne {a} a poté automaticky nárokuje {b}. Pokud cokoli uvázne, vaše {a} se vrátí v {t1}.",
+      "Obě strany podepsaly a vaše {a} jsou uzamčené. Váš daemon automaticky nárokuje {b}, jakmile druhá strana uzamkne a potvrdí svou stranu. Pokud cokoli uvázne, vaše {a} se vrátí v {t1}.",
     signedTaker:
-      "Obě strany podepsaly. Váš daemon uzamkne {b} a nárokuje {a} ve chvíli, kdy se druhá strana pohne. Záchranná síť: vrácení v {t2}.",
+      "Obě strany podepsaly. Jakmile se jejich {a} potvrdí, váš daemon uzamkne vaše {b} a poté automaticky nárokuje {a}. Jakmile jsou vaše {b} uzamčené, vrátí se v {t2}, pokud cokoli uvázne.",
     fundedAMaker:
       "Vaše {a} jsou uzamčena. Čeká se, až druhá strana uzamkne svá {b}. Pokud to nikdy neudělají, vaše {a} se automaticky vrátí v {t1}.",
     fundedATaker:

@@ -660,9 +660,9 @@ export const de: Bundle = {
     noncesExchanged:
       "Der private Swap wird eingerichtet — Signiermaterial wird ausgetauscht. Noch ist nichts gesperrt.",
     signedMaker:
-      "Beide Seiten haben signiert. Dein Daemon sperrt die {a} und beansprucht dann automatisch die {b}. Falls etwas stockt, kommen deine {a} um {t1} zurück.",
+      "Beide Seiten haben signiert und deine {a} sind gesperrt. Dein Daemon beansprucht die {b} automatisch, sobald die andere Seite sperrt und bestätigt. Falls etwas stockt, kommen deine {a} um {t1} zurück.",
     signedTaker:
-      "Beide Seiten haben signiert. Dein Daemon sperrt die {b} und beansprucht die {a}, sobald die andere Seite handelt. Sicherheitsnetz: Erstattung um {t2}.",
+      "Beide Seiten haben signiert. Sobald ihre {a} bestätigt sind, sperrt dein Daemon deine {b} und beansprucht dann automatisch die {a}. Sobald deine {b} gesperrt sind, kommen sie um {t2} zurück, falls etwas stockt.",
     fundedAMaker:
       "Deine {a} sind gesperrt. Warten darauf, dass die andere Seite ihre {b} sperrt. Falls sie es nie tut, kommen deine {a} automatisch um {t1} zurück.",
     fundedATaker:

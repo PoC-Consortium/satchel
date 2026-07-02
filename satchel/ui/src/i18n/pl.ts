@@ -660,9 +660,9 @@ export const pl: Bundle = {
     noncesExchanged:
       "Konfigurowanie prywatnego swapa — wymiana materiału do podpisywania. Nic nie jest jeszcze zablokowane.",
     signedMaker:
-      "Obie strony podpisały. Twój daemon blokuje {a}, a następnie automatycznie odbiera {b}. Jeśli cokolwiek utknie, Twoje {a} wracają o {t1}.",
+      "Obie strony podpisały, a Twoje {a} są zablokowane. Twój daemon automatycznie odbierze {b}, gdy tylko druga strona zablokuje i potwierdzi swoją stronę. Jeśli cokolwiek utknie, Twoje {a} wracają o {t1}.",
     signedTaker:
-      "Obie strony podpisały. Twój daemon blokuje {b} i odbiera {a}, gdy tylko druga strona zadziała. Siatka bezpieczeństwa: zwrot o {t2}.",
+      "Obie strony podpisały. Gdy tylko ich {a} zostaną potwierdzone, Twój daemon zablokuje Twoje {b}, a następnie automatycznie odbierze {a}. Gdy Twoje {b} są zablokowane, wracają o {t2}, jeśli cokolwiek utknie.",
     fundedAMaker:
       "Twoje {a} są zablokowane. Czekanie, aż druga strona zablokuje swoje {b}. Jeśli tego nie zrobi, Twoje {a} wracają automatycznie o {t1}.",
     fundedATaker:

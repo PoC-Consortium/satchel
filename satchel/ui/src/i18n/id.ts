@@ -660,9 +660,9 @@ export const id: Bundle = {
     noncesExchanged:
       "Menyiapkan swap privat — bertukar materi penandatanganan. Belum ada yang dikunci.",
     signedMaker:
-      "Kedua sisi menandatangani. Daemon Anda mengunci {a}, lalu mengklaim {b} secara otomatis. Jika ada yang macet, {a} Anda kembali pada {t1}.",
+      "Kedua sisi menandatangani dan {a} Anda terkunci. Begitu sisi lain mengunci dan mengonfirmasinya, daemon Anda mengklaim {b} secara otomatis. Jika ada yang macet, {a} Anda kembali pada {t1}.",
     signedTaker:
-      "Kedua sisi menandatangani. Daemon Anda mengunci {b} dan mengklaim {a} begitu sisi lain bergerak. Jaring pengaman: refund pada {t2}.",
+      "Kedua sisi menandatangani. Begitu {a} mereka dikonfirmasi, daemon Anda mengunci {b} Anda, lalu mengklaim {a} secara otomatis. Begitu {b} Anda terkunci, ia kembali pada {t2} jika ada yang macet.",
     fundedAMaker:
       "{a} Anda terkunci. Menunggu sisi lain mengunci {b} mereka. Jika mereka tidak pernah melakukannya, {a} Anda kembali otomatis pada {t1}.",
     fundedATaker:

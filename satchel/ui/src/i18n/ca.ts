@@ -660,9 +660,9 @@ export const ca: Bundle = {
     noncesExchanged:
       "Preparant l'intercanvi privat — intercanviant material de signatura. Encara no es bloqueja res.",
     signedMaker:
-      "Les dues parts han signat. El teu dimoni bloqueja els {a}, després reclama els {b} automàticament. Si alguna cosa s'encalla, els teus {a} tornen a {t1}.",
+      "Les dues parts han signat i els teus {a} estan bloquejats. El teu dimoni reclama els {b} automàticament tan bon punt l'altra part bloqueja i ho confirma. Si alguna cosa s'encalla, els teus {a} tornen a {t1}.",
     signedTaker:
-      "Les dues parts han signat. El teu dimoni bloqueja els {b} i reclama els {a} en el moment que l'altra part actua. Xarxa de seguretat: reemborsament a {t2}.",
+      "Les dues parts han signat. Un cop confirmats els seus {a}, el teu dimoni bloqueja els teus {b} i després reclama els {a} automàticament. Un cop bloquejats els teus {b}, tornen a {t2} si alguna cosa s'encalla.",
     fundedAMaker:
       "Els teus {a} estan bloquejats. Esperant que l'altra part bloquegi els seus {b}. Si no ho fan mai, els teus {a} tornen automàticament a {t1}.",
     fundedATaker:

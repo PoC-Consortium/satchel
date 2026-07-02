@@ -660,9 +660,9 @@ export const es: Bundle = {
     noncesExchanged:
       "Configurando el swap privado — intercambiando material de firma. Aún no se bloquea nada.",
     signedMaker:
-      "Ambas partes han firmado. Tu daemon bloquea los {a}, luego reclama los {b} automáticamente. Si algo se atasca, tus {a} vuelven a las {t1}.",
+      "Ambas partes han firmado y tus {a} están bloqueados. Tu daemon reclama los {b} automáticamente en cuanto la otra parte bloquea y lo confirma. Si algo se atasca, tus {a} vuelven a las {t1}.",
     signedTaker:
-      "Ambas partes han firmado. Tu daemon bloquea los {b} y reclama los {a} en cuanto la otra parte se mueve. Red de seguridad: reembolso a las {t2}.",
+      "Ambas partes han firmado. Una vez que sus {a} estén confirmados, tu daemon bloquea tus {b} y luego reclama los {a} automáticamente. Una vez bloqueados tus {b}, vuelven a las {t2} si algo se atasca.",
     fundedAMaker:
       "Tus {a} están bloqueados. Esperando a que la otra parte bloquee sus {b}. Si nunca lo hace, tus {a} vuelven automáticamente a las {t1}.",
     fundedATaker:

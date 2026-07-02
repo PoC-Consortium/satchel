@@ -660,9 +660,9 @@ export const tr: Bundle = {
     noncesExchanged:
       "Özel takas kuruluyor — imzalama materyali değişiliyor. Henüz hiçbir şey kilitli değil.",
     signedMaker:
-      "Her iki taraf da imzaladı. Daemon'ınız {a} miktarını kilitler, ardından {b} miktarını otomatik olarak talep eder. Bir şey takılırsa, {a} miktarınız {t1} zamanında geri döner.",
+      "Her iki taraf da imzaladı ve {a} miktarınız kilitli. Diğer taraf kilitleyip onayladığında, daemon'ınız {b} miktarını otomatik olarak talep eder. Bir şey takılırsa, {a} miktarınız {t1} zamanında geri döner.",
     signedTaker:
-      "Her iki taraf da imzaladı. Daemon'ınız {b} miktarını kilitler ve diğer taraf hareket eder etmez {a} miktarını talep eder. Güvenlik ağı: {t2} zamanında geri ödeme.",
+      "Her iki taraf da imzaladı. Onların {a} miktarı onaylandığında, daemon'ınız {b} miktarınızı kilitler, ardından {a} miktarını otomatik olarak talep eder. {b} miktarınız kilitlendikten sonra, bir şey takılırsa {t2} zamanında geri döner.",
     fundedAMaker:
       "{a} miktarınız kilitli. Diğer tarafın {b} miktarını kilitlemesini bekliyor. Hiç yapmazlarsa, {a} miktarınız {t1} zamanında otomatik olarak geri döner.",
     fundedATaker:
