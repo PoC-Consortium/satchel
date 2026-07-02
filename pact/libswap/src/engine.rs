@@ -24,9 +24,7 @@ use crate::adaptor_swap::AdaptorState;
 use crate::chain::{ChainBackend, MultiBackend};
 use crate::htlc::extract_preimage;
 use crate::keys::{hash_preimage, swap_id};
-use crate::messages::{
-    self, AbortBody, AcceptBody, ChainRef, Envelope, FundedBody, InitBody, RedeemedBody,
-};
+use crate::messages::{self, AbortBody, AcceptBody, ChainRef, Envelope, FundedBody, InitBody};
 use crate::params::{ChainParams, Network};
 use crate::registry;
 use crate::store::{AdaptorSwapRecord, Store, SwapRecord};
@@ -2810,16 +2808,12 @@ impl Engine {
                     }
                 }
             }
-            "redeemed" => {
-                let body: RedeemedBody = serde_json::from_value(envelope.body.clone())
-                    .context("malformed redeemed body")?;
-                let preimage = parse_hash(&body.preimage)?;
-                ensure!(
-                    hash_preimage(&preimage) == parse_hash(&rec.hash_h)?,
-                    "redeemed: preimage does not hash to H"
-                );
-                rec.preimage = Some(body.preimage);
-            }
+            // Advisory courtesy (spec §8.6). The preimage is authoritatively
+            // extracted from the on-chain redeem witness (`extract_preimage`),
+            // never trusted from a message — so this implementation neither sends
+            // nor consumes it. Accept and ignore for interop: a third-party client
+            // MAY still send it, and dropping it is safe (we learn `s` from chain).
+            "redeemed" => {}
             "abort" => {
                 let body: AbortBody =
                     serde_json::from_value(envelope.body.clone()).unwrap_or(AbortBody {
