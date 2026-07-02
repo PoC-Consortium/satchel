@@ -485,6 +485,13 @@ Bob MUST NOT rely on receiving this: he MUST independently watch the
 chain-B HTLC outpoint and extract `s` from the spending transaction's
 witness (third witness element, validated by `SHA256(s) == H`).
 
+> Note (non-normative). This message is fully optional on both ends. The Pact
+> reference implementation neither sends nor consumes it: both parties always
+> learn `s` from the chain-B spend (above), which is authoritative. A client MAY
+> still send it, and a receiver MAY ignore it. Its presence only makes the
+> counterparty's status update sooner — never a matter of safety or completion,
+> which rest on the timelocks and chain watching alone.
+
 ### 8.7 `abort` (either direction)
 
 ```json

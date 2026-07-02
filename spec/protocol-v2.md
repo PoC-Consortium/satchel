@@ -174,7 +174,10 @@ pattern), so both redeems can be pre-signed. Message sequence:
 6. **`funded`** (funder→counterparty): funding broadcast + confirmed (as v1
    §8.5). Bob funds B only after Alice's A is seen and the adaptor sigs
    verify.
-7. **`redeemed`** (A→B, courtesy): Alice claimed B; `t` is now on-chain.
+7. **`redeemed`** (A→B, courtesy): Alice claimed B; `t` is now on-chain. Fully
+   optional on both ends, as in v1 §8.6 — the reference implementation neither
+   sends nor consumes it; Bob extracts `t` from the on-chain leg-B spend, which
+   is authoritative. It only speeds a status update, never safety or completion.
 8. **`abort`** (either): as v1.
 
 A party MUST NOT broadcast its funding until it holds a verified
