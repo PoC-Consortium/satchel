@@ -53,7 +53,14 @@ export function narrate(s: Swap): string {
         v,
       );
     }
+    // The v1 maker stays in funded_a until leg B is n_b-deep, so once the
+    // progress line tracks the taker's lock ("their lock confirming") the
+    // honest story is the both-locked one — the same watching-based split
+    // v2's `signed` case does above.
     case "funded_a":
+      if (maker && s.progress?.watching === "their_lock") {
+        return tr("narrate.fundedBMaker", v);
+      }
       return tr(maker ? "narrate.fundedAMaker" : "narrate.fundedATaker", v);
     case "funded_b":
       return tr(maker ? "narrate.fundedBMaker" : "narrate.fundedBTaker", v);
