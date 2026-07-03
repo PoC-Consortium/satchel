@@ -41,10 +41,14 @@ key *types*:
 | Refund key, chain *c*, swap index *i* | `m/7228'/3'/coin(c)'/i'` | secp256k1 x-only — signs the single-key CLTV refund tapleaf |
 | Adaptor-secret source, swap index *i* | `m/7228'/2'/i'` | feeds §3.1 (was the preimage source) |
 
-`coin(c)`, swap-index rules, and "one swap key per chain per swap" are
-inherited from v1 §4.1–4.2. The refund key is a **new, separate** key
-(`branch 3'`) so the refund tapleaf is single-sig and independent of the
-MuSig2 aggregate.
+`coin(c)`, swap-key indexing, and "one swap key per chain per swap" are
+inherited from v1 §4.1–4.2 — including the initiator-counter / participant-
+anchor split: the initiator's paths use its counter `i` as above, while the
+**participant** anchors both its swap and refund keys to the adaptor point
+`T` (the v2 anchor) exactly as v1 §4.2 anchors to `H`, on the same branches
+(`1'` swap, `3'` refund) at the anchored depth. The refund key is a **new,
+separate** key (`branch 3'`) so the refund tapleaf is single-sig and
+independent of the MuSig2 aggregate.
 
 ### 3.1 Deterministic adaptor secret
 
@@ -215,9 +219,10 @@ v2 spend types diverge — the one real deviation from "inherited unchanged":
 
 ## 9. Recovery
 
-Seed + swap index re-derive every long-term key (swap, refund) and `t`
-(Alice). This is always enough to take the **refund** path via the §4
-tapleaf. Completing an in-flight **cooperative** redeem additionally needs
+Seed + swap index (Alice) or seed + adaptor point `T` (Bob, whose keys are
+anchored to `T` — v1 §4.2) re-derive every long-term key (swap, refund),
+and Alice's index also re-derives `t`. This is always enough to take the
+**refund** path via the §4 tapleaf. Completing an in-flight **cooperative** redeem additionally needs
 the persisted MuSig2 session state (nonces are not seed-derived, §3.2); if
 that state is lost mid-session, the swap falls back to the timelock refund —
 never to nonce reuse.

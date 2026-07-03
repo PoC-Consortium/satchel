@@ -251,9 +251,22 @@ pub fn snapshot_dtag(swap_id: &str) -> String {
 /// MUST be our identity key. No NIP-40 expiration: a live swap's snapshot must
 /// persist until we tombstone it on completion, and we publish sparsely (at
 /// accept and, for v2, at signing) rather than refreshing on a timer.
-pub fn snapshot_event(sealed_blob: &str, dtag: &str, keys: &Keys) -> Result<Event> {
+///
+/// `created_at` is EXPLICIT because addressable-event replacement is decided
+/// by it, and the NIP-01 tie-break for an equal `created_at` keeps the LOWEST
+/// event id — two snapshots of the same swap published within one second
+/// (accept → Signed is often that fast) could otherwise resolve to the OLDER
+/// state and strand a rescue. The caller passes `now + seq` so a later
+/// snapshot always strictly replaces an earlier one.
+pub fn snapshot_event(
+    sealed_blob: &str,
+    dtag: &str,
+    keys: &Keys,
+    created_at: u64,
+) -> Result<Event> {
     EventBuilder::new(Kind::Custom(SNAPSHOT_KIND), sealed_blob.to_string())
         .tag(Tag::identifier(dtag.to_string()))
+        .custom_created_at(Timestamp::from(created_at))
         .sign_with_keys(keys)
         .context("sign snapshot event")
 }
@@ -261,10 +274,14 @@ pub fn snapshot_event(sealed_blob: &str, dtag: &str, keys: &Keys) -> Result<Even
 /// NIP-09 deletion for one of our snapshots (coordinate
 /// `SNAPSHOT_KIND:<our pubkey>:<dtag>`), published when the swap reaches a
 /// terminal state so a rescued machine never resurrects a finished swap.
-pub fn snapshot_tombstone_event(dtag: &str, keys: &Keys) -> Result<Event> {
+/// `created_at` explicit for the same same-second reason as
+/// [`snapshot_event`]: NIP-09 only covers events up to the deletion's
+/// `created_at`, so the caller stamps it past the last snapshot's.
+pub fn snapshot_tombstone_event(dtag: &str, keys: &Keys, created_at: u64) -> Result<Event> {
     let coordinate = format!("{SNAPSHOT_KIND}:{}:{dtag}", keys.public_key().to_hex());
     EventBuilder::new(Kind::EventDeletion, "")
         .tag(Tag::parse(["a", &coordinate])?)
+        .custom_created_at(Timestamp::from(created_at))
         .sign_with_keys(keys)
         .context("sign snapshot tombstone event")
 }
@@ -432,9 +449,12 @@ mod tests {
         let snap = signed_offer(&kp); // any signed envelope works as the payload
         let blob = pact_proto::seal::seal_envelope(&xonly, &snap).unwrap();
         let dtag = snapshot_dtag(&snap.swap_id);
-        let ev = snapshot_event(&blob, &dtag, &keys).unwrap();
+        let ev = snapshot_event(&blob, &dtag, &keys, 1_700_000_000).unwrap();
 
         assert_eq!(ev.kind.as_u16(), SNAPSHOT_KIND);
+        // Explicit created_at — replacement order is caller-controlled (a later
+        // snapshot in the same wall-clock second must still win NIP-33).
+        assert_eq!(ev.created_at.as_secs(), 1_700_000_000);
         assert_eq!(ev.pubkey.to_hex(), xonly); // authored by us (not ephemeral)
         let tags: Vec<Vec<String>> = ev.tags.iter().map(|t| t.clone().to_vec()).collect();
         assert!(tags.iter().any(|t| t[0] == "d" && t[1] == dtag));
@@ -451,7 +471,8 @@ mod tests {
         assert!(snapshot_blob_from_event(&ev, &identity(0x52).2).is_err());
 
         // Tombstone references our snapshot coordinate.
-        let tomb = snapshot_tombstone_event(&dtag, &keys).unwrap();
+        let tomb = snapshot_tombstone_event(&dtag, &keys, 1_700_000_002).unwrap();
         assert_eq!(tomb.kind, Kind::EventDeletion);
+        assert_eq!(tomb.created_at.as_secs(), 1_700_000_002);
     }
 }

@@ -358,11 +358,7 @@ fn build_event(kind: &str, recipient: Option<&str>, payload: &str, keys: &Keys) 
             let env = serde_json::from_str(payload).context("parse offer payload")?;
             // Publish time drives the rolling NIP-40 relay TTL; each refresh
             // re-queues the offer, so this advances the listing's current expiry.
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
-            pn::offer_event(&env, keys, now)
+            pn::offer_event(&env, keys, unix_now())
         }
         "giftwrap" => pn::giftwrap(recipient.context("giftwrap row has no recipient")?, payload),
         "revoke" => {
@@ -385,11 +381,21 @@ fn build_event(kind: &str, recipient: Option<&str>, payload: &str, keys: &Keys) 
                 .get("blob")
                 .and_then(|x| x.as_str())
                 .context("snapshot payload has no blob")?;
+            // The engine's state rank: a later-state snapshot (v2 Signed after
+            // accept) is stamped `now + seq` so it strictly replaces the
+            // earlier one even when both publish within the same second
+            // (NIP-01 breaks an equal-created_at tie by LOWEST id — which
+            // could keep the accept-stage snapshot and strand a rescue).
+            let seq = v.get("seq").and_then(|x| x.as_u64()).unwrap_or(0);
             // Map swap_id → opaque replaceable-event tag here, so the swap_id
             // never leaves the machine.
-            pn::snapshot_event(blob, &pn::snapshot_dtag(swap_id), keys)
+            pn::snapshot_event(blob, &pn::snapshot_dtag(swap_id), keys, unix_now() + seq)
         }
-        "snapshot_tombstone" => pn::snapshot_tombstone_event(&pn::snapshot_dtag(payload), keys),
+        // Stamped past any snapshot's created_at (`+ seq` above caps at 1):
+        // NIP-09 only covers events up to the deletion's created_at.
+        "snapshot_tombstone" => {
+            pn::snapshot_tombstone_event(&pn::snapshot_dtag(payload), keys, unix_now() + 2)
+        }
         other => anyhow::bail!("unknown outbox kind '{other}'"),
     })();
     match built {
@@ -399,6 +405,14 @@ fn build_event(kind: &str, recipient: Option<&str>, payload: &str, keys: &Keys) 
             None
         }
     }
+}
+
+/// Wall-clock unix seconds — the `created_at` basis for outbox-built events.
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 /// Read the NIP-40 expiration (unix secs) from an event's tags, or 0.

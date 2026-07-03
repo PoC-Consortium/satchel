@@ -121,8 +121,12 @@ pub trait Noticeboard {
     /// (issue #54). Nostr-only — the HTTP board has no rescue channel, so the
     /// default is a no-op. The Nostr service maps `swap_id` to an OPAQUE
     /// replaceable-event tag (`snapshot_dtag`), so the swap_id never leaves the
-    /// machine in the clear.
-    fn publish_snapshot(&self, _swap_id: &str, _sealed_blob: &str) -> Result<()> {
+    /// machine in the clear. `seq` ranks snapshots of the SAME swap (v2:
+    /// accept 0, Signed 1) — stamped into the event's `created_at` so a
+    /// later-state snapshot strictly replaces an earlier one even when both
+    /// publish within the same second (an equal-created_at NIP-33 replacement
+    /// ties by lowest id and could keep the STALE state).
+    fn publish_snapshot(&self, _swap_id: &str, _sealed_blob: &str, _seq: u64) -> Result<()> {
         Ok(())
     }
     /// Tombstone a swap's snapshot on a terminal state so a rescued machine

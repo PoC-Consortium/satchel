@@ -121,7 +121,8 @@ The BIP32 **purpose** for Pact is `7228'` ("PACT" on a phone keypad).
 | Material | Path | Key type |
 |---|---|---|
 | Identity key | `m/7228'/0'/0'` | BIP340 x-only Schnorr key (message signing, §8.2; stable identity across swaps) |
-| Swap key, chain *c*, swap index *i* | `m/7228'/1'/coin(c)'/i'` | compressed secp256k1, ECDSA (HTLC redeem/refund) |
+| Swap key, initiator, chain *c*, swap index *i* | `m/7228'/1'/coin(c)'/i'` | compressed secp256k1, ECDSA (HTLC redeem/refund) |
+| Swap key, participant, chain *c*, anchored | `m/7228'/1'/coin(c)'/a'/b'/c'/d'` | same key type; path levels from the swap anchor (§4.2) |
 | Preimage source, swap index *i* | `m/7228'/2'/i'` | private key bytes feed §4.3; never used as a signing key |
 
 `coin(c)` constants (asset, not network — the same path is used on mainnet,
@@ -132,16 +133,43 @@ testnet and regtest; only address encoding differs):
 | BTC | `0'` |
 | PoCX | `1347371864'` (`0x504F4358`, ASCII "POCX") |
 
-`i` is the party's local, monotonically increasing swap index, starting at
-0. Each party numbers their own swaps; the two parties' indices are
-unrelated. A party uses **one swap key per chain per swap**: on the chain
-where they lock funds it is their refund key; on the chain where they claim
-it is their redeem key.
+A party uses **one swap key per chain per swap**: on the chain where they
+lock funds it is their refund key; on the chain where they claim it is
+their redeem key.
 
-### 4.2 Key usage rules
+### 4.2 Swap-key indexing: initiator counter, participant anchor
 
-- Swap keys MUST NOT be reused across swaps. Implementations MUST bump `i`
-  for every new swap attempt, including aborted ones.
+The two roles index their swap keys differently, because they learn the
+swap's identity at different times:
+
+- **Initiator (counter).** `i` is the initiator's local, monotonically
+  increasing swap index, starting at 0. The deterministic preimage (§4.3)
+  at index `i` is what `H` — and through it the `swap_id` (§4.4) — is
+  derived from, so the counter is the root of the swap's identity and
+  cannot itself be derived from it.
+- **Participant (anchor).** The participant learns the swap's public
+  *anchor* — the hash `H` (v1; for v2 the adaptor point `T`, see
+  protocol-v2.md §3) — from the `init` before deriving any key, so its
+  keys need no counter. The anchored path levels are:
+
+  ```
+  h          = TaggedHash("pact/swap-key-anchor/v1", anchor)
+  a,b,c,d    = the first four big-endian u32s of h, each masked to 31 bits
+  ```
+
+  giving `m/7228'/1'/coin(c)'/a'/b'/c'/d'` (hardened). 124 hash bits make
+  cross-swap collisions negligible, and the anchored depth (7) differs from
+  the counter depth (4), so the two schemes can never derive the same key.
+  Anchored keys are re-derivable from the seed plus the anchor alone — for
+  v1 the anchor `H` is embedded in both on-chain HTLC scripts — and two
+  machines holding the same seed derive the *same* key for the *same* swap
+  and can never share a key across two *different* swaps.
+
+Key usage rules:
+
+- Swap keys MUST NOT be reused across swaps. The initiator MUST bump `i`
+  for every new swap attempt, including aborted ones; the participant's
+  anchoring guarantees this per anchor.
 - The identity key MUST NOT be used in any HTLC.
 - HTLC keys are compressed 33-byte secp256k1 pubkeys; signatures are ECDSA,
   DER-encoded, with `SIGHASH_ALL` (0x01).
@@ -605,14 +633,16 @@ gross divergence.
 
 Implementations MUST persist durably, before broadcasting any funding
 transaction: the full message transcript (all envelopes, both directions),
-their own swap index `i`, the signed refund transaction, and the swap state.
+their own swap index `i` (initiator; the participant's keys are anchored,
+§4.2, and need no index), the signed refund transaction, and the swap state.
 
 Recovery story:
 
 - **Seed only:** re-derives identity, all swap keys, and all preimages
-  (§4.3) — `s` is never lost. It does not reconstruct counterparty
-  parameters, so in-flight swap *outputs* cannot be located from the seed
-  alone.
+  (§4.3) — `s` is never lost. The initiator scans its counter; the
+  participant re-derives directly from the anchor `H`, which sits in both
+  on-chain HTLC scripts. The seed alone does not reconstruct counterparty
+  parameters, so in-flight swap *outputs* cannot be located from it alone.
 - **Seed + transcript:** full recovery of any swap at any state — scripts
   reconstruct from transcript parameters, refunds re-sign from derived
   keys, chain state re-syncs by scanning for the known outpoints.

@@ -43,8 +43,10 @@ pub struct SwapRecord {
     /// have no value in their JSON blob and deserialize to 0 (see migration
     /// note in [`Store::open`]).
     pub created_at: u64,
-    /// Our local BIP32 swap index `i` (spec §4.1).
-    pub swap_index: u32,
+    /// Our local BIP32 swap index `i` (spec §4.2) — `Some` for the initiator,
+    /// whose counter the swap id itself derives from; `None` for the
+    /// participant, whose keys are anchored to `hash_h` instead (no counter).
+    pub swap_index: Option<u32>,
     pub chain_a: ChainRef,
     pub chain_b: ChainRef,
     pub amount_a: u64,
@@ -97,7 +99,10 @@ pub struct AdaptorSwapRecord {
     pub role: Role,
     pub state: AdaptorState,
     pub created_at: u64,
-    pub swap_index: u32,
+    /// `Some` for the initiator (local counter — the adaptor secret `t`, and
+    /// so `T` and the swap id, derive from it); `None` for the participant,
+    /// whose keys are anchored to `adaptor_point` instead (spec §4.2).
+    pub swap_index: Option<u32>,
     pub chain_a: ChainRef,
     pub chain_b: ChainRef,
     pub amount_a: u64,
@@ -1093,7 +1098,7 @@ mod tests {
             role: Role::Initiator,
             state: State::Created,
             created_at: 1_700_000_123,
-            swap_index: 0,
+            swap_index: Some(0),
             chain_a: ChainRef {
                 coin_id: "btcx".into(),
                 network: Network::Regtest,
