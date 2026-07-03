@@ -900,7 +900,10 @@ impl Engine {
     fn funding_fee_headroom(&self, chain: &ChainRef) -> u64 {
         let live = self
             .backend(chain)
-            .and_then(|b| b.fee_rate_sat_per_vb())
+            .and_then(|b| {
+                let ct = b.funding_conf_target();
+                b.fee_rate_for(ct, false)
+            })
             .unwrap_or(FUNDING_FEERATE_FALLBACK);
         // The clamp is written panic-safe: `u64::clamp` panics if `min > max`,
         // and a low `max_feerate_sat_vb` (< FUNDING_FEERATE_FALLBACK) would
@@ -1876,7 +1879,7 @@ impl Engine {
         // Initiator: broadcast leg A now. Safe — leg A is only claimable after the
         // initiator reveals `t` (which only it can do) and its refund is intact.
         let address = leg.address(&secp, backend.params())?;
-        let txid = backend.wallet_send(&address, rec.amount_a)?;
+        let txid = backend.wallet_send(&address, rec.amount_a, backend.funding_conf_target())?;
         let vout = backend.find_vout(&txid, &hex::encode(leg_spk.as_bytes()))?;
         self.adaptor_funding_ready(swap, &txid, vout)
     }
@@ -2806,7 +2809,7 @@ impl Engine {
         }
         let (parent_fee, parent_vsize) = backend.wallet_tx_fee_vsize(txid)?;
         let old_feerate = parent_fee / parent_vsize.max(1);
-        let market = backend.fee_rate_sat_per_vb()?;
+        let market = backend.fee_rate_for(backend.funding_conf_target(), false)?;
         let target = market.min(self.fee_bump.max_feerate_sat_vb).min(
             self.fee_bump
                 .funding
@@ -3140,7 +3143,7 @@ impl Engine {
             Some((op, _)) => (op.txid.to_string(), op.vout),
             None => {
                 let address = htlc.address(backend.params())?;
-                let txid = backend.wallet_send(&address, amount)?;
+                let txid = backend.wallet_send(&address, amount, backend.funding_conf_target())?;
                 let vout =
                     backend.find_vout(&txid, &hex::encode(htlc.script_pubkey().as_bytes()))?;
                 (txid, vout)
@@ -4861,7 +4864,7 @@ impl Engine {
         // within the headroom that gate set aside).
         let (old_fee, fvsize) = backend.wallet_tx_fee_vsize(txid)?;
         let old_feerate = old_fee / fvsize.max(1);
-        let market = backend.fee_rate_sat_per_vb()?;
+        let market = backend.fee_rate_for(backend.funding_conf_target(), false)?;
         let target = market.min(self.fee_bump.max_feerate_sat_vb).min(
             self.fee_bump
                 .funding
@@ -6351,7 +6354,9 @@ impl Engine {
         // The address must belong to this chain — catches pasting a BTC
         // address into the POCX send form before money moves.
         backend.params().parse_address(address)?;
-        backend.wallet_send(address, amount_sat)
+        // Generic user send keeps the historical 6-block baseline; only swap
+        // funding uses the per-coin ~30-min target (funding_conf_target).
+        backend.wallet_send(address, amount_sat, 6)
     }
 
     /// Live fee rate (sat/vB) for a configured coin, or the same conservative

@@ -253,7 +253,12 @@ mod tests {
         fn wallet_balance(&self) -> Result<u64> {
             Ok(0)
         }
-        fn wallet_send(&self, _address: &str, _amount_sat: u64) -> Result<String> {
+        fn wallet_send(
+            &self,
+            _address: &str,
+            _amount_sat: u64,
+            _conf_target: u16,
+        ) -> Result<String> {
             unimplemented!()
         }
     }

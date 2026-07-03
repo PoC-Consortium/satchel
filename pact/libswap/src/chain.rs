@@ -32,6 +32,29 @@ pub fn set_test_feerate(sat_vb: u64) {
     TEST_FEERATE_OVERRIDE_SAT_VB.store(sat_vb, Ordering::Relaxed);
 }
 
+/// Wall-clock cap (seconds) for how long a funding lock should wait to confirm.
+/// Divided by the coin's block spacing to derive `estimatesmartfee`'s
+/// `conf_target` for funding (see [`ChainBackend::funding_conf_target`]), so the
+/// funding feerate targets confirmation within ~30 min on any coin instead of a
+/// blind 6-block target — which is a full hour on Bitcoin's 10-min blocks.
+pub(crate) const FUNDING_TARGET_SECS: u32 = 1800;
+
+/// Ceiling on the derived funding `conf_target`: the established
+/// `estimatesmartfee(6)` baseline. The wall-clock cap only pulls the target
+/// *faster* (lower) on slow chains; it never targets a cheaper/slower confirmation
+/// than the historical default on fast chains (e.g. Litecoin's 2.5-min blocks
+/// would give 12, clamped back to 6).
+pub(crate) const FUNDING_CONF_TARGET_MAX: u16 = 6;
+
+/// Pure per-coin funding `conf_target` derivation (see
+/// [`ChainBackend::funding_conf_target`]): the number of blocks that fits the
+/// [`FUNDING_TARGET_SECS`] wall-clock budget at this coin's block spacing,
+/// clamped to `1..=FUNDING_CONF_TARGET_MAX`. A zero spacing is guarded to 1.
+pub(crate) fn funding_conf_target_for(target_spacing_secs: u32) -> u16 {
+    let spacing = target_spacing_secs.max(1);
+    ((FUNDING_TARGET_SECS / spacing) as u16).clamp(1, FUNDING_CONF_TARGET_MAX)
+}
+
 /// Is this broadcast error really "the tx is already in the chain / mempool"?
 /// Re-broadcasting an already-confirmed tx (a refund/redeem the scheduler keeps
 /// nudging, or a funding the maker re-sends) must be a no-op success, not an
@@ -119,6 +142,18 @@ pub trait ChainBackend {
         self.fee_rate_for(6, false)
     }
 
+    /// Funding-specific `estimatesmartfee` target (blocks), derived per coin from a
+    /// fixed wall-clock cap: `clamp(FUNDING_TARGET_SECS / target_spacing_secs, 1,
+    /// FUNDING_CONF_TARGET_MAX)`. Bitcoin's 10-min blocks → 3 (a 30-min budget);
+    /// faster chains keep the standard 6 (Litecoin's 6 blocks ≈ 15 min is already
+    /// inside the budget). Used everywhere funding picks a feerate — the initial
+    /// broadcast, the funding nurse's market term, and the funds-gate headroom — so
+    /// a lock doesn't sit an hour on a slow chain, with no per-coin config. Redeem
+    /// and refund keep their own (deadline-aware / flat-6) targets.
+    fn funding_conf_target(&self) -> u16 {
+        funding_conf_target_for(self.params().target_spacing_secs)
+    }
+
     /// Whether `txid` is currently in this node's mempool. The bump loop uses
     /// `!is_in_mempool` as the *only* trigger to re-broadcast an unchanged tx
     /// (recover from eviction), so steady state stays silent. Defaults to
@@ -142,8 +177,11 @@ pub trait ChainBackend {
     fn wallet_balance(&self) -> Result<u64>;
 
     /// Fund `address` with exactly `amount_sat` via the core wallet
-    /// (HTLC funding is a normal send, spec §6.1).
-    fn wallet_send(&self, address: &str, amount_sat: u64) -> Result<String>;
+    /// (HTLC funding is a normal send, spec §6.1). `conf_target` is the
+    /// `estimatesmartfee` block target the send prices itself at — funding callers
+    /// pass [`Self::funding_conf_target`] (the per-coin ~30-min target); the generic
+    /// user send passes `6` (the historical baseline).
+    fn wallet_send(&self, address: &str, amount_sat: u64, conf_target: u16) -> Result<String>;
 
     /// Build + sign (but DO NOT broadcast) a funding tx paying `amount_sat` to
     /// `address`, returning `(txid, vout, signed_tx_hex)`. The selected inputs
@@ -510,22 +548,22 @@ impl ChainBackend for CoreRpcBackend {
             .to_string())
     }
 
-    fn wallet_send(&self, address: &str, amount_sat: u64) -> Result<String> {
+    fn wallet_send(&self, address: &str, amount_sat: u64, conf_target: u16) -> Result<String> {
         // Amount as a decimal string: exact, no float in our code path.
         let amount = format!(
             "{}.{:08}",
             amount_sat / 100_000_000,
             amount_sat % 100_000_000
         );
-        // Choose the funding feerate OURSELVES — market estimate, or the 1 sat/vB
-        // fallback when the node can't estimate (a brand-new chain like BTCX with
-        // no fee history) — and pass it explicitly. Otherwise funding leans on the
-        // node's wallet estimator + `-fallbackfee`, which is disabled (0) by
-        // default on mainnet, so `sendtoaddress` would *error* on a fee-history-less
-        // chain. This mirrors how redeem/refund pick their rate (and phoenix-pocx's
-        // 1 sat/vB fallback), so the lock fee tracks the same policy as everything
-        // else instead of the node's config.
-        let fee_rate = self.fee_rate_sat_per_vb()?;
+        // Choose the funding feerate OURSELVES — market estimate at the caller's
+        // `conf_target`, or the 1 sat/vB fallback when the node can't estimate (a
+        // brand-new chain like BTCX with no fee history) — and pass it explicitly.
+        // Otherwise funding leans on the node's wallet estimator + `-fallbackfee`,
+        // which is disabled (0) by default on mainnet, so `sendtoaddress` would
+        // *error* on a fee-history-less chain. This mirrors how redeem/refund pick
+        // their rate (and phoenix-pocx's 1 sat/vB fallback), so the lock fee tracks
+        // the same policy as everything else instead of the node's config.
+        let fee_rate = self.fee_rate_for(conf_target, false)?;
         // Funding is the ONLY use of wallet_send, and the funding nurse RBF-bumps
         // it, so broadcast it explicitly BIP125-replaceable rather than relying on
         // the node's -walletrbf default. Positional sendtoaddress args (Core 0.21+):
@@ -563,7 +601,9 @@ impl ChainBackend for CoreRpcBackend {
             amount_sat / 100_000_000,
             amount_sat % 100_000_000
         );
-        let fee_rate = self.fee_rate_sat_per_vb()?;
+        // Funding prices at the per-coin ~30-min target (see funding_conf_target),
+        // not a blind 6-block target.
+        let fee_rate = self.fee_rate_for(self.funding_conf_target(), false)?;
         // 1. raw tx carrying only the funding output (no inputs yet). The output
         //    key is the funding address, so build the object with a dynamic key.
         let mut outputs = serde_json::Map::new();
@@ -1030,7 +1070,7 @@ impl ChainBackend for ElectrumBackend {
         )
     }
 
-    fn wallet_send(&self, _address: &str, _amount_sat: u64) -> Result<String> {
+    fn wallet_send(&self, _address: &str, _amount_sat: u64, _conf_target: u16) -> Result<String> {
         anyhow::bail!(
             "the Electrum backend is chain-data only — the primary backend must be a \
              Core-RPC wallet URL (http://...)"
@@ -1261,8 +1301,8 @@ impl ChainBackend for MultiBackend {
         self.primary().wallet_new_address()
     }
 
-    fn wallet_send(&self, address: &str, amount_sat: u64) -> Result<String> {
-        self.primary().wallet_send(address, amount_sat)
+    fn wallet_send(&self, address: &str, amount_sat: u64, conf_target: u16) -> Result<String> {
+        self.primary().wallet_send(address, amount_sat, conf_target)
     }
 
     fn wallet_build_funding(
@@ -1307,5 +1347,28 @@ impl ChainBackend for MultiBackend {
 
     fn wallet_bumpfee(&self, txid: &str, feerate_sat_vb: u64) -> Result<String> {
         self.primary().wallet_bumpfee(txid, feerate_sat_vb)
+    }
+}
+
+#[cfg(test)]
+mod funding_conf_target_tests {
+    use super::funding_conf_target_for;
+
+    #[test]
+    fn derives_per_coin_target_from_30min_cap() {
+        // Bitcoin: 10-min blocks → 6 blocks would be an hour, so cap at 3 (30 min).
+        assert_eq!(funding_conf_target_for(600), 3);
+        // Litecoin: 2.5-min blocks → 1800/150 = 12, clamped back to the standard 6
+        // (6 LTC blocks ≈ 15 min is already inside the budget).
+        assert_eq!(funding_conf_target_for(150), 6);
+        // BTCX: 2-min blocks → 1800/120 = 15, clamped to 6.
+        assert_eq!(funding_conf_target_for(120), 6);
+        // A slow chain gets pulled tighter: 20-min blocks → 1.
+        assert_eq!(funding_conf_target_for(1200), 1);
+        // Never below 1: 60-min blocks → 1800/3600 = 0, floored to 1.
+        assert_eq!(funding_conf_target_for(3600), 1);
+        // A nonsense 0 spacing can't occur (coins require it), but the guard must
+        // not divide by zero — it falls back to the standard baseline (6).
+        assert_eq!(funding_conf_target_for(0), 6);
     }
 }

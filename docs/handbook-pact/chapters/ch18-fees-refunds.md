@@ -192,6 +192,25 @@ where `old_feerate = fee / vsize` of the broadcast funding (recomputed live, not
 persisted). The `reservation_mult × old_feerate` bound keeps the bump within the
 balance the pre-flight funds gate (`ensure_can_fund`) set aside as headroom.
 
+**The `market` estimate is a per-coin ~30-min target, not a blind 6 blocks.**
+Everywhere funding picks a feerate — the initial broadcast, this nurse, and the
+funds-gate headroom — it uses `estimatesmartfee(conf_target)` where `conf_target`
+is derived from the coin's block spacing (`funding_conf_target`, `chain.rs`):
+
+```text
+funding conf_target = clamp(1800 / target_spacing_secs, 1, 6)
+```
+
+so a lock targets confirmation within roughly half an hour on any chain rather
+than a fixed 6-block target, which is a full **hour** on Bitcoin's 10-min blocks.
+Bitcoin (600 s) → **3**; Litecoin (150 s) → 12 clamped back to the standard
+**6** (6 blocks ≈ 15 min is already inside the budget); BTCX (120 s) → **6**. The
+30-min cap only ever pulls the target *faster* on slow chains — it never prices a
+fast chain below the historical `estimatesmartfee(6)` baseline, and it needs no
+per-coin config (block spacing is already in `coins.toml`). Redeem and refund keep
+their own targets (deadline-aware for redeem, flat 6 for refund); this applies to
+funding only.
+
 This is **liveness, not safety**: a funding that can't keep up simply stalls and
 the timelock refund returns the coin — never a loss. The two protocols bump
 differently, and the asymmetry mirrors the redeem/refund split:
