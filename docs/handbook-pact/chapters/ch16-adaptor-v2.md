@@ -173,13 +173,25 @@ structurally impossible (`spec v2 §3.2`):
 
 ## The recovery contract
 
-The seed and the swap index `i` always reconstruct every long-term key and the
-adaptor secret `t` (`keys.rs:118-128`, spec v2 §9). Therefore:
+The two roles reconstruct their long-term keys differently, mirroring how they
+index them (spec v1 §4.2, inherited by v2 §3): **Alice** (initiator) always
+reconstructs every long-term key and the adaptor secret `t` from the seed plus
+her local swap index `i` (`keys.rs:118-128`, spec v2 §9). **Bob** (participant)
+has no counter to fall back on — his swap and refund keys are instead
+*anchored* to the adaptor point `T`, so the seed plus `T` alone re-derives
+them, with no session state needed either. Therefore:
 
-- A party can **always refund** via the single-key tapleaf using only the seed
-  — no live session state required.
+- Either party can **always refund** via the single-key tapleaf using only the
+  seed (plus, for Bob, the anchor `T` he learned at `init`) — no live session
+  state required.
 - Alice can **always re-derive `t`** to complete a redeem, even with an empty
   state DB.
+- A machine rebuilt from the seed alone (no local record at all) still
+  reconstructs both parties' long-term keys correctly once it has the anchor —
+  which is what makes the encrypted relay-snapshot rescue (chapter "Seeds,
+  Wallets & Merchants") possible: the snapshot supplies the anchor and any
+  session-specific data (assembled adaptor signatures) that isn't derivable,
+  and the seed supplies everything else.
 
 The only thing that cannot be reconstructed from the seed is a *consumed*
 MuSig2 nonce — and that is by design, because reusing one would be the unsafe

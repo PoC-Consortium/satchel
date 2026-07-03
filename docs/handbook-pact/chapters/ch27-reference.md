@@ -37,6 +37,10 @@ for params and return shapes.
 **Node / info** (*"API: Node, Seed, Merchants, Coins"*): `getinfo`,
 `walletstatus`, `setwatchonly`, `stop`, `getfeepolicy`, `setfeepolicy`.
 
+**Seed-only rescue** (same chapter; full mechanics in "Seeds, Wallets &
+Merchants"): `restorefromrelay` (adopt rescuable relay snapshots),
+`rescuestatus` (read-only preview + the two-machines warning).
+
 **Seed lifecycle** (same chapter): `createseed`, `generateseed`, `importseed`,
 `unlock`.
 
@@ -89,10 +93,12 @@ PoCX = `0x504F4358`. See "HTLC v1 (Construction)" and "v2 Adaptor (Construction)
 | Key | Path | Use |
 |---|---|---|
 | Identity | `m/7228'/0'/0'` | BIP340 x-only; signs envelopes; equals the Nostr npub. Never used in an HTLC. |
-| Swap key | `m/7228'/1'/coin(c)'/i'` | One compressed secp key per chain per swap (ECDSA in v1; reused as the MuSig2 x-only signer in v2). |
+| Swap key, initiator (Alice) | `m/7228'/1'/coin(c)'/i'` | One compressed secp key per chain per swap (ECDSA in v1; reused as the MuSig2 x-only signer in v2), indexed by the local counter `i`. |
+| Swap key, participant (Bob), anchored | `m/7228'/1'/coin(c)'/a'/b'/c'/d'` | Same key type; `a,b,c,d` are the first four masked-31-bit words of `TaggedHash("pact/swap-key-anchor/v1", anchor)` (`H` for v1, `T` for v2, spec §4.2) — no counter needed, re-derivable from the seed plus the anchor alone. |
 | Preimage source | `m/7228'/2'/i'` | `s = TaggedHash("pact/htlc/preimage/v1", priv)`, `H = SHA256(s)` (v1, Alice-only). |
 | Adaptor secret source | `m/7228'/2'/i'` | `t = TaggedHash("pact/adaptor/secret/v2", priv) mod n`, `T = t·G` (v2, Alice-only). |
-| Refund key (v2) | `m/7228'/3'/coin(c)'/i'` | x-only single-key CLTV tapleaf, independent of MuSig2. |
+| Refund key (v2), initiator | `m/7228'/3'/coin(c)'/i'` | x-only single-key CLTV tapleaf, independent of MuSig2. |
+| Refund key (v2), participant, anchored | `m/7228'/3'/coin(c)'/a'/b'/c'/d'` | Same anchored derivation as the participant swap key, on branch `3'`. |
 
 ## Tagged-hash tags
 
@@ -106,6 +112,8 @@ PoCX = `0x504F4358`. See "HTLC v1 (Construction)" and "v2 Adaptor (Construction)
 | `pact/htlc/preimage/v1` | v1 preimage `s`. |
 | `pact/adaptor/secret/v2` | v2 adaptor secret `t`. |
 | `pact/relay/ecdh/v1` | Sealed-blob symmetric key (ECDH → ChaCha20-Poly1305). |
+| `pact/swap-key-anchor/v1` | Participant's anchored swap/refund key derivation (over `H` or `T`, §4.2). |
+| `pact/rescue/dtag/v1` | Opaque per-swap `d`-tag for a rescue snapshot event (over the `swap_id`). |
 
 ## Spec & vectors file map
 
@@ -145,3 +153,12 @@ PoCX = `0x504F4358`. See "HTLC v1 (Construction)" and "v2 Adaptor (Construction)
   `Noticeboard` trait (Corkboard over HTTP, or Nostr).
 - **Slip** — a private (off-market) offer serialized as `pactoffer1:<base64url>`;
   the same signed `offer` envelope, never posted to a board.
+- **Rescue snapshot** — an encrypted-to-self Nostr event (kind `31512`) holding
+  enough of an in-flight swap's state that a machine restored from the seed
+  alone can adopt and finish it. Published at `accepted` (v1 and v2) and again
+  at `signed` (v2 only); tombstoned on terminal states. See "Seeds, Wallets &
+  Merchants".
+- **`PRE_FUNDING_TIMEOUT_SECS`** — 15 minutes; the shared deadline for two
+  self-healing behaviors: a v2 handshake stuck before either leg funds
+  auto-aborts, and a board `take` whose signed `taken_at` is older than this is
+  silently dropped rather than served.

@@ -130,6 +130,18 @@ trade.
 > recoverable `Accepted` state, resumable via relay re-drive or a manual
 > `adaptor_fund`.
 
+> **Note** — **Pre-funding timeout-abort now covers v2 too.** A v1 handshake
+> stuck pre-funding has long self-aborted after `PRE_FUNDING_TIMEOUT_SECS` (15
+> minutes). A v2 adaptor handshake stalled in `created`, `accepted`, or
+> `nonces_exchanged` — before either leg is funded — now does the same,
+> silently and independently on each side's own clock (`signed` is excluded, as
+> funding may already be in flight by then). Previously a stalled pre-`signed`
+> v2 handshake was inert to the ticker: neither the `abort` RPC (which only
+> read the v1 table) nor a timeout could clear it, so a maker gone unreachable
+> during the handshake left the taker with a record that could neither be
+> cancelled nor time out. See the chapters "API: v1 HTLC Swaps" and "API: v2
+> Adaptor Swaps".
+
 ## Safety properties
 
 Pact's crypto core — the v1 witness construction, the v2 Taproot output and

@@ -54,6 +54,21 @@ chooses one transport rather than merging.
 > `min(now + 1800s, created + ttl_secs)`. It is refreshed as the offer is
 > republished, not pinned to `ttl_secs` from creation.
 
+> **Warning** — **Breaking wire change:** the `take` envelope now carries a
+> signed `taken_at` timestamp, and this field is **REQUIRED** — a `take` from a
+> pre-rc8 build has none and is treated as stale (age saturates to "very old"),
+> so it is silently dropped rather than served. Both parties must run rc8+ for
+> `boardtake` to work. This closes a mainnet incident where a take that had sat
+> queued for hours (e.g. the maker's node was unreachable) was served anyway
+> after the taker's own pending-take entry had already self-pruned — burning the
+> offer via revoke-on-commit and stranding an uncancelable record on a
+> counterparty nobody was driving. The maker now compares `taken_at` against its
+> own `PRE_FUNDING_TIMEOUT_SECS` (15 minutes) **before** serving or revoking the
+> offer: a take older than that is dropped with no reply (the taker's own card
+> pruned itself long ago, so nothing is listening), and the offer stays live for
+> the next taker. A future `taken_at` (clock skew) saturates to age zero rather
+> than being rejected, so ordinary clock drift within the window is tolerated.
+
 ## Private (off-market) offers
 
 A private offer is built and signed locally but **never posted to a board**. It

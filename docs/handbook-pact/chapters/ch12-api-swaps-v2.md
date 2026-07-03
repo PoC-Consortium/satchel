@@ -57,6 +57,30 @@ step is required.
 > **refund IS bumpable**. Budget fees accordingly when settling near a
 > deadline.
 
+## Cancelling a v2 handshake
+
+There is no separate `adaptorabort` RPC — v2 shares the `abort` method
+documented in the chapter "API: v1 HTLC Swaps". Dispatch tries the v1 store
+first, then falls back to the v2 adaptor store, so calling `abort` with a v2
+`swap_id` cancels the adaptor record instead (internally `Engine::adaptor_abort`).
+The same funding gate applies: **abort is refused once our own leg is funded**
+(`funding_a_txid` for the initiator, `funding_b_txid` for the participant) —
+past that point the timelocked refund is the only exit. An explicit abort is
+also the one case that sends a best-effort `abort` envelope to the counterparty;
+persisted MuSig2 nonce sessions are deliberately **kept**, since the store's
+overwrite-refusal on an existing session is what guarantees an aborted swap can
+never be signed again.
+
+> **Note** — A handshake stalled in `created`, `accepted`, or
+> `nonces_exchanged` — i.e. before either leg has funded — also **times out on
+> its own after 15 minutes** (`PRE_FUNDING_TIMEOUT_SECS`, `engine.rs`), with no
+> `abort` call and no relay message: each side's scheduler independently
+> retires its own stalled copy of the handshake. `signed` is deliberately
+> excluded from this auto-timeout, because by then a counterparty's funding may
+> already be in flight. This closes a gap where a v2 handshake that stalled
+> before `signed` was previously inert to the ticker — neither cancellable
+> (`abort` only read the v1 table) nor self-expiring.
+
 ## Read method
 
 | Method | Params | Returns | Mutates |

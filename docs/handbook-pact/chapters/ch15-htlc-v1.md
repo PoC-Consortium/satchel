@@ -23,8 +23,24 @@ level is hardened.
 | Material | Path | Type & use |
 |---|---|---|
 | *Identity key* | `m/7228'/0'/0'` | BIP340 x-only; signs handshake envelopes. **Never** appears in an HTLC. |
-| *Swap key* | `m/7228'/1'/coin(c)'/i'` | compressed secp256k1, ECDSA; the redeem/refund key. One per chain per swap. |
+| *Swap key, initiator (Alice)* | `m/7228'/1'/coin(c)'/i'` | compressed secp256k1, ECDSA; the redeem/refund key, indexed by her local counter `i`. |
+| *Swap key, participant (Bob), anchored* | `m/7228'/1'/coin(c)'/a'/b'/c'/d'` | Same key type; `a,b,c,d` are the first four masked-31-bit words of `TaggedHash("pact/swap-key-anchor/v1", H)` (spec §4.2) — no counter, re-derivable from the seed plus `H` alone (which sits in both on-chain HTLC scripts). |
 | *Preimage source* | `m/7228'/2'/i'` | feeds the preimage tagged hash (initiator only). |
+
+One swap key per chain per swap either way: on the chain where a party locks
+funds it is their refund key, on the chain where they claim it is their redeem
+key.
+
+> **Note** — The two roles index their keys differently because they learn the
+> swap's identity at different times. Alice's counter `i` is the *root* of the
+> swap's identity — `H` (and through it `swap_id`) derives from the preimage at
+> index `i`, so it cannot itself be derived from the swap. Bob learns the
+> public anchor `H` from the `init` message before deriving any key, so his
+> keys need no counter — and two machines sharing one seed can never issue Bob
+> the same key for two different swaps, since the anchor is swap-specific. This
+> is also what makes Bob's participant-side rescue possible after a data-loss
+> restore (see "Seeds, Wallets & Merchants"): his keys re-derive from the seed
+> plus the on-chain script alone, with no local state needed.
 
 The `coin(c)` index identifies the **asset**, not the network
 (`keys.rs:23-25`):

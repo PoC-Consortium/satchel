@@ -62,6 +62,47 @@ with their identity key, which also proves the message was addressed to them.
 > **Note** — One-time gift-wrap keys are never reused. A relay learns only that
 > "pubkey X has a mailbox"; it cannot link a wrapped message back to its sender.
 
+### Rescue snapshots — kind `31512`
+
+A distinct addressable (NIP-33) kind carries the seed-only swap-rescue
+snapshots described in the Pact handbook's "Seeds, Wallets & Merchants"
+chapter (`SNAPSHOT_KIND: u16 = 31512`, `pact-nostr/src/lib.rs`):
+
+- **Author and reader are the same party.** Unlike an offer (public) or a
+  gift-wrap (addressed to a counterparty), a snapshot event is signed by, and
+  its `content` sealed to, **our own identity key** — nobody else can decrypt
+  it, and nobody but us has any reason to fetch it.
+- **The `d` tag is opaque**, not the plain `swap_id` the offer's `d` tag uses:
+  it's `tagged_hash("pact/rescue/dtag/v1", swap_id)`. This is deliberate — a
+  relay operator can see that some pubkey published both an offer (kind
+  `31510`, `d = swap_id`) and a snapshot (kind `31512`, `d = opaque`), but
+  cannot correlate *which* snapshot belongs to *which* public offer. Rescue
+  never needs to reverse the tag: it fetches every snapshot by
+  `{ kind: 31512, author: me }` and reads the `swap_id` from inside the
+  decrypted payload.
+- **No NIP-40 expiration.** A live swap's snapshot must persist until it is
+  explicitly tombstoned on completion — unlike an offer, it is not refreshed
+  on a timer, since it is only published at `accepted` (and, for v2, again at
+  `signed`).
+- **Explicit `created_at`, not "now".** Addressable-event replacement ties
+  on equal `created_at` by keeping the *lowest* event id, and the `accepted`
+  and `signed` snapshots of a fast v2 handshake can land within the same
+  second. So the caller stamps `created_at = now + state_rank` (0 for the
+  pre-`signed` states, 1 once `signed`), guaranteeing the later snapshot
+  always strictly replaces the earlier one on the relay — otherwise a rescued
+  maker could be stranded on the stale `accepted` copy, which lacks the
+  unrecoverable assembled adaptor signatures.
+- **NIP-09 tombstone on terminal.** `snapshot_tombstone_event` deletes the
+  coordinate `31512:<our pubkey>:<dtag>` once a swap reaches `completed`,
+  `refunded`, or `aborted`, stamped past the last snapshot's `created_at` (NIP-09
+  only covers events up to the deletion's own timestamp) — so a machine
+  restored later never resurrects a finished swap.
+
+See the Pact handbook chapter "Seeds, Wallets & Merchants" for the engine-side
+rescue flow (`rescue_from_blobs`/`rescue_preview`, the gated `restorefromrelay`
+RPC, and the anchored participant-key derivation that makes a restored
+machine's keys re-derivable in the first place).
+
 ## NIP-40 rolling expiration
 
 Offer events carry a NIP-40 `expiration` tag, and it is **rolling**, not a fixed

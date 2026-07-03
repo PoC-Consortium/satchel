@@ -28,6 +28,8 @@ pact-cli --data-dir ./alice getinfo
 | `refund` | `--swap` | `refund` |
 | `abort` | `--swap --reason` | `abort` |
 | `status` | `--swap` (optional) | `getswap` / `listswaps` |
+| `restore` | — | `restorefromrelay` |
+| `rescue-status` | — | `rescuestatus` |
 | `walletstatus` | — | `walletstatus` |
 | `coins` | — | `listcoins` |
 | `pairs` | — | `listpairs` |

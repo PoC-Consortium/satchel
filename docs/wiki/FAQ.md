@@ -38,5 +38,8 @@ Drop a `[[coin]]` block (and an icon) into `coins.toml` next to the executable �
 **Where do my keys live?**
 In the engine (`pactd`), on your machine only — derived from your BIP39 seed. Satchel stores no seed or passphrase. An encrypted seed is unlocked into engine memory per session. See [Security Model](Security-Model).
 
+**What happens if my machine dies mid-swap?**
+Your recovery phrase always restores your identity and keys. For an in-flight swap, `pactd` also backs up just enough state to your Nostr relays, encrypted to your own identity — so a fresh machine holding only your recovery phrase can rediscover it. Satchel only ever *warns* it found one; you explicitly confirm the restore, since two live machines driving one swap on the same seed could double-fund it. Only swaps started after this shipped are covered. See [Security Model](Security-Model) and the Satchel handbook chapter "Backup, Seeds & Safety".
+
 **Can I build my own front-end / integrate the engine?**
 Yes — `pactd` is a plain JSON-RPC 2.0 daemon and Satchel is just one client of it. Drive it with [pact-cli](pact-cli) or any HTTP client; the full method surface is in the [JSON-RPC API](JSON-RPC-API) page and the **Pact Developer Handbook** (<https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>).

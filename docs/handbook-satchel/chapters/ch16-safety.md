@@ -119,46 +119,66 @@ caution:
 
 ## If your machine dies mid-swap
 
-Hardware fails, power cuts happen, laptops get left on trains. Two different
-things protect you, and it's worth knowing which protects what — because they are
-not the same, and a swap that's *already under way* needs a little more than the
-recovery phrase alone.
+Hardware fails, power cuts happen, laptops get left on trains. Three things
+protect you, and it's worth knowing what each one covers:
 
 1. **Your recovery phrase protects your identity and keys.** Every key is derived
    from your seed, so restoring from your recovery phrase on a new machine brings
-   your trading identity back and lets you trade again. What the phrase **does
-   not** carry is the record of an *in-flight* swap — the details of a swap
-   already in progress (who you're trading with, which outputs are locked, the
-   signing state) live in Satchel's **data folder** on the machine that ran it,
-   not in the words.
-2. **The timelock guarantees a refund — as long as the swap is being watched.**
-   Every swap has a built-in deadline called a *timelock*. Funds you locked become
-   refundable to you after that deadline, and **nobody can take them before
-   then.** But the refund is broadcast by the *engine*, so the engine has to be
-   running **and still know about the swap** to fire it automatically.
+   your trading identity back and lets you trade again.
+2. **A quiet backup of your in-flight swaps rides along on the relays.** While a
+   swap is under way, Satchel's engine also backs up just enough of its state to
+   the Nostr relays you're already connected to — **encrypted so only you can
+   read it** — so a swap survives even if the machine that ran it never comes
+   back. Nobody but you can decrypt these backups; not the relay, not anyone
+   else. This is what lets a *brand-new* machine, holding only your recovery
+   phrase, pick a swap back up.
+3. **The timelock guarantees a refund — as long as some machine of yours is
+   watching.** Every swap has a built-in deadline called a *timelock*. Funds you
+   locked become refundable to you after that deadline, and **nobody can take
+   them before then.** The refund still has to be broadcast by a running engine
+   that knows about the swap, which is exactly what the relay backup restores.
 
-Putting those together, there are two cases if a machine dies mid-swap:
+Putting those together, if a machine dies mid-swap:
 
-- **You have the data folder** (it survived, or you kept a backup and restore it
-  alongside your recovery phrase): install Satchel on a working machine, restore
-  the data folder and phrase, reconnect your coins, and the engine picks the swap
-  back up — completing it if it still can, or refunding you once the timelock
-  allows.
-- **You have only the recovery phrase** (the data folder is gone): you get your
-  identity and keys back, but the engine has no record of the in-flight swap to
-  watch or auto-refund. Your locked funds are still safe from the counterparty —
-  the timelock stands — but reclaiming a swap the engine can no longer see is a
-  manual recovery, not the automatic path.
+- **Install Satchel on a new (or the same, repaired) machine and restore your
+  recovery phrase.** Your identity and keys come back immediately.
+- **The engine notices if it finds rescuable swaps.** On unlocking your restored
+  identity, the engine checks the relays for any in-flight swap it doesn't
+  already know about, and — if it finds one — logs a warning rather than
+  silently resuming it. This is deliberate: if the old machine is still alive
+  and quietly working the same swap, having two machines drive it at once could
+  cost you money. **Only proceed once you're sure the old machine is genuinely
+  retired** (wiped, destroyed, or definitely never coming back online).
+- **Completing the restore is currently a technical, one-time step**, run
+  through the engine's command-line tool (`pact-cli restore`) rather than a
+  Satchel button — this handbook's companion, the *Pact Developer Handbook*,
+  covers it, or the chapter "Where to Get Help" points you at the community
+  channels if you'd rather have someone walk you through it. Once restored, the
+  engine drives the swap on its own exactly like any other — completing it if
+  it still can, or refunding you once the timelock allows — with no data folder
+  to carry over by hand.
 
-> **Important** — While a swap is in flight, treat Satchel's **data folder** as
-> part of your backup, not just your recovery phrase. The phrase protects your
-> *identity and keys*; the data folder is what carries an *in-flight swap* across
-> machines. (A future release will let a swap resume from the recovery phrase
-> alone, by keeping an encrypted copy of its state on the relays — until then, the
-> data folder is what makes a mid-swap machine loss recoverable automatically.)
+> **Warning** — This safety net only covers swaps **started after this
+> feature shipped**. A swap that was already in flight when you upgraded was
+> never backed up to the relays and is not retroactively rescuable — for those,
+> the data folder is still what carries the swap across machines (see below).
+> And in the rare case where you were the **maker of a Private (Taproot)** swap
+> and your machine died in the narrow window after accepting but before the
+> final signatures were assembled, the swap cannot be completed even after
+> restoring — the assembled signatures are the one piece of data that can't be
+> recreated from your seed. Your funds are never at risk either way: the
+> timelock refund is always the fallback.
+
+> **Note** — Keeping Satchel's **data folder** as an actual backup (copying it
+> alongside your recovery phrase) still works too, and restores a swap
+> immediately with no relay round-trip or waiting period — useful if you're
+> migrating a working machine deliberately rather than recovering from a loss.
+> But for an unplanned loss, you no longer *need* it: the relay-based rescue
+> above is the automatic safety net, keyed off your recovery phrase alone.
 
 > **Note** — Three things, three jobs: the **timelock** protects funds *locked in
-> a swap*; your **recovery phrase** protects your *identity and keys*; your **data
-> folder** carries *in-flight swaps* across machines. Back up the phrase always;
-> back up the data folder while you have swaps running. Without your recovery
-> phrase, a lost computer is a disaster — write it down.
+> a swap*; your **recovery phrase** protects your *identity and keys* and, via the
+> relay rescue, lets a new machine rediscover an *in-flight swap* too; your
+> **data folder**, if you happen to still have it, restores a swap instantly with
+> no waiting. Back up the phrase always — it's now doing more work than ever.
+> Without it, a lost computer is a disaster — write it down.

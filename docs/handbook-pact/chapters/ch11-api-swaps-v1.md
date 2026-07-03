@@ -71,7 +71,7 @@ blocks (initiator and counterparty legs respectively).
 | `fund` | `swap_id` | `{ record, envelope }` | yes (broadcasts) | Broadcast our HTLC funding tx. |
 | `redeem` | `swap_id` | `{ record }` | yes (broadcasts) | Redeem the counterparty HTLC (reveals secret). |
 | `refund` | `swap_id` | `{ record }` | yes (broadcasts) | Reclaim our funded HTLC after timeout. |
-| `abort` | `swap_id`, `reason?` | `{ record }` | yes | Cancel an unfunded swap. |
+| `abort` | `swap_id`, `reason?` | `{ record }` or `{ cancelled_pending_take }` | yes | Cancel an unfunded swap, a v2 adaptor swap, or an unanswered pending take. |
 | `tick` | — | `{ events:[…] }` | yes | Advance the scheduler one pass. |
 
 - `offer` — initiates a swap with the given terms and returns the signed
@@ -86,15 +86,30 @@ blocks (initiator and counterparty legs respectively).
   relaying it.)
 - `redeem` — spends the counterparty's funded HTLC, revealing the preimage.
 - `refund` — reclaims our own funded HTLC once its timelock has expired.
-- `abort` — cancels the swap; `reason` defaults to `"user aborted"`.
+- `abort` — cancels the given `swap_id`; `reason` defaults to `"user aborted"`.
+  **One method covers every in-flight card the UI shows**: it looks up `swap_id`
+  as a v1 record first, then a v2 (Taproot) adaptor record, and — if neither
+  exists — treats it as an *offer id* for a still-unanswered pending take
+  (`listpendingtakes`) and cancels that instead, returning
+  `{ cancelled_pending_take: <offer_id> }` rather than a record. A cancelled
+  pending take best-effort notifies the maker with an `abort` envelope keyed by
+  the offer id, so the maker's served-offer marker resolves it even though no
+  `SwapRecord` ever existed on that side.
 - `tick` — runs one scheduler pass (board sync + engine tick) and returns the
   resulting `events`, each `{ swap_id, action, detail }`.
 
-> **Warning** — `abort` is **refused once our HTLC has funded**. After
-> funding, the only safe exits are `redeem` (if you can claim the
-> counterparty's leg) or `refund` (after your timelock expires). Aborting a
-> funded swap is not an option because the coins are already committed
-> on-chain.
+> **Warning** — `abort` is **refused once our HTLC has funded** (v1) or once
+> our leg is funded (v2). After funding, the only safe exits are `redeem` (if
+> you can claim the counterparty's leg) or `refund` (after your timelock
+> expires). Aborting a funded swap is not an option because the coins are
+> already committed on-chain.
+
+> **Note** — A v2 handshake that stalls before either leg is funded — stuck at
+> `created`, `accepted`, or `nonces_exchanged` — also **self-aborts after 15
+> minutes** (`PRE_FUNDING_TIMEOUT_SECS`) without any `abort` call or relay
+> message: both sides' schedulers independently time out their own copy of the
+> stalled handshake. `signed` is excluded from this auto-timeout, since funding
+> may already be in flight by then. See the chapter "API: v2 Adaptor Swaps".
 
 > **Note** — The `funded` envelope `fund` relays is an *accelerator*, not a
 > requirement. Even if the relay message never reaches the maker, the swap still
@@ -112,8 +127,10 @@ blocks (initiator and counterparty legs respectively).
   its current `record` (the v1 `SwapRecord`, or the v2 `AdaptorSwapRecord` if the
   id is a v2 swap) plus `log`, the array of `pactd` log lines that mention that
   `swap_id` (the scheduler tags every event with `swap=<id>`). `pactd_version` is
-  the engine's crate version. Works for both protocol versions — the dispatch
-  tries the v1 store first, then the v2 adaptor store.
+  the engine's crate version. The dispatch tries the v1 store first, then the v2
+  adaptor store, and — if `swap_id` matches neither — falls back to a pending
+  take by offer id, so an "initiating" pre-swap that never became a `SwapRecord`
+  can still be dumped for support.
 
 > **Note** — `dumpswap` is **secret-safe by construction**. The record is passed
 > through `scrub_secrets`, which redacts the v1 preimage and any secret-named

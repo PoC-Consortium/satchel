@@ -104,3 +104,77 @@ the Nostr `nostr_outbox` / `nostr_inbox` / `nostr_offer_cache` tables.
 > than silently defaulting. There is no serde-default migration path — this is a
 > deliberate "no backward compatibility" stance, so do
 > not hand-edit the SQLite state and expect old shapes to be tolerated.
+
+## Seed-only swap rescue (#54)
+
+Losing the data directory entirely — a dead machine, a wiped disk — no longer
+strands an in-flight swap. `pactd` opportunistically backs up in-flight swap
+state to the configured Nostr relays, **encrypted to its own identity key**
+(sealed-to-self, kind `31512`; see the chapter "Nostr Transport"), so a fresh
+install restored from the seed alone can rediscover and finish or refund a swap
+the local database has no record of — no separate backup step, and nothing
+readable by anyone but you.
+
+Snapshots are minimal and sparse, published at exactly these points:
+
+- **v1** — once, at `accepted`. Any funding either side commits is then
+  refundable (from the derived keys) and, once the counterparty's leg is
+  spent on-chain, completable (the preimage extracts from the redeem witness).
+- **v2** — at `accepted`, and again at `signed`. The `signed` snapshot
+  additionally carries the assembled adaptor signatures — the *only* datum
+  that is neither seed- nor chain-derivable — so a rescued swap can be
+  **completed**, not just refunded.
+
+Everything after that is re-derived from chain-watching once the snapshot is
+adopted; the scheduler drives a rescued swap exactly like any other. A swap
+that reaches a terminal state (`completed`, `refunded`, `aborted`) publishes a
+NIP-09 tombstone so a machine restored later never resurrects a finished swap;
+even a missed tombstone is safe, since re-driving a settled swap just detects
+the spend and idempotently finalizes it.
+
+### Restore is gated, never automatic
+
+On boot, on unlock, and on every merchant load, `pactd` runs a **read-only**
+preview (`Engine::rescue_preview`) against the configured relays and only
+**warns** if rescuable snapshots exist — it never adopts one on its own. Two
+live machines driving the same swap from one seed can double-fund it, so
+adoption is an explicit, human decision:
+
+- `restorefromrelay` — adopts every rescuable snapshot the relays hold that
+  isn't already a local record, returning `{ restored, seen }`. Only call this
+  once the machine that ran those swaps is genuinely retired.
+- `rescuestatus` — the read-only twin: reports `{ pending, seen, warning }`
+  without adopting anything, for a status check or a UI badge.
+- CLI: `pact-cli restore` / `pact-cli rescue-status`.
+
+A restored swap's local record always wins over a snapshot (adoption is
+skipped if we already hold that `swap_id`), and restoring also raises the
+seed's next-swap-index high-water mark from the snapshots, so a reissued index
+can never reuse a completed swap's keys.
+
+### Anchored participant keys
+
+Restoring on a new machine has to re-derive the **participant's** swap keys
+too — not just the initiator's. Since rc8, the two roles index their keys
+differently (spec §4.2): the initiator still uses its local counter `i`, but
+the participant derives its swap and refund keys from the swap's own public
+anchor (`H` for v1, the adaptor point `T` for v2) via a hardened tagged-hash
+path, needing no counter at all. Two machines holding the same seed therefore
+derive the identical key for the identical swap, and can never issue one key
+for two different swaps. `swap_index` is `Option<u32>` in both record types —
+`None` means "participant, anchored." Existing pre-rc8 records keep their
+original counter-based derivation; this is fully backward compatible with
+databases created before this change.
+
+> **Warning** — Only swaps **started on rc8 or later** are covered — a swap
+> already in flight when you upgrade was never snapshotted and is not
+> retroactively rescuable. And a v2 **maker** wiped in the narrow window
+> between `accepted` and `signed` cannot complete the swap even after
+> restoring: the assembled adaptor signatures are the one datum that isn't
+> seed- or chain-derivable, and re-running the MuSig2 handshake is
+> structurally forbidden (persisted nonce sessions refuse to sign twice, by
+> design). The timelocked refund is the exit in that case.
+
+See the chapter "Nostr Transport" for the wire format (kind `31512`, the
+opaque per-swap `d`-tag, the tombstone event), and the Satchel handbook's
+"Backup, Seeds & Safety" chapter for the rescue story told for end users.

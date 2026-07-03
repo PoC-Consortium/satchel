@@ -82,6 +82,12 @@ for, once the linked payments unlock.
 **Refund** — Getting your own locked funds back when a swap doesn't complete. The
 *timelock* makes refunds automatic and guaranteed after its deadline.
 
+**Rescue** — Satchel's safety net for a machine that dies mid-swap: an
+encrypted, self-only backup of your in-flight swaps rides along on the relays,
+so a new machine holding just your recovery phrase can find and finish them.
+Always gated behind an explicit confirmation — Satchel only ever warns you it
+found one, never resumes it silently. See *"Backup, Seeds & Safety"*.
+
 **Relay** — One server on the *Nostr* network. Satchel posts to several at once so
 no single relay can silence you. The header's relay dot shows whether any are
 reachable.

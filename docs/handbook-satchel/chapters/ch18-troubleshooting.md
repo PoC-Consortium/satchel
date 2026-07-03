@@ -172,6 +172,14 @@ available to you right now. Common reasons:
   taken; refresh the board and look for a current one.
 - **It was already taken or withdrawn.** Someone else may have taken it first, or
   the maker pulled it. The offer's state chip tells you which.
+- **Your take arrived too late.** If the maker's Satchel was unreachable for a
+  while (their computer was asleep, offline, or its engine restarting) and your
+  take sat waiting for more than about 15 minutes, the maker's engine treats it
+  as abandoned and quietly drops it rather than serving a handshake nobody is
+  watching anymore — the offer stays live rather than being burned on a dead
+  take. If your own "initiating" card seems to have vanished without turning
+  into a swap, this is almost always why: just try the offer again (or a fresh
+  one) once you can see the maker is back online.
 
 ## Windows SmartScreen warning
 
