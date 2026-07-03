@@ -244,7 +244,57 @@ fn kick_nostr(app: &App) {
         if let Err(err) = nostr_pass(&app, &svc).await {
             tracing::warn!("nostr: on-load pass failed: {err:#}");
         }
+        // Seed-only rescue (#54), DETECTION ONLY: report any in-flight swap
+        // this machine is missing from our own encrypted relay snapshots, but
+        // never adopt one silently — if the machine that ran it is still alive,
+        // two drivers on one seed can double-fund the same swap. Adoption is
+        // the explicit `restorefromrelay` RPC / `pact-cli restore`.
+        match detect_rescue(&app).await {
+            Ok((n, _)) if n > 0 => {
+                tracing::warn!(count = n, "rescue: {}", RESCUE_PENDING_WARNING)
+            }
+            Ok(_) => {}
+            Err(err) => tracing::warn!("rescue: relay detection failed: {err:#}"),
+        }
     });
+}
+
+/// The standing #54 warning attached to every rescue surface: detection log,
+/// `rescuestatus` RPC and the CLI. One string so the wording never diverges.
+const RESCUE_PENDING_WARNING: &str = "in-flight swap snapshot(s) found on the relays but NOT \
+     auto-restored — run `restorefromrelay` ONLY if the machine that ran them is retired; \
+     driving the same swap from two live machines can double-fund it and lose money";
+
+/// Fetch our encrypted-to-self rescue snapshots from the relays and adopt any
+/// swap we don't already have locally (#54). Our identity xonly and the adopt
+/// are read/written under the registry lock; the relay fetch is lock-free in
+/// between. Returns `(restored, seen)`. Errors only when the seed is
+/// locked/unreadable or no relay transport is configured.
+async fn restore_from_relay(app: &App) -> Result<(usize, usize)> {
+    let blobs = fetch_rescue_blobs(app).await?;
+    if blobs.is_empty() {
+        return Ok((0, 0));
+    }
+    blocking_mut(app, move |e| e.rescue_from_blobs(&blobs)).await
+}
+
+/// Read-only twin of [`restore_from_relay`] (#54): count the snapshots that
+/// WOULD be adopted — `(pending, seen)` — adopting nothing. The detection half
+/// of the gated rescue; `rescuestatus` and the on-load/boot hooks use it.
+async fn detect_rescue(app: &App) -> Result<(usize, usize)> {
+    let blobs = fetch_rescue_blobs(app).await?;
+    if blobs.is_empty() {
+        return Ok((0, 0));
+    }
+    blocking(app, move |e| e.rescue_preview(&blobs)).await
+}
+
+async fn fetch_rescue_blobs(app: &App) -> Result<Vec<String>> {
+    let Some(svc) = app.nostr.clone() else {
+        bail!("nostr transport not configured — seed-only rescue needs at least one relay");
+    };
+    let me = blocking(app, |e| Ok(e.store.seed()?.identity_pubkey()?.to_string())).await?;
+    Ok(svc.fetch_my_snapshots(&me).await)
 }
 
 // ---- JSON-RPC plumbing -------------------------------------------------
@@ -893,6 +943,29 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 .collect();
             Ok(json!({ "relays": relays }))
         }
+        // Seed-only rescue (#54): re-fetch our encrypted-to-self swap snapshots
+        // from the relays and adopt any in-flight swap this machine is missing
+        // (fresh install / wiped data dir, same seed). Idempotent — swaps we
+        // already hold locally are left untouched. The scheduler then drives the
+        // rescued swaps to completion/refund via chain-watch. This is the
+        // EXPLICIT confirmation step: pactd itself only ever detects and warns
+        // (see RESCUE_PENDING_WARNING) — call this only once the machine that
+        // ran these swaps is retired.
+        "restorefromrelay" => {
+            let (restored, seen) = restore_from_relay(app).await?;
+            Ok(json!({ "restored": restored, "seen": seen }))
+        }
+        // Read-only rescue detection (#54): how many relay snapshots WOULD be
+        // adopted by `restorefromrelay`, without adopting any. A live relay
+        // round each call — cheap enough for a user-invoked status check.
+        "rescuestatus" => {
+            let (pending, seen) = detect_rescue(app).await?;
+            Ok(json!({
+                "pending": pending,
+                "seen": seen,
+                "warning": if pending > 0 { Some(RESCUE_PENDING_WARNING) } else { None },
+            }))
+        }
         "boardpostoffer" => {
             let give = parse_coin_amount(&p.str(0, "give")?)?;
             let get = parse_coin_amount(&p.str(1, "get")?)?;
@@ -1289,6 +1362,7 @@ async fn main() -> Result<()> {
             // active — so offers soft-de-listed on the last clean close come back
             // immediately on restart (not after up to a full REFRESH_SECS).
             let mut readvertised = false;
+            let mut rescue_checked = false;
             loop {
                 // Poll-then-sleep: run a pass immediately (no cold-start gap for
                 // an already-active merchant), then wait `interval` between
@@ -1319,6 +1393,29 @@ async fn main() -> Result<()> {
                     if let Some(svc) = &scheduler.nostr {
                         if let Err(err) = nostr_pass(&scheduler, svc).await {
                             tracing::error!("nostr pass failed: {err:#}");
+                        }
+                    }
+                    // One-time on boot, once a merchant with a readable seed is
+                    // active: DETECT any in-flight swap this machine is missing
+                    // from our own encrypted relay snapshots (#54) and warn —
+                    // never adopt silently (two live machines on one seed can
+                    // double-fund a swap). Adoption stays behind the explicit
+                    // `restorefromrelay` RPC / `pact-cli restore`. Covers the
+                    // headless/CLI boot with no loadmerchant RPC; the UI path
+                    // also detects via kick_nostr on load/unlock.
+                    if !rescue_checked {
+                        match detect_rescue(&scheduler).await {
+                            Ok((n, _)) if n > 0 => {
+                                rescue_checked = true;
+                                tracing::warn!(count = n, "rescue: {}", RESCUE_PENDING_WARNING);
+                            }
+                            // Only latch once the seed was actually readable (a
+                            // locked seed returns an error): keep retrying each
+                            // tick until unlock makes detection possible.
+                            Ok(_) => rescue_checked = true,
+                            Err(err) => {
+                                tracing::debug!("rescue: boot detection deferred: {err:#}")
+                            }
                         }
                     }
                     match blocking(&scheduler, |e| {

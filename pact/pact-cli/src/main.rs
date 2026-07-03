@@ -100,6 +100,15 @@ enum Command {
         #[arg(long)]
         swap: Option<String>,
     },
+    /// Recover in-flight swaps from our encrypted relay snapshots (#54) —
+    /// for a fresh install or wiped data dir restored from the same seed.
+    /// Idempotent: swaps already present locally are left untouched.
+    /// ONLY run this once the machine that ran the swaps is retired — two
+    /// live machines driving one swap can double-fund it.
+    Restore,
+    /// Check (read-only) how many in-flight swaps `restore` would recover
+    /// from the relay snapshots, without adopting any (#54).
+    RescueStatus,
     /// Seed lifecycle: show whether a seed exists / is encrypted / locked.
     Walletstatus,
     /// List shipped coins: which are configured + live connection status.
@@ -241,6 +250,25 @@ fn main() -> Result<()> {
                 None => client.call("listswaps", json!([]))?,
             };
             println!("{}", serde_json::to_string_pretty(&result)?);
+        }
+        Command::Restore => {
+            let r = client.call("restorefromrelay", json!([]))?;
+            let (restored, seen) = (
+                r["restored"].as_u64().unwrap_or(0),
+                r["seen"].as_u64().unwrap_or(0),
+            );
+            println!("rescued {restored} swap(s) from {seen} relay snapshot(s)");
+        }
+        Command::RescueStatus => {
+            let r = client.call("rescuestatus", json!([]))?;
+            let (pending, seen) = (
+                r["pending"].as_u64().unwrap_or(0),
+                r["seen"].as_u64().unwrap_or(0),
+            );
+            println!("{pending} recoverable swap(s) in {seen} relay snapshot(s)");
+            if let Some(w) = r["warning"].as_str() {
+                println!("WARNING: {w}");
+            }
         }
         Command::Walletstatus => {
             let result = client.call("walletstatus", json!([]))?;

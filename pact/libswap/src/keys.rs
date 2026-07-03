@@ -2,11 +2,25 @@
 //!
 //! All material derives from one BIP39 seed via BIP32:
 //!
-//! | Material                    | Path                      |
-//! |-----------------------------|---------------------------|
-//! | Identity key (BIP340)       | `m/7228'/0'/0'`           |
-//! | Swap key (chain c, swap i)  | `m/7228'/1'/coin(c)'/i'`  |
-//! | Preimage source (swap i)    | `m/7228'/2'/i'`           |
+//! | Material                          | Path                               |
+//! |-----------------------------------|------------------------------------|
+//! | Identity key (BIP340)             | `m/7228'/0'/0'`                    |
+//! | Swap key, initiator (chain c, i)  | `m/7228'/1'/coin(c)'/i'`           |
+//! | Swap key, participant (anchored)  | `m/7228'/1'/coin(c)'/a'/b'/c'/d'`  |
+//! | Preimage source (swap i)          | `m/7228'/2'/i'`                    |
+//! | Refund key (v2, chain c)          | `m/7228'/3'/…` (same i/anchored split) |
+//!
+//! Two index schemes (spec §4.2): the **initiator** allocates a local
+//! monotonic counter `i` — its deterministic preimage/adaptor secret at that
+//! index is what the swap id itself is derived from, so the counter is the
+//! root of the swap's identity. The **participant** learns the swap's public
+//! anchor (v1: hash `H`; v2: adaptor point `T`) before deriving any key, so
+//! its keys are *anchored*: four hardened 31-bit levels taken from a tagged
+//! hash of the anchor. Anchored keys need no counter — the same seed on any
+//! machine derives the same key from the anchor alone (for v1 the anchor is
+//! embedded in the on-chain HTLC script), and two different swaps can never
+//! collide on one key. The path depths differ (counter 4 vs anchored 7), so
+//! the two schemes can never derive the same key either.
 
 use anyhow::Result;
 use bitcoin::bip32::{ChildNumber, Xpriv};
@@ -27,6 +41,19 @@ pub const COIN_POCX: u32 = 0x504F_4358;
 const TAG_PREIMAGE: &str = "pact/htlc/preimage/v1";
 /// v2 adaptor secret tag (spec v2 §3.1).
 const TAG_ADAPTOR: &str = "pact/adaptor/secret/v2";
+/// Participant swap-key anchor tag (spec §4.2).
+const TAG_KEY_ANCHOR: &str = "pact/swap-key-anchor/v1";
+
+/// Anchored path levels: four hardened 31-bit indices from the tagged hash of
+/// the swap's public anchor (v1: hash `H`; v2: compressed adaptor point `T`).
+/// 124 hash bits — collision-free in practice, unlike a single truncated u32
+/// (birthday bound ~46k swaps at 31 bits).
+fn anchor_levels(anchor: &[u8]) -> [u32; 4] {
+    let h = tagged_hash(TAG_KEY_ANCHOR, anchor);
+    core::array::from_fn(|i| {
+        u32::from_be_bytes(h[4 * i..4 * i + 4].try_into().expect("4 bytes")) & 0x7FFF_FFFF
+    })
+}
 
 /// The Pact seed: hot transit keys only; proceeds sweep to the core wallet.
 pub struct PactSeed {
@@ -80,6 +107,22 @@ impl PactSeed {
         Ok(self.swap_secret_key(coin, index)?.public_key(&self.secp))
     }
 
+    /// Participant swap key at `m/7228'/1'/coin'/a'/b'/c'/d'`, the four levels
+    /// taken from the swap's public anchor (spec §4.2) — v1: the 32-byte hash
+    /// `H`, v2: the compressed adaptor point `T`. Counter-free: re-derivable
+    /// from the anchor alone, and never shared between two different swaps.
+    pub fn swap_secret_key_anchored(&self, coin: u32, anchor: &[u8]) -> Result<SecretKey> {
+        let [a, b, c, d] = anchor_levels(anchor);
+        self.derive(&[PURPOSE, 1, coin, a, b, c, d])
+    }
+
+    /// Compressed pubkey for [`Self::swap_secret_key_anchored`].
+    pub fn swap_pubkey_anchored(&self, coin: u32, anchor: &[u8]) -> Result<PublicKey> {
+        Ok(self
+            .swap_secret_key_anchored(coin, anchor)?
+            .public_key(&self.secp))
+    }
+
     /// Deterministic preimage for swap index `i` (spec §4.3) —
     /// `s = TaggedHash("pact/htlc/preimage/v1", key at m/7228'/2'/i')`.
     /// Initiator only. Re-derivable from the seed alone.
@@ -111,6 +154,21 @@ impl PactSeed {
     pub fn refund_xonly_pubkey(&self, coin: u32, index: u32) -> Result<XOnlyPublicKey> {
         Ok(self
             .refund_secret_key(coin, index)?
+            .x_only_public_key(&self.secp)
+            .0)
+    }
+
+    /// Participant refund key at `m/7228'/3'/coin'/a'/b'/c'/d'` — the anchored
+    /// analog of [`Self::refund_secret_key`] (see [`Self::swap_secret_key_anchored`]).
+    pub fn refund_secret_key_anchored(&self, coin: u32, anchor: &[u8]) -> Result<SecretKey> {
+        let [a, b, c, d] = anchor_levels(anchor);
+        self.derive(&[PURPOSE, 3, coin, a, b, c, d])
+    }
+
+    /// x-only pubkey for [`Self::refund_secret_key_anchored`].
+    pub fn refund_xonly_pubkey_anchored(&self, coin: u32, anchor: &[u8]) -> Result<XOnlyPublicKey> {
+        Ok(self
+            .refund_secret_key_anchored(coin, anchor)?
             .x_only_public_key(&self.secp)
             .0)
     }
@@ -221,6 +279,56 @@ mod tests {
             s.refund_secret_key(COIN_BTC, 0).unwrap(),
             s.swap_secret_key(COIN_BTC, 0).unwrap()
         );
+    }
+
+    // ---- anchored (participant) derivations — spec §4.2 ----
+
+    #[test]
+    fn anchored_keys_deterministic_and_distinct() {
+        let s = seed();
+        let h1 = [0x11u8; 32];
+        let h2 = [0x22u8; 32];
+        // Deterministic across instances.
+        assert_eq!(
+            s.swap_pubkey_anchored(COIN_BTC, &h1).unwrap(),
+            seed().swap_pubkey_anchored(COIN_BTC, &h1).unwrap()
+        );
+        // Distinct per anchor and per coin.
+        assert_ne!(
+            s.swap_secret_key_anchored(COIN_BTC, &h1).unwrap(),
+            s.swap_secret_key_anchored(COIN_BTC, &h2).unwrap()
+        );
+        assert_ne!(
+            s.swap_secret_key_anchored(COIN_BTC, &h1).unwrap(),
+            s.swap_secret_key_anchored(COIN_POCX, &h1).unwrap()
+        );
+        // Refund branch is independent of the swap branch for the same anchor.
+        assert_ne!(
+            s.refund_secret_key_anchored(COIN_BTC, &h1).unwrap(),
+            s.swap_secret_key_anchored(COIN_BTC, &h1).unwrap()
+        );
+        // A 33-byte anchor (v2 compressed point) works and differs.
+        let t = s.adaptor_point(0).unwrap().serialize();
+        assert_eq!(
+            s.swap_pubkey_anchored(COIN_BTC, &t).unwrap(),
+            seed().swap_pubkey_anchored(COIN_BTC, &t).unwrap()
+        );
+        assert_ne!(
+            s.swap_secret_key_anchored(COIN_BTC, &t).unwrap(),
+            s.swap_secret_key_anchored(COIN_BTC, &h1).unwrap()
+        );
+    }
+
+    #[test]
+    fn anchored_never_collides_with_counter_path() {
+        // The counter path is 4 levels deep, the anchored path 7 — even an
+        // adversarially chosen anchor can't reproduce a counter-derived key.
+        let s = seed();
+        let h = [0x33u8; 32];
+        let anchored = s.swap_secret_key_anchored(COIN_BTC, &h).unwrap();
+        for i in 0..64 {
+            assert_ne!(anchored, s.swap_secret_key(COIN_BTC, i).unwrap());
+        }
     }
 
     #[test]

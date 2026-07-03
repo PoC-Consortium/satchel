@@ -12,7 +12,7 @@
 //! Rebuilding from seed + record remains the recovery fallback.
 
 use anyhow::{bail, ensure, Context, Result};
-use bitcoin::secp256k1::PublicKey;
+use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::{OutPoint, ScriptBuf};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
@@ -23,7 +23,7 @@ use std::sync::Mutex;
 use crate::adaptor_swap::AdaptorState;
 use crate::chain::{ChainBackend, MultiBackend};
 use crate::htlc::extract_preimage;
-use crate::keys::{hash_preimage, swap_id};
+use crate::keys::{hash_preimage, swap_id, PactSeed};
 use crate::messages::{self, AbortBody, AcceptBody, ChainRef, Envelope, FundedBody, InitBody};
 use crate::params::{ChainParams, Network};
 use crate::registry;
@@ -459,6 +459,67 @@ fn parse_hash(hex_hash: &str) -> Result<[u8; 32]> {
         .ok()
         .and_then(|b| <[u8; 32]>::try_from(b).ok())
         .context("hash_h must be 32 bytes of hex")
+}
+
+/// Swap key for a v1 record (spec §4.2): the initiator's rides its local BIP32
+/// counter (`hash_h` — and so the swap id — derive from the deterministic
+/// preimage at that index); the participant's is anchored to `hash_h` itself,
+/// which it knows before deriving any key and which sits in both on-chain HTLC
+/// scripts — so it is re-derivable from the chain alone, with no counter to
+/// collide across machines sharing the seed.
+fn v1_swap_key(seed: &PactSeed, rec: &SwapRecord, coin: u32) -> Result<SecretKey> {
+    match rec.swap_index {
+        Some(i) => seed.swap_secret_key(coin, i),
+        None => seed.swap_secret_key_anchored(coin, &parse_hash(&rec.hash_h)?),
+    }
+}
+
+/// The v2 participant's key anchor: the compressed adaptor point `T` — the
+/// value the v2 swap id itself is derived from (spec v2 §3.3).
+fn v2_anchor(rec: &AdaptorSwapRecord) -> Result<[u8; 33]> {
+    Ok(parse_pubkey(&rec.adaptor_point, "adaptor point")?.serialize())
+}
+
+/// Swap (MuSig2 signer) key for a v2 record — the v2 analog of [`v1_swap_key`].
+fn v2_swap_key(seed: &PactSeed, rec: &AdaptorSwapRecord, coin: u32) -> Result<SecretKey> {
+    match rec.swap_index {
+        Some(i) => seed.swap_secret_key(coin, i),
+        None => seed.swap_secret_key_anchored(coin, &v2_anchor(rec)?),
+    }
+}
+
+/// Refund (CLTV tapleaf) key for a v2 record — same counter/anchored split.
+fn v2_refund_key(seed: &PactSeed, rec: &AdaptorSwapRecord, coin: u32) -> Result<SecretKey> {
+    match rec.swap_index {
+        Some(i) => seed.refund_secret_key(coin, i),
+        None => seed.refund_secret_key_anchored(coin, &v2_anchor(rec)?),
+    }
+}
+
+/// One decoded rescue snapshot (#54) — either protocol's record.
+enum RescuedRecord {
+    V1(Box<SwapRecord>),
+    V2(Box<AdaptorSwapRecord>),
+}
+
+impl RescuedRecord {
+    fn swap_id(&self) -> &str {
+        match self {
+            Self::V1(r) => &r.swap_id,
+            Self::V2(r) => &r.swap_id,
+        }
+    }
+
+    /// Terminal snapshots are never adopted — a missed tombstone is harmless.
+    fn terminal(&self) -> bool {
+        match self {
+            Self::V1(r) => matches!(r.state, State::Completed | State::Refunded | State::Aborted),
+            Self::V2(r) => matches!(
+                r.state,
+                AdaptorState::Completed | AdaptorState::Refunded | AdaptorState::Aborted
+            ),
+        }
+    }
 }
 
 impl Engine {
@@ -937,7 +998,7 @@ impl Engine {
             role: Role::Initiator,
             state: State::Created,
             created_at: local_now(),
-            swap_index: index,
+            swap_index: Some(index),
             chain_a,
             chain_b,
             amount_a: give.1,
@@ -1013,12 +1074,15 @@ impl Engine {
         parse_pubkey(&body.alice_redeem_pubkey_b, "alice redeem B")?;
 
         let seed = self.store.seed()?;
-        let index = self.store.next_swap_index()?;
+        // Participant keys are anchored to the swap's hash H (spec §4.2): no
+        // local counter is allocated — the same seed derives the same keys from
+        // the init alone on any machine, and two different swaps can never
+        // share a key (the initiator guarantees H unique via ITS counter).
         let bob_redeem_pubkey_a = seed
-            .swap_pubkey(coin_of(&body.chain_a)?, index)?
+            .swap_pubkey_anchored(coin_of(&body.chain_a)?, &hash_h)?
             .to_string();
         let bob_refund_pubkey_b = seed
-            .swap_pubkey(coin_of(&body.chain_b)?, index)?
+            .swap_pubkey_anchored(coin_of(&body.chain_b)?, &hash_h)?
             .to_string();
 
         let record = SwapRecord {
@@ -1026,7 +1090,7 @@ impl Engine {
             role: Role::Participant,
             state: State::Accepted,
             created_at: local_now(),
-            swap_index: index,
+            swap_index: None,
             chain_a: body.chain_a,
             chain_b: body.chain_b,
             amount_a: body.amount_a,
@@ -1053,6 +1117,7 @@ impl Engine {
             last_action_height: 0,
         };
         self.store.put(&record)?;
+        let _ = self.snapshot_v1(&record); // rescue snapshot at accept (#54)
         let body = AcceptBody {
             bob_redeem_pubkey_a,
             bob_refund_pubkey_b,
@@ -1140,7 +1205,7 @@ impl Engine {
             role: Role::Initiator,
             state: AdaptorState::Created,
             created_at: local_now(),
-            swap_index: index,
+            swap_index: Some(index),
             chain_a,
             chain_b,
             amount_a,
@@ -1247,16 +1312,19 @@ impl Engine {
             .unwrap_or_default();
 
         let seed = self.store.seed()?;
-        let index = self.store.next_swap_index()?;
+        // v2 participant keys are anchored to the adaptor point T (spec §4.2)
+        // — the value the swap id itself derives from — instead of a local
+        // counter. Parsing T here also validates it before we sign anything.
+        let anchor = parse_pubkey(&body.adaptor_point, "adaptor point")?.serialize();
         let body_out = crate::messages::AcceptV2Body {
             bob_swap_a: seed
-                .swap_pubkey(coin_of(&body.chain_a)?, index)?
+                .swap_pubkey_anchored(coin_of(&body.chain_a)?, &anchor)?
                 .to_string(),
             bob_swap_b: seed
-                .swap_pubkey(coin_of(&body.chain_b)?, index)?
+                .swap_pubkey_anchored(coin_of(&body.chain_b)?, &anchor)?
                 .to_string(),
             bob_refund_b: seed
-                .refund_xonly_pubkey(coin_of(&body.chain_b)?, index)?
+                .refund_xonly_pubkey_anchored(coin_of(&body.chain_b)?, &anchor)?
                 .to_string(),
             bob_sweep_a: bob_sweep_a.clone(),
         };
@@ -1276,7 +1344,7 @@ impl Engine {
             role: Role::Participant,
             state: AdaptorState::Accepted,
             created_at: local_now(),
-            swap_index: index,
+            swap_index: None,
             chain_a: body.chain_a,
             chain_b: body.chain_b,
             amount_a: body.amount_a,
@@ -1316,6 +1384,7 @@ impl Engine {
             funding_b_broadcast: false,
         };
         self.store.put_adaptor(&rec)?;
+        let _ = self.snapshot_v2(&rec); // rescue snapshot at accept (#54)
         let envelope =
             self.signed_envelope("accept", &init.swap_id, serde_json::to_value(&body_out)?)?;
         Ok((rec, envelope))
@@ -1446,8 +1515,7 @@ impl Engine {
             };
             (leg, ctx, coin_of(&rec.chain_a)?, mine)
         };
-        let my_scalar =
-            crate::musig::seckey_to_scalar(&seed.swap_secret_key(coin, rec.swap_index)?)?;
+        let my_scalar = crate::musig::seckey_to_scalar(&v2_swap_key(&seed, rec, coin)?)?;
         let agg_point: musig2::secp::Point = ctx.aggregated_pubkey();
         Ok(LegSession {
             ctx,
@@ -1636,6 +1704,10 @@ impl Engine {
         }
         rec.state = AdaptorState::Signed;
         self.store.put_adaptor(&rec)?;
+        // Rescue snapshot at Signed (#54): the record now carries the assembled
+        // adaptor signatures — the one datum that is neither seed- nor
+        // chain-derivable — so a rescued machine can COMPLETE, not just refund.
+        let _ = self.snapshot_v2(&rec);
         Ok(rec)
     }
 
@@ -1658,6 +1730,15 @@ impl Engine {
                     rec.role == Role::Initiator,
                     "only the initiator receives accept"
                 );
+                // Replay-safe (#54): state is MONOTONIC. A rescued node re-reads
+                // relay history from a fresh cursor, so a re-delivered accept
+                // must be a silent no-op — regressing a Signed record to
+                // Accepted re-opened the handshake (dead-ended by nonce-safety)
+                // and starved the scheduler redeem. v1's recv() gets the same
+                // safety from its strict `accept in state` ensure.
+                if rec.state != AdaptorState::Created {
+                    return Ok(rec);
+                }
                 let b: crate::messages::AcceptV2Body =
                     serde_json::from_value(envelope.body.clone())
                         .context("malformed accept-v2 body")?;
@@ -1705,6 +1786,11 @@ impl Engine {
             other => bail!("unknown v2 message type {other:?}"),
         }
         self.store.put_adaptor(&rec)?;
+        // Initiator snapshots once at accept (#54); Signed is snapshotted in
+        // adaptor_assemble for both roles.
+        if envelope.msg_type == "accept" {
+            let _ = self.snapshot_v2(&rec);
+        }
         Ok(rec)
     }
 
@@ -1874,7 +1960,12 @@ impl Engine {
                         rec.t2
                     );
                 }
-                let t = crate::musig::seckey_to_scalar(&seed.adaptor_secret(rec.swap_index)?)?;
+                let t = crate::musig::seckey_to_scalar(
+                    &seed.adaptor_secret(
+                        rec.swap_index
+                            .context("initiator record missing its swap index")?,
+                    )?,
+                )?;
                 let sig = crate::adaptor_engine::adaptor_sig_from_hex(
                     rec.adaptor_sig_b
                         .as_deref()
@@ -1955,6 +2046,7 @@ impl Engine {
             }
         }
         self.store.put_adaptor(&rec)?;
+        let _ = self.tombstone_swap(&rec.swap_id); // terminal: drop rescue snapshot (#54)
         Ok(rec)
     }
 
@@ -1995,7 +2087,7 @@ impl Engine {
             "too early to refund: MTP {mtp} < T {}",
             leg.locktime
         );
-        let refund_kp = seed.refund_secret_key(coin, rec.swap_index)?.keypair(&secp);
+        let refund_kp = v2_refund_key(&seed, &rec, coin)?.keypair(&secp);
         let dest = backend
             .params()
             .parse_address(&backend.wallet_new_address()?)?;
@@ -2026,6 +2118,7 @@ impl Engine {
         }
         rec.state = AdaptorState::Refunded;
         self.store.put_adaptor(&rec)?;
+        let _ = self.tombstone_swap(&rec.swap_id); // terminal: drop rescue snapshot (#54)
         Ok(rec)
     }
 
@@ -2099,6 +2192,7 @@ impl Engine {
             let mut dead = rec.clone();
             dead.state = Aborted;
             self.store.put_adaptor(&dead)?;
+            let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
             return ev(
                 "abort-timeout",
                 format!("no funding within {PRE_FUNDING_TIMEOUT_SECS}s; aborted"),
@@ -2123,6 +2217,40 @@ impl Engine {
         }
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let p = self.adaptor_params(rec)?;
+
+        // Rescue / chain-watch rediscovery (#54): the v2 tick is otherwise
+        // pointer-based (pointers arrive via `funding_ready` messages). A node
+        // restored from its seed alone — snapshot taken at `Signed`, before any
+        // funding — has NEITHER pointer, so without this it could not even refund
+        // a leg it already funded (stranded funds). While `Signed`, rediscover any
+        // missing pointer by its derived leg script before deriving `both_funded`.
+        // Idempotent: `find_funding` matches script+amount and a missing output
+        // just leaves the pointer `None`; once found it is persisted and skipped.
+        let mut owned = rec.clone();
+        if owned.state == Signed {
+            if owned.funding_a_txid.is_none() {
+                let spk_a = p.leg_a(&secp)?.script_pubkey(&secp)?;
+                if let Some((op, info)) = self.backend(&owned.chain_a)?.find_funding(&spk_a)? {
+                    if info.value_sat == owned.amount_a {
+                        owned.funding_a_txid = Some(op.txid.to_string());
+                        owned.funding_a_vout = Some(op.vout);
+                        self.store.put_adaptor(&owned)?;
+                    }
+                }
+            }
+            if owned.funding_b_txid.is_none() {
+                let spk_b = p.leg_b(&secp)?.script_pubkey(&secp)?;
+                if let Some((op, info)) = self.backend(&owned.chain_b)?.find_funding(&spk_b)? {
+                    if info.value_sat == owned.amount_b {
+                        owned.funding_b_txid = Some(op.txid.to_string());
+                        owned.funding_b_vout = Some(op.vout);
+                        self.store.put_adaptor(&owned)?;
+                    }
+                }
+            }
+        }
+        let rec = &owned;
+
         let both_funded = rec.funding_a_txid.is_some() && rec.funding_b_txid.is_some();
         let outpoint = |txid: &Option<String>, vout: Option<u32>| -> Result<OutPoint> {
             Ok(OutPoint {
@@ -2245,6 +2373,32 @@ impl Engine {
                 Ok(None)
             }
             Role::Participant => {
+                // Rescue self-heal (#54): a taker restored at `Signed` has no
+                // pre-built leg B (it is built by `adaptor_fund`, after the Signed
+                // snapshot). If rediscovery above found no leg-B output either, we
+                // never funded — rebuild it now so the two-phase broadcast below can
+                // proceed. Idempotent: `adaptor_build_leg_b` re-adopts a recorded
+                // pointer or an existing on-chain output, never double-funds. Gated
+                // on the §7.4 fund deadline so we don't reserve wallet inputs for a
+                // leg we could no longer safely broadcast.
+                if rec.state == Signed
+                    && !rec.funding_b_broadcast
+                    && rec.funding_b_tx_hex.is_none()
+                    && rec.funding_b_txid.is_none()
+                {
+                    let net = rec.chain_b.network;
+                    let (fund_margin, _, _) = action_margins(net);
+                    let fundable = match self.backend(&rec.chain_b)?.tip_median_time() {
+                        Ok(mtp) => {
+                            action_safe(deadline_clock(net, local_now(), mtp), fund_margin, rec.t2)
+                        }
+                        Err(_) => true, // clock hiccup: don't block a still-fundable swap
+                    };
+                    if fundable {
+                        self.adaptor_build_leg_b(&rec.swap_id)?;
+                        return ev("adaptor-build-b", "rebuilt leg B (rescue self-heal)".into());
+                    }
+                }
                 // CRITICAL two-phase broadcast (spec v2 §7): once the swap is
                 // `Signed` (we hold a verified σ_A) AND leg A is verified on-chain
                 // n_a-deep, broadcast our pre-built leg B. Until BOTH hold, leg B
@@ -2252,6 +2406,23 @@ impl Engine {
                 // certain it can claim leg A.
                 if rec.state == Signed && !rec.funding_b_broadcast {
                     if let Some(hex) = rec.funding_b_tx_hex.as_deref() {
+                        // §7.4 fund deadline (mirrors the manual `adaptor_fund`
+                        // gate): never broadcast leg B within `fund_margin` of T2.
+                        // This is the load-bearing gate for a RESCUED taker — a
+                        // Signed snapshot re-adopted long after negotiation must
+                        // NOT auto-commit leg B into a window too tight for Alice
+                        // to redeem: leg B was never broadcast, so skipping costs
+                        // nothing (Alice refunds leg A), while funding late risks
+                        // Bob's funds. Conservative: an unreadable clock does not
+                        // gate (a transient node hiccup must not strand a swap).
+                        let net = rec.chain_b.network;
+                        let (fund_margin, _, _) = action_margins(net);
+                        if let Ok(mtp) = self.backend(&rec.chain_b)?.tip_median_time() {
+                            let now = deadline_clock(net, local_now(), mtp);
+                            if !action_safe(now, fund_margin, rec.t2) {
+                                return Ok(None); // too late to fund leg B safely
+                            }
+                        }
                         if !self.adaptor_leg_a_confirmed(rec)? {
                             return Ok(None); // wait for leg A before committing leg B
                         }
@@ -2370,6 +2541,7 @@ impl Engine {
                 let mut updated = rec.clone();
                 updated.state = AdaptorState::Completed;
                 self.store.put_adaptor(&updated)?;
+                let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
                 return Ok(Some(TickEvent {
                     swap_id: rec.swap_id.clone(),
                     action: "adaptor-completed".into(),
@@ -2706,9 +2878,7 @@ impl Engine {
             }));
         }
         let outpoint = old_tx.input[0].previous_output;
-        let refund_kp = seed
-            .refund_secret_key(coin_of(chain)?, rec.swap_index)?
-            .keypair(&secp);
+        let refund_kp = v2_refund_key(&seed, rec, coin_of(chain)?)?.keypair(&secp);
         let new_tx = crate::taproot::build_refund_tx(
             &secp,
             &leg,
@@ -2849,6 +3019,12 @@ impl Engine {
             other => bail!("unknown message type {other:?}"),
         }
         self.store.put(&rec)?;
+        // Initiator snapshots once at accept (#54); tombstone a pre-funding abort.
+        if envelope.msg_type == "accept" {
+            let _ = self.snapshot_v1(&rec);
+        } else if rec.state == State::Aborted {
+            let _ = self.tombstone_swap(&rec.swap_id);
+        }
         Ok(rec)
     }
 
@@ -2958,7 +3134,7 @@ impl Engine {
             vout,
         };
         let seed = self.store.seed()?;
-        let key = seed.swap_secret_key(coin_of(&chain)?, rec.swap_index)?;
+        let key = v1_swap_key(&seed, &rec, coin_of(&chain)?)?;
         let destination = backend
             .params()
             .parse_address(&backend.wallet_new_address()?)?;
@@ -3032,8 +3208,11 @@ impl Engine {
                     rec.n_b
                 );
 
-                let preimage = seed.preimage(rec.swap_index)?;
-                let key = seed.swap_secret_key(coin_of(&rec.chain_b)?, rec.swap_index)?;
+                let preimage = seed.preimage(
+                    rec.swap_index
+                        .context("initiator record missing its swap index")?,
+                )?;
+                let key = v1_swap_key(&seed, &rec, coin_of(&rec.chain_b)?)?;
                 let destination = backend
                     .params()
                     .parse_address(&backend.wallet_new_address()?)?;
@@ -3111,7 +3290,7 @@ impl Engine {
                 );
 
                 let htlc = params.htlc_a()?;
-                let key = seed.swap_secret_key(coin_of(&rec.chain_a)?, rec.swap_index)?;
+                let key = v1_swap_key(&seed, &rec, coin_of(&rec.chain_a)?)?;
                 let destination = backend_a
                     .params()
                     .parse_address(&backend_a.wallet_new_address()?)?;
@@ -3141,6 +3320,9 @@ impl Engine {
             }
         }
         self.store.put(&rec)?;
+        if rec.state == State::Completed {
+            let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
+        }
         Ok(rec)
     }
 
@@ -3215,7 +3397,7 @@ impl Engine {
             )
             .context("corrupt refund_tx_hex")?,
             None => {
-                let key = seed.swap_secret_key(coin_of(&chain)?, rec.swap_index)?;
+                let key = v1_swap_key(&seed, &rec, coin_of(&chain)?)?;
                 let destination = backend
                     .params()
                     .parse_address(&backend.wallet_new_address()?)?;
@@ -3236,6 +3418,7 @@ impl Engine {
         rec.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
         rec.state = State::Refunded;
         self.store.put(&rec)?;
+        let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
         Ok(rec)
     }
 
@@ -4066,6 +4249,7 @@ impl Engine {
                     let mut updated = rec.clone();
                     updated.state = State::Completed;
                     self.store.put(&updated)?;
+                    let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
                     return event("completed", txid.to_string());
                 }
                 // Mined but shallow (1..n_b): the redeem is in a block, so it
@@ -4220,6 +4404,43 @@ impl Engine {
                 if rec.created_at > 0
                     && local_now().saturating_sub(rec.created_at) >= PRE_FUNDING_TIMEOUT_SECS =>
             {
+                // Rescue safety (#54): a node restored from the accept snapshot is
+                // `Accepted` with NO funding pointer even when our leg is already
+                // funded on chain. `abort()` assumes nothing is committed (its
+                // guard is pointer-based), so aborting here would strand a funded
+                // leg. Rediscover our own leg by its derivable script FIRST: if
+                // it is on chain, adopt the pointer and advance to the funded
+                // state so the refund/redeem path — not a false abort — governs
+                // the committed funds. Only a genuinely unfunded, stale handshake
+                // aborts. (Participant `Accepted` is handled by an earlier arm.)
+                let our_leg = match rec.role {
+                    Role::Initiator => "a",
+                    Role::Participant => "b",
+                };
+                if let Some((outpoint, _confs)) = self.locate_funding(rec, our_leg)? {
+                    let mut updated = rec.clone();
+                    match rec.role {
+                        Role::Initiator => {
+                            updated.htlc_a_txid = Some(outpoint.txid.to_string());
+                            updated.htlc_a_vout = Some(outpoint.vout);
+                            updated.state = State::FundedA;
+                        }
+                        Role::Participant => {
+                            updated.htlc_b_txid = Some(outpoint.txid.to_string());
+                            updated.htlc_b_vout = Some(outpoint.vout);
+                            updated.htlc_b_height = Some(self.backend(&rec.chain_b)?.tip_height()?);
+                            updated.state = State::FundedB;
+                        }
+                    }
+                    self.store.put(&updated)?;
+                    return event(
+                        "rescue-adopt-funding",
+                        format!(
+                            "adopted our funded leg {our_leg}; state {:?}",
+                            updated.state
+                        ),
+                    );
+                }
                 self.abort(&rec.swap_id, "pre-funding handshake timed out")?;
                 event(
                     "abort-timeout",
@@ -4398,7 +4619,7 @@ impl Engine {
         // block we acted in so we don't act again until the next block.
         let outpoint = old_tx.input[0].previous_output;
         let seed = self.store.seed()?;
-        let key = seed.swap_secret_key(coin_of(chain)?, rec.swap_index)?;
+        let key = v1_swap_key(&seed, rec, coin_of(chain)?)?;
         let new_tx = if is_redeem {
             let preimage = parse_hash(
                 rec.preimage
@@ -4556,7 +4777,7 @@ impl Engine {
                 vout: new_vout,
             };
             let seed = self.store.seed()?;
-            let key = seed.swap_secret_key(coin_of(chain)?, rec.swap_index)?;
+            let key = v1_swap_key(&seed, rec, coin_of(chain)?)?;
             let destination = backend
                 .params()
                 .parse_address(&backend.wallet_new_address()?)?;
@@ -4681,6 +4902,167 @@ impl Engine {
             kept.push(o);
         }
         Ok(kept)
+    }
+
+    // ---- Encrypted swap-state rescue (issue #54) ----
+
+    /// Publish an encrypted-to-self snapshot of a v1 swap record. Taken once
+    /// after `accept`: the negotiated params make any funding we commit
+    /// refundable — and (via the seed preimage / chain-extracted secret)
+    /// completable — from the seed alone. Best-effort across boards.
+    fn snapshot_v1(&self, rec: &SwapRecord) -> Result<()> {
+        let body = serde_json::json!({
+            "v": 1,
+            "record": serde_json::to_value(rec)?,
+            "next_index": self.store.peek_next_swap_index()?,
+        });
+        // v1 snapshots once (accept) — no later state to outrank.
+        self.publish_snapshot_body(&rec.swap_id, body, 0)
+    }
+
+    /// Publish an encrypted-to-self snapshot of a v2 record. Taken at `accept`
+    /// (leg-A refund basis for the initiator) and again at `Signed`, where the
+    /// record additionally carries the assembled adaptor signatures — the one
+    /// datum that is neither seed- nor chain-derivable — so the swap can be
+    /// COMPLETED, not just refunded, from the record alone.
+    fn snapshot_v2(&self, rec: &AdaptorSwapRecord) -> Result<()> {
+        let body = serde_json::json!({
+            "v": 2,
+            "record": serde_json::to_value(rec)?,
+            "next_index": self.store.peek_next_swap_index()?,
+        });
+        // State rank: the Signed snapshot must strictly REPLACE the accept one
+        // on the relay even when both publish within the same second — a
+        // rescued maker restored to `accepted` cannot re-handshake (the
+        // counterparty's nonces are consumed) and would strand until refund.
+        let seq = match rec.state {
+            AdaptorState::Created | AdaptorState::Accepted | AdaptorState::NoncesExchanged => 0,
+            _ => 1,
+        };
+        self.publish_snapshot_body(&rec.swap_id, body, seq)
+    }
+
+    fn publish_snapshot_body(
+        &self,
+        swap_id: &str,
+        body: serde_json::Value,
+        seq: u64,
+    ) -> Result<()> {
+        let env = self.signed_envelope("swapstate", swap_id, body)?;
+        let me = self.store.seed()?.identity_pubkey()?.to_string();
+        let blob = crate::board::seal_envelope(&me, &env)?;
+        for (_, board) in self.boards()? {
+            let _ = board.publish_snapshot(swap_id, &blob, seq); // best-effort per board
+        }
+        Ok(())
+    }
+
+    /// Tombstone a swap's rescue snapshot once it reaches a terminal state, so a
+    /// machine restored from seed never resurrects a finished swap.
+    fn tombstone_swap(&self, swap_id: &str) -> Result<()> {
+        for (_, board) in self.boards()? {
+            let _ = board.tombstone_snapshot(swap_id);
+        }
+        Ok(())
+    }
+
+    /// Rebuild in-flight swaps from encrypted-to-self relay snapshots — the
+    /// seed-only cross-machine recovery path (#54). `blobs` are the sealed
+    /// `PACTSEALED1:` payloads pactd fetched from our own snapshot events. Each
+    /// is decrypted with our identity key, its inner signature verified, and the
+    /// record adopted IFF we have no local record for that swap_id (local always
+    /// wins) and it is not terminal. Restores the next-swap-index high-water
+    /// mark so a reissued index can never reuse a completed swap's keys. Returns
+    /// `(restored, seen)`. The scheduler then drives each rescued swap to
+    /// completion or refund via chain-watch — all later state is derivable.
+    pub fn rescue_from_blobs(&self, blobs: &[String]) -> Result<(usize, usize)> {
+        let (kp, me, have) = self.rescue_context()?;
+        let mut restored = 0usize;
+        let mut hi = self.store.peek_next_swap_index()?;
+        for blob in blobs {
+            match self.rescue_decode(&kp, &me, blob) {
+                Ok((rec, next_index)) => {
+                    hi = hi.max(next_index);
+                    if !have.contains(rec.swap_id()) && !rec.terminal() {
+                        match &rec {
+                            RescuedRecord::V1(r) => self.store.put(r)?,
+                            RescuedRecord::V2(r) => self.store.put_adaptor(r)?,
+                        }
+                        restored += 1;
+                    }
+                }
+                Err(e) => eprintln!("rescue: skipping unreadable snapshot: {e:#}"),
+            }
+        }
+        self.store.set_next_swap_index_at_least(hi)?;
+        Ok((restored, blobs.len()))
+    }
+
+    /// Read-only twin of [`Engine::rescue_from_blobs`]: count the snapshots
+    /// that WOULD be adopted, without adopting anything or moving the index
+    /// high-water mark. This is the detection half of the gated rescue (#54):
+    /// pactd surfaces the count + the two-machines warning and waits for an
+    /// explicit `restorefromrelay` — silently re-driving a swap that another
+    /// live machine on the same seed is still driving can double-fund it.
+    pub fn rescue_preview(&self, blobs: &[String]) -> Result<(usize, usize)> {
+        let (kp, me, have) = self.rescue_context()?;
+        let mut pending = 0usize;
+        for blob in blobs {
+            match self.rescue_decode(&kp, &me, blob) {
+                Ok((rec, _)) if !have.contains(rec.swap_id()) && !rec.terminal() => pending += 1,
+                Ok(_) => {}
+                Err(e) => eprintln!("rescue: skipping unreadable snapshot: {e:#}"),
+            }
+        }
+        Ok((pending, blobs.len()))
+    }
+
+    /// Shared setup for a rescue pass: identity keypair + pubkey and the set
+    /// of swap ids we already hold locally (local always wins over a snapshot).
+    fn rescue_context(
+        &self,
+    ) -> Result<(
+        bitcoin::secp256k1::Keypair,
+        String,
+        std::collections::HashSet<String>,
+    )> {
+        let seed = self.store.seed()?;
+        let kp = seed.identity_keypair()?;
+        let me = seed.identity_pubkey()?.to_string();
+        let mut have: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for r in self.store.list()? {
+            have.insert(r.swap_id);
+        }
+        for r in self.store.list_adaptor()? {
+            have.insert(r.swap_id);
+        }
+        Ok((kp, me, have))
+    }
+
+    /// Decrypt + validate one snapshot blob. Returns the decoded record and the
+    /// counter high-water mark stamped into the snapshot.
+    fn rescue_decode(
+        &self,
+        kp: &bitcoin::secp256k1::Keypair,
+        me: &str,
+        blob: &str,
+    ) -> Result<(RescuedRecord, u32)> {
+        let env = crate::board::open_envelope(kp, blob)?;
+        messages::verify(&env)?;
+        ensure!(env.msg_type == "swapstate", "not a swapstate snapshot");
+        ensure!(env.from == me, "snapshot is not ours");
+        let next_index = env
+            .body
+            .get("next_index")
+            .and_then(|x| x.as_u64())
+            .unwrap_or(0) as u32;
+        let rec_val = env.body.get("record").context("snapshot has no record")?;
+        let rec = match env.body.get("v").and_then(|x| x.as_u64()) {
+            Some(1) => RescuedRecord::V1(serde_json::from_value(rec_val.clone())?),
+            Some(2) => RescuedRecord::V2(serde_json::from_value(rec_val.clone())?),
+            _ => bail!("unknown snapshot version"),
+        };
+        Ok((rec, next_index))
     }
 
     /// Seal to the recipient identity, then best-effort send to every
@@ -5397,6 +5779,20 @@ impl Engine {
         };
         let both_funded = rec.funding_a_txid.is_some() && rec.funding_b_txid.is_some();
 
+        // Handshake already complete (Signed or beyond): nothing left to
+        // drive here — completion is the scheduler's chain-watch. Load-bearing
+        // for rescue (#54): a restored record carries the assembled sigs but a
+        // WIPED nonce store, so without this gate the replayed relay history
+        // re-arms the nonce/partial steps below — re-opening a signing session
+        // that nonce-safety has already dead-ended — and their early returns
+        // starve the scheduler-driven redeem forever.
+        if !matches!(
+            rec.state,
+            AdaptorState::Created | AdaptorState::Accepted | AdaptorState::NoncesExchanged
+        ) {
+            return ev("adaptor-recv", msg_type.into());
+        }
+
         // 1. Fund my leg: initiator on `accept`; participant once leg A is in.
         // No `auto_fund` gate — v2 always auto-funds (see the fn doc): the
         // manual e2e drives via `adaptorrecv`, which never reaches this
@@ -5554,6 +5950,7 @@ impl Engine {
             if rec.htlc_a_txid.is_none() && rec.htlc_b_txid.is_none() {
                 rec.state = State::Aborted;
                 self.store.put(&rec)?;
+                let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
                 return event("counterparty-abort", reason.into());
             }
             return event(
@@ -5578,6 +5975,7 @@ impl Engine {
         }
         rec.state = AdaptorState::Aborted;
         self.store.put_adaptor(&rec)?;
+        let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
         event("counterparty-abort", reason.into())
     }
 
@@ -5931,10 +6329,11 @@ impl Engine {
         );
         rec.state = State::Aborted;
         self.store.put(&rec)?;
-        // Best-effort notify — an explicit user cancel is the ONE case that
-        // sends an abort envelope (automatic timeouts stay silent; the
-        // counterparty's own pre-funding clock clears their side). Not gated
-        // on board_url: relay_send_all fans out over whatever boards exist.
+        let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
+                                                   // Best-effort notify — an explicit user cancel is the ONE case that
+                                                   // sends an abort envelope (automatic timeouts stay silent; the
+                                                   // counterparty's own pre-funding clock clears their side). Not gated
+                                                   // on board_url: relay_send_all fans out over whatever boards exist.
         if let Some(counterparty) = &rec.counterparty_identity {
             let abort = self.signed_envelope(
                 "abort",
@@ -5963,6 +6362,7 @@ impl Engine {
         );
         rec.state = AdaptorState::Aborted;
         self.store.put_adaptor(&rec)?;
+        let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
         if let Some(counterparty) = &rec.counterparty_identity {
             let abort = self.signed_envelope(
                 "abort",

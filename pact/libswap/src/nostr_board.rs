@@ -82,6 +82,26 @@ impl Noticeboard for NostrBoard<'_> {
             .unwrap_or(0);
         self.store.nostr_inbox_since(since)
     }
+
+    /// Queue an encrypted-to-self snapshot for publication as an addressable
+    /// event (issue #54). Payload carries the `swap_id` (mapped to an opaque
+    /// d-tag by the service, so it stays local) and the sealed blob; the
+    /// service builds the event via `pact_nostr::snapshot_event`.
+    fn publish_snapshot(&self, swap_id: &str, sealed_blob: &str, seq: u64) -> Result<()> {
+        let payload =
+            serde_json::json!({ "swap_id": swap_id, "blob": sealed_blob, "seq": seq }).to_string();
+        self.store
+            .nostr_outbox_push("snapshot", None, &payload, local_now())?;
+        Ok(())
+    }
+
+    /// Queue a snapshot tombstone (NIP-09 delete of the swap's snapshot
+    /// coordinate); the service maps it via `pact_nostr::snapshot_tombstone_event`.
+    fn tombstone_snapshot(&self, swap_id: &str) -> Result<()> {
+        self.store
+            .nostr_outbox_push("snapshot_tombstone", None, swap_id, local_now())?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

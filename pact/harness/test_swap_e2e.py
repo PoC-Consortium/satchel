@@ -15,6 +15,7 @@ Env:  POCX_BITCOIND / BTC_BITCOIND     (node binaries, see regtest_harness.py)
 import json
 import os
 import shlex
+import shutil
 import socket
 import subprocess
 import sys
@@ -131,6 +132,14 @@ class NostrRelay:
         return [relay_bin, "--config", cfg, "--db", self.dir]
 
     def start(self):
+        # The port is fixed: a relay leaked by an earlier (crashed) run would
+        # keep listening, this start would "succeed" against it, and its STALE
+        # event DB would poison the scenario (same test npubs). Fail loudly.
+        with socket.socket() as probe:
+            if probe.connect_ex((self.host, self.port)) == 0:
+                raise RuntimeError(
+                    f"port {self.port} already in use — leaked relay from a "
+                    "previous run? Kill it (by port, never by name) first.")
         cmd = self._build_cmd()
         self.proc = subprocess.Popen(
             cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -160,9 +169,16 @@ _next_port = [PACTD_PORT]
 
 
 def _alloc_port():
-    p = _next_port[0]
-    _next_port[0] += 1
-    return p
+    # Skip ports something is already listening on — a pactd leaked by an
+    # earlier crashed run would otherwise steal the port and the fresh pactd
+    # dies at bind (no .cookie ever appears).
+    while True:
+        p = _next_port[0]
+        _next_port[0] += 1
+        with socket.socket() as probe:
+            if probe.connect_ex(("127.0.0.1", p)) != 0:
+                return p
+        print(f"[e2e] port {p} already in use (leaked process?) — skipping")
 
 
 class Party:
@@ -300,6 +316,15 @@ class Party:
             except subprocess.TimeoutExpired:
                 self.proc.kill()
             self.proc = None
+        # Release the log file handle so the data dir can be removed (Windows
+        # holds a lock on any open file — a rescue test wipes the dir after stop).
+        logf = getattr(self, "_logf", None)
+        if logf is not None:
+            try:
+                logf.close()
+            except Exception:  # noqa: BLE001
+                pass
+            self._logf = None
 
 
 def swap_id_from(message_file):
@@ -1132,6 +1157,378 @@ def test_private_offer_swap(h):
         board.stop()
 
 
+# Fixed BIP39 test vectors — deterministic identities so a wiped party can be
+# re-provisioned with the SAME seed (thus same npub + swap keys) after its data
+# dir is destroyed. DISTINCT per scenario: same seed ⇒ same npub ⇒ the rescue
+# would (correctly!) also pull the OTHER scenario's snapshot, muddying the test.
+# Standard BIP39 English test vectors, except M2/R1: deterministic phrases from
+# entropy 0x00010203…0e0f / 0x10111213…1e1f (checksum-valid). NOT for real funds.
+RESCUE_MNEMONIC_V1 = ("abandon abandon abandon abandon abandon abandon abandon "
+                      "abandon abandon abandon abandon about")
+RESCUE_MNEMONIC_V2 = ("legal winner thank year wave sausage worth useful legal "
+                      "winner thank yellow")
+RESCUE_MNEMONIC_M1 = ("letter advice cage absurd amount doctor acoustic avoid "
+                      "letter advice cage above")
+RESCUE_MNEMONIC_T1 = "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong"
+RESCUE_MNEMONIC_T2 = ("ozone drill grab fiber curtain grace pudding thank "
+                      "cruise elder eight picnic")
+RESCUE_MNEMONIC_M2 = ("abandon amount liar amount expire adjust cage candy "
+                      "arch gather drum buyer")
+RESCUE_MNEMONIC_R1 = ("avoid mass luggage choice fabric argue gather cash "
+                      "brand thought elegant divide")
+
+
+def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
+                     stage="committed", refund=False):
+    """Seed-only mid-swap rescue (#54) over a live Nostr relay — one cell of
+    the wipe-stage matrix {maker,taker} × {accepted, funded_a, committed,
+    post_reveal} × {v1,v2}, plus a refund variant.
+
+    Drive a board swap until `stage` is reached, then DESTROY the victim's
+    pactd data dir — its swap state, relay cursors and Pact seed, exactly like
+    a dead laptop. Re-provision a fresh pactd with the SAME seed, assert the
+    GATED rescue (pactd detects + warns, adopts nothing by itself), adopt via
+    the explicit `restorefromrelay`, and drive to completion — or, with
+    `refund=True`, jump past the timelocks and drive to the timeout reclaim.
+    Asserts the victim re-broadcasts NOTHING it already funded: its own leg's
+    txid is IDENTICAL before the wipe and after settlement (adopted, not
+    re-funded).
+
+    Stages (when the wipe lands):
+      accepted     the victim's record (and its accept snapshot) exists;
+                   nothing of the victim's is on chain yet.
+      funded_a     the maker's leg A is on chain (v1 only here: v1 funds
+                   serially, so leg B is guaranteed not committed yet).
+      committed    the taker's leg B is on the wire — funds at stake on both
+                   legs, swap not settled.
+      post_reveal  the maker has redeemed leg B, publishing the secret; a
+                   wiped taker must finish leg A from the chain alone.
+
+    Balance probes use the clean RECEIVING wallets only (bob_pocx, alice_btc);
+    the funding wallets creep from maturing coinbase and mining rewards, so
+    settlement and refunds are asserted via swap state / outpoint spends
+    where balances can't signal.
+    """
+    # The victim gets the fixed seed (auto_init off → importseed); its funding
+    # behavior must survive the restart identically. The refund variant keeps
+    # the taker from ever funding leg B, so the maker times out.
+    relay = NostrRelay(h.workdir)
+    # v2 maker@committed: on 1-conf regtest the maker races signed →
+    # redeemed_b → completed inside one round, so the wipe window never opens.
+    # A deeper leg-B requirement holds the maker at Signed for a few blocks —
+    # exactly the state whose snapshot (assembled adaptor sigs) is under test.
+    maker_confs = ({"btc": 3} if victim == "maker" and stage == "committed"
+                   and protocol.endswith("v2") else None)
+    maker = Party(f"mk{tag}", h, h.workdir, "alice_pocx", "alice_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True,
+                  coin_confs=maker_confs,
+                  auto_init=(victim != "maker"))
+    taker = Party(f"tk{tag}", h, h.workdir, "bob_pocx", "bob_btc",
+                  nostr_relays=relay.ws_url, auto_fund=not refund,
+                  auto_init=(victim != "taker"))
+    victim_party = maker if victim == "maker" else taker
+    victim_data_dir = victim_party.data_dir
+
+    def swap_of(p, sid=None):
+        # After the restore, the replayed relay history can spawn a ghost
+        # handshake record (the rescued node lost its relay cursor with the
+        # wipe) — pin post-restore reads to the swap under test via `sid`.
+        sw = (p.rpc("listswaps") or []) + (p.rpc("listadaptorswaps") or [])
+        if sid is not None:
+            sw = [s for s in sw if s["swap_id"] == sid]
+        return sw[0] if sw else None
+
+    def leg_a_txid(s):
+        # v1 HTLC vs v2 adaptor field names.
+        return None if s is None else (s.get("htlc_a_txid") or s.get("funding_a_txid"))
+
+    def leg_b_txid(s):
+        return None if s is None else (s.get("htlc_b_txid") or s.get("funding_b_txid"))
+
+    def own_leg_txid(s):
+        # The leg the victim itself funds: maker → A, taker → B.
+        return leg_a_txid(s) if victim == "maker" else leg_b_txid(s)
+
+    def committed_leg_b(s):
+        # "Leg B is on the wire", with a wide detection window that persists to
+        # completion (a mempool probe only hits for the single unconfirmed round).
+        # v1 sets htlc_b_txid only at the funding broadcast; v2 records
+        # funding_b_txid at BUILD (too early) but flips funding_b_broadcast at the
+        # two-phase broadcast.
+        if s is None:
+            return False
+        if s.get("htlc_b_txid"):  # v1 HTLC
+            return True
+        return s.get("funding_b_broadcast") is True  # v2 adaptor
+
+    def stage_reached():
+        if stage == "accepted":
+            return swap_of(victim_party) is not None
+        if stage == "funded_a":
+            return leg_a_txid(swap_of(maker)) is not None
+        if stage == "committed":
+            if not committed_leg_b(swap_of(taker)):
+                return False
+            if victim == "maker" and protocol.endswith("v2"):
+                # The v2 maker assembles (Signed) one relay round AFTER the
+                # taker commits — wipe only once ITS Signed snapshot exists. A
+                # maker wiped inside the accept→Signed gap cannot complete by
+                # design (the assembled adaptor sigs are the one datum that is
+                # neither seed- nor chain-derivable); it falls back to the
+                # timelock refund, which the refund cell covers.
+                m = swap_of(maker)
+                return m is not None and m["state"] in (
+                    "signed", "funded_a", "funded_b")
+            return True
+        if stage == "post_reveal":
+            m = swap_of(maker)
+            return m is not None and m["state"] == "redeemed_b"
+        raise AssertionError(f"unknown wipe stage: {stage}")
+
+    try:
+        # Everything runs inside the try — a failure during startup/seed setup
+        # must still tear down relay + pactds, or the leaked relay poisons
+        # every later scenario on the same fixed port with its stale DB.
+        relay.start()
+        maker.start()
+        taker.start()
+        victim_party.setup_seed(mnemonic=mnemonic)
+        before = balances(h)
+
+        offer_id = maker.rpc(
+            "boardpostoffer", f"btcx:{GIVE_POCX}", f"btc:{GET_BTC}",
+            4 * 3600, 2 * 3600, protocol)["offer_id"]
+        # Relay propagation is async (publish our outbox / fetch theirs per tick);
+        # poll until the taker sees the offer, then take it.
+        for _ in range(25):
+            maker.rpc("tick")
+            taker.rpc("tick")
+            if any(o["swap_id"] == offer_id
+                   for o in taker.rpc("boardlistoffers")["offers"]):
+                break
+        else:
+            raise AssertionError("offer never propagated to the taker over the relay")
+        taker.rpc("boardtake", offer_id)
+
+        # Drive until the wipe stage is reached. Break the INSTANT it is, so
+        # the wipe lands mid-flight.
+        reached = False
+        for _round in range(50):
+            for party in (maker, taker):
+                evs = party.rpc("tick")["events"]
+                for ev in evs:
+                    print(f"[e2e]   {tag}[{party.name}]: {ev['action']} {ev['detail'][:70]}")
+            if stage_reached():
+                reached = True
+                break
+            h.pocx.generate(1, "alice_pocx")
+            h.btc.generate(1, "bob_btc")
+        assert reached, f"stage '{stage}' never reached before the wipe"
+        pre_rec = swap_of(victim_party)
+        pre_own_leg = own_leg_txid(pre_rec)
+        if stage not in ("accepted",):
+            assert pre_own_leg or victim == "taker" and stage == "funded_a", \
+                f"no own-leg txid recorded pre-wipe at stage {stage}: {pre_rec}"
+        # The snapshot rides the Nostr outbox and the on-tick relay pass is
+        # asynchronous — give it two more ticks and a beat so the snapshot is
+        # ON the relay before the wipe destroys the outbox.
+        for _ in range(2):
+            victim_party.rpc("tick")
+            time.sleep(1)
+        sid = pre_rec["swap_id"]
+        print(f"[e2e] {tag}: {victim} @ {stage} "
+              f"(own leg: {str(pre_own_leg)[:16]}) — wiping mid-swap")
+
+        # --- the crash: destroy the victim's pactd state entirely ---
+        victim_party.stop()
+        for attempt in range(10):  # Windows can lag releasing the dead proc's handles
+            try:
+                shutil.rmtree(victim_data_dir)
+                break
+            except PermissionError:
+                time.sleep(0.5)
+        else:
+            shutil.rmtree(victim_data_dir)  # last try: surface the error
+
+        # --- the rescue: a fresh pactd on the SAME (now-wiped) data dir, same
+        # seed. The Bitcoin Core wallets are the node's, untouched by the wipe. ---
+        fresh = Party(victim_party.name, h, h.workdir,
+                      "alice_pocx" if victim == "maker" else "bob_pocx",
+                      "alice_btc" if victim == "maker" else "bob_btc",
+                      nostr_relays=relay.ws_url,
+                      auto_fund=(victim == "maker" or not refund),
+                      coin_confs=maker_confs if victim == "maker" else None,
+                      auto_init=False)
+        assert fresh.data_dir == victim_data_dir, "restart must reuse the wiped data dir"
+        fresh.start()
+        if victim == "maker":
+            maker = fresh
+        else:
+            taker = fresh
+        victim_party = fresh
+        # Importing the seed re-establishes our identity. #54 decision 1: pactd
+        # only DETECTS recoverable snapshots — nothing may auto-adopt (a still-
+        # live machine on the same seed could be driving the swap; two drivers
+        # can double-fund it). Assert `rescuestatus` reports the snapshot as
+        # pending WITH the two-machines warning while the local swap list stays
+        # empty, then adopt via the explicit `restorefromrelay`.
+        victim_party.setup_seed(mnemonic=mnemonic)
+        st = None
+        for _ in range(20):
+            st = victim_party.rpc("rescuestatus")
+            if st["pending"] > 0:
+                break
+            time.sleep(0.5)
+        assert st and st["pending"] >= 1, \
+            f"rescuestatus never saw the relay snapshot: {st}"
+        assert st.get("warning"), "a pending rescue must carry the two-machines warning"
+        assert swap_of(victim_party, sid) is None, \
+            "swap auto-restored without explicit confirmation (gated rescue regression)"
+        for _ in range(15):
+            r = victim_party.rpc("restorefromrelay")
+            if swap_of(victim_party, sid) is not None:
+                break
+            time.sleep(0.5)
+        assert swap_of(victim_party, sid) is not None, \
+            f"rescued swap never came back from the relay snapshot (last restore: {r})"
+        # The snapshot was taken at `accept`, BEFORE any funding — the rescued
+        # record has no funding pointers; the tick rediscovers them on chain
+        # below. (The no-double-fund check compares txids after settlement.)
+        print(f"[e2e] {tag}: swap {sid[:16]} restored from relay snapshot")
+
+        # Whatever was on the wire at the wipe may still be unconfirmed.
+        # find_funding is confirmed-only, so bury it first — otherwise the
+        # rescued party wouldn't SEE its own funding and might re-fund it. This
+        # is the exact ordering a real recovery faces.
+        for _ in range(4):
+            h.pocx.generate(1, "alice_pocx")
+            h.btc.generate(1, "bob_btc")
+
+        if refund:
+            # The taker never funds leg B (auto_fund off): jump past both
+            # timelocks and let the RESCUED maker's scheduler time out and
+            # reclaim its leg A — the C8 timeout path re-driven from a rescued
+            # record whose funding pointer had to be rediscovered on chain.
+            a_txid = pre_rec.get("htlc_a_txid") or pre_rec.get("funding_a_txid")
+            a_vout = pre_rec.get("htlc_a_vout")
+            if a_vout is None:
+                a_vout = pre_rec.get("funding_a_vout")
+            h.advance_time(5 * 3600)
+            done = False
+            for _ in range(40):
+                for party in (maker, taker):
+                    evs = party.rpc("tick")["events"]
+                    for ev in evs:
+                        print(f"[e2e]   {tag}[{party.name}]: {ev['action']} {ev['detail'][:70]}")
+                h.pocx.generate(1, "alice_pocx")
+                h.btc.generate(1, "bob_btc")
+                v = swap_of(victim_party, sid)
+                # The funding wallet's balance can't signal (coinbase creep):
+                # refunded = terminal state + the leg-A outpoint SPENT on chain.
+                spent = h.pocx.rpc("gettxout", a_txid, a_vout) is None
+                if v is not None and v["state"] in ("aborted", "refunded") and spent:
+                    done = True
+                    break
+            assert done, f"rescued maker never reclaimed leg A: {swap_of(victim_party, sid)}"
+            post_own_leg = own_leg_txid(swap_of(victim_party, sid))
+            assert post_own_leg == pre_own_leg, \
+                f"maker re-funded leg A (double-fund!): {pre_own_leg} -> {post_own_leg}"
+            print(f"[e2e] {tag}: seed-only rescue refunded; leg A reclaimed, not re-funded")
+            return
+
+        # Drive both to completion — the rescued party rediscovers funding on
+        # chain and settles via chain-watch alone.
+        done = False
+        for _ in range(40):
+            for party in (maker, taker):
+                evs = party.rpc("tick")["events"]
+                for ev in evs:
+                    print(f"[e2e]   {tag}[{party.name}]: {ev['action']} {ev['detail'][:70]}")
+            h.pocx.generate(1, "alice_pocx")
+            h.btc.generate(1, "bob_btc")
+            now = balances(h)
+            # Receiving legs are clean: taker got the POCX leg, maker got the BTC leg.
+            if (now["bob_pocx"] >= before["bob_pocx"] + float(GIVE_POCX) - FEE_SLACK
+                    and now["alice_btc"] >= before["alice_btc"] + float(GET_BTC) - 0.0005):
+                done = True
+                break
+        after = balances(h)
+        assert done, f"rescued swap did not complete: before={before}, after={after}"
+        # No double-fund: the rescued victim must have ADOPTED its existing
+        # funding, not broadcast a second one — its own leg's txid is unchanged.
+        # Exception: rediscovery only re-points UNSPENT funding, so a leg that
+        # was already spent at the wipe (post_reveal) legitimately stays
+        # pointerless — prove settlement went through the ORIGINAL funding by
+        # its outpoint being spent on chain instead.
+        if pre_own_leg is not None:
+            post_own_leg = own_leg_txid(swap_of(victim_party, sid))
+            assert post_own_leg in (pre_own_leg, None), \
+                f"{victim} re-funded its leg (double-fund!): {pre_own_leg} -> {post_own_leg}"
+            if post_own_leg is None:
+                node = h.pocx if victim == "maker" else h.btc
+                keys = (("htlc_a_vout", "funding_a_vout") if victim == "maker"
+                        else ("htlc_b_vout", "funding_b_vout"))
+                vout = pre_rec.get(keys[0])
+                if vout is None:
+                    vout = pre_rec.get(keys[1])
+                assert node.rpc("gettxout", pre_own_leg, vout) is None, \
+                    "own-leg pointer lost but the original funding is still unspent"
+        print(f"[e2e] {tag}: seed-only rescue completed; own leg adopted, not re-funded")
+    finally:
+        maker.stop()
+        taker.stop()
+        relay.stop()
+
+
+def test_swap_rescue_v1(h):
+    """v1 HTLC: wipe the taker mid-swap (leg B committed), restore, complete."""
+    _rescue_scenario(h, "pact-htlc-v1", "rcv1", RESCUE_MNEMONIC_V1)
+
+
+def test_swap_rescue_v2(h):
+    """v2 Taproot/adaptor: wipe the taker mid-swap (leg B committed), restore."""
+    _rescue_scenario(h, "pact-htlc-v2", "rcv2", RESCUE_MNEMONIC_V2)
+
+
+def test_rescue_v1_maker_funded_a(h):
+    """v1: wipe the MAKER right after it funded leg A — the rescued initiator
+    must rediscover its own funding, restore its counter and still complete
+    (deterministic preimage re-derived from the restored index)."""
+    _rescue_scenario(h, "pact-htlc-v1", "rcm1", RESCUE_MNEMONIC_M1,
+                     victim="maker", stage="funded_a")
+
+
+def test_rescue_v1_taker_accepted(h):
+    """v1: wipe the taker at ACCEPT, before anything of its is on chain — the
+    earliest snapshot; the rescued (anchored-key) taker funds and completes."""
+    _rescue_scenario(h, "pact-htlc-v1", "rct1", RESCUE_MNEMONIC_T1,
+                     victim="taker", stage="accepted")
+
+
+def test_rescue_v1_taker_post_reveal(h):
+    """v1: wipe the taker AFTER the maker revealed the preimage redeeming leg
+    B — the rescued taker must find the spend, extract the secret and claim
+    leg A from the chain alone."""
+    _rescue_scenario(h, "pact-htlc-v1", "rct2", RESCUE_MNEMONIC_T2,
+                     victim="taker", stage="post_reveal")
+
+
+def test_rescue_v2_maker_committed(h):
+    """v2: wipe the MAKER once the taker's leg B is on the wire (the maker is
+    Signed — its snapshot carries the assembled adaptor sigs); the rescued
+    maker must rediscover both legs and reveal t to completion."""
+    _rescue_scenario(h, "pact-htlc-v2", "rcm2", RESCUE_MNEMONIC_M2,
+                     victim="maker", stage="committed")
+
+
+def test_rescue_v1_maker_refund(h):
+    """v1 refund variant: the taker never funds leg B; the maker is wiped at
+    funded_a and, once past the timelocks, the RESCUED maker must time out and
+    reclaim leg A (C8 abort re-driven from a rescued record)."""
+    _rescue_scenario(h, "pact-htlc-v1", "rcr1", RESCUE_MNEMONIC_R1,
+                     victim="maker", stage="funded_a", refund=True)
+
+
 def main():
     build_workspace()
     failures = 0
@@ -1140,7 +1537,11 @@ def main():
              test_chain_watched_funding, test_funding_fee_bump_v1,
              test_balance_validation,
              test_create_import_then_swap, test_coin_setup, test_corkboard_swap,
-             test_board_reset_recovery, test_nostr_relay_swap, test_private_offer_swap)
+             test_board_reset_recovery, test_nostr_relay_swap, test_private_offer_swap,
+             test_swap_rescue_v1, test_swap_rescue_v2,
+             test_rescue_v1_maker_funded_a, test_rescue_v1_taker_accepted,
+             test_rescue_v1_taker_post_reveal, test_rescue_v2_maker_committed,
+             test_rescue_v1_maker_refund)
     with Harness(keep=True) as h:
         for test in tests:
             try:

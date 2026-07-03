@@ -256,6 +256,35 @@ impl NostrService {
         out
     }
 
+    /// One-shot fetch of OUR encrypted-to-self rescue snapshots (#54). Returns
+    /// the sealed `PACTSEALED1:` blobs from every snapshot event we authored, for
+    /// the engine to decrypt and adopt. Best-effort: a filter/fetch error or an
+    /// unverifiable event yields fewer (or no) blobs rather than failing.
+    pub async fn fetch_my_snapshots(&self, me_xonly: &str) -> Vec<String> {
+        let filter = match pn::my_snapshots_filter(me_xonly) {
+            Ok(f) => f,
+            Err(err) => {
+                tracing::warn!("nostr: snapshot filter: {err:#}");
+                return Vec::new();
+            }
+        };
+        let events = match self.fetch(filter).await {
+            Ok(e) => e,
+            Err(err) => {
+                tracing::warn!("nostr: fetch snapshots: {err:#}");
+                return Vec::new();
+            }
+        };
+        let mut blobs = Vec::new();
+        for ev in events {
+            match pn::snapshot_blob_from_event(&ev, me_xonly) {
+                Ok(blob) => blobs.push(blob),
+                Err(err) => tracing::warn!("nostr: skip snapshot event: {err:#}"),
+            }
+        }
+        blobs
+    }
+
     async fn fetch(&self, filter: Filter) -> Result<Vec<Event>> {
         let events = self.client.fetch_events(filter, FETCH_TIMEOUT).await?;
         Ok(events.into_iter().collect())
@@ -329,11 +358,7 @@ fn build_event(kind: &str, recipient: Option<&str>, payload: &str, keys: &Keys) 
             let env = serde_json::from_str(payload).context("parse offer payload")?;
             // Publish time drives the rolling NIP-40 relay TTL; each refresh
             // re-queues the offer, so this advances the listing's current expiry.
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
-            pn::offer_event(&env, keys, now)
+            pn::offer_event(&env, keys, unix_now())
         }
         "giftwrap" => pn::giftwrap(recipient.context("giftwrap row has no recipient")?, payload),
         "revoke" => {
@@ -345,6 +370,32 @@ fn build_event(kind: &str, recipient: Option<&str>, payload: &str, keys: &Keys) 
                 .context("revoke payload has no swap_id")?;
             pn::revocation_event(swap_id, keys)
         }
+        "snapshot" => {
+            let v: serde_json::Value =
+                serde_json::from_str(payload).context("parse snapshot payload")?;
+            let swap_id = v
+                .get("swap_id")
+                .and_then(|x| x.as_str())
+                .context("snapshot payload has no swap_id")?;
+            let blob = v
+                .get("blob")
+                .and_then(|x| x.as_str())
+                .context("snapshot payload has no blob")?;
+            // The engine's state rank: a later-state snapshot (v2 Signed after
+            // accept) is stamped `now + seq` so it strictly replaces the
+            // earlier one even when both publish within the same second
+            // (NIP-01 breaks an equal-created_at tie by LOWEST id — which
+            // could keep the accept-stage snapshot and strand a rescue).
+            let seq = v.get("seq").and_then(|x| x.as_u64()).unwrap_or(0);
+            // Map swap_id → opaque replaceable-event tag here, so the swap_id
+            // never leaves the machine.
+            pn::snapshot_event(blob, &pn::snapshot_dtag(swap_id), keys, unix_now() + seq)
+        }
+        // Stamped past any snapshot's created_at (`+ seq` above caps at 1):
+        // NIP-09 only covers events up to the deletion's created_at.
+        "snapshot_tombstone" => {
+            pn::snapshot_tombstone_event(&pn::snapshot_dtag(payload), keys, unix_now() + 2)
+        }
         other => anyhow::bail!("unknown outbox kind '{other}'"),
     })();
     match built {
@@ -354,6 +405,14 @@ fn build_event(kind: &str, recipient: Option<&str>, payload: &str, keys: &Keys) 
             None
         }
     }
+}
+
+/// Wall-clock unix seconds — the `created_at` basis for outbox-built events.
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 /// Read the NIP-40 expiration (unix secs) from an event's tags, or 0.

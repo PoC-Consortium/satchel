@@ -43,8 +43,10 @@ pub struct SwapRecord {
     /// have no value in their JSON blob and deserialize to 0 (see migration
     /// note in [`Store::open`]).
     pub created_at: u64,
-    /// Our local BIP32 swap index `i` (spec §4.1).
-    pub swap_index: u32,
+    /// Our local BIP32 swap index `i` (spec §4.2) — `Some` for the initiator,
+    /// whose counter the swap id itself derives from; `None` for the
+    /// participant, whose keys are anchored to `hash_h` instead (no counter).
+    pub swap_index: Option<u32>,
     pub chain_a: ChainRef,
     pub chain_b: ChainRef,
     pub amount_a: u64,
@@ -97,7 +99,10 @@ pub struct AdaptorSwapRecord {
     pub role: Role,
     pub state: AdaptorState,
     pub created_at: u64,
-    pub swap_index: u32,
+    /// `Some` for the initiator (local counter — the adaptor secret `t`, and
+    /// so `T` and the swap id, derive from it); `None` for the participant,
+    /// whose keys are anchored to `adaptor_point` instead (spec §4.2).
+    pub swap_index: Option<u32>,
     pub chain_a: ChainRef,
     pub chain_b: ChainRef,
     pub amount_a: u64,
@@ -441,7 +446,19 @@ impl Store {
     /// Allocate the next BIP32 swap index (monotonic, never reused —
     /// spec §4.2 counts aborted attempts too).
     pub fn next_swap_index(&self) -> Result<u32> {
-        let current: u32 = self
+        let current = self.peek_next_swap_index()?;
+        self.conn.execute(
+            "INSERT INTO meta (key, value) VALUES ('next_swap_index', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = ?1",
+            params![(current + 1).to_string()],
+        )?;
+        Ok(current)
+    }
+
+    /// Read the next swap index WITHOUT allocating it — used to stamp the
+    /// counter into a rescue snapshot (issue #54).
+    pub fn peek_next_swap_index(&self) -> Result<u32> {
+        Ok(self
             .conn
             .query_row(
                 "SELECT value FROM meta WHERE key = 'next_swap_index'",
@@ -449,13 +466,23 @@ impl Store {
                 |row| row.get::<_, String>(0),
             )
             .map(|v| v.parse().unwrap_or(0))
-            .unwrap_or(0);
-        self.conn.execute(
-            "INSERT INTO meta (key, value) VALUES ('next_swap_index', ?1)
-             ON CONFLICT(key) DO UPDATE SET value = ?1",
-            params![(current + 1).to_string()],
-        )?;
-        Ok(current)
+            .unwrap_or(0))
+    }
+
+    /// Raise the next-swap-index counter to at least `n` (never lowers it) — on
+    /// rescue this restores the high-water mark from the backed-up snapshots so a
+    /// fresh machine never reissues an index a completed swap already used (which
+    /// would reuse HTLC/adaptor keys). Idempotent.
+    pub fn set_next_swap_index_at_least(&self, n: u32) -> Result<()> {
+        let current = self.peek_next_swap_index()?;
+        if n > current {
+            self.conn.execute(
+                "INSERT INTO meta (key, value) VALUES ('next_swap_index', ?1)
+                 ON CONFLICT(key) DO UPDATE SET value = ?1",
+                params![n.to_string()],
+            )?;
+        }
+        Ok(())
     }
 
     pub fn put(&self, record: &SwapRecord) -> Result<()> {
@@ -1071,7 +1098,7 @@ mod tests {
             role: Role::Initiator,
             state: State::Created,
             created_at: 1_700_000_123,
-            swap_index: 0,
+            swap_index: Some(0),
             chain_a: ChainRef {
                 coin_id: "btcx".into(),
                 network: Network::Regtest,
