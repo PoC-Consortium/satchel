@@ -85,7 +85,18 @@ The foundation, concretely:
 - Test: `built_funding_reserves_inputs_and_cancel_releases_them` pins the
   whole reserve→activity→evict→release cycle against real bdk 2.4.
 
-## Live spike (harness/spike_electrs.py) — WRITTEN, blocked on a v31+ node
+## Live spike (harness/spike_electrs.py) — **GREEN** (2026-07-03)
+
+With a **PoCX v31.0.0rc1** node in `harness/bin/pocx-bitcoind.exe` (the
+Phoenix PoCX node build), the full nodeless flow passes against live
+electrs on native Windows: fresh-seed scan → `rpocx1p…` receive → mature
+coinbase balance (PoCX 286-byte headers → anchors) → bdk-built send
+broadcast over Electrum into the node mempool (143 sat fee) → steady-state
+re-sync → correct `listtransactions` rows → pactd-restart persistence.
+Design decision **D3 (no bdk fork) is validated on the wire.** Original
+run notes below.
+
+## Spike run notes (first attempt, superseded)
 
 `python pact/harness/spike_electrs.py` drives the full nodeless flow against
 a real electrs (fresh-seed scan → receive → balance → send → re-sync →
@@ -98,11 +109,10 @@ findings from the first run (2026-07-03):
    `--daemon-rpc-addr` does not move the indexer. The spike therefore runs
    its node on 18443 + `-rest=1` instead of the harness's isolated 19443.
    Worth a flag upstream (or deriving from `daemon_rpc_addr`).
-2. **Blocked**: bindex needs `/rest/blockpart` (Bitcoin PR #33657, v31+).
-   The harness's `pocx-bitcoind.exe` is **v30.2.2** → electrs exits with a
-   404 on blockpart. Everything up to that point works — REST reachable,
-   PoCX genesis fetched, 286-byte header offsets correct (`size=491`).
-   Waiting on a v31+ PoCX bitcoind build to drop into `harness/bin/`.
+2. ~~Blocked~~ **RESOLVED**: bindex needs `/rest/blockpart` (Bitcoin PR
+   #33657, v31+); the harness's old node was v30.2.2 → 404. Fixed by
+   upgrading `harness/bin/pocx-bitcoind.exe` to **v31.0.0rc1** (the e2e
+   suite runs on the same binary — regression-ran after the swap).
 
 ## Known TODOs / sharp edges (all noted in code comments too)
 - A fresh wallet with no history full-scans (2×20 scripthash calls) on
