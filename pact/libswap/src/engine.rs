@@ -2015,6 +2015,61 @@ impl Engine {
         })
     }
 
+    /// Is the participant's BUILT leg-B funding provably UNCOMMITTED — the
+    /// signed tx never reached the network? Leg B is built at accept (spec v2
+    /// §7) but broadcast only after `Signed` + leg A `n_a`-deep, so a set
+    /// `funding_b_txid` alone commits nothing. True only when every observable
+    /// agrees: we never two-phase-released it, its outpoint is not on
+    /// chain/in the mempool, and it was never SPENT (a spent leg B means the
+    /// maker redeemed it and revealed `t` — the swap must claim leg A, never
+    /// abort; covers a pre-rescue incarnation having broadcast it).
+    /// Conservative: any read error answers "committed".
+    fn adaptor_leg_b_uncommitted(&self, rec: &AdaptorSwapRecord) -> bool {
+        if rec.role != Role::Participant || rec.funding_b_broadcast {
+            return false;
+        }
+        let Some(txid) = rec.funding_b_txid.as_deref() else {
+            return true; // never even built
+        };
+        let Some(vout) = rec.funding_b_vout else {
+            return false; // malformed pointer (txid without vout): be conservative
+        };
+        (|| -> Result<bool> {
+            let secp = bitcoin::secp256k1::Secp256k1::new();
+            let p = self.adaptor_params(rec)?;
+            let spk_b = p.leg_b(&secp)?.script_pubkey(&secp)?;
+            let op = OutPoint {
+                txid: bitcoin::Txid::from_str(txid)?,
+                vout,
+            };
+            let backend = self.backend(&rec.chain_b)?;
+            if backend.get_txout(&op, &spk_b)?.is_some() {
+                return Ok(false); // live on chain or in the mempool
+            }
+            let from = self.funding_scan_from_height(&backend, txid, &spk_b)?;
+            Ok(backend.find_spend_witness(&op, &spk_b, from)?.is_none())
+        })()
+        .unwrap_or(false)
+    }
+
+    /// Best-effort release of a built-but-never-broadcast leg-B funding's
+    /// input reservation (Core: `lockunspent`; nodeless bdk: evict the
+    /// persisted phantom tx). Callers have already established the tx is
+    /// uncommitted via [`Self::adaptor_leg_b_uncommitted`]. Returns whether
+    /// the release succeeded, for tick-event detail; failure is non-fatal
+    /// (Core locks clear on node restart, and a retry costs nothing).
+    fn adaptor_cancel_built_leg_b(&self, rec: &AdaptorSwapRecord) -> bool {
+        let Some(hex) = rec.funding_b_tx_hex.as_deref() else {
+            return true; // nothing was built — nothing reserved
+        };
+        if rec.role != Role::Participant || rec.funding_b_broadcast {
+            return true;
+        }
+        self.backend(&rec.chain_b)
+            .and_then(|b| b.wallet_cancel_funding(hex))
+            .is_ok()
+    }
+
     /// Bounded block-scan start for watching the counterparty's redeem of OUR
     /// funding (`find_spend_witness` fallback). The funding is our own wallet tx,
     /// so its confirmations are readable without `-txindex` (and stay readable
@@ -2247,6 +2302,29 @@ impl Engine {
         let mtp = self.backend(chain)?.tip_median_time_min()?;
         if mtp < u64::from(timelock) {
             return Ok(None); // timelock not yet mature — keep waiting
+        }
+        // The participant's pointer may be a BUILT leg B that was never
+        // two-phase-released (spec v2 §7) — a pre-Signed handshake that died
+        // with the tx still in our wallet. There is no on-chain leg to refund
+        // (the refund would error-loop on a nonexistent outpoint); once the
+        // same maturity the refund would need has passed, release the built
+        // tx's input reservation and go terminal. Same retry rule as the
+        // §7.4 dead-end: terminal only once the release succeeds.
+        if rec.role == Role::Participant && self.adaptor_leg_b_uncommitted(rec) {
+            if !self.adaptor_cancel_built_leg_b(rec) {
+                return Ok(None); // release failed (locked seed?) — retry next tick
+            }
+            let mut dead = rec.clone();
+            dead.state = AdaptorState::Aborted;
+            self.store.put_adaptor(&dead)?;
+            let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
+            return Ok(Some(TickEvent {
+                swap_id: rec.swap_id.clone(),
+                action: "abort-unbroadcast".into(),
+                detail: "handshake died with leg B built but never broadcast; \
+                         reserved inputs released, aborted"
+                    .into(),
+            }));
         }
         let r = self.adaptor_refund(&rec.swap_id)?;
         Ok(Some(TickEvent {
@@ -2526,7 +2604,33 @@ impl Engine {
                         if let Ok(mtp) = self.backend(&rec.chain_b)?.tip_median_time() {
                             let now = deadline_clock(net, local_now(), mtp);
                             if !action_safe(now, fund_margin, rec.t2) {
-                                return Ok(None); // too late to fund leg B safely
+                                // Too late to fund leg B safely — and the clock
+                                // only moves forward, so it stays too late: this
+                                // swap can never proceed. Instead of idling here
+                                // forever with the built funding's inputs
+                                // reserved, release them and go terminal. Guarded
+                                // on the tx being provably off-network (a leg B
+                                // broadcast by a pre-rescue incarnation must keep
+                                // driving the claim path instead).
+                                // Terminal only once the release succeeds — a
+                                // failed release (locked seed on a nodeless
+                                // coin) retries next tick; the record must not
+                                // go terminal with inputs still reserved.
+                                if self.adaptor_leg_b_uncommitted(rec)
+                                    && self.adaptor_cancel_built_leg_b(rec)
+                                {
+                                    let mut dead = rec.clone();
+                                    dead.state = Aborted;
+                                    self.store.put_adaptor(&dead)?;
+                                    let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
+                                    return ev(
+                                        "abort-fund-deadline",
+                                        "past the leg-B fund deadline (§7.4) with leg B \
+                                         unbroadcast; reserved inputs released, aborted"
+                                            .into(),
+                                    );
+                                }
+                                return Ok(None);
                             }
                         }
                         if !self.adaptor_leg_a_confirmed(rec)? {
@@ -6149,16 +6253,22 @@ impl Engine {
             rec.counterparty_identity.as_deref() == Some(sender),
             "abort signed by {sender} but counterparty pinned otherwise (spec §8.2)"
         );
-        let our_leg_funded = match rec.role {
+        // Same commitment semantics as adaptor_abort: the participant's leg B
+        // being merely BUILT (never broadcast, spec v2 §7) does not lock funds,
+        // so the peer's abort can be honored — releasing the built tx's inputs.
+        let our_leg_committed = match rec.role {
             Role::Initiator => rec.funding_a_txid.is_some(),
-            Role::Participant => rec.funding_b_txid.is_some(),
+            Role::Participant => {
+                rec.funding_b_txid.is_some() && !self.adaptor_leg_b_uncommitted(&rec)
+            }
         };
-        if our_leg_funded {
+        if our_leg_committed {
             return event(
                 "counterparty-abort",
                 "ignored (funded; timelocks protect)".into(),
             );
         }
+        let _ = self.adaptor_cancel_built_leg_b(&rec); // release reserved inputs
         rec.state = AdaptorState::Aborted;
         self.store.put_adaptor(&rec)?;
         let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
@@ -6420,6 +6530,22 @@ impl Engine {
         backend.wallet_send(address, amount_sat, 6)
     }
 
+    /// The wallet activity feed for a nodeless coin (`listtransactions`, design
+    /// doc §4) — newest first, straight off the bdk tx graph. Refuses for
+    /// Core-backed coins: Satchel keeps those read-only by design (the node's
+    /// own wallet is the operator's tool).
+    pub fn wallet_transactions(
+        &self,
+        network: Network,
+        coin_id: &str,
+    ) -> Result<Vec<crate::chain::WalletTxInfo>> {
+        self.backend(&ChainRef {
+            coin_id: coin_id.to_string(),
+            network,
+        })?
+        .wallet_transactions()
+    }
+
     /// Live fee rate (sat/vB) for a configured coin, or the same conservative
     /// fallback the backends use when a coin is unconfigured/unreachable. The
     /// `bool` is `true` when the rate is the fallback (the UI flags it as a
@@ -6534,20 +6660,26 @@ impl Engine {
     }
 
     /// v2 twin of [`Self::abort`]: back out of an adaptor swap while OUR leg
-    /// is still unfunded. Once our funding is on-chain the timelocked refund
-    /// is the only safe exit, so this refuses. Persisted nonce sessions are
-    /// deliberately KEPT — the store's overwrite refusal is what guarantees
-    /// an aborted swap can never sign again.
+    /// is still uncommitted. Once our funding is on-chain the timelocked
+    /// refund is the only safe exit, so this refuses. The participant's leg B
+    /// being merely BUILT (txid known from accept, spec v2 §7) does NOT
+    /// commit it — an abort then also releases the built tx's input
+    /// reservation. Persisted nonce sessions are deliberately KEPT — the
+    /// store's overwrite refusal is what guarantees an aborted swap can
+    /// never sign again.
     pub fn adaptor_abort(&self, swap: &str, reason: &str) -> Result<AdaptorSwapRecord> {
         let mut rec = self.store.get_adaptor(swap)?;
-        let our_leg_funded = match rec.role {
+        let our_leg_committed = match rec.role {
             Role::Initiator => rec.funding_a_txid.is_some(),
-            Role::Participant => rec.funding_b_txid.is_some(),
+            Role::Participant => {
+                rec.funding_b_txid.is_some() && !self.adaptor_leg_b_uncommitted(&rec)
+            }
         };
         ensure!(
-            !our_leg_funded,
+            !our_leg_committed,
             "cannot abort: our leg is funded — use the timelocked refund instead"
         );
+        let _ = self.adaptor_cancel_built_leg_b(&rec); // release reserved inputs
         rec.state = AdaptorState::Aborted;
         self.store.put_adaptor(&rec)?;
         let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)

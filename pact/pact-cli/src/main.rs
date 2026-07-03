@@ -111,6 +111,11 @@ enum Command {
     RescueStatus,
     /// Seed lifecycle: show whether a seed exists / is encrypted / locked.
     Walletstatus,
+    /// Wallet activity of a nodeless coin, newest first (epic #58).
+    Transactions {
+        /// Coin id (e.g. `btcx`) — must be a nodeless (Electrum-backed) coin.
+        coin: String,
+    },
     /// List shipped coins: which are configured + live connection status.
     Coins,
     /// List derived swap-pair availability for the current setup.
@@ -272,6 +277,10 @@ fn main() -> Result<()> {
         }
         Command::Walletstatus => {
             let result = client.call("walletstatus", json!([]))?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        }
+        Command::Transactions { coin } => {
+            let result = client.call("listtransactions", json!([coin]))?;
             println!("{}", serde_json::to_string_pretty(&result)?);
         }
         Command::Coins => {

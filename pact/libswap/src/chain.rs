@@ -79,6 +79,26 @@ pub struct TxOutInfo {
     pub confirmations: u64,
 }
 
+/// One entry of the nodeless wallet's activity feed (`listtransactions`,
+/// design doc §4): direction + net amount from the wallet's point of view.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct WalletTxInfo {
+    pub txid: String,
+    /// `"sent"` or `"received"` — the wallet's NET direction. A self-transfer
+    /// nets to a pure fee payment and reads as `"sent"` with `amount_sat` 0.
+    pub direction: String,
+    /// Net value moved, excluding the fee on sends: what the recipient got
+    /// (sent) or what landed in our keychains (received).
+    pub amount_sat: u64,
+    /// `None` when the wallet doesn't own every input (a receive — the fee was
+    /// paid by the sender and isn't ours to report).
+    pub fee_sat: Option<u64>,
+    pub confirmations: u64,
+    /// Block time for confirmed txs, first-seen time for mempool ones. `None`
+    /// only for a built-but-unbroadcast funding awaiting its two-phase release.
+    pub timestamp: Option<u64>,
+}
+
 pub trait ChainBackend {
     fn params(&self) -> &ChainParams;
 
@@ -196,6 +216,27 @@ pub trait ChainBackend {
         _amount_sat: u64,
     ) -> Result<(String, u32, String)> {
         bail!("this backend cannot build funding transactions without broadcasting")
+    }
+
+    /// Release the input reservation of a [`Self::wallet_build_funding`] tx that
+    /// will NEVER be broadcast (the swap went terminal before its two-phase
+    /// broadcast). `tx_hex` is the exact signed tx the build returned. Without
+    /// this, the built tx's inputs stay reserved forever — Core keeps them in
+    /// `lockunspent` until a node restart, and the bdk wallet persists the
+    /// phantom unbroadcast tx across restarts. Callers gate on the tx being
+    /// absent from the chain AND our own broadcast flag; implementations may
+    /// add their own refusal for an on-chain tx. Default: no-op (chain-only
+    /// backends never built anything).
+    fn wallet_cancel_funding(&self, _tx_hex: &str) -> Result<()> {
+        Ok(())
+    }
+
+    /// The wallet's transaction history, newest first — the activity feed behind
+    /// the `listtransactions` RPC (design doc §4). Only the nodeless bdk wallet
+    /// serves this (Core-backed coins stay read-only in Satchel by design), so
+    /// the default refuses.
+    fn wallet_transactions(&self) -> Result<Vec<WalletTxInfo>> {
+        bail!("wallet activity requires a nodeless (Electrum-backed) coin")
     }
 
     /// Whether the node's wallet is encrypted AND currently locked — it can read
@@ -649,6 +690,26 @@ impl ChainBackend for CoreRpcBackend {
             .context("built funding tx has no output paying the funding address")?
             as u32;
         Ok((tx.compute_txid().to_string(), vout, signed_hex))
+    }
+
+    fn wallet_cancel_funding(&self, tx_hex: &str) -> Result<()> {
+        // Undo wallet_build_funding's `lockUnspents`: unlock exactly the built
+        // tx's inputs. Per-input and error-tolerant — an input already unlocked
+        // (node restarted; Core's locks are memory-only) must not fail the
+        // cancel of the rest.
+        let tx: Transaction = bitcoin::consensus::encode::deserialize(&hex::decode(tx_hex)?)
+            .context("decode built funding tx for cancel")?;
+        for input in &tx.input {
+            let op = &input.previous_output;
+            let _ = self.rpc.call(
+                "lockunspent",
+                &[
+                    json!(true),
+                    json!([{ "txid": op.txid.to_string(), "vout": op.vout }]),
+                ],
+            );
+        }
+        Ok(())
     }
 
     fn wallet_balance(&self) -> Result<u64> {
@@ -1337,6 +1398,14 @@ impl ChainBackend for MultiBackend {
     ) -> Result<(String, u32, String)> {
         // Wallet op: the primary (Core) backend owns the funding UTXOs.
         self.primary().wallet_build_funding(address, amount_sat)
+    }
+
+    fn wallet_cancel_funding(&self, tx_hex: &str) -> Result<()> {
+        self.primary().wallet_cancel_funding(tx_hex)
+    }
+
+    fn wallet_transactions(&self) -> Result<Vec<WalletTxInfo>> {
+        self.primary().wallet_transactions()
     }
 
     fn wallet_balance(&self) -> Result<u64> {

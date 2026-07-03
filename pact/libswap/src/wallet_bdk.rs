@@ -23,20 +23,20 @@
 //!   286-byte headers are handled exactly like everywhere else in the
 //!   engine, and stock upstream bdk needs no fork.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Context, Result};
-use bdk_wallet::chain::{BlockId, CheckPoint, ConfirmationBlockTime, TxUpdate};
+use bdk_wallet::chain::{BlockId, ChainPosition, CheckPoint, ConfirmationBlockTime, TxUpdate};
 use bdk_wallet::rusqlite::Connection;
 use bdk_wallet::{KeychainKind, PersistedWallet, SignOptions, Update, Wallet};
 use bitcoin::{
     Amount, BlockHash, FeeRate, OutPoint, Psbt, ScriptBuf, Sequence, Transaction, TxOut, Txid,
 };
 
-use crate::chain::{ChainBackend, ElectrumBackend, TxOutInfo};
+use crate::chain::{ChainBackend, ElectrumBackend, TxOutInfo, WalletTxInfo};
 use crate::keys::PactSeed;
 use crate::params::ChainParams;
 use crate::registry;
@@ -167,7 +167,11 @@ fn sync_entry(entry: &mut WalletEntry, chain: &ElectrumBackend) -> Result<()> {
     let mut tx_update = TxUpdate::<ConfirmationBlockTime>::default();
     let mut fetched: HashSet<Txid> = HashSet::new();
     let mut headers: BTreeMap<u32, (BlockHash, u64)> = BTreeMap::new();
-    let mut seen_ats: HashMap<Txid, u64> = HashMap::new();
+    // One timestamp for the whole sync pass: `seen_ats` is a SET of
+    // (txid, ts) pairs (bdk_chain 0.23), so a tx surfacing in several spk
+    // histories must insert the identical pair to dedupe.
+    let sync_ts = now_ts();
+    let mut seen_ats: HashSet<(Txid, u64)> = HashSet::new();
     let mut last_active: BTreeMap<KeychainKind, u32> = BTreeMap::new();
 
     let mut process_spk = |entry: &WalletEntry,
@@ -199,7 +203,7 @@ fn sync_entry(entry: &mut WalletEntry, chain: &ElectrumBackend) -> Result<()> {
                 ));
             } else {
                 // 0 = mempool, -1 = mempool with unconfirmed parents.
-                seen_ats.insert(txid, now_ts());
+                seen_ats.insert((txid, sync_ts));
             }
         }
         Ok(!history.is_empty())
@@ -486,11 +490,41 @@ impl ChainBackend for BdkWalletBackend {
             // Deliberately NOT broadcast (v2 two-phase funding, spec v2 §7).
             // Inserting it unconfirmed locks its inputs against reuse and
             // tracks the change — bdk's equivalent of Core `lockUnspents`.
-            // A swap that dies pre-broadcast leaves it dangling like Core's
-            // locked UTXOs; surfacing a cancel on abort is task-5 wiring.
+            // A swap that dies pre-broadcast releases them via
+            // wallet_cancel_funding on the engine's terminal paths.
             entry.wallet.apply_unconfirmed_txs([(tx, now_ts())]);
             Ok((txid.to_string(), vout, hex_tx))
         })
+    }
+
+    fn wallet_cancel_funding(&self, tx_hex: &str) -> Result<()> {
+        let tx: Transaction = bitcoin::consensus::encode::deserialize(&hex::decode(tx_hex)?)
+            .context("decode built funding tx for cancel")?;
+        let txid = tx.compute_txid();
+        // No sync: cancel runs on abort paths and must work while the Electrum
+        // view is unreachable; evicting a never-broadcast tx needs no chain
+        // data. (If the tx WAS broadcast after all, the next sync re-learns it
+        // from our own spk histories — its inputs spend our spks — and a
+        // fresher last_seen out-cancels the eviction, so this self-heals.)
+        self.with_wallet(false, |entry| {
+            // Belt-and-suspenders (the engine gates on this too): never evict
+            // a funding the wallet knows is confirmed.
+            if let Some(wtx) = entry.wallet.get_tx(txid) {
+                anyhow::ensure!(
+                    !matches!(wtx.chain_position, ChainPosition::Confirmed { .. }),
+                    "refusing to cancel funding {txid}: it is confirmed on-chain"
+                );
+            }
+            // Drop the phantom from the canonical set — this is what frees its
+            // inputs — and unmark the change derivation index for reuse.
+            entry.wallet.apply_evicted_txs([(txid, now_ts())]);
+            entry.wallet.cancel_tx(&tx);
+            Ok(())
+        })
+    }
+
+    fn wallet_transactions(&self) -> Result<Vec<WalletTxInfo>> {
+        self.with_wallet(true, |entry| Ok(wallet_activity(entry)))
     }
 
     fn wallet_locked(&self) -> Result<bool> {
@@ -623,6 +657,57 @@ impl ChainBackend for BdkWalletBackend {
     }
 }
 
+/// The activity feed off one wallet's canonical tx set (`listtransactions`,
+/// design doc §4), newest first. Free function (no chain I/O — the caller
+/// syncs) so it is unit-testable without an Electrum server.
+fn wallet_activity(entry: &WalletEntry) -> Vec<WalletTxInfo> {
+    let tip = entry.wallet.latest_checkpoint().height();
+    let mut out = Vec::new();
+    for wtx in entry.wallet.transactions() {
+        let tx = &wtx.tx_node.tx;
+        let (sent, received) = entry.wallet.sent_and_received(tx);
+        let (sent, received) = (sent.to_sat(), received.to_sat());
+        let fee_sat = entry.wallet.calculate_fee(tx).ok().map(Amount::to_sat);
+        let (direction, amount_sat) = if sent > received {
+            // Net send: inputs minus change minus the fee = what the
+            // recipient got. Unknown fee (foreign input) degrades to the
+            // net outflow, fee included.
+            let net_out = sent - received;
+            ("sent", net_out - fee_sat.unwrap_or(0).min(net_out))
+        } else {
+            ("received", received - sent)
+        };
+        let (confirmations, timestamp) = match wtx.chain_position {
+            ChainPosition::Confirmed { anchor, .. } => (
+                u64::from((tip + 1).saturating_sub(anchor.block_id.height)),
+                Some(anchor.confirmation_time),
+            ),
+            ChainPosition::Unconfirmed {
+                first_seen,
+                last_seen,
+            } => (0, first_seen.or(last_seen)),
+        };
+        out.push(WalletTxInfo {
+            txid: wtx.tx_node.txid.to_string(),
+            direction: direction.into(),
+            amount_sat,
+            fee_sat,
+            confirmations,
+            timestamp,
+        });
+    }
+    // Newest first: mempool/pending (0 confs) ahead of shallow ahead of
+    // deep; ties by descending time. A built-but-unbroadcast v2 funding has
+    // no timestamp and sorts to the very front.
+    out.sort_by_key(|t| {
+        (
+            t.confirmations,
+            std::cmp::Reverse(t.timestamp.unwrap_or(u64::MAX)),
+        )
+    });
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -697,6 +782,135 @@ mod tests {
                 "bc1p4qhjn9zdvkux4e44uhx8tc55attvtyu358kutcqkudyccelu0was9fqzwh"
             );
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn built_funding_reserves_inputs_and_cancel_releases_them() {
+        use bitcoin::hashes::Hash;
+
+        let dir = temp_data_dir();
+        let params = btc_mainnet();
+        let seed = PactSeed::from_mnemonic(TEST_MNEMONIC, "").unwrap();
+        let manager = WalletManager::new(&dir);
+        let handle = manager.open("btc", params, &seed).unwrap();
+        let mut guard = handle.lock().unwrap();
+        let entry = &mut *guard;
+
+        // Fund the wallet: a confirmed (non-coinbase) foreign tx paying our
+        // first address, anchored in a fabricated block 1.
+        let spk0 = entry
+            .wallet
+            .reveal_next_address(KeychainKind::External)
+            .address
+            .script_pubkey();
+        let funding = Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: vec![bitcoin::TxIn {
+                previous_output: OutPoint {
+                    txid: Txid::from_byte_array([2u8; 32]),
+                    vout: 0,
+                },
+                ..Default::default()
+            }],
+            output: vec![TxOut {
+                value: Amount::from_sat(100_000),
+                script_pubkey: spk0,
+            }],
+        };
+        let fund_txid = funding.compute_txid();
+        let h1 = BlockHash::from_byte_array([1u8; 32]);
+        let genesis = entry.wallet.latest_checkpoint().block_id();
+        let cp = CheckPoint::from_block_ids([
+            genesis,
+            BlockId {
+                height: 1,
+                hash: h1,
+            },
+        ])
+        .unwrap();
+        let mut tx_update = TxUpdate::<ConfirmationBlockTime>::default();
+        tx_update.txs.push(Arc::new(funding));
+        tx_update.anchors.insert((
+            ConfirmationBlockTime {
+                block_id: BlockId {
+                    height: 1,
+                    hash: h1,
+                },
+                confirmation_time: 1_000,
+            },
+            fund_txid,
+        ));
+        entry
+            .wallet
+            .apply_update(Update {
+                last_active_indices: BTreeMap::new(),
+                tx_update,
+                chain: Some(cp),
+            })
+            .unwrap();
+        assert_eq!(entry.wallet.balance().trusted_spendable().to_sat(), 100_000);
+
+        // Build-and-hold a "swap leg" funding (v2 two-phase, spec §7): sign,
+        // insert unbroadcast — its inputs must now be reserved.
+        let leg_spk = ScriptBuf::from_hex(&format!("5120{}", "ab".repeat(32))).unwrap();
+        let mut builder = entry.wallet.build_tx();
+        builder
+            .add_recipient(leg_spk, Amount::from_sat(40_000))
+            .fee_rate(FeeRate::from_sat_per_vb(2).unwrap())
+            .set_exact_sequence(Sequence::ENABLE_RBF_NO_LOCKTIME);
+        let mut psbt = builder.finish().unwrap();
+        assert!(entry
+            .wallet
+            .sign(&mut psbt, SignOptions::default())
+            .unwrap());
+        let built = psbt.extract_tx().unwrap();
+        let built_txid = built.compute_txid();
+        let fee = entry.wallet.calculate_fee(&built).unwrap().to_sat();
+        entry.wallet.apply_unconfirmed_txs([(built.clone(), 2_000)]);
+        assert_eq!(
+            entry.wallet.balance().trusted_spendable().to_sat(),
+            100_000 - 40_000 - fee,
+            "built-but-unbroadcast funding must reserve its inputs"
+        );
+
+        // Activity feed: the pending send sorts first, then the receive.
+        let act = wallet_activity(entry);
+        assert_eq!(act.len(), 2);
+        assert_eq!(
+            (
+                act[0].direction.as_str(),
+                act[0].amount_sat,
+                act[0].confirmations
+            ),
+            ("sent", 40_000, 0)
+        );
+        assert_eq!(act[0].fee_sat, Some(fee));
+        assert_eq!(
+            (
+                act[1].direction.as_str(),
+                act[1].amount_sat,
+                act[1].confirmations
+            ),
+            ("received", 100_000, 1)
+        );
+
+        // Cancel — the exact wallet_cancel_funding sequence (evict from the
+        // canonical set + unmark the change index): the inputs are spendable
+        // again and the phantom leaves the activity feed.
+        entry.wallet.apply_evicted_txs([(built_txid, 3_000)]);
+        entry.wallet.cancel_tx(&built);
+        assert_eq!(
+            entry.wallet.balance().trusted_spendable().to_sat(),
+            100_000,
+            "cancel must release the reserved inputs"
+        );
+        let act = wallet_activity(entry);
+        assert_eq!(act.len(), 1);
+        assert_eq!(act[0].txid, fund_txid.to_string());
+
+        drop(guard);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

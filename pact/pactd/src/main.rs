@@ -1058,6 +1058,17 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             .await?;
             Ok(json!({ "txid": txid }))
         }
+        "listtransactions" => {
+            // Activity feed of the nodeless wallet (design doc §4): newest
+            // first, each entry txid/direction/amount/fee/confirmations/time.
+            // Core-backed coins refuse (their wallet stays read-only here).
+            let chain = p.str(0, "chain")?;
+            let txs = blocking(app, move |e| {
+                e.wallet_transactions(net, &parse_coin(&chain)?)
+            })
+            .await?;
+            Ok(json!({ "transactions": txs }))
+        }
         other => bail!("unknown method '{other}'"),
     }
 }

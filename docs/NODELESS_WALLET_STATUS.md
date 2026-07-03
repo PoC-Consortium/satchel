@@ -56,17 +56,36 @@ The foundation, concretely:
      re-sync → balance again. Then the same through a v1 regtest swap.
 3. **File the sub-issues** under #58 (§6 of the design doc) once the
    spike confirms the shape.
-4. Next code, roughly in order: `cancel_tx` wiring for aborted v2
-   fundings (the phantom-unbroadcast-tx TODO in `wallet_build_funding`),
-   pactd `listtransactions` RPC, Satchel send/receive/activity UI +
+4. Next code, roughly in order: Satchel send/receive/activity UI +
    wizard nodeless path (i18n ×26), regtest e2e parity suite.
+   ~~`cancel_tx` wiring~~ and ~~pactd `listtransactions`~~ are DONE (see
+   below).
+
+## Done since the pause
+
+- **bdk_wallet 1.2 → 2.4** (still bitcoin 0.32 / rusqlite 0.31, one-line
+  sync churn: `seen_ats` is a set now). Motive: `apply_evicted_txs` — the
+  only way to drop a never-broadcast tx from the canonical set.
+- **Phantom-funding release** (`wallet_cancel_funding` on `ChainBackend`):
+  bdk evicts the phantom + unmarks its change index; Core `lockunspent`s
+  the built tx's inputs back; default no-op. The engine wires it into
+  every path where a BUILT-but-unbroadcast leg B ends: user abort + peer
+  abort (both now use *commitment* semantics — a built tx with its
+  outpoint provably off-network and unspent no longer blocks cancel), the
+  §7.4 fund-deadline dead-end in the `Signed` tick (used to idle forever),
+  and `adaptor_refund_if_due` (used to error-loop refunding a nonexistent
+  outpoint). Tick paths go terminal only once the release succeeds;
+  `adaptor_leg_b_uncommitted` answers "committed" on any read error and
+  refuses when the outpoint was ever spent (rescue corner: a pre-wipe
+  broadcast + maker redeem must drive the claim, never an abort).
+- **`listtransactions <coin>` RPC** + `pact-cli transactions <coin>`:
+  activity off the bdk tx graph (txid, direction, net amount, fee, confs,
+  timestamp), newest first; Core-backed coins refuse (read-only by
+  design). Mapping lives in `wallet_activity` (pure, unit-tested).
+- Test: `built_funding_reserves_inputs_and_cancel_releases_them` pins the
+  whole reserve→activity→evict→release cycle against real bdk 2.4.
 
 ## Known TODOs / sharp edges (all noted in code comments too)
-
-- Aborted v2 handshake leaves the built-but-unbroadcast funding tx in the
-  bdk graph (input lock without release — Core's `lockUnspents` has the
-  same wart). Fix = surface `Wallet::cancel_tx` on the engine's abort
-  paths.
 - A fresh wallet with no history full-scans (2×20 scripthash calls) on
   every sync until the first address is revealed — harmless, worth a
   "scanned once" marker later.
