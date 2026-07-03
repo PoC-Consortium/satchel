@@ -423,6 +423,19 @@ export const sk: Bundle = {
     validateFirst: "Pred uložením overte uzol.",
     savingReconnecting: "Ukladanie a opätovné pripájanie…",
     connected: "{coin} pripojené",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "Typ pripojenia",
+    modeNode: "Vlastný uzol",
+    modeNodeDesc: "Core RPC — swapy financuje peňaženka uzla. Maximálna suverenita.",
+    modeNodeless: "Bez uzla (Electrum)",
+    modeNodelessDesc:
+      "Žiadny uzol nie je potrebný: dáta reťazca prichádzajú z Electrum serverov a peňaženka žije na vašom Pact seede.",
+    electrumUrlsLabel: "Electrum servery",
+    electrumUrlsHelp:
+      "Jeden na riadok: tcp://host:port alebo ssl://host:port. Mainnet vyžaduje aspoň dva nezávislé servery ako vzájomnú kontrolu pohľadov na reťazec.",
+    electrumNeedUrl: "Zadajte aspoň jednu URL Electrum servera (tcp:// alebo ssl://).",
+    electrumBadUrl: "URL Electrum serverov musia začínať tcp:// alebo ssl:// — zadané: {url}",
+    validateServers: "Overiť servery",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nepodporované",
     unsupportedByEngineTip:
@@ -456,6 +469,44 @@ export const sk: Bundle = {
     walletDefaultHint:
       "Pre túto mincu nie je nastavená žiadna peňaženka, takže RPC používajú predvolenú peňaženku uzla. Nastavte jednu v Nastavenia → Mince, aby každé volanie smerovalo na konkrétnu peňaženku.",
     balanceLabel: "Zostatok {symbol}",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "peňaženka pact seedu",
+    pactSeedHint:
+      "Táto minca beží bez uzla: jej peňaženka žije na vašom Pact seede a synchronizuje sa z Electrum serverov — žiadny uzol nie je potrebný. Odosielanie, prijímanie aj história sú priamo tu.",
+    receive: "Prijať",
+    send: "Odoslať",
+    activity: "Aktivita",
+    copy: "Kopírovať",
+    copied: "Skopírované",
+    close: "Zavrieť",
+    refresh: "Obnoviť",
+    receiveTitle: "Prijať {sym}",
+    receiveIntro:
+      "Čerstvá adresa z vašej peňaženky pact seedu. Mince sem poslané sa po potvrdení objavia v zostatku.",
+    receiveFreshNote:
+      "Pri každom otvorení tohto dialógu dostanete čerstvú adresu. Staré adresy fungujú ďalej — čerstvé sú len lepšie pre súkromie.",
+    sendTitle: "Odoslať {sym}",
+    sendIntro: "Na minutie: {balance} {sym}.",
+    sendAddressLabel: "Adresa príjemcu {sym}",
+    sendAmountLabel: "Suma",
+    sendNeedAddress: "Zadajte adresu príjemcu.",
+    sendNeedAmount: "Zadajte sumu.",
+    sendOverBalance: "Viac než minuteľný zostatok.",
+    sendFeeNote:
+      "Sieťový poplatok sa pripočítava navyše a vyberá sa automaticky podľa aktuálneho trhu poplatkov.",
+    sendBroadcast: "Odoslané — {txid}… je na ceste ({sym}).",
+    sendConfirm: "Odoslať",
+    activityTitle: "Aktivita {sym}",
+    activityEmpty: "Zatiaľ nič — prijmite mince alebo dokončite swap a objaví sa to tu.",
+    activityWhen: "Kedy",
+    activityDirection: "Smer",
+    activityAmount: "Suma ({sym})",
+    activityFee: "Poplatok",
+    activityConfs: "Potvrdenia",
+    activityTxid: "Transakcia",
+    activityPending: "čaká",
+    activitySent: "Odoslané",
+    activityReceived: "Prijaté",
   },
   corkboard: {
     noBoardTitle: "Žiadny pripojený Corkboard",

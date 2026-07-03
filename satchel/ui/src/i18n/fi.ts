@@ -423,6 +423,19 @@ export const fi: Bundle = {
     validateFirst: "Vahvista solmu ennen tallennusta.",
     savingReconnecting: "Tallennetaan ja yhdistetään uudelleen…",
     connected: "{coin} yhdistetty",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "Yhteystyyppi",
+    modeNode: "Oma solmusi",
+    modeNodeDesc: "Core RPC — solmun lompakko rahoittaa swapit. Täysi suvereniteetti.",
+    modeNodeless: "Ilman solmua (Electrum)",
+    modeNodelessDesc:
+      "Solmua ei tarvita: ketjudata tulee Electrum-palvelimilta ja lompakko elää Pact-seedilläsi.",
+    electrumUrlsLabel: "Electrum-palvelimet",
+    electrumUrlsHelp:
+      "Yksi per rivi: tcp://host:port tai ssl://host:port. Mainnet vaatii vähintään kaksi riippumatonta palvelinta, jotka ristiintarkistavat ketjunäkymän.",
+    electrumNeedUrl: "Syötä vähintään yksi Electrum-palvelimen URL (tcp:// tai ssl://).",
+    electrumBadUrl: "Electrum-URL:ien on alettava tcp:// tai ssl:// — saatiin: {url}",
+    validateServers: "Validoi palvelimet",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Ei tuettu",
     unsupportedByEngineTip:
@@ -456,6 +469,43 @@ export const fi: Bundle = {
     walletDefaultHint:
       "Tälle kolikolle ei ole asetettu lompakkoa, joten RPC:t käyttävät solmun oletuslompakkoa. Aseta sellainen kohdassa Asetukset → Kolikot rajataksesi jokaisen kutsun tiettyyn lompakkoon.",
     balanceLabel: "{symbol}-saldo",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "pact-seed-lompakko",
+    pactSeedHint:
+      "Tämä kolikko toimii ilman solmua: sen lompakko elää Pact-seedilläsi ja synkronoituu Electrum-palvelimilta — solmua ei tarvita. Lähetys, vastaanotto ja historia ovat suoraan tässä.",
+    receive: "Vastaanota",
+    send: "Lähetä",
+    activity: "Tapahtumat",
+    copy: "Kopioi",
+    copied: "Kopioitu",
+    close: "Sulje",
+    refresh: "Päivitä",
+    receiveTitle: "Vastaanota {sym}",
+    receiveIntro:
+      "Tuore osoite pact-seed-lompakostasi. Tänne lähetetyt kolikot näkyvät saldossa, kun ne on vahvistettu.",
+    receiveFreshNote:
+      "Joka kerta kun avaat tämän ikkunan, saat tuoreen osoitteen. Vanhat osoitteet toimivat edelleen — tuoreet ovat vain parempia yksityisyydelle.",
+    sendTitle: "Lähetä {sym}",
+    sendIntro: "Käytettävissä: {balance} {sym}.",
+    sendAddressLabel: "Vastaanottajan {sym}-osoite",
+    sendAmountLabel: "Määrä",
+    sendNeedAddress: "Syötä vastaanottajan osoite.",
+    sendNeedAmount: "Syötä määrä.",
+    sendOverBalance: "Enemmän kuin käytettävissä oleva saldo.",
+    sendFeeNote: "Verkkomaksu lisätään päälle ja valitaan automaattisesti ajantasaisilta maksumarkkinoilta.",
+    sendBroadcast: "Lähetetty — {txid}… on matkalla ({sym}).",
+    sendConfirm: "Lähetä",
+    activityTitle: "{sym}-tapahtumat",
+    activityEmpty: "Ei vielä mitään — vastaanota kolikoita tai vie swap loppuun, niin se ilmestyy tähän.",
+    activityWhen: "Milloin",
+    activityDirection: "Suunta",
+    activityAmount: "Määrä ({sym})",
+    activityFee: "Maksu",
+    activityConfs: "Vahvistukset",
+    activityTxid: "Transaktio",
+    activityPending: "odottaa",
+    activitySent: "Lähetetty",
+    activityReceived: "Vastaanotettu",
   },
   corkboard: {
     noBoardTitle: "Ei yhdistettyä Corkboardia",

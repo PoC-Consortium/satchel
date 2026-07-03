@@ -423,6 +423,19 @@ export const pl: Bundle = {
     validateFirst: "Zweryfikuj węzeł przed zapisaniem.",
     savingReconnecting: "Zapisywanie i ponowne łączenie…",
     connected: "{coin} połączono",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "Typ połączenia",
+    modeNode: "Twój własny węzeł",
+    modeNodeDesc: "Core RPC — portfel węzła finansuje swapy. Maksymalna suwerenność.",
+    modeNodeless: "Bez węzła (Electrum)",
+    modeNodelessDesc:
+      "Węzeł niepotrzebny: dane łańcucha pochodzą z serwerów Electrum, a portfel żyje na Twoim seedzie Pact.",
+    electrumUrlsLabel: "Serwery Electrum",
+    electrumUrlsHelp:
+      "Jeden na linię: tcp://host:port lub ssl://host:port. Mainnet wymaga co najmniej dwóch niezależnych serwerów, które krzyżowo weryfikują widok łańcucha.",
+    electrumNeedUrl: "Wpisz co najmniej jeden URL serwera Electrum (tcp:// lub ssl://).",
+    electrumBadUrl: "URL-e Electrum muszą zaczynać się od tcp:// lub ssl:// — otrzymano: {url}",
+    validateServers: "Zweryfikuj serwery",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nieobsługiwane",
     unsupportedByEngineTip:
@@ -456,6 +469,43 @@ export const pl: Bundle = {
     walletDefaultHint:
       "Nie ustawiono portfela dla tej monety, więc RPC używają domyślnego portfela węzła. Ustaw go w Ustawienia → Monety, aby ograniczyć każde wywołanie do konkretnego portfela.",
     balanceLabel: "saldo {symbol}",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "portfel na seedzie Pact",
+    pactSeedHint:
+      "Ta moneta działa bez węzła: jej portfel żyje na Twoim seedzie Pact, synchronizowany z serwerów Electrum — węzeł nie jest potrzebny. Wysyłanie, odbieranie i historia są właśnie tutaj.",
+    receive: "Odbierz",
+    send: "Wyślij",
+    activity: "Aktywność",
+    copy: "Kopiuj",
+    copied: "Skopiowano",
+    close: "Zamknij",
+    refresh: "Odśwież",
+    receiveTitle: "Odbierz {sym}",
+    receiveIntro:
+      "Świeży adres z Twojego portfela na seedzie Pact. Monety wysłane tutaj pojawią się w saldzie po potwierdzeniu.",
+    receiveFreshNote:
+      "Za każdym otwarciem tego okna dostajesz świeży adres. Stare adresy nadal działają — świeże są po prostu lepsze dla prywatności.",
+    sendTitle: "Wyślij {sym}",
+    sendIntro: "Do wydania: {balance} {sym}.",
+    sendAddressLabel: "Adres {sym} odbiorcy",
+    sendAmountLabel: "Kwota",
+    sendNeedAddress: "Wpisz adres odbiorcy.",
+    sendNeedAmount: "Wpisz kwotę.",
+    sendOverBalance: "Więcej niż saldo do wydania.",
+    sendFeeNote: "Opłata sieciowa jest doliczana dodatkowo i dobierana automatycznie z bieżącego rynku opłat.",
+    sendBroadcast: "Wysłano — {txid}… jest w drodze ({sym}).",
+    sendConfirm: "Wyślij",
+    activityTitle: "Aktywność {sym}",
+    activityEmpty: "Jeszcze nic — odbierz monety albo dokończ swapa, a pojawi się tutaj.",
+    activityWhen: "Kiedy",
+    activityDirection: "Kierunek",
+    activityAmount: "Kwota ({sym})",
+    activityFee: "Opłata",
+    activityConfs: "Potwierdzenia",
+    activityTxid: "Transakcja",
+    activityPending: "oczekuje",
+    activitySent: "Wysłano",
+    activityReceived: "Odebrano",
   },
   corkboard: {
     noBoardTitle: "Brak połączonego Corkboardu",

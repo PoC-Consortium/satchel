@@ -423,6 +423,19 @@ export const ru: Bundle = {
     validateFirst: "Проверьте узел перед сохранением.",
     savingReconnecting: "Сохранение и переподключение…",
     connected: "{coin} подключено",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "Тип подключения",
+    modeNode: "Свой узел",
+    modeNodeDesc: "Core RPC — свопы финансирует кошелёк узла. Максимальный суверенитет.",
+    modeNodeless: "Без узла (Electrum)",
+    modeNodelessDesc:
+      "Узел не нужен: данные цепочки приходят с серверов Electrum, а кошелёк живёт на вашем сиде Pact.",
+    electrumUrlsLabel: "Серверы Electrum",
+    electrumUrlsHelp:
+      "По одному в строке: tcp://host:port или ssl://host:port. Для mainnet нужны минимум два независимых сервера, перекрёстно проверяющих вид цепочки.",
+    electrumNeedUrl: "Введите хотя бы один URL сервера Electrum (tcp:// или ssl://).",
+    electrumBadUrl: "URL Electrum должны начинаться с tcp:// или ssl:// — получено: {url}",
+    validateServers: "Проверить серверы",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Не поддерживается",
     unsupportedByEngineTip:
@@ -456,6 +469,43 @@ export const ru: Bundle = {
     walletDefaultHint:
       "Для этой монеты кошелёк не задан, поэтому RPC используют кошелёк узла по умолчанию. Задайте его в Настройки → Монеты, чтобы привязать каждый вызов к конкретному кошельку.",
     balanceLabel: "Баланс {symbol}",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "кошелёк на сиде Pact",
+    pactSeedHint:
+      "Эта монета работает без узла: её кошелёк живёт на вашем сиде Pact и синхронизируется с серверов Electrum — узел не нужен. Отправка, получение и история — прямо здесь.",
+    receive: "Получить",
+    send: "Отправить",
+    activity: "Активность",
+    copy: "Копировать",
+    copied: "Скопировано",
+    close: "Закрыть",
+    refresh: "Обновить",
+    receiveTitle: "Получить {sym}",
+    receiveIntro:
+      "Свежий адрес из вашего кошелька на сиде Pact. Отправленные сюда монеты появятся в балансе после подтверждения.",
+    receiveFreshNote:
+      "Каждый раз при открытии этого диалога вы получаете свежий адрес. Старые адреса продолжают работать — свежие просто лучше для приватности.",
+    sendTitle: "Отправить {sym}",
+    sendIntro: "Доступно к отправке: {balance} {sym}.",
+    sendAddressLabel: "Адрес получателя {sym}",
+    sendAmountLabel: "Сумма",
+    sendNeedAddress: "Введите адрес получателя.",
+    sendNeedAmount: "Введите сумму.",
+    sendOverBalance: "Больше доступного баланса.",
+    sendFeeNote: "Сетевая комиссия добавляется сверху и выбирается автоматически по текущему рынку комиссий.",
+    sendBroadcast: "Отправлено — {txid}… уже в пути ({sym}).",
+    sendConfirm: "Отправить",
+    activityTitle: "Активность {sym}",
+    activityEmpty: "Пока пусто — получите монеты или завершите своп, и они появятся здесь.",
+    activityWhen: "Когда",
+    activityDirection: "Направление",
+    activityAmount: "Сумма ({sym})",
+    activityFee: "Комиссия",
+    activityConfs: "Подтв.",
+    activityTxid: "Транзакция",
+    activityPending: "в ожидании",
+    activitySent: "Отправлено",
+    activityReceived: "Получено",
   },
   corkboard: {
     noBoardTitle: "Corkboard не подключён",

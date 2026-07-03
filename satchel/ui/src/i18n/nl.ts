@@ -423,6 +423,19 @@ export const nl: Bundle = {
     validateFirst: "Valideer de node voordat je opslaat.",
     savingReconnecting: "Opslaan & opnieuw verbinden…",
     connected: "{coin} verbonden",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "Verbindingstype",
+    modeNode: "Je eigen node",
+    modeNodeDesc: "Core RPC — de wallet van de node fundt de swaps. Maximale soevereiniteit.",
+    modeNodeless: "Nodeless (Electrum)",
+    modeNodelessDesc:
+      "Geen node nodig: chaindata komt van Electrum-servers en de wallet leeft op je Pact-seed.",
+    electrumUrlsLabel: "Electrum-servers",
+    electrumUrlsHelp:
+      "Eén per regel: tcp://host:port of ssl://host:port. Mainnet vereist minstens twee onafhankelijke servers die elkaars beeld van de keten kruiselings controleren.",
+    electrumNeedUrl: "Voer minstens één Electrum-server-URL in (tcp:// of ssl://).",
+    electrumBadUrl: "Electrum-URL's moeten beginnen met tcp:// of ssl:// — kreeg: {url}",
+    validateServers: "Servers valideren",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Niet ondersteund",
     unsupportedByEngineTip:
@@ -456,6 +469,43 @@ export const nl: Bundle = {
     walletDefaultHint:
       "Geen wallet ingesteld voor deze munt, dus RPC's gebruiken de standaard wallet van de node. Stel er een in bij Instellingen → Munten om elke aanroep af te bakenen tot een specifieke wallet.",
     balanceLabel: "{symbol}-saldo",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "Pact-seed-wallet",
+    pactSeedHint:
+      "Deze munt draait nodeless: zijn wallet leeft op je Pact-seed, gesynchroniseerd via Electrum-servers — geen node nodig. Versturen, ontvangen en geschiedenis zitten gewoon hier.",
+    receive: "Ontvangen",
+    send: "Versturen",
+    activity: "Activiteit",
+    copy: "Kopiëren",
+    copied: "Gekopieerd",
+    close: "Sluiten",
+    refresh: "Vernieuwen",
+    receiveTitle: "{sym} ontvangen",
+    receiveIntro:
+      "Een vers adres uit je Pact-seed-wallet. Munten die hierheen gestuurd worden verschijnen in het saldo zodra ze bevestigd zijn.",
+    receiveFreshNote:
+      "Elke keer dat je dit venster opent krijg je een vers adres. Oude adressen blijven werken — verse zijn alleen beter voor je privacy.",
+    sendTitle: "{sym} versturen",
+    sendIntro: "Besteedbaar: {balance} {sym}.",
+    sendAddressLabel: "{sym}-adres van de ontvanger",
+    sendAmountLabel: "Bedrag",
+    sendNeedAddress: "Voer het adres van de ontvanger in.",
+    sendNeedAmount: "Voer een bedrag in.",
+    sendOverBalance: "Meer dan het besteedbare saldo.",
+    sendFeeNote: "De netwerkfee komt er bovenop en wordt automatisch gekozen uit de actuele fee-markt.",
+    sendBroadcast: "Verstuurd — {txid}… is onderweg ({sym}).",
+    sendConfirm: "Versturen",
+    activityTitle: "{sym}-activiteit",
+    activityEmpty: "Nog niets — ontvang munten of rond een swap af en het verschijnt hier.",
+    activityWhen: "Wanneer",
+    activityDirection: "Richting",
+    activityAmount: "Bedrag ({sym})",
+    activityFee: "Fee",
+    activityConfs: "Bevestigingen",
+    activityTxid: "Transactie",
+    activityPending: "in afwachting",
+    activitySent: "Verstuurd",
+    activityReceived: "Ontvangen",
   },
   corkboard: {
     noBoardTitle: "Geen Corkboard verbonden",

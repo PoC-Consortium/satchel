@@ -423,6 +423,19 @@ export const ro: Bundle = {
     validateFirst: "Validează nodul înainte de a salva.",
     savingReconnecting: "Se salvează și se reconectează…",
     connected: "{coin} conectat",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "Tip de conexiune",
+    modeNode: "Propriul tău nod",
+    modeNodeDesc: "Core RPC — portofelul nodului finanțează swap-urile. Suveranitate maximă.",
+    modeNodeless: "Fără nod (Electrum)",
+    modeNodelessDesc:
+      "Niciun nod necesar: datele lanțului vin de la servere Electrum, iar portofelul trăiește pe seed-ul tău Pact.",
+    electrumUrlsLabel: "Servere Electrum",
+    electrumUrlsHelp:
+      "Unul pe linie: tcp://host:port sau ssl://host:port. Mainnet-ul cere cel puțin două servere independente, care își verifică reciproc vederile asupra lanțului.",
+    electrumNeedUrl: "Introdu cel puțin un URL de server Electrum (tcp:// sau ssl://).",
+    electrumBadUrl: "URL-urile Electrum trebuie să înceapă cu tcp:// sau ssl:// — primit: {url}",
+    validateServers: "Validează serverele",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nesuportat",
     unsupportedByEngineTip:
@@ -456,6 +469,44 @@ export const ro: Bundle = {
     walletDefaultHint:
       "Niciun portofel setat pentru această monedă, deci RPC-urile folosesc portofelul implicit al nodului. Setează unul în Setări → Monede pentru a limita fiecare apel la un portofel specific.",
     balanceLabel: "Sold {symbol}",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "portofel pe seed-ul Pact",
+    pactSeedHint:
+      "Această monedă rulează fără nod: portofelul ei trăiește pe seed-ul tău Pact, sincronizat de pe servere Electrum — niciun nod necesar. Trimiterea, primirea și istoricul sunt chiar aici.",
+    receive: "Primește",
+    send: "Trimite",
+    activity: "Activitate",
+    copy: "Copiază",
+    copied: "Copiat",
+    close: "Închide",
+    refresh: "Reîmprospătează",
+    receiveTitle: "Primește {sym}",
+    receiveIntro:
+      "O adresă proaspătă din portofelul tău pe seed-ul Pact. Monedele trimise aici apar în sold odată confirmate.",
+    receiveFreshNote:
+      "De fiecare dată când deschizi acest dialog primești o adresă proaspătă. Adresele vechi continuă să funcționeze — cele proaspete sunt doar mai bune pentru confidențialitate.",
+    sendTitle: "Trimite {sym}",
+    sendIntro: "Disponibil de cheltuit: {balance} {sym}.",
+    sendAddressLabel: "Adresa {sym} a destinatarului",
+    sendAmountLabel: "Sumă",
+    sendNeedAddress: "Introdu adresa destinatarului.",
+    sendNeedAmount: "Introdu o sumă.",
+    sendOverBalance: "Mai mult decât soldul disponibil de cheltuit.",
+    sendFeeNote:
+      "Taxa de rețea se adaugă separat, aleasă automat din piața de taxe în timp real.",
+    sendBroadcast: "Trimis — {txid}… este pe drum ({sym}).",
+    sendConfirm: "Trimite",
+    activityTitle: "Activitate {sym}",
+    activityEmpty: "Nimic încă — primește monede sau finalizează un swap și apare aici.",
+    activityWhen: "Când",
+    activityDirection: "Direcție",
+    activityAmount: "Sumă ({sym})",
+    activityFee: "Taxă",
+    activityConfs: "Conf.",
+    activityTxid: "Tranzacție",
+    activityPending: "în așteptare",
+    activitySent: "Trimis",
+    activityReceived: "Primit",
   },
   corkboard: {
     noBoardTitle: "Niciun Corkboard conectat",

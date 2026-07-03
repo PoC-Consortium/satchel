@@ -423,6 +423,19 @@ export const ja: Bundle = {
     validateFirst: "保存する前にノードを検証してください。",
     savingReconnecting: "保存して再接続中…",
     connected: "{coin} 接続済み",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "接続タイプ",
+    modeNode: "自分のノード",
+    modeNodeDesc: "Core RPC — ノードのウォレットがスワップに資金を入れます。最大限の主権。",
+    modeNodeless: "ノードレス（Electrum）",
+    modeNodelessDesc:
+      "ノードは不要です。チェーンデータは Electrum サーバーから取得され、ウォレットはあなたの Pact シード上にあります。",
+    electrumUrlsLabel: "Electrum サーバー",
+    electrumUrlsHelp:
+      "1 行に 1 つ: tcp://host:port または ssl://host:port。メインネットでは、チェーンの見え方を相互チェックするため、少なくとも 2 つの独立したサーバーが必要です。",
+    electrumNeedUrl: "Electrum サーバーの URL を少なくとも 1 つ入力してください（tcp:// または ssl://）。",
+    electrumBadUrl: "Electrum の URL は tcp:// または ssl:// で始まる必要があります — 入力値: {url}",
+    validateServers: "サーバーを検証",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "非対応",
     unsupportedByEngineTip:
@@ -456,6 +469,43 @@ export const ja: Bundle = {
     walletDefaultHint:
       "このコインにウォレットが設定されていないため、RPC はノードのデフォルトウォレットを使用します。設定 → コインで設定すると、すべての呼び出しを特定のウォレットにスコープできます。",
     balanceLabel: "{symbol} 残高",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "pact シードウォレット",
+    pactSeedHint:
+      "このコインはノードレスで動作します。ウォレットはあなたの Pact シード上にあり、Electrum サーバーから同期されます — ノードは不要です。送金・受取・履歴はすべてここで行えます。",
+    receive: "受け取る",
+    send: "送る",
+    activity: "アクティビティ",
+    copy: "コピー",
+    copied: "コピーしました",
+    close: "閉じる",
+    refresh: "更新",
+    receiveTitle: "{sym} を受け取る",
+    receiveIntro:
+      "pact シードウォレットからの新しいアドレスです。ここに送られたコインは、確認後に残高へ反映されます。",
+    receiveFreshNote:
+      "このダイアログを開くたびに新しいアドレスが発行されます。古いアドレスも引き続き使えます — 新しいアドレスの方がプライバシーに優れているだけです。",
+    sendTitle: "{sym} を送る",
+    sendIntro: "利用可能: {balance} {sym}。",
+    sendAddressLabel: "受取先の {sym} アドレス",
+    sendAmountLabel: "金額",
+    sendNeedAddress: "受取先のアドレスを入力してください。",
+    sendNeedAmount: "金額を入力してください。",
+    sendOverBalance: "利用可能な残高を超えています。",
+    sendFeeNote: "ネットワーク手数料は別途加算され、現在の手数料相場から自動的に選ばれます。",
+    sendBroadcast: "送信しました — {txid}… が処理中です（{sym}）。",
+    sendConfirm: "送る",
+    activityTitle: "{sym} のアクティビティ",
+    activityEmpty: "まだ何もありません — コインを受け取るかスワップを完了すると、ここに表示されます。",
+    activityWhen: "日時",
+    activityDirection: "方向",
+    activityAmount: "金額（{sym}）",
+    activityFee: "手数料",
+    activityConfs: "承認数",
+    activityTxid: "トランザクション",
+    activityPending: "保留中",
+    activitySent: "送金",
+    activityReceived: "受取",
   },
   corkboard: {
     noBoardTitle: "Corkboard が接続されていません",

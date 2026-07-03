@@ -423,6 +423,19 @@ export const hr: Bundle = {
     validateFirst: "Provjerite čvor prije spremanja.",
     savingReconnecting: "Spremanje i ponovno povezivanje…",
     connected: "{coin} povezan",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "Vrsta veze",
+    modeNode: "Vlastiti čvor",
+    modeNodeDesc: "Core RPC — novčanik čvora financira swapove. Maksimalna suverenost.",
+    modeNodeless: "Bez čvora (Electrum)",
+    modeNodelessDesc:
+      "Čvor nije potreban: podaci o lancu dolaze s Electrum poslužitelja, a novčanik živi na vašem Pact seedu.",
+    electrumUrlsLabel: "Electrum poslužitelji",
+    electrumUrlsHelp:
+      "Jedan po retku: tcp://host:port ili ssl://host:port. Mainnet zahtijeva barem dva neovisna poslužitelja koji unakrsno provjeravaju stanje lanca.",
+    electrumNeedUrl: "Unesite barem jedan URL Electrum poslužitelja (tcp:// ili ssl://).",
+    electrumBadUrl: "Electrum URL-ovi moraju počinjati s tcp:// ili ssl:// — dobiveno: {url}",
+    validateServers: "Provjeri poslužitelje",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nepodržano",
     unsupportedByEngineTip:
@@ -456,6 +469,43 @@ export const hr: Bundle = {
     walletDefaultHint:
       "Za ovu kovanicu nije postavljen novčanik, pa RPC-ovi koriste zadani novčanik čvora. Postavite jedan u Postavke → Kovanice da ograničite svaki poziv na određeni novčanik.",
     balanceLabel: "Stanje {symbol}",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "novčanik na Pact seedu",
+    pactSeedHint:
+      "Ova kovanica radi bez čvora: njezin novčanik živi na vašem Pact seedu, sinkroniziran s Electrum poslužitelja — čvor nije potreban. Slanje, primanje i povijest su upravo ovdje.",
+    receive: "Primi",
+    send: "Pošalji",
+    activity: "Aktivnost",
+    copy: "Kopiraj",
+    copied: "Kopirano",
+    close: "Zatvori",
+    refresh: "Osvježi",
+    receiveTitle: "Primi {sym}",
+    receiveIntro:
+      "Svježa adresa iz vašeg novčanika na Pact seedu. Kovanice poslane ovamo pojavljuju se u stanju nakon potvrde.",
+    receiveFreshNote:
+      "Svaki put kad otvorite ovaj dijalog dobivate svježu adresu. Stare adrese i dalje rade — svježe su jednostavno bolje za privatnost.",
+    sendTitle: "Pošalji {sym}",
+    sendIntro: "Raspoloživo: {balance} {sym}.",
+    sendAddressLabel: "{sym} adresa primatelja",
+    sendAmountLabel: "Iznos",
+    sendNeedAddress: "Unesite adresu primatelja.",
+    sendNeedAmount: "Unesite iznos.",
+    sendOverBalance: "Više od raspoloživog stanja.",
+    sendFeeNote: "Mrežna naknada dodaje se povrh iznosa i bira se automatski prema trenutnom tržištu naknada.",
+    sendBroadcast: "Poslano — {txid}… je na putu ({sym}).",
+    sendConfirm: "Pošalji",
+    activityTitle: "Aktivnost {sym}",
+    activityEmpty: "Još ništa — primite kovanice ili dovršite swap i pojavit će se ovdje.",
+    activityWhen: "Kada",
+    activityDirection: "Smjer",
+    activityAmount: "Iznos ({sym})",
+    activityFee: "Naknada",
+    activityConfs: "Potv.",
+    activityTxid: "Transakcija",
+    activityPending: "na čekanju",
+    activitySent: "Poslano",
+    activityReceived: "Primljeno",
   },
   corkboard: {
     noBoardTitle: "Nijedan Corkboard nije povezan",

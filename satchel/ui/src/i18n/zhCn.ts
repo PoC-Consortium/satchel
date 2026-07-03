@@ -423,6 +423,19 @@ export const zhCn: Bundle = {
     validateFirst: "请在保存前验证节点。",
     savingReconnecting: "正在保存并重新连接…",
     connected: "{coin} 已连接",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "连接类型",
+    modeNode: "你自己的节点",
+    modeNodeDesc: "Core RPC — 由节点的钱包为交换注资。最大程度的自主权。",
+    modeNodeless: "无节点（Electrum）",
+    modeNodelessDesc:
+      "无需节点：链上数据来自 Electrum 服务器，钱包依托你的 Pact 种子。",
+    electrumUrlsLabel: "Electrum 服务器",
+    electrumUrlsHelp:
+      "每行一个：tcp://host:port 或 ssl://host:port。主网需要至少两台相互独立的服务器，以交叉核对链视图。",
+    electrumNeedUrl: "请至少输入一个 Electrum 服务器 URL（tcp:// 或 ssl://）。",
+    electrumBadUrl: "Electrum URL 必须以 tcp:// 或 ssl:// 开头 — 收到的是：{url}",
+    validateServers: "验证服务器",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "不支持",
     unsupportedByEngineTip:
@@ -456,6 +469,43 @@ export const zhCn: Bundle = {
     walletDefaultHint:
       "此币种未设置钱包，因此 RPC 使用节点的默认钱包。请在设置 → 币种中设置一个，以将每次调用限定到指定钱包。",
     balanceLabel: "{symbol} 余额",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "pact 种子钱包",
+    pactSeedHint:
+      "此币种以无节点方式运行：其钱包依托你的 Pact 种子，从 Electrum 服务器同步 — 无需节点。发送、接收和历史记录都在这里。",
+    receive: "接收",
+    send: "发送",
+    activity: "活动",
+    copy: "复制",
+    copied: "已复制",
+    close: "关闭",
+    refresh: "刷新",
+    receiveTitle: "接收 {sym}",
+    receiveIntro:
+      "来自你 pact 种子钱包的一个全新地址。发送到这里的币在确认后会计入余额。",
+    receiveFreshNote:
+      "每次打开此对话框都会得到一个全新地址。旧地址仍然有效 — 新地址只是更有利于隐私。",
+    sendTitle: "发送 {sym}",
+    sendIntro: "可用：{balance} {sym}。",
+    sendAddressLabel: "收款方 {sym} 地址",
+    sendAmountLabel: "金额",
+    sendNeedAddress: "请输入收款地址。",
+    sendNeedAmount: "请输入金额。",
+    sendOverBalance: "超过可用余额。",
+    sendFeeNote: "网络手续费另行加收，并根据实时费用市场自动选取。",
+    sendBroadcast: "已发送 — {txid}… 正在路上（{sym}）。",
+    sendConfirm: "发送",
+    activityTitle: "{sym} 活动",
+    activityEmpty: "暂无记录 — 接收币或完成一笔交换后就会显示在这里。",
+    activityWhen: "时间",
+    activityDirection: "方向",
+    activityAmount: "金额（{sym}）",
+    activityFee: "手续费",
+    activityConfs: "确认数",
+    activityTxid: "交易",
+    activityPending: "待确认",
+    activitySent: "已发送",
+    activityReceived: "已接收",
   },
   corkboard: {
     noBoardTitle: "未连接 Corkboard",

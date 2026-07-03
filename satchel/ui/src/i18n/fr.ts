@@ -423,6 +423,18 @@ export const fr: Bundle = {
     validateFirst: "Validez le nœud avant d'enregistrer.",
     savingReconnecting: "Enregistrement et reconnexion…",
     connected: "{coin} connecté",
+    modeLabel: "Type de connexion",
+    modeNode: "Votre propre nœud",
+    modeNodeDesc: "Core RPC — le portefeuille du nœud finance les swaps. Souveraineté maximale.",
+    modeNodeless: "Sans nœud (Electrum)",
+    modeNodelessDesc:
+      "Aucun nœud requis : les données de chaîne viennent de serveurs Electrum et le portefeuille vit sur votre seed Pact.",
+    electrumUrlsLabel: "Serveurs Electrum",
+    electrumUrlsHelp:
+      "Un par ligne : tcp://host:port ou ssl://host:port. Le mainnet exige au moins deux serveurs indépendants qui recoupent leurs vues de la chaîne.",
+    electrumNeedUrl: "Saisissez au moins une URL de serveur Electrum (tcp:// ou ssl://).",
+    electrumBadUrl: "Les URL Electrum doivent commencer par tcp:// ou ssl:// — reçu : {url}",
+    validateServers: "Valider les serveurs",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Non pris en charge",
     unsupportedByEngineTip:
@@ -456,6 +468,43 @@ export const fr: Bundle = {
     walletDefaultHint:
       "Aucun portefeuille défini pour ce coin, donc les RPC utilisent le portefeuille par défaut du nœud. Définissez-en un dans Paramètres → Coins pour limiter chaque appel à un portefeuille spécifique.",
     balanceLabel: "Solde {symbol}",
+    pactSeed: "portefeuille de seed Pact",
+    pactSeedHint:
+      "Ce coin fonctionne sans nœud : son portefeuille vit sur votre seed Pact, synchronisé depuis des serveurs Electrum — aucun nœud requis. Envoi, réception et historique se trouvent directement ici.",
+    receive: "Recevoir",
+    send: "Envoyer",
+    activity: "Activité",
+    copy: "Copier",
+    copied: "Copié",
+    close: "Fermer",
+    refresh: "Actualiser",
+    receiveTitle: "Recevoir {sym}",
+    receiveIntro:
+      "Une adresse fraîche de votre portefeuille de seed Pact. Les coins envoyés ici apparaissent dans le solde une fois confirmés.",
+    receiveFreshNote:
+      "Chaque fois que vous ouvrez ce dialogue, vous obtenez une adresse fraîche. Les anciennes adresses restent valables — les fraîches sont simplement meilleures pour la confidentialité.",
+    sendTitle: "Envoyer {sym}",
+    sendIntro: "Dépensable : {balance} {sym}.",
+    sendAddressLabel: "Adresse {sym} du destinataire",
+    sendAmountLabel: "Montant",
+    sendNeedAddress: "Saisissez l'adresse du destinataire.",
+    sendNeedAmount: "Saisissez un montant.",
+    sendOverBalance: "Supérieur au solde dépensable.",
+    sendFeeNote:
+      "Les frais réseau s'ajoutent en plus, choisis automatiquement d'après le marché des frais en direct.",
+    sendBroadcast: "Envoyé — {txid}… est en route ({sym}).",
+    sendConfirm: "Envoyer",
+    activityTitle: "Activité {sym}",
+    activityEmpty: "Rien pour l'instant — recevez des coins ou terminez un swap et cela apparaîtra ici.",
+    activityWhen: "Quand",
+    activityDirection: "Sens",
+    activityAmount: "Montant ({sym})",
+    activityFee: "Frais",
+    activityConfs: "Confs",
+    activityTxid: "Transaction",
+    activityPending: "en attente",
+    activitySent: "Envoyé",
+    activityReceived: "Reçu",
   },
   corkboard: {
     noBoardTitle: "Aucun Corkboard connecté",

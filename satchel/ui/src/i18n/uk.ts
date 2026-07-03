@@ -423,6 +423,19 @@ export const uk: Bundle = {
     validateFirst: "Перевірте вузол перед збереженням.",
     savingReconnecting: "Збереження й перепідключення…",
     connected: "{coin} підключено",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "Тип підключення",
+    modeNode: "Власний вузол",
+    modeNodeDesc: "Core RPC — свопи фінансує гаманець вузла. Максимальний суверенітет.",
+    modeNodeless: "Без вузла (Electrum)",
+    modeNodelessDesc:
+      "Вузол не потрібен: дані ланцюга надходять із серверів Electrum, а гаманець живе на вашому Pact seed.",
+    electrumUrlsLabel: "Сервери Electrum",
+    electrumUrlsHelp:
+      "По одному в рядку: tcp://host:port або ssl://host:port. Для mainnet потрібні щонайменше два незалежні сервери, що перехресно звіряють стан ланцюга.",
+    electrumNeedUrl: "Введіть хоча б один URL сервера Electrum (tcp:// або ssl://).",
+    electrumBadUrl: "URL Electrum мають починатися з tcp:// або ssl:// — отримано: {url}",
+    validateServers: "Перевірити сервери",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Не підтримується",
     unsupportedByEngineTip:
@@ -456,6 +469,43 @@ export const uk: Bundle = {
     walletDefaultHint:
       "Для цієї монети не задано гаманець, тож RPC використовують гаманець вузла за замовчуванням. Задайте один у Налаштування → Монети, щоб прив'язати кожен виклик до конкретного гаманця.",
     balanceLabel: "Баланс {symbol}",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "гаманець на Pact seed",
+    pactSeedHint:
+      "Ця монета працює без вузла: її гаманець живе на вашому Pact seed і синхронізується із серверів Electrum — вузол не потрібен. Надсилання, отримання та історія — прямо тут.",
+    receive: "Отримати",
+    send: "Надіслати",
+    activity: "Активність",
+    copy: "Копіювати",
+    copied: "Скопійовано",
+    close: "Закрити",
+    refresh: "Оновити",
+    receiveTitle: "Отримати {sym}",
+    receiveIntro:
+      "Свіжа адреса з вашого гаманця на Pact seed. Надіслані сюди монети з'являться в балансі після підтвердження.",
+    receiveFreshNote:
+      "Щоразу, коли ви відкриваєте цей діалог, ви отримуєте свіжу адресу. Старі адреси продовжують працювати — свіжі просто кращі для приватності.",
+    sendTitle: "Надіслати {sym}",
+    sendIntro: "Доступно до витрати: {balance} {sym}.",
+    sendAddressLabel: "Адреса отримувача {sym}",
+    sendAmountLabel: "Сума",
+    sendNeedAddress: "Введіть адресу отримувача.",
+    sendNeedAmount: "Введіть суму.",
+    sendOverBalance: "Більше за доступний баланс.",
+    sendFeeNote: "Мережева комісія додається зверху й обирається автоматично за поточним ринком комісій.",
+    sendBroadcast: "Надіслано — {txid}… вже в дорозі ({sym}).",
+    sendConfirm: "Надіслати",
+    activityTitle: "Активність {sym}",
+    activityEmpty: "Поки що нічого — отримайте монети або завершіть своп, і воно з'явиться тут.",
+    activityWhen: "Коли",
+    activityDirection: "Напрям",
+    activityAmount: "Сума ({sym})",
+    activityFee: "Комісія",
+    activityConfs: "Підтв.",
+    activityTxid: "Транзакція",
+    activityPending: "очікує",
+    activitySent: "Надіслано",
+    activityReceived: "Отримано",
   },
   corkboard: {
     noBoardTitle: "Жоден Corkboard не підключено",

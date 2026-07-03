@@ -423,6 +423,19 @@ export const de: Bundle = {
     validateFirst: "Validiere die Node vor dem Speichern.",
     savingReconnecting: "Speichern & neu verbinden…",
     connected: "{coin} verbunden",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "Verbindungstyp",
+    modeNode: "Deine eigene Node",
+    modeNodeDesc: "Core RPC — die Wallet der Node finanziert Swaps. Maximale Souveränität.",
+    modeNodeless: "Nodeless (Electrum)",
+    modeNodelessDesc:
+      "Keine Node nötig: Chain-Daten kommen von Electrum-Servern, und die Wallet lebt auf deinem Pact-Seed.",
+    electrumUrlsLabel: "Electrum-Server",
+    electrumUrlsHelp:
+      "Einer pro Zeile: tcp://host:port oder ssl://host:port. Mainnet verlangt mindestens zwei unabhängige Server, die ihre Chain-Sicht gegenseitig abgleichen.",
+    electrumNeedUrl: "Gib mindestens eine Electrum-Server-URL ein (tcp:// oder ssl://).",
+    electrumBadUrl: "Electrum-URLs müssen mit tcp:// oder ssl:// beginnen — erhalten: {url}",
+    validateServers: "Server validieren",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nicht unterstützt",
     unsupportedByEngineTip:
@@ -456,6 +469,43 @@ export const de: Bundle = {
     walletDefaultHint:
       "Für diesen Coin ist keine Wallet gesetzt, daher nutzen RPCs die Standard-Wallet der Node. Setze eine unter Einstellungen → Coins, um jeden Aufruf auf eine bestimmte Wallet zu beschränken.",
     balanceLabel: "{symbol}-Guthaben",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "Pact-Seed-Wallet",
+    pactSeedHint:
+      "Dieser Coin läuft nodeless: seine Wallet lebt auf deinem Pact-Seed, synchronisiert über Electrum-Server — keine Node nötig. Senden, Empfangen und Verlauf sind direkt hier.",
+    receive: "Empfangen",
+    send: "Senden",
+    activity: "Aktivität",
+    copy: "Kopieren",
+    copied: "Kopiert",
+    close: "Schließen",
+    refresh: "Aktualisieren",
+    receiveTitle: "{sym} empfangen",
+    receiveIntro:
+      "Eine frische Adresse aus deiner Pact-Seed-Wallet. Coins, die hierher gesendet werden, erscheinen im Guthaben, sobald sie bestätigt sind.",
+    receiveFreshNote:
+      "Jedes Mal, wenn du diesen Dialog öffnest, bekommst du eine frische Adresse. Alte Adressen funktionieren weiter — frische sind nur besser für die Privatsphäre.",
+    sendTitle: "{sym} senden",
+    sendIntro: "Verfügbar: {balance} {sym}.",
+    sendAddressLabel: "{sym}-Adresse des Empfängers",
+    sendAmountLabel: "Betrag",
+    sendNeedAddress: "Gib die Empfängeradresse ein.",
+    sendNeedAmount: "Gib einen Betrag ein.",
+    sendOverBalance: "Mehr als das verfügbare Guthaben.",
+    sendFeeNote: "Die Netzwerkgebühr kommt obendrauf und wird automatisch aus dem aktuellen Gebührenmarkt gewählt.",
+    sendBroadcast: "Gesendet — {txid}… ist unterwegs ({sym}).",
+    sendConfirm: "Senden",
+    activityTitle: "{sym}-Aktivität",
+    activityEmpty: "Noch nichts — empfange Coins oder schließe einen Swap ab, dann erscheint es hier.",
+    activityWhen: "Wann",
+    activityDirection: "Richtung",
+    activityAmount: "Betrag ({sym})",
+    activityFee: "Gebühr",
+    activityConfs: "Bestät.",
+    activityTxid: "Transaktion",
+    activityPending: "ausstehend",
+    activitySent: "Gesendet",
+    activityReceived: "Empfangen",
   },
   corkboard: {
     noBoardTitle: "Kein Corkboard verbunden",
