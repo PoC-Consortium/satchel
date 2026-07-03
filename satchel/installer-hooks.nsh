@@ -20,6 +20,30 @@
 
 !include "WinMessages.nsh"
 
+; Stop any pactd / pact-cli running FROM THIS INSTALL DIR before files are
+; (over)written. Tauri's NSIS template only handles the main app (satchel.exe);
+; sidecars are invisible to it, and a deliberately-detached pactd (C6
+; keep-running-on-close) survives Satchel's exit BY DESIGN — which is correct
+; in operation but wrong during an upgrade: it holds a lock on pactd.exe (the
+; overwrite fails or silently keeps the old engine) and the next Satchel would
+; re-adopt the OLD binary. Path-scoped via $_.Path so a dev build or playground
+; pactd running from elsewhere is never touched. A hard stop is tolerated by
+; design (state is persisted around every broadcast; chain-watch resumes the
+; swap when the new pactd comes up).
+!macro _STOP_INSTDIR_DAEMONS
+  Push $0
+  nsExec::Exec `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-Process pactd,pact-cli -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '$INSTDIR\*' } | Stop-Process -Force -ErrorAction SilentlyContinue"`
+  Pop $0
+!macroend
+
+!macro NSIS_HOOK_PREINSTALL
+  !insertmacro _STOP_INSTDIR_DAEMONS
+!macroend
+
+!macro NSIS_HOOK_PREUNINSTALL
+  !insertmacro _STOP_INSTDIR_DAEMONS
+!macroend
+
 !macro NSIS_HOOK_POSTINSTALL
   Push $0
   ; Append $INSTDIR to the USER Path if absent — full read-modify-write in .NET

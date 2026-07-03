@@ -2081,6 +2081,29 @@ impl Engine {
                 detail,
             }))
         };
+        // C8 (v2 twin of the v1 pre-funding timeout-abort): a handshake
+        // stalled strictly BEFORE any funding can exist (`Signed` is where
+        // funding starts, so it is excluded — a counterparty's funding may be
+        // in flight there) past the timeout is aborted LOCALLY, with NO
+        // envelope: the counterparty's own clock clears their side
+        // (minimal-relay-traffic decision, 2026-07-03). Nothing is locked
+        // on-chain, so this loses no money. The funding-pointer guard is
+        // belt-and-braces; `created_at == 0` (pre-timestamp records) must
+        // not be judged infinitely old.
+        if matches!(rec.state, Created | Accepted | NoncesExchanged)
+            && rec.funding_a_txid.is_none()
+            && rec.funding_b_txid.is_none()
+            && rec.created_at > 0
+            && local_now().saturating_sub(rec.created_at) >= PRE_FUNDING_TIMEOUT_SECS
+        {
+            let mut dead = rec.clone();
+            dead.state = Aborted;
+            self.store.put_adaptor(&dead)?;
+            return ev(
+                "abort-timeout",
+                format!("no funding within {PRE_FUNDING_TIMEOUT_SECS}s; aborted"),
+            );
+        }
         // Signed: drive redeem/refund. RedeemedB/Completed/Refunded: keep the
         // broadcast spend moving until it confirms. Anything else is inert.
         //
@@ -4988,10 +5011,16 @@ impl Engine {
         self.ensure_can_fund(network, &body.get_asset, body.get_amount)?;
         self.store
             .put_pending_take(offer_id, &serde_json::to_string(&offer)?, local_now())?;
+        // `taken_at` (signed, being part of the body) lets the maker drop a
+        // take that reaches it stale — after our pending take will have
+        // pruned itself — instead of committing to a dead handshake.
         let take = self.signed_envelope(
             "take",
             offer_id,
-            serde_json::json!({ "offer": serde_json::to_value(&offer)? }),
+            serde_json::json!({
+                "offer": serde_json::to_value(&offer)?,
+                "taken_at": local_now(),
+            }),
         )?;
         self.relay_send_all(&offer.from, &take)
     }
@@ -5141,10 +5170,14 @@ impl Engine {
             &serde_json::to_string(&offer)?,
             local_now(),
         )?;
+        // Same signed `taken_at` staleness stamp as a board take.
         let take = self.signed_envelope(
             "take",
             &offer.swap_id,
-            serde_json::json!({ "offer": serde_json::to_value(&offer)? }),
+            serde_json::json!({
+                "offer": serde_json::to_value(&offer)?,
+                "taken_at": local_now(),
+            }),
         )?;
         self.relay_send_all(&offer.from, &take)
     }
@@ -5429,6 +5462,125 @@ impl Engine {
         ev("adaptor-recv", msg_type.into())
     }
 
+    /// Every incoming `abort`, routed by what `envelope.swap_id` resolves to:
+    ///  1. a v1 record → the legacy [`Self::recv`] path (advisory: flips the
+    ///     state only while neither HTLC is funded);
+    ///  2. a v2 adaptor record → flip to `Aborted` iff the sender is the
+    ///     pinned counterparty and OUR leg is unfunded (after funding the
+    ///     timelocks are the safety, same rule as v1);
+    ///  3. an offer WE served → resolve `offer_served:<offer_id>` to the swap
+    ///     record the take created and abort that (the taker cancels by OFFER
+    ///     id when the handshake died before it ever learned the swap id);
+    ///  4. a pending take WE sent → the maker rejected the take; drop it;
+    ///  5. none of ours → ignore (junk).
+    fn recv_abort(&self, envelope: &Envelope) -> Result<Option<TickEvent>> {
+        let event = |swap_id: &str, action: &str, detail: String| {
+            Ok(Some(TickEvent {
+                swap_id: swap_id.into(),
+                action: action.into(),
+                detail,
+            }))
+        };
+        messages::verify(envelope)?;
+        let reason = envelope.body["reason"]
+            .as_str()
+            .unwrap_or("unspecified")
+            .to_string();
+        // 1. v1 record (recv re-checks the pinned counterparty).
+        if self.store.get(&envelope.swap_id).is_ok() {
+            let rec = self.recv(envelope)?;
+            return event(
+                &rec.swap_id,
+                "recv",
+                format!("counterparty abort: {reason}"),
+            );
+        }
+        // 2. v2 record, directly by swap id.
+        if self.store.get_adaptor(&envelope.swap_id).is_ok() {
+            return self.abort_record_by_peer(&envelope.swap_id, &envelope.from, &reason);
+        }
+        // 3. An offer we served: the take-committed record carries a fresh
+        //    swap id the taker may never have learned (init lost) — the
+        //    served-marker maps offer id -> swap id.
+        if let Some(swap_id) = self
+            .store
+            .meta_get(&format!("offer_served:{}", envelope.swap_id))?
+        {
+            return self.abort_record_by_peer(&swap_id, &envelope.from, &reason);
+        }
+        // 4. A pending take of ours the maker is rejecting.
+        let pending: Vec<_> = self
+            .store
+            .pending_takes()?
+            .into_iter()
+            .filter(|(offer_id, offer_json)| {
+                *offer_id == envelope.swap_id
+                    && serde_json::from_str::<Envelope>(offer_json)
+                        .map(|offer| offer.from == envelope.from)
+                        .unwrap_or(false)
+            })
+            .collect();
+        if pending.is_empty() {
+            return Ok(None); // junk abort for nothing we know
+        }
+        for (offer_id, _) in pending {
+            self.store.remove_pending_take(&offer_id)?;
+        }
+        event(&envelope.swap_id, "take-failed", reason)
+    }
+
+    /// Abort the (v1 or v2) record `swap_id` on a counterparty's signed
+    /// abort: only the pinned counterparty is honored, and only while the
+    /// pre-funding gate holds (v1: neither HTLC funded; v2: our leg
+    /// unfunded) — funded swaps ignore aborts, timelocks are the safety.
+    fn abort_record_by_peer(
+        &self,
+        swap_id: &str,
+        sender: &str,
+        reason: &str,
+    ) -> Result<Option<TickEvent>> {
+        let event = |action: &str, detail: String| {
+            Ok(Some(TickEvent {
+                swap_id: swap_id.into(),
+                action: action.into(),
+                detail,
+            }))
+        };
+        if let Ok(mut rec) = self.store.get(swap_id) {
+            ensure!(
+                rec.counterparty_identity.as_deref() == Some(sender),
+                "abort signed by {sender} but counterparty pinned otherwise (spec §8.2)"
+            );
+            if rec.htlc_a_txid.is_none() && rec.htlc_b_txid.is_none() {
+                rec.state = State::Aborted;
+                self.store.put(&rec)?;
+                return event("counterparty-abort", reason.into());
+            }
+            return event(
+                "counterparty-abort",
+                "ignored (funded; timelocks protect)".into(),
+            );
+        }
+        let mut rec = self.store.get_adaptor(swap_id)?;
+        ensure!(
+            rec.counterparty_identity.as_deref() == Some(sender),
+            "abort signed by {sender} but counterparty pinned otherwise (spec §8.2)"
+        );
+        let our_leg_funded = match rec.role {
+            Role::Initiator => rec.funding_a_txid.is_some(),
+            Role::Participant => rec.funding_b_txid.is_some(),
+        };
+        if our_leg_funded {
+            return event(
+                "counterparty-abort",
+                "ignored (funded; timelocks protect)".into(),
+            );
+        }
+        rec.state = AdaptorState::Aborted;
+        self.store.put_adaptor(&rec)?;
+        event("counterparty-abort", reason.into())
+    }
+
     fn handle_relay_envelope(&self, envelope: &Envelope) -> Result<Option<TickEvent>> {
         let event = |swap_id: &str, action: &str, detail: String| {
             Ok(Some(TickEvent {
@@ -5442,6 +5594,29 @@ impl Engine {
             "take" => {
                 let me = self.identity()?;
                 let (offer, body) = crate::board::offer_from_take(envelope, &me)?;
+                // Staleness gate FIRST, before ANY side effect (serving,
+                // revoking, record creation): a take older than the taker's
+                // own pending-take prune window is a handshake the taker has
+                // certainly given up on — e.g. it sat queued while our node
+                // was unreachable. Acting on it would burn the offer and
+                // strand a record on a counterparty that stopped listening.
+                // Dropped SILENTLY (no reject envelope — the taker's card
+                // pruned itself long ago, nobody is listening); the local
+                // event is the only trace. `taken_at` is REQUIRED (this
+                // product has never shipped a take without it); a missing or
+                // unparsable stamp is treated as stale. A FUTURE stamp
+                // (taker clock ahead) saturates to age 0 = fresh, so honest
+                // clock skew within the 15-min window is tolerated.
+                let taken_at = envelope.body["taken_at"].as_u64().unwrap_or(0);
+                if local_now().saturating_sub(taken_at) >= PRE_FUNDING_TIMEOUT_SECS {
+                    return event(
+                        &offer.swap_id,
+                        "take-stale",
+                        format!(
+                            "dropped a take older than {PRE_FUNDING_TIMEOUT_SECS}s (taker gave up); offer stays live"
+                        ),
+                    );
+                }
                 // Withdrawn or expired offers are refused even though the
                 // taker holds our valid signature — revocation is enforced
                 // here, not just on the board listing.
@@ -5568,33 +5743,9 @@ impl Engine {
                 self.relay_send_all(&envelope.from, &accept)?;
                 event(&swap_id, "init->accept", format!("offer {offer_id}"))
             }
-            // A maker telling us our take was rejected, before any swap
-            // record exists: clean up the pending take so the user is not
-            // left waiting on a dead handshake.
-            "abort" if self.store.get(&envelope.swap_id).is_err() => {
-                let pending: Vec<_> = self
-                    .store
-                    .pending_takes()?
-                    .into_iter()
-                    .filter(|(offer_id, offer_json)| {
-                        *offer_id == envelope.swap_id
-                            && serde_json::from_str::<Envelope>(offer_json)
-                                .map(|offer| offer.from == envelope.from)
-                                .unwrap_or(false)
-                    })
-                    .collect();
-                if pending.is_empty() {
-                    return Ok(None); // junk abort for nothing we know
-                }
-                for (offer_id, _) in pending {
-                    self.store.remove_pending_take(&offer_id)?;
-                }
-                let reason = envelope.body["reason"]
-                    .as_str()
-                    .unwrap_or("rejected")
-                    .to_string();
-                event(&envelope.swap_id, "take-failed", reason)
-            }
+            // Every abort — take rejections, counterparty cancels (by swap
+            // id OR by offer id), v1 and v2 — routes through one resolver.
+            "abort" => self.recv_abort(envelope),
             // v2 (pact-htlc-v2) handshake messages route to the adaptor
             // autopilot; the swap_id lives in the adaptor_swaps table.
             "funding_ready" | "nonces" | "partial_sigs" => {
@@ -5608,12 +5759,8 @@ impl Engine {
             // Protocol messages: apply, then keep the ball rolling. `accept`
             // is shared between v1 and v2 (disambiguated by which swap table
             // holds the swap_id).
-            "accept" | "funded" | "redeemed" | "abort" => {
+            "accept" | "funded" | "redeemed" => {
                 if self.store.get_adaptor(&envelope.swap_id).is_ok() {
-                    if envelope.msg_type == "abort" {
-                        return event(&envelope.swap_id, "recv", "abort".into());
-                        // advisory; timelocks protect
-                    }
                     let rec = self.recv_adaptor(envelope)?;
                     let counterparty = rec
                         .counterparty_identity
@@ -5784,17 +5931,71 @@ impl Engine {
         );
         rec.state = State::Aborted;
         self.store.put(&rec)?;
+        // Best-effort notify — an explicit user cancel is the ONE case that
+        // sends an abort envelope (automatic timeouts stay silent; the
+        // counterparty's own pre-funding clock clears their side). Not gated
+        // on board_url: relay_send_all fans out over whatever boards exist.
         if let Some(counterparty) = &rec.counterparty_identity {
-            if self.board_url.is_some() {
-                let abort = self.signed_envelope(
-                    "abort",
-                    &rec.swap_id,
-                    serde_json::json!({ "reason": reason }),
-                )?;
-                let _ = self.relay_send_all(counterparty, &abort);
-            }
+            let abort = self.signed_envelope(
+                "abort",
+                &rec.swap_id,
+                serde_json::json!({ "reason": reason }),
+            )?;
+            let _ = self.relay_send_all(counterparty, &abort);
         }
         Ok(rec)
+    }
+
+    /// v2 twin of [`Self::abort`]: back out of an adaptor swap while OUR leg
+    /// is still unfunded. Once our funding is on-chain the timelocked refund
+    /// is the only safe exit, so this refuses. Persisted nonce sessions are
+    /// deliberately KEPT — the store's overwrite refusal is what guarantees
+    /// an aborted swap can never sign again.
+    pub fn adaptor_abort(&self, swap: &str, reason: &str) -> Result<AdaptorSwapRecord> {
+        let mut rec = self.store.get_adaptor(swap)?;
+        let our_leg_funded = match rec.role {
+            Role::Initiator => rec.funding_a_txid.is_some(),
+            Role::Participant => rec.funding_b_txid.is_some(),
+        };
+        ensure!(
+            !our_leg_funded,
+            "cannot abort: our leg is funded — use the timelocked refund instead"
+        );
+        rec.state = AdaptorState::Aborted;
+        self.store.put_adaptor(&rec)?;
+        if let Some(counterparty) = &rec.counterparty_identity {
+            let abort = self.signed_envelope(
+                "abort",
+                &rec.swap_id,
+                serde_json::json!({ "reason": reason }),
+            )?;
+            let _ = self.relay_send_all(counterparty, &abort);
+        }
+        Ok(rec)
+    }
+
+    /// Back out of a take we sent that the maker never answered — the UI's
+    /// Cancel on an "initiating" pre-swap. Removes the pending take and
+    /// best-effort relays an `abort` keyed by the OFFER id; the maker
+    /// resolves that to its swap record via the `offer_served` marker
+    /// ([`Self::recv_abort`]). The maker's own pre-funding timeout is the
+    /// fallback when the envelope never arrives.
+    pub fn cancel_pending_take(&self, offer_id: &str) -> Result<()> {
+        let (_, offer_json) = self
+            .store
+            .pending_takes()?
+            .into_iter()
+            .find(|(id, _)| id == offer_id)
+            .with_context(|| format!("no pending take for offer {offer_id}"))?;
+        let offer: Envelope = serde_json::from_str(&offer_json)?;
+        self.store.remove_pending_take(offer_id)?;
+        let abort = self.signed_envelope(
+            "abort",
+            offer_id,
+            serde_json::json!({ "reason": "taker cancelled" }),
+        )?;
+        let _ = self.relay_send_all(&offer.from, &abort);
+        Ok(())
     }
 }
 
@@ -6954,5 +7155,348 @@ mod tests {
         let err = engine.take_offer_slip(&slip).unwrap_err().to_string();
         assert!(err.contains("our own"), "{err}");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // ---- handshake cancel + staleness (the 2026-07-03 stuck-`created`
+    // incident: a stale take burned the offer and stranded an uncancelable
+    // v2 record; see HANDSHAKE_CANCEL_FIX_PLAN.md) ----
+
+    /// A fresh v2 record on `engine` (initiator side), pre-funding.
+    fn v2_record(engine: &Engine) -> crate::store::AdaptorSwapRecord {
+        let now = local_now() as u32;
+        let (rec, _init) = engine
+            .adaptor_init(
+                Network::Regtest,
+                ("btcx".into(), 50_000_000),
+                ("btc".into(), 100_000),
+                now + 40_000,
+                now + 20_000,
+            )
+            .unwrap();
+        rec
+    }
+
+    #[test]
+    fn adaptor_abort_flips_prefunding_and_refuses_after_our_funding() {
+        let (alice, ad) = engine_with("v2-abort-alice", None);
+        let (bob, bd) = engine_with("v2-abort-bob", None);
+
+        // Initiator, nothing funded → abort succeeds and persists.
+        let rec = v2_record(&alice);
+        let aborted = alice.adaptor_abort(&rec.swap_id, "test").unwrap();
+        assert_eq!(aborted.state, AdaptorState::Aborted);
+        assert_eq!(
+            alice.store.get_adaptor(&rec.swap_id).unwrap().state,
+            AdaptorState::Aborted
+        );
+
+        // Initiator with leg A funded → refused (refund is the only exit).
+        let mut rec = v2_record(&alice);
+        rec.funding_a_txid = Some("aa".repeat(32));
+        alice.store.put_adaptor(&rec).unwrap();
+        let err = alice
+            .adaptor_abort(&rec.swap_id, "x")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("funded"), "{err}");
+
+        // Participant: gate is OUR leg (B) — the counterparty's leg-A funding
+        // does not block our abort (we lose nothing by walking away).
+        let (_arec, init) = alice
+            .adaptor_init(
+                Network::Regtest,
+                ("btcx".into(), 1_000),
+                ("btc".into(), 500),
+                local_now() as u32 + 40_000,
+                local_now() as u32 + 20_000,
+            )
+            .unwrap();
+        let (mut brec, _accept) = bob.adaptor_accept(&init).unwrap();
+        brec.funding_a_txid = Some("bb".repeat(32));
+        bob.store.put_adaptor(&brec).unwrap();
+        assert_eq!(
+            bob.adaptor_abort(&brec.swap_id, "x").unwrap().state,
+            AdaptorState::Aborted
+        );
+        // …but not once WE funded leg B.
+        let (_arec2, init2) = alice
+            .adaptor_init(
+                Network::Regtest,
+                ("btcx".into(), 2_000),
+                ("btc".into(), 900),
+                local_now() as u32 + 40_000,
+                local_now() as u32 + 20_000,
+            )
+            .unwrap();
+        let (mut brec2, _accept2) = bob.adaptor_accept(&init2).unwrap();
+        brec2.funding_b_txid = Some("cc".repeat(32));
+        bob.store.put_adaptor(&brec2).unwrap();
+        assert!(bob.adaptor_abort(&brec2.swap_id, "x").is_err());
+
+        std::fs::remove_dir_all(&ad).ok();
+        std::fs::remove_dir_all(&bd).ok();
+    }
+
+    #[test]
+    fn recv_abort_flips_v2_only_from_pinned_counterparty_and_only_prefunding() {
+        let (alice, ad) = engine_with("v2-recv-abort-alice", None);
+        let (bob, bd) = engine_with("v2-recv-abort-bob", None);
+        let (carol, cd) = engine_with("v2-recv-abort-carol", None);
+        let bob_id = bob.identity().unwrap();
+
+        // Pinned counterparty aborts a pre-funding record → flips.
+        let mut rec = v2_record(&alice);
+        rec.counterparty_identity = Some(bob_id.clone());
+        alice.store.put_adaptor(&rec).unwrap();
+        let abort = bob
+            .signed_envelope(
+                "abort",
+                &rec.swap_id,
+                serde_json::json!({ "reason": "bye" }),
+            )
+            .unwrap();
+        let ev = alice.recv_abort(&abort).unwrap().unwrap();
+        assert_eq!(ev.action, "counterparty-abort");
+        assert_eq!(
+            alice.store.get_adaptor(&rec.swap_id).unwrap().state,
+            AdaptorState::Aborted
+        );
+
+        // A third party's signed abort is refused and flips nothing.
+        let mut rec = v2_record(&alice);
+        rec.counterparty_identity = Some(bob_id.clone());
+        alice.store.put_adaptor(&rec).unwrap();
+        let forged = carol
+            .signed_envelope(
+                "abort",
+                &rec.swap_id,
+                serde_json::json!({ "reason": "hah" }),
+            )
+            .unwrap();
+        assert!(alice.recv_abort(&forged).is_err());
+        assert_eq!(
+            alice.store.get_adaptor(&rec.swap_id).unwrap().state,
+            AdaptorState::Created
+        );
+
+        // Once our leg is funded the abort is advisory only.
+        let mut rec = v2_record(&alice);
+        rec.counterparty_identity = Some(bob_id);
+        rec.funding_a_txid = Some("dd".repeat(32));
+        alice.store.put_adaptor(&rec).unwrap();
+        let abort = bob
+            .signed_envelope(
+                "abort",
+                &rec.swap_id,
+                serde_json::json!({ "reason": "bye" }),
+            )
+            .unwrap();
+        let ev = alice.recv_abort(&abort).unwrap().unwrap();
+        assert!(ev.detail.contains("ignored"), "{}", ev.detail);
+        assert_eq!(
+            alice.store.get_adaptor(&rec.swap_id).unwrap().state,
+            AdaptorState::Created
+        );
+
+        std::fs::remove_dir_all(&ad).ok();
+        std::fs::remove_dir_all(&bd).ok();
+        std::fs::remove_dir_all(&cd).ok();
+    }
+
+    #[test]
+    fn recv_abort_resolves_offer_id_via_served_marker() {
+        // The taker may never have learned the swap id (its pending take
+        // pruned before our init arrived) — it cancels by OFFER id and the
+        // served marker maps that to the record the take created.
+        let (alice, ad) = engine_with("v2-offer-abort-alice", None);
+        let (bob, bd) = engine_with("v2-offer-abort-bob", None);
+        let (carol, cd) = engine_with("v2-offer-abort-carol", None);
+        let bob_id = bob.identity().unwrap();
+
+        let mut rec = v2_record(&alice);
+        rec.counterparty_identity = Some(bob_id);
+        alice.store.put_adaptor(&rec).unwrap();
+        alice
+            .store
+            .meta_set("offer_served:offer-Z", &rec.swap_id)
+            .unwrap();
+
+        // Wrong sender first: refused, nothing flips.
+        let forged = carol
+            .signed_envelope("abort", "offer-Z", serde_json::json!({ "reason": "hah" }))
+            .unwrap();
+        assert!(alice.recv_abort(&forged).is_err());
+        assert_eq!(
+            alice.store.get_adaptor(&rec.swap_id).unwrap().state,
+            AdaptorState::Created
+        );
+
+        // The pinned taker cancelling by offer id aborts the record.
+        let abort = bob
+            .signed_envelope(
+                "abort",
+                "offer-Z",
+                serde_json::json!({ "reason": "gave up" }),
+            )
+            .unwrap();
+        let ev = alice.recv_abort(&abort).unwrap().unwrap();
+        assert_eq!(ev.action, "counterparty-abort");
+        assert_eq!(ev.swap_id, rec.swap_id);
+        assert_eq!(
+            alice.store.get_adaptor(&rec.swap_id).unwrap().state,
+            AdaptorState::Aborted
+        );
+
+        std::fs::remove_dir_all(&ad).ok();
+        std::fs::remove_dir_all(&bd).ok();
+        std::fs::remove_dir_all(&cd).ok();
+    }
+
+    #[test]
+    fn cancel_pending_take_removes_the_take() {
+        let (engine, dir) = engine_with("cancel-take", None);
+        engine
+            .store
+            .put_pending_take("offer-A", &pending_offer_from("some-maker"), 1)
+            .unwrap();
+        // The relay notify is best-effort (no boards here) — the local
+        // removal must succeed regardless.
+        engine.cancel_pending_take("offer-A").unwrap();
+        assert!(engine.store.pending_takes().unwrap().is_empty());
+        // Cancelling a take we don't hold errors.
+        assert!(engine.cancel_pending_take("offer-A").is_err());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn v2_prefunding_timeout_aborts_silently() {
+        let (alice, dir) = engine_with("v2-timeout", None);
+        let stale = local_now() - PRE_FUNDING_TIMEOUT_SECS - 5;
+
+        // Created + past the window + nothing funded → aborted by the tick.
+        let mut rec = v2_record(&alice);
+        rec.created_at = stale;
+        alice.store.put_adaptor(&rec).unwrap();
+        let ev = alice.adaptor_tick_one(&rec).unwrap().unwrap();
+        assert_eq!(ev.action, "abort-timeout");
+        assert_eq!(
+            alice.store.get_adaptor(&rec.swap_id).unwrap().state,
+            AdaptorState::Aborted
+        );
+
+        // NoncesExchanged is still strictly pre-funding → also covered.
+        let mut rec = v2_record(&alice);
+        rec.state = AdaptorState::NoncesExchanged;
+        rec.created_at = stale;
+        alice.store.put_adaptor(&rec).unwrap();
+        let ev = alice.adaptor_tick_one(&rec).unwrap().unwrap();
+        assert_eq!(ev.action, "abort-timeout");
+
+        // created_at == 0 (pre-timestamp record) must NOT read as infinitely
+        // old: the tick leaves it alone.
+        let mut rec = v2_record(&alice);
+        rec.created_at = 0;
+        alice.store.put_adaptor(&rec).unwrap();
+        assert!(alice.adaptor_tick_one(&rec).unwrap().is_none());
+        assert_eq!(
+            alice.store.get_adaptor(&rec.swap_id).unwrap().state,
+            AdaptorState::Created
+        );
+
+        // A funding pointer disarms the timeout (belt-and-braces guard).
+        let mut rec = v2_record(&alice);
+        rec.created_at = stale;
+        rec.funding_a_txid = Some("ee".repeat(32));
+        alice.store.put_adaptor(&rec).unwrap();
+        let _ = alice.adaptor_tick_one(&rec); // may err (no backends here)
+        assert_ne!(
+            alice.store.get_adaptor(&rec.swap_id).unwrap().state,
+            AdaptorState::Aborted
+        );
+
+        // Signed is excluded — funding may already be in flight there.
+        let mut rec = v2_record(&alice);
+        rec.state = AdaptorState::Signed;
+        rec.created_at = stale;
+        alice.store.put_adaptor(&rec).unwrap();
+        let _ = alice.adaptor_tick_one(&rec); // may err (no backends here)
+        assert_ne!(
+            alice.store.get_adaptor(&rec.swap_id).unwrap().state,
+            AdaptorState::Aborted
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn stale_take_is_dropped_before_any_side_effect() {
+        let (maker, md) = engine_with("stale-take-maker", None);
+        let (taker, td) = engine_with("stale-take-taker", None);
+
+        // A real signed offer of ours (the slip codec hands back the envelope).
+        let slip = maker
+            .make_private_offer(
+                Network::Regtest,
+                ("btcx".into(), 100),
+                ("btc".into(), 50),
+                1_700_000_002,
+                1_700_000_001,
+                None,
+                None,
+            )
+            .unwrap();
+        let offer = pact_proto::slip::decode_slip(&slip).unwrap();
+        let offer_id = offer.swap_id.clone();
+        let take_with = |taken_at: serde_json::Value| {
+            taker
+                .signed_envelope(
+                    "take",
+                    &offer_id,
+                    serde_json::json!({
+                        "offer": serde_json::to_value(&offer).unwrap(),
+                        "taken_at": taken_at,
+                    }),
+                )
+                .unwrap()
+        };
+        let no_side_effects = |maker: &Engine| {
+            assert!(maker
+                .store
+                .meta_get(&format!("offer_served:{offer_id}"))
+                .unwrap()
+                .is_none());
+            assert!(maker
+                .store
+                .meta_get(&format!("offer_revoked:{offer_id}"))
+                .unwrap()
+                .is_none());
+            assert!(maker.store.list().unwrap().is_empty());
+            assert!(maker.store.list_adaptor().unwrap().is_empty());
+        };
+
+        // Older than the taker's own prune window → dropped silently, the
+        // offer is NOT burned, no record is created.
+        let stale = take_with(serde_json::json!(
+            local_now() - PRE_FUNDING_TIMEOUT_SECS - 5
+        ));
+        let ev = maker.handle_relay_envelope(&stale).unwrap().unwrap();
+        assert_eq!(ev.action, "take-stale");
+        no_side_effects(&maker);
+
+        // A take without the (required) stamp is treated as stale.
+        let unstamped = take_with(serde_json::Value::Null);
+        let ev = maker.handle_relay_envelope(&unstamped).unwrap().unwrap();
+        assert_eq!(ev.action, "take-stale");
+        no_side_effects(&maker);
+
+        // A fresh take gets PAST the gate: with no chain backends configured
+        // here it then fails on chain access — but is NOT "take-stale", and
+        // still nothing was burned before that failure.
+        let fresh = take_with(serde_json::json!(local_now()));
+        assert!(maker.handle_relay_envelope(&fresh).is_err());
+        no_side_effects(&maker);
+
+        std::fs::remove_dir_all(&md).ok();
+        std::fs::remove_dir_all(&td).ok();
     }
 }

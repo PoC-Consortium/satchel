@@ -681,10 +681,22 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 let log_dir = r.data_dir().join("logs");
                 let engine = r.active()?;
                 // v1 record first (scrub its preimage); else the v2 adaptor
-                // record (stores no secret — `t` is never persisted).
+                // record (stores no secret — `t` is never persisted); else an
+                // "initiating" pre-swap — dump the pending take (the signed
+                // offer we took carries no secret either).
                 let record = match engine.store.get(&id) {
                     Ok(rec) => scrub_secrets(serde_json::to_value(&rec)?),
-                    Err(_) => serde_json::to_value(engine.store.get_adaptor(&id)?)?,
+                    Err(_) => match engine.store.get_adaptor(&id) {
+                        Ok(rec) => serde_json::to_value(&rec)?,
+                        Err(_) => {
+                            let take = engine
+                                .list_pending_takes()?
+                                .into_iter()
+                                .find(|t| t.offer_id == id)
+                                .with_context(|| format!("unknown swap {id}"))?;
+                            serde_json::to_value(&take)?
+                        }
+                    },
                 };
                 Ok(json!({
                     "swap_id": id,
@@ -801,8 +813,23 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             let reason = p
                 .opt_str(1, "reason")
                 .unwrap_or_else(|| "user aborted".into());
-            let record = blocking(app, move |e| e.abort(&id, &reason)).await?;
-            Ok(json!({ "record": serde_json::to_value(&record)? }))
+            // One Cancel for every card kind the UI shows: a v1 record, a v2
+            // adaptor record, or a still-unanswered pending take (there the
+            // id is the offer id; cancel = drop it + tell the maker).
+            let result = blocking(app, move |e| {
+                if e.store.get(&id).is_ok() {
+                    let record = e.abort(&id, &reason)?;
+                    return Ok(json!({ "record": serde_json::to_value(&record)? }));
+                }
+                if e.store.get_adaptor(&id).is_ok() {
+                    let record = e.adaptor_abort(&id, &reason)?;
+                    return Ok(json!({ "record": serde_json::to_value(&record)? }));
+                }
+                e.cancel_pending_take(&id)?;
+                Ok(json!({ "cancelled_pending_take": id }))
+            })
+            .await?;
+            Ok(result)
         }
         "tick" => {
             // Mirror the scheduler: move Nostr mail/offers into the local
