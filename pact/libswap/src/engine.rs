@@ -2136,6 +2136,40 @@ impl Engine {
         }
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let p = self.adaptor_params(rec)?;
+
+        // Rescue / chain-watch rediscovery (#54): the v2 tick is otherwise
+        // pointer-based (pointers arrive via `funding_ready` messages). A node
+        // restored from its seed alone — snapshot taken at `Signed`, before any
+        // funding — has NEITHER pointer, so without this it could not even refund
+        // a leg it already funded (stranded funds). While `Signed`, rediscover any
+        // missing pointer by its derived leg script before deriving `both_funded`.
+        // Idempotent: `find_funding` matches script+amount and a missing output
+        // just leaves the pointer `None`; once found it is persisted and skipped.
+        let mut owned = rec.clone();
+        if owned.state == Signed {
+            if owned.funding_a_txid.is_none() {
+                let spk_a = p.leg_a(&secp)?.script_pubkey(&secp)?;
+                if let Some((op, info)) = self.backend(&owned.chain_a)?.find_funding(&spk_a)? {
+                    if info.value_sat == owned.amount_a {
+                        owned.funding_a_txid = Some(op.txid.to_string());
+                        owned.funding_a_vout = Some(op.vout);
+                        self.store.put_adaptor(&owned)?;
+                    }
+                }
+            }
+            if owned.funding_b_txid.is_none() {
+                let spk_b = p.leg_b(&secp)?.script_pubkey(&secp)?;
+                if let Some((op, info)) = self.backend(&owned.chain_b)?.find_funding(&spk_b)? {
+                    if info.value_sat == owned.amount_b {
+                        owned.funding_b_txid = Some(op.txid.to_string());
+                        owned.funding_b_vout = Some(op.vout);
+                        self.store.put_adaptor(&owned)?;
+                    }
+                }
+            }
+        }
+        let rec = &owned;
+
         let both_funded = rec.funding_a_txid.is_some() && rec.funding_b_txid.is_some();
         let outpoint = |txid: &Option<String>, vout: Option<u32>| -> Result<OutPoint> {
             Ok(OutPoint {
@@ -2258,6 +2292,32 @@ impl Engine {
                 Ok(None)
             }
             Role::Participant => {
+                // Rescue self-heal (#54): a taker restored at `Signed` has no
+                // pre-built leg B (it is built by `adaptor_fund`, after the Signed
+                // snapshot). If rediscovery above found no leg-B output either, we
+                // never funded — rebuild it now so the two-phase broadcast below can
+                // proceed. Idempotent: `adaptor_build_leg_b` re-adopts a recorded
+                // pointer or an existing on-chain output, never double-funds. Gated
+                // on the §7.4 fund deadline so we don't reserve wallet inputs for a
+                // leg we could no longer safely broadcast.
+                if rec.state == Signed
+                    && !rec.funding_b_broadcast
+                    && rec.funding_b_tx_hex.is_none()
+                    && rec.funding_b_txid.is_none()
+                {
+                    let net = rec.chain_b.network;
+                    let (fund_margin, _, _) = action_margins(net);
+                    let fundable = match self.backend(&rec.chain_b)?.tip_median_time() {
+                        Ok(mtp) => {
+                            action_safe(deadline_clock(net, local_now(), mtp), fund_margin, rec.t2)
+                        }
+                        Err(_) => true, // clock hiccup: don't block a still-fundable swap
+                    };
+                    if fundable {
+                        self.adaptor_build_leg_b(&rec.swap_id)?;
+                        return ev("adaptor-build-b", "rebuilt leg B (rescue self-heal)".into());
+                    }
+                }
                 // CRITICAL two-phase broadcast (spec v2 §7): once the swap is
                 // `Signed` (we hold a verified σ_A) AND leg A is verified on-chain
                 // n_a-deep, broadcast our pre-built leg B. Until BOTH hold, leg B
@@ -2265,6 +2325,23 @@ impl Engine {
                 // certain it can claim leg A.
                 if rec.state == Signed && !rec.funding_b_broadcast {
                     if let Some(hex) = rec.funding_b_tx_hex.as_deref() {
+                        // §7.4 fund deadline (mirrors the manual `adaptor_fund`
+                        // gate): never broadcast leg B within `fund_margin` of T2.
+                        // This is the load-bearing gate for a RESCUED taker — a
+                        // Signed snapshot re-adopted long after negotiation must
+                        // NOT auto-commit leg B into a window too tight for Alice
+                        // to redeem: leg B was never broadcast, so skipping costs
+                        // nothing (Alice refunds leg A), while funding late risks
+                        // Bob's funds. Conservative: an unreadable clock does not
+                        // gate (a transient node hiccup must not strand a swap).
+                        let net = rec.chain_b.network;
+                        let (fund_margin, _, _) = action_margins(net);
+                        if let Ok(mtp) = self.backend(&rec.chain_b)?.tip_median_time() {
+                            let now = deadline_clock(net, local_now(), mtp);
+                            if !action_safe(now, fund_margin, rec.t2) {
+                                return Ok(None); // too late to fund leg B safely
+                            }
+                        }
                         if !self.adaptor_leg_a_confirmed(rec)? {
                             return Ok(None); // wait for leg A before committing leg B
                         }
@@ -4245,6 +4322,43 @@ impl Engine {
                 if rec.created_at > 0
                     && local_now().saturating_sub(rec.created_at) >= PRE_FUNDING_TIMEOUT_SECS =>
             {
+                // Rescue safety (#54): a node restored from the accept snapshot is
+                // `Accepted` with NO funding pointer even when our leg is already
+                // funded on chain. `abort()` assumes nothing is committed (its
+                // guard is pointer-based), so aborting here would strand a funded
+                // leg. Rediscover our own leg by its derivable script FIRST: if
+                // it is on chain, adopt the pointer and advance to the funded
+                // state so the refund/redeem path — not a false abort — governs
+                // the committed funds. Only a genuinely unfunded, stale handshake
+                // aborts. (Participant `Accepted` is handled by an earlier arm.)
+                let our_leg = match rec.role {
+                    Role::Initiator => "a",
+                    Role::Participant => "b",
+                };
+                if let Some((outpoint, _confs)) = self.locate_funding(rec, our_leg)? {
+                    let mut updated = rec.clone();
+                    match rec.role {
+                        Role::Initiator => {
+                            updated.htlc_a_txid = Some(outpoint.txid.to_string());
+                            updated.htlc_a_vout = Some(outpoint.vout);
+                            updated.state = State::FundedA;
+                        }
+                        Role::Participant => {
+                            updated.htlc_b_txid = Some(outpoint.txid.to_string());
+                            updated.htlc_b_vout = Some(outpoint.vout);
+                            updated.htlc_b_height = Some(self.backend(&rec.chain_b)?.tip_height()?);
+                            updated.state = State::FundedB;
+                        }
+                    }
+                    self.store.put(&updated)?;
+                    return event(
+                        "rescue-adopt-funding",
+                        format!(
+                            "adopted our funded leg {our_leg}; state {:?}",
+                            updated.state
+                        ),
+                    );
+                }
                 self.abort(&rec.swap_id, "pre-funding handshake timed out")?;
                 event(
                     "abort-timeout",
