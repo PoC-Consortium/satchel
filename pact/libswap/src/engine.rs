@@ -2192,6 +2192,7 @@ impl Engine {
             let mut dead = rec.clone();
             dead.state = Aborted;
             self.store.put_adaptor(&dead)?;
+            let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
             return ev(
                 "abort-timeout",
                 format!("no funding within {PRE_FUNDING_TIMEOUT_SECS}s; aborted"),
@@ -5949,6 +5950,7 @@ impl Engine {
             if rec.htlc_a_txid.is_none() && rec.htlc_b_txid.is_none() {
                 rec.state = State::Aborted;
                 self.store.put(&rec)?;
+                let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
                 return event("counterparty-abort", reason.into());
             }
             return event(
@@ -5973,6 +5975,7 @@ impl Engine {
         }
         rec.state = AdaptorState::Aborted;
         self.store.put_adaptor(&rec)?;
+        let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
         event("counterparty-abort", reason.into())
     }
 
@@ -6327,10 +6330,10 @@ impl Engine {
         rec.state = State::Aborted;
         self.store.put(&rec)?;
         let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
-        // Best-effort notify — an explicit user cancel is the ONE case that
-        // sends an abort envelope (automatic timeouts stay silent; the
-        // counterparty's own pre-funding clock clears their side). Not gated
-        // on board_url: relay_send_all fans out over whatever boards exist.
+                                                   // Best-effort notify — an explicit user cancel is the ONE case that
+                                                   // sends an abort envelope (automatic timeouts stay silent; the
+                                                   // counterparty's own pre-funding clock clears their side). Not gated
+                                                   // on board_url: relay_send_all fans out over whatever boards exist.
         if let Some(counterparty) = &rec.counterparty_identity {
             let abort = self.signed_envelope(
                 "abort",
@@ -6359,6 +6362,7 @@ impl Engine {
         );
         rec.state = AdaptorState::Aborted;
         self.store.put_adaptor(&rec)?;
+        let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
         if let Some(counterparty) = &rec.counterparty_identity {
             let abort = self.signed_envelope(
                 "abort",
