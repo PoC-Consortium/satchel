@@ -441,7 +441,19 @@ impl Store {
     /// Allocate the next BIP32 swap index (monotonic, never reused —
     /// spec §4.2 counts aborted attempts too).
     pub fn next_swap_index(&self) -> Result<u32> {
-        let current: u32 = self
+        let current = self.peek_next_swap_index()?;
+        self.conn.execute(
+            "INSERT INTO meta (key, value) VALUES ('next_swap_index', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = ?1",
+            params![(current + 1).to_string()],
+        )?;
+        Ok(current)
+    }
+
+    /// Read the next swap index WITHOUT allocating it — used to stamp the
+    /// counter into a rescue snapshot (issue #54).
+    pub fn peek_next_swap_index(&self) -> Result<u32> {
+        Ok(self
             .conn
             .query_row(
                 "SELECT value FROM meta WHERE key = 'next_swap_index'",
@@ -449,13 +461,23 @@ impl Store {
                 |row| row.get::<_, String>(0),
             )
             .map(|v| v.parse().unwrap_or(0))
-            .unwrap_or(0);
-        self.conn.execute(
-            "INSERT INTO meta (key, value) VALUES ('next_swap_index', ?1)
-             ON CONFLICT(key) DO UPDATE SET value = ?1",
-            params![(current + 1).to_string()],
-        )?;
-        Ok(current)
+            .unwrap_or(0))
+    }
+
+    /// Raise the next-swap-index counter to at least `n` (never lowers it) — on
+    /// rescue this restores the high-water mark from the backed-up snapshots so a
+    /// fresh machine never reissues an index a completed swap already used (which
+    /// would reuse HTLC/adaptor keys). Idempotent.
+    pub fn set_next_swap_index_at_least(&self, n: u32) -> Result<()> {
+        let current = self.peek_next_swap_index()?;
+        if n > current {
+            self.conn.execute(
+                "INSERT INTO meta (key, value) VALUES ('next_swap_index', ?1)
+                 ON CONFLICT(key) DO UPDATE SET value = ?1",
+                params![n.to_string()],
+            )?;
+        }
+        Ok(())
     }
 
     pub fn put(&self, record: &SwapRecord) -> Result<()> {

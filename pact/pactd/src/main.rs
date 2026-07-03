@@ -244,7 +244,35 @@ fn kick_nostr(app: &App) {
         if let Err(err) = nostr_pass(&app, &svc).await {
             tracing::warn!("nostr: on-load pass failed: {err:#}");
         }
+        // Seed-only rescue (#54): adopt any in-flight swap this machine is
+        // missing from our own encrypted relay snapshots. Idempotent — only
+        // swaps with no local record are added — so running it on every
+        // load/unlock is safe. Best-effort: never blocks the calling RPC.
+        match restore_from_relay(&app).await {
+            Ok((n, _)) if n > 0 => {
+                tracing::info!(count = n, "rescue: restored swaps from relay snapshots")
+            }
+            Ok(_) => {}
+            Err(err) => tracing::warn!("rescue: relay restore failed: {err:#}"),
+        }
     });
+}
+
+/// Fetch our encrypted-to-self rescue snapshots from the relays and adopt any
+/// swap we don't already have locally (#54). Our identity xonly and the adopt
+/// are read/written under the registry lock; the relay fetch is lock-free in
+/// between. Returns `(restored, seen)`. Errors only when the seed is
+/// locked/unreadable or no relay transport is configured.
+async fn restore_from_relay(app: &App) -> Result<(usize, usize)> {
+    let Some(svc) = app.nostr.clone() else {
+        bail!("nostr transport not configured — seed-only rescue needs at least one relay");
+    };
+    let me = blocking(app, |e| Ok(e.store.seed()?.identity_pubkey()?.to_string())).await?;
+    let blobs = svc.fetch_my_snapshots(&me).await;
+    if blobs.is_empty() {
+        return Ok((0, 0));
+    }
+    blocking_mut(app, move |e| e.rescue_from_blobs(&blobs)).await
 }
 
 // ---- JSON-RPC plumbing -------------------------------------------------
@@ -893,6 +921,15 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 .collect();
             Ok(json!({ "relays": relays }))
         }
+        // Seed-only rescue (#54): re-fetch our encrypted-to-self swap snapshots
+        // from the relays and adopt any in-flight swap this machine is missing
+        // (fresh install / wiped data dir, same seed). Idempotent — swaps we
+        // already hold locally are left untouched. The scheduler then drives the
+        // rescued swaps to completion/refund via chain-watch.
+        "restorefromrelay" => {
+            let (restored, seen) = restore_from_relay(app).await?;
+            Ok(json!({ "restored": restored, "seen": seen }))
+        }
         "boardpostoffer" => {
             let give = parse_coin_amount(&p.str(0, "give")?)?;
             let get = parse_coin_amount(&p.str(1, "get")?)?;
@@ -1289,6 +1326,7 @@ async fn main() -> Result<()> {
             // active — so offers soft-de-listed on the last clean close come back
             // immediately on restart (not after up to a full REFRESH_SECS).
             let mut readvertised = false;
+            let mut rescued = false;
             loop {
                 // Poll-then-sleep: run a pass immediately (no cold-start gap for
                 // an already-active merchant), then wait `interval` between
@@ -1319,6 +1357,28 @@ async fn main() -> Result<()> {
                     if let Some(svc) = &scheduler.nostr {
                         if let Err(err) = nostr_pass(&scheduler, svc).await {
                             tracing::error!("nostr pass failed: {err:#}");
+                        }
+                    }
+                    // One-time on boot, once a merchant with a readable seed is
+                    // active: adopt any in-flight swap this machine is missing
+                    // from our own encrypted relay snapshots (#54). Idempotent —
+                    // only swaps with no local record are added, so re-running is
+                    // harmless. Covers the headless/CLI boot with no loadmerchant
+                    // RPC; the UI path also kicks it via kick_nostr on load/unlock.
+                    if !rescued {
+                        match restore_from_relay(&scheduler).await {
+                            Ok((n, _)) if n > 0 => {
+                                rescued = true;
+                                tracing::info!(
+                                    count = n,
+                                    "rescue: restored swaps from relay snapshots on boot"
+                                );
+                            }
+                            // Only latch `rescued` once the seed was actually
+                            // readable (a locked seed returns an error): keep
+                            // retrying each tick until unlock makes rescue possible.
+                            Ok(_) => rescued = true,
+                            Err(err) => tracing::debug!("rescue: boot restore deferred: {err:#}"),
                         }
                     }
                     match blocking(&scheduler, |e| {

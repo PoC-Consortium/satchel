@@ -256,6 +256,35 @@ impl NostrService {
         out
     }
 
+    /// One-shot fetch of OUR encrypted-to-self rescue snapshots (#54). Returns
+    /// the sealed `PACTSEALED1:` blobs from every snapshot event we authored, for
+    /// the engine to decrypt and adopt. Best-effort: a filter/fetch error or an
+    /// unverifiable event yields fewer (or no) blobs rather than failing.
+    pub async fn fetch_my_snapshots(&self, me_xonly: &str) -> Vec<String> {
+        let filter = match pn::my_snapshots_filter(me_xonly) {
+            Ok(f) => f,
+            Err(err) => {
+                tracing::warn!("nostr: snapshot filter: {err:#}");
+                return Vec::new();
+            }
+        };
+        let events = match self.fetch(filter).await {
+            Ok(e) => e,
+            Err(err) => {
+                tracing::warn!("nostr: fetch snapshots: {err:#}");
+                return Vec::new();
+            }
+        };
+        let mut blobs = Vec::new();
+        for ev in events {
+            match pn::snapshot_blob_from_event(&ev, me_xonly) {
+                Ok(blob) => blobs.push(blob),
+                Err(err) => tracing::warn!("nostr: skip snapshot event: {err:#}"),
+            }
+        }
+        blobs
+    }
+
     async fn fetch(&self, filter: Filter) -> Result<Vec<Event>> {
         let events = self.client.fetch_events(filter, FETCH_TIMEOUT).await?;
         Ok(events.into_iter().collect())
@@ -345,6 +374,22 @@ fn build_event(kind: &str, recipient: Option<&str>, payload: &str, keys: &Keys) 
                 .context("revoke payload has no swap_id")?;
             pn::revocation_event(swap_id, keys)
         }
+        "snapshot" => {
+            let v: serde_json::Value =
+                serde_json::from_str(payload).context("parse snapshot payload")?;
+            let swap_id = v
+                .get("swap_id")
+                .and_then(|x| x.as_str())
+                .context("snapshot payload has no swap_id")?;
+            let blob = v
+                .get("blob")
+                .and_then(|x| x.as_str())
+                .context("snapshot payload has no blob")?;
+            // Map swap_id → opaque replaceable-event tag here, so the swap_id
+            // never leaves the machine.
+            pn::snapshot_event(blob, &pn::snapshot_dtag(swap_id), keys)
+        }
+        "snapshot_tombstone" => pn::snapshot_tombstone_event(&pn::snapshot_dtag(payload), keys),
         other => anyhow::bail!("unknown outbox kind '{other}'"),
     })();
     match built {

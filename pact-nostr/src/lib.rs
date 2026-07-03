@@ -240,7 +240,10 @@ pub const SNAPSHOT_KIND: u16 = 31512;
 /// fetches all our snapshots by author+kind and reads the swap_id from inside
 /// the (decrypted) payload.
 pub fn snapshot_dtag(swap_id: &str) -> String {
-    hex::encode(pact_proto::crypto::tagged_hash("pact/rescue/dtag/v1", swap_id.as_bytes()))
+    hex::encode(pact_proto::crypto::tagged_hash(
+        "pact/rescue/dtag/v1",
+        swap_id.as_bytes(),
+    ))
 }
 
 /// Build a signed addressable snapshot event carrying a `PACTSEALED1:` blob

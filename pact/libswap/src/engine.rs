@@ -1053,6 +1053,7 @@ impl Engine {
             last_action_height: 0,
         };
         self.store.put(&record)?;
+        let _ = self.snapshot_v1(&record); // rescue snapshot at accept (#54)
         let body = AcceptBody {
             bob_redeem_pubkey_a,
             bob_refund_pubkey_b,
@@ -1316,6 +1317,7 @@ impl Engine {
             funding_b_broadcast: false,
         };
         self.store.put_adaptor(&rec)?;
+        let _ = self.snapshot_v2(&rec); // rescue snapshot at accept (#54)
         let envelope =
             self.signed_envelope("accept", &init.swap_id, serde_json::to_value(&body_out)?)?;
         Ok((rec, envelope))
@@ -1636,6 +1638,10 @@ impl Engine {
         }
         rec.state = AdaptorState::Signed;
         self.store.put_adaptor(&rec)?;
+        // Rescue snapshot at Signed (#54): the record now carries the assembled
+        // adaptor signatures — the one datum that is neither seed- nor
+        // chain-derivable — so a rescued machine can COMPLETE, not just refund.
+        let _ = self.snapshot_v2(&rec);
         Ok(rec)
     }
 
@@ -1705,6 +1711,11 @@ impl Engine {
             other => bail!("unknown v2 message type {other:?}"),
         }
         self.store.put_adaptor(&rec)?;
+        // Initiator snapshots once at accept (#54); Signed is snapshotted in
+        // adaptor_assemble for both roles.
+        if envelope.msg_type == "accept" {
+            let _ = self.snapshot_v2(&rec);
+        }
         Ok(rec)
     }
 
@@ -1955,6 +1966,7 @@ impl Engine {
             }
         }
         self.store.put_adaptor(&rec)?;
+        let _ = self.tombstone_swap(&rec.swap_id); // terminal: drop rescue snapshot (#54)
         Ok(rec)
     }
 
@@ -2026,6 +2038,7 @@ impl Engine {
         }
         rec.state = AdaptorState::Refunded;
         self.store.put_adaptor(&rec)?;
+        let _ = self.tombstone_swap(&rec.swap_id); // terminal: drop rescue snapshot (#54)
         Ok(rec)
     }
 
@@ -2370,6 +2383,7 @@ impl Engine {
                 let mut updated = rec.clone();
                 updated.state = AdaptorState::Completed;
                 self.store.put_adaptor(&updated)?;
+                let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
                 return Ok(Some(TickEvent {
                     swap_id: rec.swap_id.clone(),
                     action: "adaptor-completed".into(),
@@ -2849,6 +2863,12 @@ impl Engine {
             other => bail!("unknown message type {other:?}"),
         }
         self.store.put(&rec)?;
+        // Initiator snapshots once at accept (#54); tombstone a pre-funding abort.
+        if envelope.msg_type == "accept" {
+            let _ = self.snapshot_v1(&rec);
+        } else if rec.state == State::Aborted {
+            let _ = self.tombstone_swap(&rec.swap_id);
+        }
         Ok(rec)
     }
 
@@ -3141,6 +3161,9 @@ impl Engine {
             }
         }
         self.store.put(&rec)?;
+        if rec.state == State::Completed {
+            let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
+        }
         Ok(rec)
     }
 
@@ -3236,6 +3259,7 @@ impl Engine {
         rec.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
         rec.state = State::Refunded;
         self.store.put(&rec)?;
+        let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
         Ok(rec)
     }
 
@@ -4066,6 +4090,7 @@ impl Engine {
                     let mut updated = rec.clone();
                     updated.state = State::Completed;
                     self.store.put(&updated)?;
+                    let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
                     return event("completed", txid.to_string());
                 }
                 // Mined but shallow (1..n_b): the redeem is in a block, so it
@@ -4686,6 +4711,141 @@ impl Engine {
     /// Seal to the recipient identity, then best-effort send to every
     /// board; success if any accepted. Board operators see only
     /// ciphertext addressed to a pubkey.
+    // ---- Encrypted swap-state rescue (issue #54) ----
+
+    /// Publish an encrypted-to-self snapshot of a v1 swap record. Taken once
+    /// after `accept`: the negotiated params make any funding we commit
+    /// refundable — and (via the seed preimage / chain-extracted secret)
+    /// completable — from the seed alone. Best-effort across boards.
+    fn snapshot_v1(&self, rec: &SwapRecord) -> Result<()> {
+        let body = serde_json::json!({
+            "v": 1,
+            "record": serde_json::to_value(rec)?,
+            "next_index": self.store.peek_next_swap_index()?,
+        });
+        self.publish_snapshot_body(&rec.swap_id, body)
+    }
+
+    /// Publish an encrypted-to-self snapshot of a v2 record. Taken at `accept`
+    /// (leg-A refund basis for the initiator) and again at `Signed`, where the
+    /// record additionally carries the assembled adaptor signatures — the one
+    /// datum that is neither seed- nor chain-derivable — so the swap can be
+    /// COMPLETED, not just refunded, from the record alone.
+    fn snapshot_v2(&self, rec: &AdaptorSwapRecord) -> Result<()> {
+        let body = serde_json::json!({
+            "v": 2,
+            "record": serde_json::to_value(rec)?,
+            "next_index": self.store.peek_next_swap_index()?,
+        });
+        self.publish_snapshot_body(&rec.swap_id, body)
+    }
+
+    fn publish_snapshot_body(&self, swap_id: &str, body: serde_json::Value) -> Result<()> {
+        let env = self.signed_envelope("swapstate", swap_id, body)?;
+        let me = self.store.seed()?.identity_pubkey()?.to_string();
+        let blob = crate::board::seal_envelope(&me, &env)?;
+        for (_, board) in self.boards()? {
+            let _ = board.publish_snapshot(swap_id, &blob); // best-effort per board
+        }
+        Ok(())
+    }
+
+    /// Tombstone a swap's rescue snapshot once it reaches a terminal state, so a
+    /// machine restored from seed never resurrects a finished swap.
+    fn tombstone_swap(&self, swap_id: &str) -> Result<()> {
+        for (_, board) in self.boards()? {
+            let _ = board.tombstone_snapshot(swap_id);
+        }
+        Ok(())
+    }
+
+    /// Rebuild in-flight swaps from encrypted-to-self relay snapshots — the
+    /// seed-only cross-machine recovery path (#54). `blobs` are the sealed
+    /// `PACTSEALED1:` payloads pactd fetched from our own snapshot events. Each
+    /// is decrypted with our identity key, its inner signature verified, and the
+    /// record adopted IFF we have no local record for that swap_id (local always
+    /// wins) and it is not terminal. Restores the next-swap-index high-water
+    /// mark so a reissued index can never reuse a completed swap's keys. Returns
+    /// `(restored, seen)`. The scheduler then drives each rescued swap to
+    /// completion or refund via chain-watch — all later state is derivable.
+    pub fn rescue_from_blobs(&self, blobs: &[String]) -> Result<(usize, usize)> {
+        let seed = self.store.seed()?;
+        let kp = seed.identity_keypair()?;
+        let me = seed.identity_pubkey()?.to_string();
+        let mut have: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for r in self.store.list()? {
+            have.insert(r.swap_id);
+        }
+        for r in self.store.list_adaptor()? {
+            have.insert(r.swap_id);
+        }
+        let mut restored = 0usize;
+        let mut hi = self.store.peek_next_swap_index()?;
+        for blob in blobs {
+            match self.rescue_one(&kp, &me, blob, &have) {
+                Ok(Some((adopted, next_index))) => {
+                    if adopted {
+                        restored += 1;
+                    }
+                    hi = hi.max(next_index);
+                }
+                Ok(None) => {}
+                Err(e) => eprintln!("rescue: skipping unreadable snapshot: {e:#}"),
+            }
+        }
+        self.store.set_next_swap_index_at_least(hi)?;
+        Ok((restored, blobs.len()))
+    }
+
+    /// Decrypt + validate one snapshot blob and adopt its record if new. Returns
+    /// `(adopted, next_index)` — `adopted=false` when we already have it locally
+    /// or it is terminal (we still fold its `next_index` into the high-water mark).
+    fn rescue_one(
+        &self,
+        kp: &bitcoin::secp256k1::Keypair,
+        me: &str,
+        blob: &str,
+        have: &std::collections::HashSet<String>,
+    ) -> Result<Option<(bool, u32)>> {
+        let env = crate::board::open_envelope(kp, blob)?;
+        messages::verify(&env)?;
+        ensure!(env.msg_type == "swapstate", "not a swapstate snapshot");
+        ensure!(env.from == me, "snapshot is not ours");
+        let next_index = env
+            .body
+            .get("next_index")
+            .and_then(|x| x.as_u64())
+            .unwrap_or(0) as u32;
+        let rec_val = env.body.get("record").context("snapshot has no record")?;
+        match env.body.get("v").and_then(|x| x.as_u64()) {
+            Some(1) => {
+                let rec: SwapRecord = serde_json::from_value(rec_val.clone())?;
+                let terminal = matches!(
+                    rec.state,
+                    State::Completed | State::Refunded | State::Aborted
+                );
+                if !have.contains(&rec.swap_id) && !terminal {
+                    self.store.put(&rec)?;
+                    return Ok(Some((true, next_index)));
+                }
+            }
+            Some(2) => {
+                use crate::adaptor_swap::AdaptorState;
+                let rec: AdaptorSwapRecord = serde_json::from_value(rec_val.clone())?;
+                let terminal = matches!(
+                    rec.state,
+                    AdaptorState::Completed | AdaptorState::Refunded | AdaptorState::Aborted
+                );
+                if !have.contains(&rec.swap_id) && !terminal {
+                    self.store.put_adaptor(&rec)?;
+                    return Ok(Some((true, next_index)));
+                }
+            }
+            _ => bail!("unknown snapshot version"),
+        }
+        Ok(Some((false, next_index)))
+    }
+
     fn relay_send_all(&self, to: &str, envelope: &Envelope) -> Result<()> {
         let blob = crate::board::seal_envelope(to, envelope)?;
         let mut last_err = None;
@@ -5931,6 +6091,7 @@ impl Engine {
         );
         rec.state = State::Aborted;
         self.store.put(&rec)?;
+        let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
         // Best-effort notify — an explicit user cancel is the ONE case that
         // sends an abort envelope (automatic timeouts stay silent; the
         // counterparty's own pre-funding clock clears their side). Not gated

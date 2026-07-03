@@ -100,6 +100,10 @@ enum Command {
         #[arg(long)]
         swap: Option<String>,
     },
+    /// Recover in-flight swaps from our encrypted relay snapshots (#54) —
+    /// for a fresh install or wiped data dir restored from the same seed.
+    /// Idempotent: swaps already present locally are left untouched.
+    Restore,
     /// Seed lifecycle: show whether a seed exists / is encrypted / locked.
     Walletstatus,
     /// List shipped coins: which are configured + live connection status.
@@ -241,6 +245,14 @@ fn main() -> Result<()> {
                 None => client.call("listswaps", json!([]))?,
             };
             println!("{}", serde_json::to_string_pretty(&result)?);
+        }
+        Command::Restore => {
+            let r = client.call("restorefromrelay", json!([]))?;
+            let (restored, seen) = (
+                r["restored"].as_u64().unwrap_or(0),
+                r["seen"].as_u64().unwrap_or(0),
+            );
+            println!("rescued {restored} swap(s) from {seen} relay snapshot(s)");
         }
         Command::Walletstatus => {
             let result = client.call("walletstatus", json!([]))?;

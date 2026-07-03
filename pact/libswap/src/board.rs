@@ -116,6 +116,20 @@ pub trait Noticeboard {
     fn revoke(&self, revocation: &Envelope) -> Result<()>;
     fn relay_send_blob(&self, to: &str, blob: &str) -> Result<()>;
     fn relay_poll(&self, poll: &Envelope) -> Result<Vec<(i64, String)>>;
+
+    /// Publish an encrypted-to-self swap-state snapshot for seed-only rescue
+    /// (issue #54). Nostr-only — the HTTP board has no rescue channel, so the
+    /// default is a no-op. The Nostr service maps `swap_id` to an OPAQUE
+    /// replaceable-event tag (`snapshot_dtag`), so the swap_id never leaves the
+    /// machine in the clear.
+    fn publish_snapshot(&self, _swap_id: &str, _sealed_blob: &str) -> Result<()> {
+        Ok(())
+    }
+    /// Tombstone a swap's snapshot on a terminal state so a rescued machine
+    /// never resurrects it. Nostr-only; default no-op.
+    fn tombstone_snapshot(&self, _swap_id: &str) -> Result<()> {
+        Ok(())
+    }
 }
 
 // Inherent methods stay (direct callers in pactd use a concrete
