@@ -856,7 +856,10 @@ impl ElectrumBackend {
             vec![electrum_client::Param::Usize(height as usize)],
         )?;
         let raw = hex::decode(raw.as_str().context("block.header: non-string")?)?;
-        Ok((self.params.header_hash(&raw)?, self.params.header_time(&raw)?))
+        Ok((
+            self.params.header_hash(&raw)?,
+            self.params.header_time(&raw)?,
+        ))
     }
 
     pub(crate) fn history(&self, spk: &ScriptBuf) -> Result<Vec<(String, i64)>> {

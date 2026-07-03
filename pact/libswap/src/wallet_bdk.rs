@@ -159,7 +159,10 @@ fn sync_entry(entry: &mut WalletEntry, chain: &ElectrumBackend) -> Result<()> {
     let params = chain.params();
     // Fresh store (nothing ever revealed) → gap-limit scan for a restored
     // seed's history. Steady state → revealed spks only.
-    let full_scan = entry.wallet.derivation_index(KeychainKind::External).is_none();
+    let full_scan = entry
+        .wallet
+        .derivation_index(KeychainKind::External)
+        .is_none();
 
     let mut tx_update = TxUpdate::<ConfirmationBlockTime>::default();
     let mut fetched: HashSet<Txid> = HashSet::new();
@@ -206,7 +209,11 @@ fn sync_entry(entry: &mut WalletEntry, chain: &ElectrumBackend) -> Result<()> {
         if full_scan {
             let (mut index, mut gap) = (0u32, 0u32);
             while gap < STOP_GAP {
-                let spk = entry.wallet.peek_address(keychain, index).address.script_pubkey();
+                let spk = entry
+                    .wallet
+                    .peek_address(keychain, index)
+                    .address
+                    .script_pubkey();
                 if process_spk(entry, &mut tx_update, &spk)? {
                     last_active.insert(keychain, index);
                     gap = 0;
@@ -217,7 +224,11 @@ fn sync_entry(entry: &mut WalletEntry, chain: &ElectrumBackend) -> Result<()> {
             }
         } else if let Some(last) = entry.wallet.derivation_index(keychain) {
             for index in 0..=last {
-                let spk = entry.wallet.peek_address(keychain, index).address.script_pubkey();
+                let spk = entry
+                    .wallet
+                    .peek_address(keychain, index)
+                    .address
+                    .script_pubkey();
                 process_spk(entry, &mut tx_update, &spk)?;
             }
         }
@@ -275,8 +286,12 @@ fn chain_update(
         // Reorged: blocks already holds the server's hash, displacing ours.
     }
 
-    CheckPoint::from_block_ids(blocks.into_iter().map(|(height, hash)| BlockId { height, hash }))
-        .map_err(|_| anyhow!("checkpoint heights not strictly ascending"))
+    CheckPoint::from_block_ids(
+        blocks
+            .into_iter()
+            .map(|(height, hash)| BlockId { height, hash }),
+    )
+    .map_err(|_| anyhow!("checkpoint heights not strictly ascending"))
 }
 
 // ---- the backend ------------------------------------------------------------
@@ -338,8 +353,9 @@ impl BdkWalletBackend {
         entry: &mut WalletEntry,
         spk: ScriptBuf,
         amount_sat: u64,
+        conf_target: u16,
     ) -> Result<Transaction> {
-        let feerate = FeeRate::from_sat_per_vb(self.chain.fee_rate_sat_per_vb()?)
+        let feerate = FeeRate::from_sat_per_vb(self.chain.fee_rate_for(conf_target, false)?)
             .context("feerate overflow")?;
         let mut builder = entry.wallet.build_tx();
         builder
@@ -396,7 +412,8 @@ impl ChainBackend for BdkWalletBackend {
         watch_spk: &ScriptBuf,
         from_height: u64,
     ) -> Result<Option<Vec<Vec<u8>>>> {
-        self.chain.find_spend_witness(outpoint, watch_spk, from_height)
+        self.chain
+            .find_spend_witness(outpoint, watch_spk, from_height)
     }
 
     fn tip_height(&self) -> Result<u64> {
@@ -434,10 +451,10 @@ impl ChainBackend for BdkWalletBackend {
         })
     }
 
-    fn wallet_send(&self, address: &str, amount_sat: u64) -> Result<String> {
+    fn wallet_send(&self, address: &str, amount_sat: u64, conf_target: u16) -> Result<String> {
         let spk = self.params.parse_address(address)?;
         self.with_wallet(true, |entry| {
-            let tx = self.build_signed(entry, spk, amount_sat)?;
+            let tx = self.build_signed(entry, spk, amount_sat, conf_target)?;
             // Broadcast-before-persist (the rc6 commit rule): a crash after
             // broadcast re-learns the tx from our own spk history on the
             // next sync, never double-spends.
@@ -447,10 +464,17 @@ impl ChainBackend for BdkWalletBackend {
         })
     }
 
-    fn wallet_build_funding(&self, address: &str, amount_sat: u64) -> Result<(String, u32, String)> {
+    fn wallet_build_funding(
+        &self,
+        address: &str,
+        amount_sat: u64,
+    ) -> Result<(String, u32, String)> {
         let spk = self.params.parse_address(address)?;
         self.with_wallet(true, |entry| {
-            let tx = self.build_signed(entry, spk.clone(), amount_sat)?;
+            // Funding prices at the per-coin ~30-min target (see
+            // funding_conf_target), mirroring the Core-RPC backend.
+            let tx =
+                self.build_signed(entry, spk.clone(), amount_sat, self.funding_conf_target())?;
             let txid = tx.compute_txid();
             let vout = tx
                 .output
@@ -519,7 +543,9 @@ impl ChainBackend for BdkWalletBackend {
                 )
                 .map_err(|e| anyhow!("signing CPFP child: {e}"))?;
             anyhow::ensure!(done, "wallet could not finalize the CPFP child");
-            let tx = psbt.extract_tx().map_err(|e| anyhow!("extracting CPFP child: {e}"))?;
+            let tx = psbt
+                .extract_tx()
+                .map_err(|e| anyhow!("extracting CPFP child: {e}"))?;
             let txid = self.chain.broadcast(&tx)?;
             entry.wallet.apply_unconfirmed_txs([(tx, now_ts())]);
             Ok(txid)
@@ -583,9 +609,13 @@ impl ChainBackend for BdkWalletBackend {
                 .build_fee_bump(txid)
                 .map_err(|e| anyhow!("bumpfee {txid}: {e}"))?;
             builder.fee_rate(feerate);
-            let mut psbt = builder.finish().map_err(|e| anyhow!("building bump: {e}"))?;
+            let mut psbt = builder
+                .finish()
+                .map_err(|e| anyhow!("building bump: {e}"))?;
             self.finalize(entry, &mut psbt)?;
-            let tx = psbt.extract_tx().map_err(|e| anyhow!("extracting bump: {e}"))?;
+            let tx = psbt
+                .extract_tx()
+                .map_err(|e| anyhow!("extracting bump: {e}"))?;
             let new_txid = self.chain.broadcast(&tx)?;
             entry.wallet.apply_unconfirmed_txs([(tx, now_ts())]);
             Ok(new_txid.to_string())
