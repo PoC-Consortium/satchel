@@ -26,6 +26,41 @@ connects while the initial index is still empty (`electrum.rs:220`,
 which error-returns cleanly — before subscribing. UPSTREAM FIX WANTED in
 electrs-pocx; the workaround is harmless to keep afterwards.
 
+## D5 — Nodeless config = `funding_wallet: "pact-seed"` + `extra_backends`
+
+No new satchel.json fields: the existing `funding_wallet` kind field (built
+for exactly this — "only core-rpc for now") flips to `"pact-seed"`, the
+Electrum URLs ride in `extra_backends`, and `compose_chain_data` joins them
+verbatim (`auth_method` stays None — nothing to recompose at launch).
+Revert surface: one branch in compose.rs + the CoinSetup mode toggle.
+
+## D6 — Wallet actions are dialogs on the wallet card, not a new screen
+
+Receive (fresh address + copy), Send (locale-aware amount, overspend guard,
+engine-side fee), Activity (listtransactions table) live in
+`dialogs/WalletActions.tsx`, shown only when `listcoins.nodeless`. Matches
+the existing dialog idiom; a dedicated screen can grow later if the feature
+sprawls. No QR code (no QR dep in the tree — add one later if wanted).
+
+## D7 — i18n: new keys OPTIONAL in Bundle, translations deferred to a pass
+
+All new copy is in en.ts (`wallets.*`, `coins.*`); the Bundle type marks the
+new keys optional (the existing `progress.funding` mechanism), so all 26
+locales compile and fall back to English at runtime per key. A translation
+pass fills the 25 locales at the end of the run (or in review) without
+blocking the feature.
+
+## D8 — Playground: Alice's BTCX goes nodeless, with a faucet
+
+`playground-cork.ps1` + `satchel_playground.py`: PoCX node moves to :18443
+(+REST, D2), one electrs serves Alice; her satchel.json btcx entry is the
+pact-seed/Electrum form (BTC + LTC stay node-backed so both worlds show
+side by side). Her bdk wallet can't be pre-funded (the seed is created in
+the wizard), so the driver polls her pactd and drops 100 BTCX once the
+merchant exists. Old 19443 stays in the teardown port sweep for stale runs.
+Dress-rehearsed headless end to end: faucet fired, a v2 board take gave
+47 BTCX from the bdk wallet and completed; balances + activity exact.
+
 ## D4 — Parity scenarios chosen (test_nodeless_e2e.py)
 
 (1) v1 nodeless maker (bdk `wallet_send` funds leg A), (2) v2 nodeless taker

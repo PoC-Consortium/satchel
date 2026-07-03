@@ -25,16 +25,58 @@ Satchel separately; this script runs the infra + Bob + Carol and keeps mining
 so confirmations and timelocks advance.
 """
 
+import base64
+import json
+import os
 import sys
 import time
+import urllib.request
 
 sys.stdout.reconfigure(line_buffering=True)
 
-from regtest_harness import Harness
+from regtest_harness import ElectrsServer, Harness
 from test_swap_e2e import build_workspace, Corkboard, Party, COINS_TOML
 
 BLOCK_EVERY_SECS = 4
 REPOST_EVERY_SECS = 60
+
+# Alice's managed pactd (Satchel regtest offset) + its cookie, for the faucet.
+ALICE_RPC = "http://127.0.0.1:9739/"
+ALICE_COOKIE = os.path.join(
+    os.environ.get("LOCALAPPDATA", ""), "org.pocx.satchel", "regtest", "pactd", ".cookie")
+FAUCET_BTCX = 100.0
+
+
+def alice_rpc(method, *params):
+    with open(ALICE_COOKIE, encoding="utf-8") as fh:
+        cookie = fh.read().strip()
+    body = json.dumps(
+        {"jsonrpc": "2.0", "id": "pg", "method": method, "params": list(params)}).encode()
+    req = urllib.request.Request(ALICE_RPC, data=body, method="POST")
+    req.add_header("Content-Type", "application/json")
+    req.add_header("Authorization", "Basic " + base64.b64encode(cookie.encode()).decode())
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read())
+    if data.get("error"):
+        raise RuntimeError(data["error"]["message"])
+    return data["result"]
+
+
+def faucet_alice_btcx(h):
+    """Alice's btcx is NODELESS (epic #58): her wallet is the bdk one on the
+    seed she creates in the wizard, so it cannot be pre-funded like a node
+    wallet. Poll until her pactd serves a wallet (merchant created + unlocked),
+    then send a starter balance once. Returns True when done."""
+    try:
+        if alice_rpc("getbalance", "btcx")["balance_sat"] > 0:
+            return True
+        addr = alice_rpc("getnewaddress", "btcx")["address"]
+        h.pocx.rpc("sendtoaddress", addr, FAUCET_BTCX, wallet="alice_pocx")
+        print(f"[satchel-pg] faucet: {FAUCET_BTCX} BTCX -> Alice's nodeless "
+              f"wallet ({addr[:24]}…) — confirms next block")
+        return True
+    except Exception:  # noqa: BLE001 — not up yet / wizard pending: retry
+        return False
 
 # Each side posts a SPREAD at varied sizes + implied rates so the book is
 # rate-sorted, not one card repeated. Both sides hover ~47k–51k POCX/BTC so
@@ -100,9 +142,15 @@ def chain_time(node):
 
 def main():
     build_workspace()
-    with Harness(keep=False, with_ltc=True) as h:
+    # pocx_rest: Alice's btcx runs NODELESS over electrs, and bindex (electrs'
+    # indexer) hardcodes the node's REST endpoint at regtest-default :18443.
+    with Harness(keep=False, with_ltc=True, pocx_rest=True) as h:
         board = Corkboard(h.workdir)
         board.start()
+        electrs = ElectrsServer(h.workdir, h.pocx)
+        electrs.start()
+        electrs.wait_synced(h.pocx.rpc("getblockcount"))
+        print(f"[satchel-pg] electrs up on {electrs.url} (Alice's nodeless btcx)")
 
         # Extra wallets for the two-sided book — created HERE, not in the shared
         # Harness, so the e2e suite's 2-party funding layout stays untouched:
@@ -190,22 +238,28 @@ def main():
   Two headless counterparties make a two-sided book + an LTC sub-book:
     Bob   (:{bob.port}) BUY side — {len(BOB_OFFERS)} give-BTC/get-POCX + {len(BOB_LTC_OFFERS)} give-BTC/get-LTC
     Carol (:{carol.port}) SELL side — {len(CAROL_OFFERS)} give-POCX/get-BTC + {len(CAROL_LTC_OFFERS)} LTC offers
-  Corkboard {board.url} | POCX :19443 | BTC :19543 | LTC :19643
+  Corkboard {board.url} | POCX :18443 (+REST) | BTC :19543 | LTC :19643
+  electrs {electrs.url} — Alice's BTCX is NODELESS (pact-seed bdk wallet)
   Blocks every {BLOCK_EVERY_SECS}s; both top up taken offers every {REPOST_EVERY_SECS}s (live IDs stable).
 
-  In the Satchel window (managed "Alice", funded on ALL THREE coins):
+  In the Satchel window (managed "Alice"):
     1. Wizard -> Create a merchant (write down the mnemonic; pick
        encrypted or not).
-    2. Coins tab -> BTCX + BTC + LTC should show configured + connected.
-    3. Corkboard tab -> two-sided market incl. LTC pairs; take any side:
-       give POCX, give BTC, or trade LTC either way.
-    4. Swaps tab -> watch it walk to 'completed' on its own.
+    2. Coins tab -> BTCX shows "pact seed wallet" (nodeless via electrs);
+       BTC + LTC are node-backed as before.
+    3. Wallets tab -> the BTCX card has Receive / Send / Activity; a
+       faucet drops {FAUCET_BTCX} BTCX into your wallet right after the
+       wizard (watch the balance appear).
+    4. Corkboard tab -> two-sided market incl. LTC pairs; take any side.
+    5. Swaps tab -> watch it walk to 'completed' on its own — BTCX legs
+       fund straight from your pact-seed wallet.
 {bar}
 """)
         start_wall = time.time()
         legs = ((h.pocx, "alice_pocx"), (h.btc, "bob_btc"), (h.ltc, "alice_ltc"))
         base = max(chain_time(n) for n, _ in legs)
         last_post = time.time()
+        alice_funded = False
         # Per-tick mining is BEST-EFFORT: a transient node error (e.g. a momentary
         # `bad-txns-vin-empty` on CreateNewBlock) must NOT crash the driver — that
         # would unwind the Harness and tear every node down, leaving Satchel on a
@@ -227,6 +281,8 @@ def main():
                         node.generate(1, wallet)
                     except Exception as e:  # noqa: BLE001
                         print(f"[satchel-pg] mine skipped ({wallet}): {e}")
+                if not alice_funded:
+                    alice_funded = faucet_alice_btcx(h)
                 if time.time() - last_post > REPOST_EVERY_SECS:
                     try:
                         post_offers()
@@ -239,6 +295,7 @@ def main():
             bob.stop()
             carol.stop()
             board.stop()
+            electrs.stop()
 
 
 if __name__ == "__main__":
