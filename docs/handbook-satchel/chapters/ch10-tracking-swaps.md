@@ -85,9 +85,13 @@ waiting for, you'll see one of:
   were the maker's turn; now it names the wait correctly.)
 - **Your lock confirming · 2/6** — *your own* funding is burying toward the depth
   your counterparty needs before they'll lock their side. You'll see this as the
-  maker of a classic swap: the wait is on your lock maturing, not on a slow
+  maker of either kind of swap: the wait is on your lock maturing, not on a slow
   counterparty, so Satchel shows it honestly as a count on your own chain rather
-  than an indeterminate "awaiting their lock."
+  than an indeterminate "awaiting their lock." (A Private swap's maker locks the
+  moment its offer is taken, so this count starts during the brief signing
+  handshake and runs until your lock is deep enough — only when the taker's lock
+  is actually *seen* on the network does the line switch to **Their lock
+  confirming**, never before.)
 - **Their lock confirming · 3/6** — their funding is burying toward the depth you
   need before you act. The numbers are *confirmations so far / confirmations
   needed*.
