@@ -19,12 +19,22 @@ export function narrate(s: Swap): string {
       return tr("narrate.initiating");
     case "created":
       return tr("narrate.created");
-    case "accepted":
-      return tr(maker ? "narrate.acceptedMaker" : "narrate.acceptedTaker", v);
     // v2 (Taproot/MuSig2 adaptor) handshake states. Funding + the claim run
     // automatically from "signed"; the timelock refund is the safety net.
-    case "nonces_exchanged":
-      return tr("narrate.noncesExchanged");
+    // The v2 maker broadcasts its lock the moment `accept` arrives but stays in
+    // these states through the nonce/sig round-trips — once the progress line
+    // tracks that lock, "you can still cancel freely" / "nothing is locked yet"
+    // would be false: the honest story is the funded-maker one.
+    case "accepted":
+    case "nonces_exchanged": {
+      const w = s.progress?.watching;
+      if (maker && (w === "our_lock" || w === "awaiting_lock")) {
+        return tr("narrate.fundedAMaker", v);
+      }
+      return s.state === "accepted"
+        ? tr(maker ? "narrate.acceptedMaker" : "narrate.acceptedTaker", v)
+        : tr("narrate.noncesExchanged");
+    }
     // v2 "signed" is a single state spanning the whole execution phase, so a
     // flat story freezes there while only the progress bar moves. Sub-divide it
     // by the progress sub-phase the tick already computes, so it steps through
@@ -43,7 +53,14 @@ export function narrate(s: Swap): string {
         v,
       );
     }
+    // The v1 maker stays in funded_a until leg B is n_b-deep, so once the
+    // progress line tracks the taker's lock ("their lock confirming") the
+    // honest story is the both-locked one — the same watching-based split
+    // v2's `signed` case does above.
     case "funded_a":
+      if (maker && s.progress?.watching === "their_lock") {
+        return tr("narrate.fundedBMaker", v);
+      }
       return tr(maker ? "narrate.fundedAMaker" : "narrate.fundedATaker", v);
     case "funded_b":
       return tr(maker ? "narrate.fundedBMaker" : "narrate.fundedBTaker", v);

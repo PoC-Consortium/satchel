@@ -450,6 +450,48 @@ pub fn default_confirmations(chain: &ChainParams) -> u32 {
     }
 }
 
+/// The progress phase a maker (initiator) surfaces while in the v2 `Signed`
+/// state. Pure (no chain I/O) so the two-phase display is unit-testable.
+///
+/// Leg B's funding txid is BUILT at accept, so it exists from the moment we
+/// reach `Signed` — but the taker only BROADCASTS leg B once our leg A is
+/// `n_a`-deep (`adaptor_leg_a_confirmed`). The phase must therefore be driven by
+/// OBSERVATION of the output, never by the txid merely being set: until leg B
+/// is seen on the network the honest wait is our own leg A burying, not the
+/// taker's lock. `leg_b_seen` is `None` until the leg-B outpoint is visible;
+/// the mempool counts as `Some(0)` — v1's maker flips to `their_lock` on the
+/// taker's `funded` message at broadcast time, so gating v2 on the first
+/// confirmation instead made it lag v1 by exactly one block. `leg_a_confs` is
+/// `None` when our leg-A funding isn't recorded yet.
+#[derive(Debug, PartialEq, Eq)]
+enum MakerSignedPhase {
+    /// Leg B is observed (mempool or deeper), burying toward `n_b` → "their
+    /// lock confirming".
+    TheirLockB,
+    /// Leg B not observed yet; our leg A buries toward `n_a` → "your lock confirming".
+    OurLockA,
+    /// Our leg A is `n_a`-deep; now awaiting the taker's leg-B broadcast.
+    AwaitingLock,
+    /// Nothing of ours is on-chain to anchor a count to yet.
+    AwaitingLockUnanchored,
+}
+
+fn maker_signed_phase(
+    leg_b_seen: Option<u32>,
+    leg_a_confs: Option<u32>,
+    n_a: u32,
+) -> MakerSignedPhase {
+    if leg_b_seen.is_some() {
+        MakerSignedPhase::TheirLockB
+    } else {
+        match leg_a_confs {
+            Some(c) if c < n_a => MakerSignedPhase::OurLockA,
+            Some(_) => MakerSignedPhase::AwaitingLock,
+            None => MakerSignedPhase::AwaitingLockUnanchored,
+        }
+    }
+}
+
 fn parse_pubkey(hex_key: &str, what: &str) -> Result<PublicKey> {
     PublicKey::from_str(hex_key).with_context(|| format!("invalid pubkey for {what}"))
 }
@@ -3821,33 +3863,59 @@ impl Engine {
         };
         match (rec.role, rec.state) {
             // Maker: wait for the taker's B lock to bury, then secure our B redeem.
-            (Role::Initiator, Signed) => match &rec.funding_b_txid {
-                Some(txid) => self.progress_confirming(
-                    &rec.swap_id,
-                    &rec.chain_b,
-                    txid.clone(),
-                    rec.funding_b_vout,
-                    leg_spk(false),
-                    rec.n_b,
-                    "their_lock",
-                    None,
-                ),
-                // Anchor to our leg-A funding depth (chain-read) so the count
-                // survives a restart. v2 has no `n_a` fund-gate, so it's the raw
-                // confirmations since A landed.
-                None => match rec.funding_a_txid.as_deref() {
-                    Some(txid_a) => self.progress_awaiting_anchored(
+            // Leg B's txid is BUILT at accept (two-phase, spec §7), so it exists
+            // the instant we reach `Signed` — but the taker only BROADCASTS it once
+            // OUR leg A is `n_a`-deep. The phase is therefore driven by OBSERVING
+            // the leg-B output (see `maker_signed_phase`), mirroring v1's maker:
+            // while our leg A buries show a determinate `our_lock · confs/n_a`
+            // ("Your lock confirming"), then a liveness `awaiting_lock` once it's
+            // buried, then `their_lock · confs/n_b` from the FIRST SIGHTING of leg
+            // B (mempool included — v1 flips on the taker's `funded` message at
+            // broadcast, so gating on the first confirmation made v2 lag v1 by one
+            // block) — never a misleading `their_lock` for a leg B that was never
+            // broadcast (which drove narrate() to a false "both locked").
+            (Role::Initiator, Signed) => {
+                let leg_b_seen = rec.funding_b_txid.as_deref().and_then(|txid| {
+                    self.lock_seen_confs(&rec.chain_b, txid, rec.funding_b_vout, leg_spk(false))
+                });
+                let leg_a_confs = rec.funding_a_txid.as_deref().map(|txid_a| {
+                    self.lock_confs(&rec.chain_a, txid_a, rec.funding_a_vout, leg_spk(true))
+                        .unwrap_or(0)
+                });
+                match maker_signed_phase(leg_b_seen, leg_a_confs, rec.n_a) {
+                    MakerSignedPhase::TheirLockB => self.progress_confirming(
+                        &rec.swap_id,
+                        &rec.chain_b,
+                        rec.funding_b_txid.clone()?,
+                        rec.funding_b_vout,
+                        leg_spk(false),
+                        rec.n_b,
+                        "their_lock",
+                        None,
+                    ),
+                    MakerSignedPhase::OurLockA => self.progress_confirming(
+                        &rec.swap_id,
+                        &rec.chain_a,
+                        rec.funding_a_txid.clone()?,
+                        rec.funding_a_vout,
+                        leg_spk(true),
+                        rec.n_a,
+                        "our_lock",
+                        None,
+                    ),
+                    // Anchor the liveness count to leg A's depth so it survives a
+                    // restart (leg A is `n_a`-deep here, so this can't underflow).
+                    MakerSignedPhase::AwaitingLock => self.progress_awaiting_anchored(
                         &rec.swap_id,
                         &rec.chain_b,
                         "awaiting_lock",
-                        self.lock_confs(&rec.chain_a, txid_a, rec.funding_a_vout, leg_spk(true))
-                            .unwrap_or(0),
+                        leg_a_confs.unwrap_or(rec.n_a).saturating_sub(rec.n_a),
                     ),
-                    None => {
+                    MakerSignedPhase::AwaitingLockUnanchored => {
                         self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_lock", prev)
                     }
-                },
-            },
+                }
+            }
             (Role::Initiator, RedeemedB) => self.progress_confirming(
                 &rec.swap_id,
                 &rec.chain_b,
@@ -3923,13 +3991,42 @@ impl Engine {
                 "settlement",
                 Some(rec.redeem_feerate_a),
             ),
-            // Pre-Signed (handshake) parity with v1: the maker is funding leg A +
-            // negotiating the adaptor sigs; the taker has built leg B and is
-            // waiting on the maker's leg A — same phases v1 shows from Accepted, so
-            // neither side sees a blank during the (brief) handshake.
-            (Role::Initiator, Accepted | NoncesExchanged) => {
-                self.progress_awaiting(&rec.swap_id, &rec.chain_a, "funding", prev)
-            }
+            // Pre-Signed (handshake): leg A is broadcast the INSTANT the taker's
+            // `accept` lands (the autopilot funds on that message), but the swap
+            // sits in these states for two more relay round-trips (nonces, then
+            // partial sigs) before `Signed`. Mirror v1's maker once the lock is
+            // out: `our_lock · confs/n_a` while it buries, then an anchored
+            // liveness wait — a stale "funding" here reads as "not committed yet"
+            // (and narrate's accepted line even offered free cancel) while the
+            // coins are already locked. No pointer yet = the fund really is
+            // pending (locked wallet, retry) → keep the "funding" hint.
+            (Role::Initiator, Accepted | NoncesExchanged) => match rec.funding_a_txid.as_deref() {
+                Some(txid_a) => {
+                    let confs_a = self
+                        .lock_confs(&rec.chain_a, txid_a, rec.funding_a_vout, leg_spk(true))
+                        .unwrap_or(0);
+                    if confs_a < rec.n_a {
+                        self.progress_confirming(
+                            &rec.swap_id,
+                            &rec.chain_a,
+                            txid_a.to_string(),
+                            rec.funding_a_vout,
+                            leg_spk(true),
+                            rec.n_a,
+                            "our_lock",
+                            None,
+                        )
+                    } else {
+                        self.progress_awaiting_anchored(
+                            &rec.swap_id,
+                            &rec.chain_b,
+                            "awaiting_lock",
+                            confs_a - rec.n_a,
+                        )
+                    }
+                }
+                None => self.progress_awaiting(&rec.swap_id, &rec.chain_a, "funding", prev),
+            },
             (Role::Participant, Accepted | NoncesExchanged) => match &rec.funding_a_txid {
                 Some(txid) => self.progress_confirming(
                     &rec.swap_id,
@@ -4004,6 +4101,31 @@ impl Engine {
         }
         .min(u64::from(u32::MAX)) as u32;
         Some(confs)
+    }
+
+    /// Like [`Engine::lock_confs`] for a funding outpoint, but preserving
+    /// VISIBILITY: `None` when the outpoint isn't seen at all (not broadcast, or
+    /// not yet propagated to our node), `Some(0)` while it sits in the mempool
+    /// (`gettxout` includes the mempool), `Some(c)` once buried `c` deep. The v2
+    /// maker's `Signed` phase needs the distinction — leg B's txid is known from
+    /// accept, so only observation tells broadcast apart from not-yet.
+    fn lock_seen_confs(
+        &self,
+        chain: &ChainRef,
+        txid: &str,
+        vout: Option<u32>,
+        spk: Option<ScriptBuf>,
+    ) -> Option<u32> {
+        let backend = self.backend(chain).ok()?;
+        let outpoint = OutPoint {
+            txid: bitcoin::Txid::from_str(txid).ok()?,
+            vout: vout?,
+        };
+        backend
+            .get_txout(&outpoint, &spk?)
+            .ok()
+            .flatten()
+            .map(|o| o.confirmations.min(u64::from(u32::MAX)) as u32)
     }
 
     /// A "confirming X/n" entry — a wait that is ours: the counterparty's lock
@@ -6782,6 +6904,43 @@ mod tests {
 
         std::fs::remove_dir_all(&ad).ok();
         std::fs::remove_dir_all(&bd).ok();
+    }
+
+    #[test]
+    fn maker_signed_phase_tracks_observation_not_txid_presence() {
+        use MakerSignedPhase::*;
+        // Regression for the "Both locked / Their lock confirming · 0/10" bug:
+        // leg B's funding txid is BUILT at accept, so it is always present by
+        // `Signed`. The phase must be chosen from OBSERVATION of the output, so
+        // the maker's display walks: our leg A confirming → awaiting the taker's
+        // lock → their lock confirming — never jumping straight to `their_lock`
+        // (which narrate() renders as a false "Both locked") before leg B is
+        // actually broadcast.
+
+        // Leg B not observed (never broadcast) while our leg A buries toward
+        // n_a: this is the exact live-swap state the user hit — must be
+        // `our_lock`, NOT `their_lock`. (n_a = 6 on mainnet BTC → "Your lock
+        // confirming · 0/6".)
+        assert_eq!(maker_signed_phase(None, Some(0), 6), OurLockA);
+        assert_eq!(maker_signed_phase(None, Some(5), 6), OurLockA);
+
+        // Our leg A is n_a-deep but leg B still isn't observed: we're genuinely
+        // waiting on the taker to broadcast → an honest liveness wait.
+        assert_eq!(maker_signed_phase(None, Some(6), 6), AwaitingLock);
+        assert_eq!(maker_signed_phase(None, Some(9), 6), AwaitingLock);
+
+        // Leg B observed from FIRST SIGHTING — the mempool (0 confs) counts:
+        // v1's maker flips on the taker's `funded` message at broadcast time, so
+        // gating v2 on the first confirmation made it lag v1 by exactly one
+        // block ("Their lock confirming · 0/10" was skipped).
+        assert_eq!(maker_signed_phase(Some(0), Some(6), 6), TheirLockB);
+        assert_eq!(maker_signed_phase(Some(1), Some(6), 6), TheirLockB);
+        assert_eq!(maker_signed_phase(Some(3), Some(6), 6), TheirLockB);
+        // Even if our leg A were somehow shallow, an observed leg B wins.
+        assert_eq!(maker_signed_phase(Some(0), Some(0), 6), TheirLockB);
+
+        // No leg-A funding recorded yet → pre-lock liveness wait (no anchor).
+        assert_eq!(maker_signed_phase(None, None, 6), AwaitingLockUnanchored);
     }
 
     #[test]
