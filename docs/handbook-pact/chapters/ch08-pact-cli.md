@@ -36,6 +36,8 @@ The CLI exposes structured subcommands for the common v1 and board operations:
 | `refund` | `--swap` | `refund` |
 | `abort` | `--swap --reason` | `abort` |
 | `status` | `--swap` (optional) | `getswap` / `listswaps` |
+| `restore` | — | `restorefromrelay` |
+| `rescue-status` | — | `rescuestatus` |
 | `walletstatus` | — | `walletstatus` |
 | `coins` | — | `listcoins` |
 | `pairs` | — | `listpairs` |

@@ -1,6 +1,6 @@
 # JSON-RPC API
 
-[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 56 methods, grouped below by area with a one-line purpose each. This is an index; for full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
+[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 59 methods, grouped below by area with a one-line purpose each. This is an index; for full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
 
 ## Conventions
 
@@ -30,6 +30,15 @@
 | `generateseed` | Generate a mnemonic preview **without** persisting it (onboarding). |
 | `importseed` | Import a mnemonic (optional passphrase); returns identity. |
 | `unlock` | Unlock an encrypted seed by trial-decrypt; holds the passphrase in memory. |
+
+## Seed-only rescue
+
+A machine restored from the seed alone can rediscover in-flight swaps from encrypted-to-self relay snapshots. Adoption is always explicit — `pactd` only ever detects and warns on its own (boot/unlock/merchant-load).
+
+| Method | Purpose |
+|---|---|
+| `restorefromrelay` | Adopt every rescuable relay snapshot not already held locally; `{ restored, seen }`. |
+| `rescuestatus` | Read-only preview — how many *would* be adopted, plus a two-machines double-fund warning; `{ pending, seen, warning? }`. |
 
 ## Merchants
 
@@ -64,12 +73,12 @@
 | `fund` | Fund our HTLC leg (broadcasts), then **relays the `funded` envelope to the counterparty** — so a manually-recovered swap notifies the maker just like the automatic auto-fund path (it previously only returned the envelope). The swap still completes via chain-watching even without this message; relay envelopes are accelerators. |
 | `redeem` | Redeem the counterparty leg (broadcasts). |
 | `refund` | Refund our funded leg after timeout (broadcasts). |
-| `abort` | Abort before our leg is funded. |
+| `abort` | Cancel before our leg is funded — routes to a v1 record, a v2 adaptor record, or a pending take (by offer id), whichever matches `swap_id`. |
 | `tick` | Run one scheduler pass; returns events. |
 
 ## Swaps — v2 adaptor (Taproot/MuSig2)
 
-v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed).
+v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed). There is no separate `adaptorabort` — the shared `abort` method above cancels a v2 record too (refused once our leg is funded); a handshake stalled before either leg funds (`created`/`accepted`/`nonces_exchanged`) also self-cancels after 15 minutes with no RPC call needed.
 
 | Method | Purpose |
 |---|---|
@@ -117,7 +126,7 @@ v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed).
 
 | Method | Purpose |
 |---|---|
-| `dumpswap` | Secret-free per-swap bundle (`swap_id`): scrubbed record + the `pactd` log lines mentioning that swap. Works for v1 and v2. Backs Satchel's **Dump logs** button. |
+| `dumpswap` | Secret-free per-swap bundle (`swap_id`): scrubbed record + the `pactd` log lines mentioning that swap. Works for v1, v2, and a pending take. Backs Satchel's **Dump logs** button. |
 | `swapprogress` | Live snapshot of every active swap (confirmations + feerate, v1 and v2). Backs Satchel's active-swaps progress display. |
 
 ## See also

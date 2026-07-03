@@ -71,6 +71,19 @@ until it's reopened.
 > If something went missing, just **re-add it once** — for example, add
 > `%USERPROFILE%\.cargo\bin` back to your PATH — and it'll stick.
 
+> **Note** — On **Windows**, installing or uninstalling a new version now stops
+> any `pactd`/`pact-cli` still running **from this install's own folder** first.
+> This matters if you chose **Keep running** on a previous quit (see the
+> chapter "Tracking Your Swaps") and the engine was still alive in the
+> background when you upgraded: without this, the running engine would hold a
+> file lock through the upgrade, or the new Satchel could end up re-adopting
+> the *old* engine binary instead of the freshly installed one. If a stop like
+> this ever interrupts a live swap mid-step, that's safe — the engine persists
+> its state around every broadcast, and the freshly installed `pactd` picks the
+> swap back up via chain-watching as soon as it starts. Only daemons running
+> from *this* install's folder are ever touched; a developer build or a
+> playground instance running elsewhere on the same machine is untouched.
+
 ### What's inside the bundle
 
 The bundle contains two things working together:

@@ -98,6 +98,35 @@ The policy object is a flat shape:
 > `importseed`. Back it up immediately; there is no recovery path if it is
 > lost.
 
+### Seed-only rescue (#54)
+
+A machine restored from the seed alone — a wiped data directory, a fresh
+install — can rediscover and resume in-flight swaps it has no local record of,
+from encrypted-to-self snapshots on the configured Nostr relays. See the
+chapter "Seeds, Wallets & Merchants" for the full mechanics.
+
+| Method | Params | Returns | Mutates |
+|---|---|---|---|
+| `restorefromrelay` | — | `{ restored, seen }` | yes (adopts records) |
+| `rescuestatus` | — | `{ pending, seen, warning? }` | no |
+
+- `restorefromrelay` — fetches this identity's rescue snapshots from the
+  configured relays and adopts every one that (a) isn't already a local record
+  and (b) isn't terminal. `restored` is how many were adopted; `seen` is how
+  many snapshot events were fetched in total. Errors if the seed is
+  locked/unreadable or no relay transport is configured.
+- `rescuestatus` — the read-only preview: `pending` is how many snapshots
+  `restorefromrelay` *would* adopt right now, without adopting anything.
+  `warning` is present (a fixed advisory string) whenever `pending > 0`,
+  cautioning that driving the same swap from two live machines on one seed can
+  double-fund it.
+
+> **Note** — `pactd` never adopts a snapshot on its own. Boot, unlock, and
+> merchant-load each trigger a **read-only** rescue preview and log a warning
+> if snapshots are pending, but adoption is always the explicit
+> `restorefromrelay` call (or `pact-cli restore`) — call it only once the
+> machine that ran those swaps is genuinely retired.
+
 ## Merchants
 
 A *merchant* is one seed bound to one data directory — the engine's wallet

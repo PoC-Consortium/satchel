@@ -155,9 +155,16 @@ first.
 > **Note** — **cancel** is offered only while nothing of yours is locked yet, so
 > it's always safe — the offer simply won't complete. It's gated on there being no
 > funding on either leg (not on a particular state name), so it behaves correctly
-> for both **Standard (HTLC)** and **Private (Taproot)** swaps. Once a leg is
-> funded, your safety net is the **"refunds at *when*"** time shown on the card:
-> the engine reclaims your funds automatically after that deadline.
+> for both **Standard (HTLC)** and **Private (Taproot)** swaps, and it works even
+> on an "initiating" pre-swap that's still waiting on the maker to answer. Once a
+> leg is funded, your safety net is the **"refunds at *when*"** time shown on the
+> card: the engine reclaims your funds automatically after that deadline.
+
+> **Tip** — You don't strictly have to press **cancel** on a handshake that's
+> going nowhere. A **Private (Taproot)** swap stuck waiting on the other side —
+> before anything is funded — clears itself automatically after about 15
+> minutes, on both sides independently, with nothing lost either way. Cancel is
+> there for when you don't want to wait even that long.
 
 ![The active-swaps dock, with its cancel and dump-logs buttons.](images/processed/ch10-dock.png){width=85%}
 
