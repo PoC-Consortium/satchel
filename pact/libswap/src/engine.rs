@@ -5489,7 +5489,11 @@ impl Engine {
         // 1. v1 record (recv re-checks the pinned counterparty).
         if self.store.get(&envelope.swap_id).is_ok() {
             let rec = self.recv(envelope)?;
-            return event(&rec.swap_id, "recv", format!("counterparty abort: {reason}"));
+            return event(
+                &rec.swap_id,
+                "recv",
+                format!("counterparty abort: {reason}"),
+            );
         }
         // 2. v2 record, directly by swap id.
         if self.store.get_adaptor(&envelope.swap_id).is_ok() {
@@ -5552,7 +5556,10 @@ impl Engine {
                 self.store.put(&rec)?;
                 return event("counterparty-abort", reason.into());
             }
-            return event("counterparty-abort", "ignored (funded; timelocks protect)".into());
+            return event(
+                "counterparty-abort",
+                "ignored (funded; timelocks protect)".into(),
+            );
         }
         let mut rec = self.store.get_adaptor(swap_id)?;
         ensure!(
@@ -5564,7 +5571,10 @@ impl Engine {
             Role::Participant => rec.funding_b_txid.is_some(),
         };
         if our_leg_funded {
-            return event("counterparty-abort", "ignored (funded; timelocks protect)".into());
+            return event(
+                "counterparty-abort",
+                "ignored (funded; timelocks protect)".into(),
+            );
         }
         rec.state = AdaptorState::Aborted;
         self.store.put_adaptor(&rec)?;
@@ -7184,7 +7194,10 @@ mod tests {
         let mut rec = v2_record(&alice);
         rec.funding_a_txid = Some("aa".repeat(32));
         alice.store.put_adaptor(&rec).unwrap();
-        let err = alice.adaptor_abort(&rec.swap_id, "x").unwrap_err().to_string();
+        let err = alice
+            .adaptor_abort(&rec.swap_id, "x")
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("funded"), "{err}");
 
         // Participant: gate is OUR leg (B) — the counterparty's leg-A funding
@@ -7236,7 +7249,11 @@ mod tests {
         rec.counterparty_identity = Some(bob_id.clone());
         alice.store.put_adaptor(&rec).unwrap();
         let abort = bob
-            .signed_envelope("abort", &rec.swap_id, serde_json::json!({ "reason": "bye" }))
+            .signed_envelope(
+                "abort",
+                &rec.swap_id,
+                serde_json::json!({ "reason": "bye" }),
+            )
             .unwrap();
         let ev = alice.recv_abort(&abort).unwrap().unwrap();
         assert_eq!(ev.action, "counterparty-abort");
@@ -7250,7 +7267,11 @@ mod tests {
         rec.counterparty_identity = Some(bob_id.clone());
         alice.store.put_adaptor(&rec).unwrap();
         let forged = carol
-            .signed_envelope("abort", &rec.swap_id, serde_json::json!({ "reason": "hah" }))
+            .signed_envelope(
+                "abort",
+                &rec.swap_id,
+                serde_json::json!({ "reason": "hah" }),
+            )
             .unwrap();
         assert!(alice.recv_abort(&forged).is_err());
         assert_eq!(
@@ -7264,7 +7285,11 @@ mod tests {
         rec.funding_a_txid = Some("dd".repeat(32));
         alice.store.put_adaptor(&rec).unwrap();
         let abort = bob
-            .signed_envelope("abort", &rec.swap_id, serde_json::json!({ "reason": "bye" }))
+            .signed_envelope(
+                "abort",
+                &rec.swap_id,
+                serde_json::json!({ "reason": "bye" }),
+            )
             .unwrap();
         let ev = alice.recv_abort(&abort).unwrap().unwrap();
         assert!(ev.detail.contains("ignored"), "{}", ev.detail);
@@ -7308,7 +7333,11 @@ mod tests {
 
         // The pinned taker cancelling by offer id aborts the record.
         let abort = bob
-            .signed_envelope("abort", "offer-Z", serde_json::json!({ "reason": "gave up" }))
+            .signed_envelope(
+                "abort",
+                "offer-Z",
+                serde_json::json!({ "reason": "gave up" }),
+            )
             .unwrap();
         let ev = alice.recv_abort(&abort).unwrap().unwrap();
         assert_eq!(ev.action, "counterparty-abort");
