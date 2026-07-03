@@ -812,7 +812,7 @@ impl ElectrumBackend {
 
     /// Electrum addresses outputs by the SHA256 of the scriptPubKey,
     /// reversed (display order).
-    fn scripthash(spk: &ScriptBuf) -> String {
+    pub(crate) fn scripthash(spk: &ScriptBuf) -> String {
         use bitcoin::hashes::{sha256, Hash};
         let mut digest = sha256::Hash::hash(spk.as_bytes()).to_byte_array();
         digest.reverse();
@@ -820,7 +820,7 @@ impl ElectrumBackend {
     }
 
     /// (height, raw tip header) from headers.subscribe.
-    fn tip(&self) -> Result<(u64, Vec<u8>)> {
+    pub(crate) fn tip(&self) -> Result<(u64, Vec<u8>)> {
         let tip = self.raw("blockchain.headers.subscribe", vec![])?;
         let height = tip["height"]
             .as_u64()
@@ -837,7 +837,7 @@ impl ElectrumBackend {
         }
     }
 
-    fn get_raw_tx(&self, txid: &str) -> Result<Transaction> {
+    pub(crate) fn get_raw_tx(&self, txid: &str) -> Result<Transaction> {
         let hex_tx = self.raw(
             "blockchain.transaction.get",
             vec![electrum_client::Param::String(txid.into())],
@@ -846,7 +846,20 @@ impl ElectrumBackend {
         bitcoin::consensus::encode::deserialize(&bytes).context("transaction.get: bad tx")
     }
 
-    fn history(&self, spk: &ScriptBuf) -> Result<Vec<(String, i64)>> {
+    /// (block hash hex, header timestamp) at `height` — raw header bytes
+    /// hashed via [`ChainParams::header_hash`] (PoCX 286-byte headers safe).
+    /// The nodeless wallet's chain source uses this for bdk anchors and
+    /// checkpoints.
+    pub(crate) fn header_at(&self, height: u64) -> Result<(String, u32)> {
+        let raw = self.raw(
+            "blockchain.block.header",
+            vec![electrum_client::Param::Usize(height as usize)],
+        )?;
+        let raw = hex::decode(raw.as_str().context("block.header: non-string")?)?;
+        Ok((self.params.header_hash(&raw)?, self.params.header_time(&raw)?))
+    }
+
+    pub(crate) fn history(&self, spk: &ScriptBuf) -> Result<Vec<(String, i64)>> {
         let entries = self.raw(
             "blockchain.scripthash.get_history",
             vec![electrum_client::Param::String(Self::scripthash(spk))],
@@ -1125,6 +1138,15 @@ impl MultiBackend {
             })
             .collect::<Result<Vec<_>>>()?;
         anyhow::ensure!(!backends.is_empty(), "no RPC URLs given");
+        Ok(Self { backends })
+    }
+
+    /// Assemble from prebuilt backends — the nodeless path builds its own
+    /// primary (a `wallet_bdk::BdkWalletBackend`) before the remaining
+    /// Electrum views join (docs/NODELESS_WALLET.md D5). `backends[0]` is
+    /// the primary, exactly as with [`MultiBackend::new`].
+    pub fn from_backends(backends: Vec<Box<dyn ChainBackend>>) -> Result<Self> {
+        anyhow::ensure!(!backends.is_empty(), "no backends given");
         Ok(Self { backends })
     }
 

@@ -190,6 +190,36 @@ impl PactSeed {
     pub fn adaptor_point(&self, index: u32) -> Result<PublicKey> {
         Ok(self.adaptor_secret(index)?.public_key(&self.secp))
     }
+
+    // ---- nodeless on-chain wallet (docs/NODELESS_WALLET.md D1) ----
+
+    /// Account xprv of the nodeless on-chain wallet at `m/86'/coin_type'/0'`
+    /// — the standard BIP-86 branch of the SAME mnemonic. Standard paths keep
+    /// the funds recoverable in any descriptor wallet, and the purpose (86')
+    /// is disjoint from the Pact tree (7228') by construction. `coin_type` is
+    /// the registry's `bip32_coin_type` (spec §4.1), NOT the SLIP-44 network
+    /// constant of whatever network the coin happens to run.
+    pub fn wallet_account_xpriv(&self, coin_type: u32) -> Result<Xpriv> {
+        let path: Vec<ChildNumber> = [86, coin_type, 0]
+            .iter()
+            .map(|&i| ChildNumber::from_hardened_idx(i).map_err(Into::into))
+            .collect::<Result<_>>()?;
+        Ok(self.master.derive_priv(&self.secp, &path)?)
+    }
+
+    /// bdk descriptor pair `(external, internal)` for the nodeless wallet:
+    /// `tr([fingerprint/86'/coin'/0']xprv/{0,1}/*)`. Private descriptors —
+    /// they carry the account xprv so bdk can sign; they must never be
+    /// logged or persisted (bdk stores only the public form).
+    pub fn wallet_descriptors(&self, coin_type: u32) -> Result<(String, String)> {
+        let fingerprint = self.master.fingerprint(&self.secp);
+        let account = self.wallet_account_xpriv(coin_type)?;
+        let origin = format!("[{fingerprint}/86'/{coin_type}'/0']");
+        Ok((
+            format!("tr({origin}{account}/0/*)"),
+            format!("tr({origin}{account}/1/*)"),
+        ))
+    }
 }
 
 /// v2 swap identifier (spec v2 §3.3): `hex(TaggedHash("pact/swapid/v2", T)[0..8])`
@@ -329,6 +359,34 @@ mod tests {
         for i in 0..64 {
             assert_ne!(anchored, s.swap_secret_key(COIN_BTC, i).unwrap());
         }
+    }
+
+    // ---- nodeless wallet branch (docs/NODELESS_WALLET.md D1) ----
+
+    #[test]
+    fn wallet_account_matches_bip86_vector() {
+        // COIN_BTC = 0, so m/86'/0'/0' from the standard test mnemonic is
+        // exactly BIP-86's published account-xprv test vector.
+        let account = seed().wallet_account_xpriv(COIN_BTC).unwrap();
+        assert_eq!(
+            account.to_string(),
+            "xprv9xgqHN7yz9MwCkxsBPN5qetuNdQSUttZNKw1dcYTV4mkaAFiBVGQziHs3NRSWMkCzvgjEe3n9xV8oYywvM8at9yRqyaZVz6TYYhX98VjsUk"
+        );
+    }
+
+    #[test]
+    fn wallet_descriptors_shape_and_disjointness() {
+        let s = seed();
+        let (ext, int) = s.wallet_descriptors(COIN_POCX).unwrap();
+        // tr() descriptors with full origin, distinct keychains.
+        assert!(ext.starts_with("tr(["));
+        assert!(ext.contains(&format!("/86'/{COIN_POCX}'/0']")));
+        assert!(ext.ends_with("/0/*)"));
+        assert!(int.ends_with("/1/*)"));
+        assert_ne!(ext, int);
+        // Deterministic; distinct per coin type.
+        assert_eq!(ext, seed().wallet_descriptors(COIN_POCX).unwrap().0);
+        assert_ne!(ext, s.wallet_descriptors(COIN_BTC).unwrap().0);
     }
 
     #[test]

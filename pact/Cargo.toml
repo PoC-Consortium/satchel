@@ -14,7 +14,9 @@ libswap = { path = "libswap" }
 # Bitcoin stack — versions must stay mutually compatible (all on bitcoin 0.32).
 bitcoin = { version = "0.32", features = ["serde", "rand-std"] }
 miniscript = "12"
-bdk_wallet = "1"
+# rusqlite feature: bdk's sqlite persister; pinned 0.31 = our own rusqlite,
+# so the bundled libsqlite3-sys stays a single native link.
+bdk_wallet = { version = "1", features = ["rusqlite"] }
 electrum-client = "0.21"
 bech32 = "0.11"
 bip39 = "2"

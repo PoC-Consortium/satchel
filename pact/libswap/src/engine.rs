@@ -21,7 +21,7 @@ use std::str::FromStr;
 use std::sync::Mutex;
 
 use crate::adaptor_swap::AdaptorState;
-use crate::chain::{ChainBackend, MultiBackend};
+use crate::chain::{ChainBackend, ElectrumBackend, MultiBackend};
 use crate::htlc::extract_preimage;
 use crate::keys::{hash_preimage, swap_id, PactSeed};
 use crate::messages::{self, AbortBody, AcceptBody, ChainRef, Envelope, FundedBody, InitBody};
@@ -80,6 +80,12 @@ pub struct Engine {
     /// node call per poll. Ephemeral: empty after a restart until the next tick
     /// repopulates it.
     progress: Mutex<HashMap<String, SwapProgress>>,
+    /// Per-coin nodeless (bdk) wallets, opened lazily by [`Engine::backend`]
+    /// for coins configured with Electrum URLs only
+    /// (docs/NODELESS_WALLET.md D2/D5). Stateful — sync position, revealed
+    /// indexes, sqlite store — so it lives here rather than being rebuilt
+    /// per backend construction.
+    wallet_manager: crate::wallet_bdk::WalletManager,
 }
 
 fn chain_params(chain: &ChainRef) -> Result<&'static ChainParams> {
@@ -585,6 +591,7 @@ impl Engine {
             fee_bump,
             watch_only,
             progress: Mutex::new(HashMap::new()),
+            wallet_manager: crate::wallet_bdk::WalletManager::new(data_dir),
         })
     }
 
@@ -615,9 +622,63 @@ impl Engine {
                 chain.coin_id
             )
         })?;
-        let backend = MultiBackend::new(chain_params(chain)?, urls)?;
+        let params = chain_params(chain)?;
+        let first = urls.split(',').map(str::trim).find(|u| !u.is_empty());
+        let backend = match first {
+            // No Core-RPC primary ⇒ nodeless mode (docs/NODELESS_WALLET.md D5).
+            Some(url) if !url.starts_with("http://") => {
+                self.nodeless_backend(&chain.coin_id, params, urls)?
+            }
+            _ => MultiBackend::new(params, urls)?,
+        };
         backend.verify_chain()?;
         Ok(backend)
+    }
+
+    /// Electrum-only URL list ⇒ nodeless mode: the primary becomes a
+    /// [`crate::wallet_bdk::BdkWalletBackend`] (bdk wallet from the Pact
+    /// mnemonic's BIP-86 branch over the first Electrum URL); the remaining
+    /// URLs join as independent chain views. A locked — or absent,
+    /// watch-only — seed keeps chain reads working and surfaces through
+    /// `wallet_locked`, exactly like an encrypted, locked Core wallet.
+    fn nodeless_backend(
+        &self,
+        coin_id: &str,
+        params: &'static ChainParams,
+        urls: &str,
+    ) -> Result<MultiBackend> {
+        let urls: Vec<&str> = urls
+            .split(',')
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .collect();
+        anyhow::ensure!(
+            urls.iter()
+                .all(|u| u.starts_with("tcp://") || u.starts_with("ssl://")),
+            "nodeless coin {coin_id}: a Core-RPC (http://) URL must come FIRST in the \
+             backend list to be the funding wallet — Electrum-first lists must be \
+             Electrum-only"
+        );
+        // A single lying/withholding server must not be our only chain view
+        // while real funds move (spec §10). Test networks may run on one.
+        if params.network == Network::Mainnet {
+            anyhow::ensure!(
+                urls.len() >= 2,
+                "nodeless coin {coin_id} on mainnet needs at least 2 Electrum servers \
+                 (independent chain views) — add a second URL"
+            );
+        }
+        let handle = match self.store.seed() {
+            Ok(seed) => Some(self.wallet_manager.open(coin_id, params, &seed)?),
+            Err(_) => None, // locked or absent seed: chain-reads-only backend
+        };
+        let mut backends: Vec<Box<dyn ChainBackend>> = vec![Box::new(
+            crate::wallet_bdk::BdkWalletBackend::new(params, urls[0], handle)?,
+        )];
+        for url in &urls[1..] {
+            backends.push(Box::new(ElectrumBackend::new(params, url)?));
+        }
+        MultiBackend::from_backends(backends)
     }
 
     /// Live reachability gate for both legs of a swap: each coin's node must be
