@@ -545,6 +545,12 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 let wallet = blocking(app, move |e| Ok(e.coin_wallet(&wid)))
                     .await
                     .unwrap_or(None);
+                // Nodeless (Electrum-only, pact-seed bdk wallet) — the UI keys
+                // the send/receive/activity surface off this (epic #58).
+                let nid = def.id.to_string();
+                let nodeless = blocking(app, move |e| Ok(e.coin_nodeless(&nid)))
+                    .await
+                    .unwrap_or(false);
                 coins.push(json!({
                     "id": def.id,
                     "display_name": def.display_name,
@@ -559,6 +565,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                     "confirmations": confirmations,
                     "default_confirmations": default_confirmations,
                     "wallet": wallet,
+                    "nodeless": nodeless,
                 }));
             }
             Ok(json!({ "network": format!("{net:?}").to_lowercase(), "coins": coins }))

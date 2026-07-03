@@ -4,6 +4,8 @@
 First real-server exercise of `wallet_bdk.rs`: stock bdk over our raw-Electrum
 calls, against a REAL electrs (PoCX-patched romanz fork) indexing a regtest
 PoCX node. Everything below `sync_entry` is unit-tested; this proves the wire.
+The full swap-parity matrix lives in test_nodeless_e2e.py — this is the
+minimal wallet-flow smoke, kept for quick iteration on the chain source.
 
 Covered end to end, all through pactd's JSON-RPC (nodeless mode: the coin URL
 list has no http:// primary, so the engine dispatches to BdkWalletBackend):
@@ -25,7 +27,6 @@ Env:  POCX_BITCOIND       node binary        (see regtest_harness.py)
 import json
 import os
 import shutil
-import socket
 import subprocess
 import sys
 import tempfile
@@ -33,9 +34,12 @@ import time
 import urllib.request
 
 from regtest_harness import (
+    ELECTRS_ELECTRUM_PORT,
     EXE,
     HERE,
     POCX_REGTEST_GENESIS,
+    POCX_REST_RPC_PORT,
+    ElectrsServer,
     Node,
     find_pocx_bitcoind,
 )
@@ -43,109 +47,7 @@ from regtest_harness import (
 PACT_DIR = os.path.normpath(os.path.join(HERE, ".."))
 PACTD_BIN = os.path.join(PACT_DIR, "target", "debug", "pactd" + EXE)
 
-# bindex-pocx (the fork's indexer) fetches blocks over bitcoind's REST
-# interface at the HARDCODED network-default RPC port (chain.rs:
-# `http://localhost:{default_rpc_port(network)}`) — --daemon-rpc-addr does
-# not move it. So unlike the e2e suite, the spike node MUST sit on the
-# regtest default 18443, with `-rest=1` (REST is unauthenticated, RPC-port).
-POCX_SPIKE_RPC_PORT = 18443
-ELECTRUM_PORT = 19750
-MONITORING_PORT = 19751
 PACTD_PORT = 19752
-
-
-def find_electrs():
-    candidates = [
-        os.environ.get("PACT_ELECTRS_BIN"),
-        os.path.join(HERE, "bin", "electrs" + EXE),
-    ]
-    for candidate in candidates:
-        if candidate and os.path.exists(candidate):
-            return candidate
-    raise FileNotFoundError(
-        "electrs binary not found. Copy the PoCX-patched electrs to "
-        "harness/bin/electrs" + EXE + " or set PACT_ELECTRS_BIN.")
-
-
-class Electrs:
-    """The PoCX-patched electrs, indexing the harness's regtest PoCX node."""
-
-    def __init__(self, workdir, node):
-        self.dir = os.path.join(workdir, "electrs")
-        os.makedirs(self.dir, exist_ok=True)
-        # electrs authenticates via a cookie FILE whose content is user:pass —
-        # hand it the harness node's static credentials in that shape.
-        self.cookie_path = os.path.join(self.dir, "rpc.cookie")
-        with open(self.cookie_path, "w", encoding="ascii") as fh:
-            fh.write(f"{node.rpc_user}:{node.rpc_pass}")
-        self.daemon_port = node.rpc_port
-        self.proc = None
-        self.logf = None
-
-    def start(self):
-        cmd = [
-            find_electrs(),
-            "--network", "regtest",
-            "--daemon-rpc-addr", f"127.0.0.1:{self.daemon_port}",
-            "--cookie-file", self.cookie_path,
-            "--db-dir", os.path.join(self.dir, "db"),
-            "--electrum-rpc-addr", f"127.0.0.1:{ELECTRUM_PORT}",
-            "--monitoring-addr", f"127.0.0.1:{MONITORING_PORT}",
-            "--log-filters", "INFO",
-        ]
-        self.logf = open(os.path.join(self.dir, "electrs.log"), "w", encoding="utf-8")
-        print(f"[spike] starting electrs: {' '.join(cmd)}")
-        self.proc = subprocess.Popen(cmd, stdout=self.logf, stderr=subprocess.STDOUT)
-
-    def raw_call(self, method, params, timeout=5):
-        """One-shot Electrum JSONRPC call over a fresh TCP connection."""
-        with socket.create_connection(("127.0.0.1", ELECTRUM_PORT), timeout=timeout) as s:
-            req = {"id": 0, "jsonrpc": "2.0", "method": method, "params": params}
-            s.sendall((json.dumps(req) + "\n").encode())
-            s.settimeout(timeout)
-            buf = b""
-            while not buf.endswith(b"\n"):
-                chunk = s.recv(65536)
-                if not chunk:
-                    break
-                buf += chunk
-        resp = json.loads(buf.decode())
-        if resp.get("error"):
-            raise RuntimeError(f"electrum {method}: {resp['error']}")
-        return resp["result"]
-
-    def wait_synced(self, want_height, timeout=90):
-        deadline = time.time() + timeout
-        last = None
-        while time.time() < deadline:
-            if self.proc.poll() is not None:
-                raise RuntimeError(
-                    f"electrs exited early: {self.proc.returncode} "
-                    f"(see {self.dir}/electrs.log)")
-            try:
-                tip = self.raw_call("blockchain.headers.subscribe", [])
-                last = tip.get("height")
-                if last is not None and last >= want_height:
-                    print(f"[spike] electrs synced to height {last}")
-                    return
-            except (OSError, RuntimeError):
-                pass
-            time.sleep(0.5)
-        raise TimeoutError(
-            f"electrs did not reach height {want_height} (last seen: {last}; "
-            f"see {self.dir}/electrs.log)")
-
-    def stop(self):
-        if self.proc:
-            self.proc.terminate()
-            try:
-                self.proc.wait(timeout=15)
-            except subprocess.TimeoutExpired:
-                self.proc.kill()
-            self.proc = None
-        if self.logf:
-            self.logf.close()
-            self.logf = None
 
 
 class NodelessPactd:
@@ -163,7 +65,7 @@ class NodelessPactd:
             PACTD_BIN,
             "--data-dir", self.data_dir,
             "--network", "regtest",
-            "--coin", f"btcx=tcp://127.0.0.1:{ELECTRUM_PORT}",
+            "--coin", f"btcx=tcp://127.0.0.1:{ELECTRS_ELECTRUM_PORT}",
             "--listen", f"127.0.0.1:{self.port}",
             "--tick-secs", "0",
         ]
@@ -225,9 +127,9 @@ def main():
     workdir = tempfile.mkdtemp(prefix="pact-spike-electrs-")
     print(f"[spike] workdir {workdir}")
     node = Node("pocx", find_pocx_bitcoind(), os.path.join(workdir, "pocx"),
-                POCX_SPIKE_RPC_PORT, POCX_REGTEST_GENESIS,
+                POCX_REST_RPC_PORT, POCX_REGTEST_GENESIS,
                 extra_args=["-rest=1"])
-    electrs = Electrs(workdir, node)
+    electrs = None
     pactd = NodelessPactd(workdir)
     ok = False
     try:
@@ -239,8 +141,10 @@ def main():
         miner = node.new_address("miner")
         # A little chain history BEFORE electrs starts (initial index path).
         node.rpc("generatetoaddress", 10, miner)
+        electrs = ElectrsServer(workdir, node)
         electrs.start()
         electrs.wait_synced(10)
+        print("[spike] electrs synced to height 10")
 
         # Genesis served through electrs must be the PoCX regtest genesis —
         # this is the exact header path verify_chain uses (286-byte headers).
@@ -299,12 +203,13 @@ def main():
         pactd.start()
         bal3 = pactd.rpc("getbalance", "btcx")["balance_sat"]
         assert bal3 == bal2, f"balance changed across restart: {bal2} -> {bal3}"
-        print(f"[spike] persistence OK: balance stable across restart")
+        print("[spike] persistence OK: balance stable across restart")
 
         ok = True
     finally:
         pactd.stop()
-        electrs.stop()
+        if electrs:
+            electrs.stop()
         node.stop()
         if ok:
             shutil.rmtree(workdir, ignore_errors=True)

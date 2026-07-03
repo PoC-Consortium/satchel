@@ -735,6 +735,21 @@ impl Engine {
         (!name.is_empty()).then(|| name.to_string())
     }
 
+    /// Whether `coin_id` is configured NODELESS (docs/NODELESS_WALLET.md D5):
+    /// its backend list has no Core-RPC primary, so the wallet is the bdk one
+    /// derived from the Pact seed. Mirrors the [`Engine::backend`] dispatch
+    /// without building a backend; the UI keys the send/receive/activity
+    /// surface (and the "pact seed" wallet label) off this.
+    pub fn coin_nodeless(&self, coin_id: &str) -> bool {
+        let Some(urls) = self.coins.get(coin_id) else {
+            return false;
+        };
+        match urls.split(',').map(str::trim).find(|u| !u.is_empty()) {
+            Some(url) => !url.starts_with("http://"),
+            None => false,
+        }
+    }
+
     /// The confirmation depth (reorg-safety / finality) to require for `chain`:
     /// the operator's per-coin setting if present, else the network/spacing
     /// [`default_confirmations`] heuristic. The single source of truth for

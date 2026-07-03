@@ -84,7 +84,9 @@ Engine status (proven by the regtest e2e suite):
   comma-separated backend lists select the Electrum protocol — works
   against any BTC Electrum server and against
   [`electrs-pocx`](https://github.com/PoC-Consortium/electrs-pocx) (the
-  explorer's indexer, which serves Electrum RPC alongside Esplora REST).
+  PoCX Electrum server, a romanz/electrs fork; the explorer's indexer
+  [`esplora-electrs-pocx`](https://github.com/PoC-Consortium/esplora-electrs-pocx)
+  also serves Electrum RPC).
   Chain-data only: the primary backend stays a Core-RPC wallet URL. PoCX's
   286-byte signed headers are handled on raw bytes (hash excludes the
   generator signature) — pinned by unit vectors captured from a real node.

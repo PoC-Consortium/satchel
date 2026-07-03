@@ -839,9 +839,9 @@ impl ChainBackend for CoreRpcBackend {
 }
 
 /// Chain-data backend speaking the Electrum protocol — the same client
-/// for BTC (any public Electrum server) and PoCX (`electrs-pocx`, which
-/// serves Electrum RPC alongside the Esplora REST API used by the
-/// explorer).
+/// for BTC (any public Electrum server) and PoCX (`electrs-pocx`, the
+/// dedicated Electrum server; the explorer's indexer
+/// `esplora-electrs-pocx` also serves Electrum RPC).
 ///
 /// Chain data only: it has no wallet, so it cannot be the primary backend
 /// (funding and sweep addresses come from a Core-RPC wallet URL).
