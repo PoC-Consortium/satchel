@@ -1,8 +1,33 @@
 # Nodeless wallet (epic #58) — branch status & resume notes
 
-Branch: `nodeless-wallet`. Design: [`NODELESS_WALLET.md`](NODELESS_WALLET.md).
-Paused 2026-07-03 waiting on the PoCX electrs patch (romanz latest fork —
-being built/tested for Windows separately).
+Branch: `nodeless-wallet`, draft PR #67. Design:
+[`NODELESS_WALLET.md`](NODELESS_WALLET.md); overnight-run decisions:
+[`NODELESS_DECISIONS.md`](NODELESS_DECISIONS.md).
+
+## State after the 2026-07-03/04 overnight run — REVIEW-READY
+
+Everything through the playground is DONE and verified:
+
+- **libswap foundation + live spike GREEN** (bdk 2.4, electrs, v31 node).
+- **Phantom-funding release + listtransactions** (see "Done since the
+  pause" below).
+- **E2E parity suite GREEN** (`test_nodeless_e2e.py`, 4 scenarios: v1
+  nodeless maker, v2 nodeless taker, v2 cancel releases inputs LIVE,
+  v1 nodeless↔nodeless).
+- **Satchel UI**: Wallets screen send/receive/activity for nodeless coins,
+  "pact seed wallet" label, CoinSetup nodeless (Electrum) mode; wizard
+  inherits it. i18n: en + 25 locales (new keys optional in Bundle).
+- **Playground**: `tools/playground-cork.ps1` — Alice's BTCX is NODELESS
+  over electrs, faucet auto-funds her pact-seed wallet after the wizard;
+  BTC + LTC stay node-backed. Dress-rehearsed headless: a v2 board take
+  gave 47 BTCX from the bdk wallet and completed.
+
+Still open after review: pactd deep-rescan affordance (O2), sweep-target
+question (O3), handbook/wiki flip (+1 RPC method count), sub-issues under
+#58 (not filed — user decides), Electrum-over-Tor / multi-server policy
+tuning (hardening, later). Upstream electrs-pocx wishes: a `--rest-url`
+override (bindex hardcodes :18443 on regtest) and a fix for the
+empty-index `headers.subscribe` panic (harness works around both).
 
 ## Landed on this branch
 
