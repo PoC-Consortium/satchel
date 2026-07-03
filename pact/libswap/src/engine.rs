@@ -3991,13 +3991,42 @@ impl Engine {
                 "settlement",
                 Some(rec.redeem_feerate_a),
             ),
-            // Pre-Signed (handshake) parity with v1: the maker is funding leg A +
-            // negotiating the adaptor sigs; the taker has built leg B and is
-            // waiting on the maker's leg A — same phases v1 shows from Accepted, so
-            // neither side sees a blank during the (brief) handshake.
-            (Role::Initiator, Accepted | NoncesExchanged) => {
-                self.progress_awaiting(&rec.swap_id, &rec.chain_a, "funding", prev)
-            }
+            // Pre-Signed (handshake): leg A is broadcast the INSTANT the taker's
+            // `accept` lands (the autopilot funds on that message), but the swap
+            // sits in these states for two more relay round-trips (nonces, then
+            // partial sigs) before `Signed`. Mirror v1's maker once the lock is
+            // out: `our_lock · confs/n_a` while it buries, then an anchored
+            // liveness wait — a stale "funding" here reads as "not committed yet"
+            // (and narrate's accepted line even offered free cancel) while the
+            // coins are already locked. No pointer yet = the fund really is
+            // pending (locked wallet, retry) → keep the "funding" hint.
+            (Role::Initiator, Accepted | NoncesExchanged) => match rec.funding_a_txid.as_deref() {
+                Some(txid_a) => {
+                    let confs_a = self
+                        .lock_confs(&rec.chain_a, txid_a, rec.funding_a_vout, leg_spk(true))
+                        .unwrap_or(0);
+                    if confs_a < rec.n_a {
+                        self.progress_confirming(
+                            &rec.swap_id,
+                            &rec.chain_a,
+                            txid_a.to_string(),
+                            rec.funding_a_vout,
+                            leg_spk(true),
+                            rec.n_a,
+                            "our_lock",
+                            None,
+                        )
+                    } else {
+                        self.progress_awaiting_anchored(
+                            &rec.swap_id,
+                            &rec.chain_b,
+                            "awaiting_lock",
+                            confs_a - rec.n_a,
+                        )
+                    }
+                }
+                None => self.progress_awaiting(&rec.swap_id, &rec.chain_a, "funding", prev),
+            },
             (Role::Participant, Accepted | NoncesExchanged) => match &rec.funding_a_txid {
                 Some(txid) => self.progress_confirming(
                     &rec.swap_id,
