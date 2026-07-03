@@ -4822,9 +4822,6 @@ impl Engine {
         Ok(kept)
     }
 
-    /// Seal to the recipient identity, then best-effort send to every
-    /// board; success if any accepted. Board operators see only
-    /// ciphertext addressed to a pubkey.
     // ---- Encrypted swap-state rescue (issue #54) ----
 
     /// Publish an encrypted-to-self snapshot of a v1 swap record. Taken once
@@ -4960,6 +4957,9 @@ impl Engine {
         Ok(Some((false, next_index)))
     }
 
+    /// Seal to the recipient identity, then best-effort send to every
+    /// board; success if any accepted. Board operators see only
+    /// ciphertext addressed to a pubkey.
     fn relay_send_all(&self, to: &str, envelope: &Envelope) -> Result<()> {
         let blob = crate::board::seal_envelope(to, envelope)?;
         let mut last_err = None;
