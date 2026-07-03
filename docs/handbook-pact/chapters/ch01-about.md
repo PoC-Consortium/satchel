@@ -80,7 +80,7 @@ This handbook follows a few consistent conventions:
 > — are reviewed and live on mainnet.
 
 Rather than a release-version number, this handbook tracks the **source revision**
-it was checked against: it was verified against commit `0fe9cdb` (July 2026), the
+it was checked against: it was verified against commit `eb22c39` (July 2026), the
 hash printed on the copyright page. The **code is the ultimate source of truth** —
 when a precise detail matters for your integration, confirm it against the code at
 that revision and the pinned test vectors before you rely on it. When the engine
