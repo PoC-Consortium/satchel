@@ -26,13 +26,15 @@ type Verdict =
   | { kind: "bad"; msg: string };
 
 type Auth = "cookie" | "userpass";
+type ConnMode = "node" | "electrum";
 
 // Coin setup: structured RPC connection (host / port / auth / datadir or
 // user-pass / wallet), pre-filled from the coin's template → any saved config →
-// network defaults. Validate composes the exact backend URL Satchel will save
-// and runs the node's genesis-hash check; nothing persists until that passes,
-// so funds can never be pointed at the wrong chain. Editing any field
-// invalidates a prior check.
+// network defaults — OR the nodeless (Electrum) mode, epic #58: no node, chain
+// data from Electrum servers, the wallet on the Pact seed. Validate composes
+// the exact backend URL Satchel will save and runs the genesis-hash check;
+// nothing persists until that passes, so funds can never be pointed at the
+// wrong chain. Editing any field invalidates a prior check.
 export default function CoinSetup({
   coin,
   saved,
@@ -54,6 +56,12 @@ export default function CoinSetup({
   const pick = <T,>(s: T | null | undefined, tpl: T | undefined, def: T): T =>
     s ?? tpl ?? def;
 
+  const [mode, setMode] = useState<ConnMode>(
+    saved?.funding_wallet === "pact-seed" ? "electrum" : "node",
+  );
+  const [electrumUrls, setElectrumUrls] = useState(
+    saved?.funding_wallet === "pact-seed" ? (saved?.extra_backends ?? []).join("\n") : "",
+  );
   const [host, setHost] = useState(pick(saved?.rpc_host, template?.rpc_host, "127.0.0.1"));
   const [port, setPort] = useState(String(saved?.rpc_port ?? template?.rpc_port ?? ""));
   const [auth, setAuth] = useState<Auth>(
@@ -87,22 +95,43 @@ export default function CoinSetup({
   }
 
   const portNum = parseInt(port.trim(), 10);
+  const electrumList = useMemo(
+    () => electrumUrls.split("\n").map((s) => s.trim()).filter(Boolean),
+    [electrumUrls],
+  );
   const connInput = useMemo<CoinConnInput>(
-    () => ({
-      rpc_host: host.trim() || "127.0.0.1",
-      rpc_port: Number.isFinite(portNum) ? portNum : undefined,
-      auth_method: auth,
-      rpc_user: auth === "userpass" ? user.trim() : undefined,
-      rpc_password: auth === "userpass" ? password : undefined,
-      datadir: auth === "cookie" ? datadir.trim() : undefined,
-      cookie_subpath: auth === "cookie" && cookieSub.trim() ? cookieSub.trim() : undefined,
-      wallet: wallet.trim() || undefined,
-    }),
-    [host, portNum, auth, user, password, datadir, cookieSub, wallet],
+    () =>
+      mode === "electrum"
+        ? {
+            // Nodeless: the pact-seed wallet + Electrum-only backend list.
+            funding_wallet: "pact-seed",
+            extra_backends: electrumList,
+          }
+        : {
+            rpc_host: host.trim() || "127.0.0.1",
+            rpc_port: Number.isFinite(portNum) ? portNum : undefined,
+            auth_method: auth,
+            rpc_user: auth === "userpass" ? user.trim() : undefined,
+            rpc_password: auth === "userpass" ? password : undefined,
+            datadir: auth === "cookie" ? datadir.trim() : undefined,
+            cookie_subpath: auth === "cookie" && cookieSub.trim() ? cookieSub.trim() : undefined,
+            wallet: wallet.trim() || undefined,
+          },
+    [mode, electrumList, host, portNum, auth, user, password, datadir, cookieSub, wallet],
   );
 
   async function validate() {
-    if (!Number.isFinite(portNum) || portNum <= 0) {
+    if (mode === "electrum") {
+      if (electrumList.length === 0) {
+        setErr(t("coins.electrumNeedUrl"));
+        return;
+      }
+      const bad = electrumList.find((u) => !u.startsWith("tcp://") && !u.startsWith("ssl://"));
+      if (bad) {
+        setErr(t("coins.electrumBadUrl", { url: bad }));
+        return;
+      }
+    } else if (!Number.isFinite(portNum) || portNum <= 0) {
       setErr(t("coins.needPort"));
       return;
     }
@@ -156,6 +185,44 @@ export default function CoinSetup({
           {t("coins.setupIntro", { sym: coin.symbol })}
         </DialogContentText>
 
+        <Typography
+          sx={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.08em", color: "text.secondary" }}
+        >
+          {t("coins.modeLabel")}
+        </Typography>
+        <Stack direction="row" spacing={1.5} sx={{ mt: 1, mb: 2 }}>
+          <ChoiceCard
+            title={t("coins.modeNode")}
+            desc={t("coins.modeNodeDesc")}
+            selected={mode === "node"}
+            onClick={() => edited(setMode)("node")}
+          />
+          <ChoiceCard
+            title={t("coins.modeNodeless")}
+            desc={t("coins.modeNodelessDesc")}
+            selected={mode === "electrum"}
+            onClick={() => edited(setMode)("electrum")}
+          />
+        </Stack>
+
+        {mode === "electrum" ? (
+          <>
+            <TextField
+              label={t("coins.electrumUrlsLabel")}
+              value={electrumUrls}
+              onChange={(e) => edited(setElectrumUrls)(e.target.value)}
+              multiline
+              minRows={3}
+              fullWidth
+              placeholder={"tcp://127.0.0.1:50001"}
+              slotProps={{ htmlInput: { style: { fontFamily: C.mono } } }}
+            />
+            <Typography sx={{ color: "text.secondary", fontSize: 12, mt: 1 }}>
+              {t("coins.electrumUrlsHelp")}
+            </Typography>
+          </>
+        ) : (
+          <>
         <Stack direction="row" spacing={1.5}>
           <TextField
             label={t("coins.rpcHostLabel")}
@@ -237,6 +304,8 @@ export default function CoinSetup({
           sx={{ mt: 2 }}
           slotProps={{ htmlInput: { style: { fontFamily: C.mono } } }}
         />
+          </>
+        )}
 
         <TextField
           label={t("coins.confirmationsLabel")}
@@ -260,7 +329,7 @@ export default function CoinSetup({
           {t("common.cancel")}
         </Button>
         <Button color="inherit" variant="outlined" onClick={() => void validate()} disabled={busy}>
-          {t("coins.validateNode")}
+          {mode === "electrum" ? t("coins.validateServers") : t("coins.validateNode")}
         </Button>
         <Button variant="contained" onClick={() => void save()} disabled={!validated || busy}>
           {t("common.save")}

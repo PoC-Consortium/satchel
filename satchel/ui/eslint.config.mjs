@@ -50,7 +50,7 @@ export default [
               "[0-9!-/:-@[-`{-~]+",
               "[\\s]+",
               // Glyphs / separators used as visual punctuation in JSX.
-              "↓", "→", "↔", "·", "⏱", "—", "…", "✓", "✗",
+              "↓", "→", "↔", "·", "⏱", "—", "…", "✓", "✗", "−",
               // Unit / format fragments that aren't translatable prose.
               "h", "h /", "sat/vB", "v",
               // MUI theme color tokens passed as args (not user copy).

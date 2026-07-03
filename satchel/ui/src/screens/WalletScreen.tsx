@@ -1,24 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Box, Button, Card, CardContent, Tooltip, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Stack, Tooltip, Typography } from "@mui/material";
 import { useApp } from "../AppContext";
 import { useNavigate } from "../ui/nav";
 import { useT } from "../i18n";
 import { errMsg, rpc } from "../api/tauri";
 import { EmptyState } from "../components/StatusViews";
 import CoinGlyph from "../components/CoinGlyph";
+import { ActivityDialog, ReceiveDialog, SendDialog } from "../dialogs/WalletActions";
 import { fmtBare } from "../format";
 import { C } from "../theme";
 import type { CoinInfo } from "../api/types";
 
 interface Bal {
   text: string;
+  sat?: number;
   error?: string;
 }
 
-// Satchel's wallet is read-only: it shows the hot transit balance per coin so you
-// can see what's available to make/take swaps. There is deliberately no send or
-// receive here — Satchel swaps, it is not a general wallet; move funds with your
-// own wallet/core UI, and swap proceeds sweep to your wallet automatically.
+// Satchel's wallet view is read-only for CORE-backed coins: it shows the hot
+// transit balance so you can see what's available to swap; the node wallet
+// stays your own tool. A NODELESS coin (epic #58) is different — its wallet
+// lives on the Pact seed and Satchel is its only UI, so those cards grow
+// send / receive / activity.
 export default function WalletScreen() {
   const { setConn, setSymbol, watchOnly } = useApp();
   const navigate = useNavigate();
@@ -47,7 +50,10 @@ export default function WalletScreen() {
     for (const c of configured) {
       try {
         const r = await rpc<{ balance_sat: number }>("getbalance", [c.id]);
-        setBalances((b) => ({ ...b, [c.id]: { text: fmtBare(r.balance_sat) } }));
+        setBalances((b) => ({
+          ...b,
+          [c.id]: { text: fmtBare(r.balance_sat), sat: r.balance_sat },
+        }));
       } catch (e) {
         setBalances((b) => ({ ...b, [c.id]: { text: "—", error: errMsg(e) } }));
       }
@@ -90,7 +96,7 @@ export default function WalletScreen() {
       ) : (
         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 1.875 }}>
           {(coins ?? []).map((c) => (
-            <WalletCard key={c.id} c={c} bal={balances[c.id]} />
+            <WalletCard key={c.id} c={c} bal={balances[c.id]} onChanged={load} />
           ))}
         </Box>
       )}
@@ -98,8 +104,17 @@ export default function WalletScreen() {
   );
 }
 
-function WalletCard({ c, bal }: { c: CoinInfo; bal: Bal | undefined }) {
+function WalletCard({
+  c,
+  bal,
+  onChanged,
+}: {
+  c: CoinInfo;
+  bal: Bal | undefined;
+  onChanged: () => void | Promise<void>;
+}) {
   const t = useT();
+  const [dialog, setDialog] = useState<null | "receive" | "send" | "activity">(null);
   return (
     <Card variant="outlined">
       <CardContent sx={{ display: "flex", alignItems: "center", gap: 1.6 }}>
@@ -107,7 +122,13 @@ function WalletCard({ c, bal }: { c: CoinInfo; bal: Bal | undefined }) {
         <Box sx={{ minWidth: 0 }}>
           <Typography sx={{ fontSize: 15, fontWeight: 600 }}>{c.display_name}</Typography>
           <Typography sx={{ color: "text.secondary", fontFamily: C.mono, fontSize: 12 }}>{c.symbol}</Typography>
-          {c.wallet ? (
+          {c.nodeless ? (
+            <Tooltip title={t("wallets.pactSeedHint")}>
+              <Typography sx={{ color: "success.main", fontFamily: C.mono, fontSize: 11 }}>
+                {t("wallets.pactSeed")}
+              </Typography>
+            </Tooltip>
+          ) : c.wallet ? (
             <Tooltip title={t("wallets.walletScopedHint")}>
               <Typography
                 sx={{
@@ -149,6 +170,31 @@ function WalletCard({ c, bal }: { c: CoinInfo; bal: Bal | undefined }) {
           </Typography>
         </Box>
       </CardContent>
+      {c.nodeless && (
+        <CardContent sx={{ pt: 0, pb: "12px !important" }}>
+          <Stack direction="row" spacing={1}>
+            <Button size="small" variant="outlined" onClick={() => setDialog("receive")}>
+              {t("wallets.receive")}
+            </Button>
+            <Button size="small" variant="outlined" onClick={() => setDialog("send")}>
+              {t("wallets.send")}
+            </Button>
+            <Button size="small" color="inherit" onClick={() => setDialog("activity")}>
+              {t("wallets.activity")}
+            </Button>
+          </Stack>
+        </CardContent>
+      )}
+      {dialog === "receive" && <ReceiveDialog coin={c} onClose={() => setDialog(null)} />}
+      {dialog === "send" && (
+        <SendDialog
+          coin={c}
+          balanceSat={bal?.sat}
+          onClose={() => setDialog(null)}
+          onSent={onChanged}
+        />
+      )}
+      {dialog === "activity" && <ActivityDialog coin={c} onClose={() => setDialog(null)} />}
     </Card>
   );
 }
