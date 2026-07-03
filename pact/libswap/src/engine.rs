@@ -450,6 +450,39 @@ pub fn default_confirmations(chain: &ChainParams) -> u32 {
     }
 }
 
+/// The progress phase a maker (initiator) surfaces while in the v2 `Signed`
+/// state. Pure (no chain I/O) so the two-phase display is unit-testable.
+///
+/// Leg B's funding txid is BUILT at accept, so it exists from the moment we
+/// reach `Signed` — but the taker only BROADCASTS leg B once our leg A is
+/// `n_a`-deep (`adaptor_leg_a_confirmed`). The phase must therefore be driven by
+/// observed on-chain DEPTH, never by the txid merely being set: until leg B is
+/// on-chain the honest wait is our own leg A burying, not the taker's lock.
+/// `leg_a_confs` is `None` when our leg-A funding isn't recorded yet.
+#[derive(Debug, PartialEq, Eq)]
+enum MakerSignedPhase {
+    /// Leg B is on-chain, burying toward `n_b` → "their lock confirming".
+    TheirLockB,
+    /// Leg B not on-chain yet; our leg A buries toward `n_a` → "your lock confirming".
+    OurLockA,
+    /// Our leg A is `n_a`-deep; now awaiting the taker's leg-B broadcast.
+    AwaitingLock,
+    /// Nothing of ours is on-chain to anchor a count to yet.
+    AwaitingLockUnanchored,
+}
+
+fn maker_signed_phase(leg_b_confs: u32, leg_a_confs: Option<u32>, n_a: u32) -> MakerSignedPhase {
+    if leg_b_confs > 0 {
+        MakerSignedPhase::TheirLockB
+    } else {
+        match leg_a_confs {
+            Some(c) if c < n_a => MakerSignedPhase::OurLockA,
+            Some(_) => MakerSignedPhase::AwaitingLock,
+            None => MakerSignedPhase::AwaitingLockUnanchored,
+        }
+    }
+}
+
 fn parse_pubkey(hex_key: &str, what: &str) -> Result<PublicKey> {
     PublicKey::from_str(hex_key).with_context(|| format!("invalid pubkey for {what}"))
 }
@@ -3821,33 +3854,60 @@ impl Engine {
         };
         match (rec.role, rec.state) {
             // Maker: wait for the taker's B lock to bury, then secure our B redeem.
-            (Role::Initiator, Signed) => match &rec.funding_b_txid {
-                Some(txid) => self.progress_confirming(
-                    &rec.swap_id,
-                    &rec.chain_b,
-                    txid.clone(),
-                    rec.funding_b_vout,
-                    leg_spk(false),
-                    rec.n_b,
-                    "their_lock",
-                    None,
-                ),
-                // Anchor to our leg-A funding depth (chain-read) so the count
-                // survives a restart. v2 has no `n_a` fund-gate, so it's the raw
-                // confirmations since A landed.
-                None => match rec.funding_a_txid.as_deref() {
-                    Some(txid_a) => self.progress_awaiting_anchored(
+            // Leg B's txid is BUILT at accept (two-phase, spec §7), so it exists
+            // the instant we reach `Signed` — but the taker only BROADCASTS it once
+            // OUR leg A is `n_a`-deep. The phase is therefore driven by observed
+            // depth (see `maker_signed_phase`), mirroring v1's maker: while our leg
+            // A buries show a determinate `our_lock · confs/n_a` ("Your lock
+            // confirming"), then a liveness `awaiting_lock` once it's buried — never
+            // a misleading `their_lock · 0/n_b` for a leg B that isn't on-chain yet
+            // (which also drove narrate() to a false "both locked").
+            (Role::Initiator, Signed) => {
+                let leg_b_confs = rec
+                    .funding_b_txid
+                    .as_deref()
+                    .and_then(|txid| {
+                        self.lock_confs(&rec.chain_b, txid, rec.funding_b_vout, leg_spk(false))
+                    })
+                    .unwrap_or(0);
+                let leg_a_confs = rec.funding_a_txid.as_deref().map(|txid_a| {
+                    self.lock_confs(&rec.chain_a, txid_a, rec.funding_a_vout, leg_spk(true))
+                        .unwrap_or(0)
+                });
+                match maker_signed_phase(leg_b_confs, leg_a_confs, rec.n_a) {
+                    MakerSignedPhase::TheirLockB => self.progress_confirming(
+                        &rec.swap_id,
+                        &rec.chain_b,
+                        rec.funding_b_txid.clone()?,
+                        rec.funding_b_vout,
+                        leg_spk(false),
+                        rec.n_b,
+                        "their_lock",
+                        None,
+                    ),
+                    MakerSignedPhase::OurLockA => self.progress_confirming(
+                        &rec.swap_id,
+                        &rec.chain_a,
+                        rec.funding_a_txid.clone()?,
+                        rec.funding_a_vout,
+                        leg_spk(true),
+                        rec.n_a,
+                        "our_lock",
+                        None,
+                    ),
+                    // Anchor the liveness count to leg A's depth so it survives a
+                    // restart (leg A is `n_a`-deep here, so this can't underflow).
+                    MakerSignedPhase::AwaitingLock => self.progress_awaiting_anchored(
                         &rec.swap_id,
                         &rec.chain_b,
                         "awaiting_lock",
-                        self.lock_confs(&rec.chain_a, txid_a, rec.funding_a_vout, leg_spk(true))
-                            .unwrap_or(0),
+                        leg_a_confs.unwrap_or(rec.n_a).saturating_sub(rec.n_a),
                     ),
-                    None => {
+                    MakerSignedPhase::AwaitingLockUnanchored => {
                         self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_lock", prev)
                     }
-                },
-            },
+                }
+            }
             (Role::Initiator, RedeemedB) => self.progress_confirming(
                 &rec.swap_id,
                 &rec.chain_b,
@@ -6782,6 +6842,38 @@ mod tests {
 
         std::fs::remove_dir_all(&ad).ok();
         std::fs::remove_dir_all(&bd).ok();
+    }
+
+    #[test]
+    fn maker_signed_phase_tracks_on_chain_depth_not_txid_presence() {
+        use MakerSignedPhase::*;
+        // Regression for the "Both locked / Their lock confirming · 0/10" bug:
+        // leg B's funding txid is BUILT at accept, so it is always present by
+        // `Signed`. The phase must be chosen from observed DEPTH, so the maker's
+        // display walks: our leg A confirming → awaiting the taker's lock → their
+        // lock confirming — never jumping straight to `their_lock` (which
+        // narrate() renders as a false "Both locked") before leg B is on-chain.
+
+        // Leg B not on-chain (0 confs) while our leg A buries toward n_a: this is
+        // the exact live-swap state the user hit — must be `our_lock`, NOT
+        // `their_lock`. (n_a = 6 on mainnet BTC → "Your lock confirming · 0/6".)
+        assert_eq!(maker_signed_phase(0, Some(0), 6), OurLockA);
+        assert_eq!(maker_signed_phase(0, Some(5), 6), OurLockA);
+
+        // Our leg A is n_a-deep but leg B still isn't on-chain: we're genuinely
+        // waiting on the taker to broadcast → an honest liveness wait.
+        assert_eq!(maker_signed_phase(0, Some(6), 6), AwaitingLock);
+        assert_eq!(maker_signed_phase(0, Some(9), 6), AwaitingLock);
+
+        // Leg B is on-chain (≥1 conf) and burying toward n_b → their lock. Only
+        // here is "both locked" honest.
+        assert_eq!(maker_signed_phase(1, Some(6), 6), TheirLockB);
+        assert_eq!(maker_signed_phase(3, Some(6), 6), TheirLockB);
+        // Even if our leg A were somehow shallow, an on-chain leg B wins.
+        assert_eq!(maker_signed_phase(1, Some(0), 6), TheirLockB);
+
+        // No leg-A funding recorded yet → pre-lock liveness wait (no anchor).
+        assert_eq!(maker_signed_phase(0, None, 6), AwaitingLockUnanchored);
     }
 
     #[test]
