@@ -142,7 +142,10 @@ mod tests {
             "ssl://electrum.example.org:50002".into(),
         ];
         let url = compose_chain_data(&c, "regtest").unwrap();
-        assert_eq!(url, "tcp://127.0.0.1:19750,ssl://electrum.example.org:50002");
+        assert_eq!(
+            url,
+            "tcp://127.0.0.1:19750,ssl://electrum.example.org:50002"
+        );
 
         // No URLs / a non-Electrum URL must refuse.
         c.extra_backends = vec![];
