@@ -18,7 +18,7 @@ Yes — pick **Browse in watch-only mode** on first run (or **Settings → Mode*
 Fee-bumping is now automatic market-tracking: the engine bumps stuck swap transactions toward the live market feerate instead of a fixed manual escalation step, capped so you never pay more in fees than the amount being claimed. The old RBF-step knob is gone from the Fees page. See [Security Model](Security-Model).
 
 **Do I need to run my own nodes?**
-For now, yes — the engine drives a real node (or Electrum backend) per coin. You must have **at least two coins live** before Satchel lets you trade. A full send/receive wallet without your own node arrives with the planned nodeless build. See [Configuring Coins](Configuring-Coins).
+No — per coin you choose **your own node** (RPC; the node's wallet funds swaps) or **Electrum servers** (no node: chain data from the servers, the wallet on your Pact seed; mainnet requires ≥ 2 independent servers as cross-checking views). You still need **at least two coins live** before Satchel lets you trade. See [Configuring Coins](Configuring-Coins).
 
 **Does this run on mainnet?**
 Yes. Both v1 (HTLC) and v2 (Taproot/MuSig2 adaptor) run on mainnet, reviewed. You alone hold your keys — safeguard your recovery phrase.

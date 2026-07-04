@@ -11,7 +11,7 @@ Satchel is a small stack of components with **one hard wall** between your machi
 | `pact-nostr/` | — | Pure mapping between Pact envelopes and Nostr events (public offers kind `31510`, gift-wrapped messages kind `1059`). No relay I/O of its own. |
 | `pact/` | **Pact** | The swap engine (Rust workspace): `libswap` (HTLC/adaptor logic + state machine), `pactd` (local JSON-RPC daemon, SQLite, auto-refund + fee-bump scheduler), `pact-cli` (thin RPC client). |
 | `corkboard/` | **Corkboard** | Self-hostable order board: a single axum + SQLite/Postgres binary that stores signed offers and blind-relays sealed blobs. The alternative transport to Nostr. |
-| `satchel/` | **Satchel** | Desktop app (Tauri shell + React/Vite/TypeScript/MUI). Bundles and supervises `pactd`, manages seeds, shows read-only balances. Owns the GUI, never the swap logic. |
+| `satchel/` | **Satchel** | Desktop app (Tauri shell + React/Vite/TypeScript/MUI). Bundles and supervises `pactd`, manages seeds, offers per-coin wallet cards (balances, send/receive; activity for Electrum coins). Owns the GUI, never the swap logic. |
 
 ## The trust boundary
 

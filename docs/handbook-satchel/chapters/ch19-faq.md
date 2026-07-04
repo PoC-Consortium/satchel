@@ -20,14 +20,16 @@ all-or-nothing arrangement enforced by the blockchain itself — not handed to a
 
 ## Do I need to run nodes?
 
-**Yes, for now.** Satchel works by talking to your own cryptocurrency nodes (your
-Bitcoin node, your BTCX node, and so on), which is what keeps everything fully in
-your control. Setting them up is a one-time job covered in the chapter *"Setting Up
+**No — it's your choice per coin.** Each coin connects either to **your own
+node** (RPC — the node's wallet funds swaps, maximum sovereignty) or to
+**Electrum servers** (no node: chain data comes from the servers and the wallet
+lives on your Pact seed — the servers never see your keys). Mixing is normal: a
+BTCX miner already running a node keeps it, and connects Bitcoin via Electrum
+to skip the multi-day node sync. Both are set up in the chapter *"Setting Up
 Your Coins"*.
 
-> **Note** — A future *nodeless* build is planned, which will let Satchel act as a
-> self-contained wallet without you running full nodes. For now, nodes are
-> required.
+> **Note** — On mainnet an Electrum coin requires **at least two independent
+> servers**, which cross-check each other's view of the chain.
 
 ## Is it safe to close the app?
 

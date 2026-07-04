@@ -87,7 +87,10 @@ Engine status (proven by the regtest e2e suite):
   PoCX Electrum server, a romanz/electrs fork; the explorer's indexer
   [`esplora-electrs-pocx`](https://github.com/PoC-Consortium/esplora-electrs-pocx)
   also serves Electrum RPC).
-  Chain-data only: the primary backend stays a Core-RPC wallet URL. PoCX's
+  An Electrum-FIRST (no `http://`) backend list flips the coin to NODELESS:
+  a bdk wallet on the Pact seed's BIP-86 branch serves all wallet ops over
+  the same raw Electrum calls (mainnet requires >= 2 servers). With a Core
+  primary, Electrum URLs remain extra chain-data views. PoCX's
   286-byte signed headers are handled on raw bytes (hash excludes the
   generator signature) — pinned by unit vectors captured from a real node.
 - **API auth**: pactd authenticates like bitcoind — HTTP Basic against an

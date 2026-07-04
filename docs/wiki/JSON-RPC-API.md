@@ -1,6 +1,6 @@
 # JSON-RPC API
 
-[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 59 methods, grouped below by area with a one-line purpose each. This is an index; for full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
+[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 60 methods, grouped below by area with a one-line purpose each. This is an index; for full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
 
 ## Conventions
 
@@ -121,6 +121,7 @@ v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed). T
 | `getbalance` | Balance for one chain. |
 | `getnewaddress` | Fresh HD address for one chain. |
 | `sendtoaddress` | Send from one chain (broadcasts). |
+| `listtransactions` | Wallet activity of an Electrum-connected (nodeless) coin, newest first: `{ txid, direction, amount_sat, fee_sat?, confirmations, timestamp? }`. Node-backed coins refuse. |
 
 ## Diagnostics
 
