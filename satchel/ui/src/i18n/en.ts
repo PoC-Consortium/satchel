@@ -804,20 +804,20 @@ export const en = {
     switchMerchant: "Switch merchant",
     unlock: "Unlock",
   },
-  // Manual USD reference (issue #56) — display-only USD equivalents derived
-  // from ONE user-entered anchor (USD per 1 BTC). Deliberately manual: BTCX is
-  // unlisted so no feed could price it, and Satchel makes no external calls.
+  // Manual Cashrate (issue #56) — display-only "~Cash" equivalents derived from
+  // user-entered per-coin anchors. Currency-NEUTRAL on purpose: the user thinks
+  // in whatever money they think in (EUR, USD, RMB, …) and Satchel never names
+  // it. Deliberately manual: BTCX is unlisted so no feed could price it, and
+  // Satchel makes no external calls. The rate entry lives in the sidebar.
   fx: {
-    section: "USD reference",
-    enable: "Show USD equivalents",
-    enableHint:
-      "Adds a muted USD figure next to prices and amounts, derived only from your own rate below. Display-only — Satchel never fetches prices and makes no network request for this.",
-    anchorLabel: "Your BTC rate (USD)",
-    anchorHint:
-      "What you consider 1 BTC to be worth in US dollars. Every USD figure is derived from this single anchor at each offer's own price — a sanity check against quotes, not a market feed.",
-    approx: "≈ {usd}",
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "What you call 1 {sym} in your own money — EUR, USD, RMB, whatever you think in. Every ~Cash figure derives from your rates, remembered per coin. Display-only — Satchel never fetches prices.",
+    cashrateNoContext:
+      "Greyed here — the rate binds to the pair you're looking at. Open the Corkboard or an offer form to set the rate for its quote coin.",
+    cashUnit: "~Cash",
     refTip:
-      "At your own BTC rate — a reference, not a market price. Both legs of an offer are worth the same at its price. Set the rate in Settings → General.",
+      "At your own Cashrate — your reference, not a market price. Both legs of an offer are worth the same at its own price. Set rates in the sidebar.",
   },
   common: {
     cancel: "Cancel",

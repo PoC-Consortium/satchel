@@ -19,7 +19,7 @@ import BlockIcon from "@mui/icons-material/Block";
 import { useApp } from "../AppContext";
 import { useContacts } from "../contacts";
 import { useDenom } from "../denom";
-import { useFx } from "../fx";
+import { useFx, useFxContext } from "../fx";
 import { useNavigate } from "../ui/nav";
 import { useT } from "../i18n";
 import { errMsg, listCoinConfig, rpc } from "../api/tauri";
@@ -33,15 +33,15 @@ import {
   DENOMS,
   denomLabel,
   fmtBareLocale,
+  fmtCash,
   fmtDenom,
   fmtPriceDenom,
-  fmtUsd,
   freshness,
   hours,
+  offerCash,
   offerState,
-  offerUsd,
   pairKey,
-  priceUsd,
+  priceCash,
 } from "../format";
 import { C } from "../theme";
 import type { BookSide, Denom, OfferState } from "../format";
@@ -72,7 +72,7 @@ export default function CorkboardScreen() {
   // refuses too — this is the friendly up-front block).
   const coinLive = (id?: string) => !!coins.find((c) => c.id === id && c.status === "ok");
   const { denom, setDenom } = useDenom();
-  const { enabled: fxOn, usdPerBtc } = useFx();
+  const { enabled: fxOn, rateOf } = useFx();
   const { get: contactOf, book: contactBook } = useContacts();
   const confirmTake = useTakeConfirm();
   const navigate = useNavigate();
@@ -218,6 +218,14 @@ export default function CorkboardScreen() {
   }, [pairFilter]);
   const effectivePair = pairFilter || pairOptions[0]?.key || "";
 
+  // Pick a stable base/quote for the selected pair — every offer projects onto
+  // a single price axis (quote per base) further down. Computed here (not below
+  // the early returns) so the Cashrate context hook can bind unconditionally.
+  const [ca, cb] = effectivePair ? effectivePair.split("|") : ["", ""];
+  const { base, quote } = effectivePair ? baseQuote(ca, cb) : { base: "", quote: "" };
+  // Bind the sidebar Cashrate entry to this board's quote coin (issue #56).
+  useFxContext(quote);
+
   // Switching market/board/filter clears the open level so the detail pane never
   // shows offers from a market you're no longer looking at.
   useEffect(() => setSelected(null), [effectivePair, boardSel, mineOnly]);
@@ -323,11 +331,8 @@ export default function CorkboardScreen() {
     });
   };
 
-  // Pick a stable base/quote for the selected pair and project every offer onto
-  // a single price axis (quote per base). Bids and asks are exact-rate levels;
+  // Bids and asks are exact-rate levels on the base/quote axis picked above;
   // this is purely a way to READ the board — pactd never matches or prioritises.
-  const [ca, cb] = effectivePair ? effectivePair.split("|") : ["", ""];
-  const { base, quote } = effectivePair ? baseQuote(ca, cb) : { base: "", quote: "" };
   const baseSym = symOf(base);
   const quoteSym = symOf(quote);
   const quoteUnit = quote ? denomLabel(quote, quoteSym, denom) : "";
@@ -364,6 +369,9 @@ export default function CorkboardScreen() {
     quoteSym,
     priceUnit: quoteUnit,
     denom,
+    // Cash unit-price column (issue #56): each level's price through the quote
+    // coin's own Cashrate; null hides the column entirely (feature off).
+    cashOf: fxOn ? (p: number) => fmtCash(priceCash(p, rateOf(quote))) : null,
     myId,
     stagedIds,
     selectedKey: selected,
@@ -507,12 +515,12 @@ export default function CorkboardScreen() {
                   <Box sx={{ color: "text.secondary", fontFamily: C.mono }}>
                     {t("corkboard.book.mid", { price: `${fmtPriceDenom(mid, denom)} ${quoteUnit}` })}
                   </Box>
-                  {/* Muted USD-equivalent of the mid, from the user's own manual
-                      anchor (issue #56) — a reference, never a market feed. */}
+                  {/* Muted cash-equivalent of the mid, from the user's own
+                      Cashrate (issue #56) — a reference, never a market feed. */}
                   {fxOn && (
                     <Tooltip title={t("fx.refTip")}>
                       <Box sx={{ color: "text.secondary", fontFamily: C.mono, cursor: "help" }}>
-                        {t("fx.approx", { usd: fmtUsd(priceUsd(mid, quote, usdPerBtc)) })}
+                        {fmtCash(priceCash(mid, rateOf(quote)))}
                       </Box>
                     </Tooltip>
                   )}
@@ -645,6 +653,8 @@ interface ColProps {
   quoteSym: string;
   priceUnit: string;
   denom: Denom;
+  /** Formats a level price as ~Cash (issue #56); null = column hidden. */
+  cashOf: ((price: number) => string) | null;
   myId: string | null;
   stagedIds: Set<string>;
   selectedKey: string | null;
@@ -655,7 +665,7 @@ interface ColProps {
 // price levels; the rest fold behind a "Show N more" toggle.
 const DEPTH_CAP = 8;
 
-function BookColumn({ side, levels, maxSize, baseSym, quoteSym, priceUnit, denom, myId, stagedIds, selectedKey, onSelect }: ColProps) {
+function BookColumn({ side, levels, maxSize, baseSym, quoteSym, priceUnit, denom, cashOf, myId, stagedIds, selectedKey, onSelect }: ColProps) {
   const t = useT();
   const [showAll, setShowAll] = useState(false);
   const isBid = side === "bid";
@@ -664,6 +674,16 @@ function BookColumn({ side, levels, maxSize, baseSym, quoteSym, priceUnit, denom
   const hint = isBid
     ? t("corkboard.book.bidsHint", { base: baseSym, quote: quoteSym })
     : t("corkboard.book.asksHint", { base: baseSym, quote: quoteSym });
+
+  // With the Cashrate on, an extra unit-price column joins as the INNERMOST
+  // pair — cash prices hug the centre divider on both sides (issue #56).
+  const gridCols = isBid
+    ? cashOf
+      ? "auto 1fr auto auto"
+      : "auto 1fr auto"
+    : cashOf
+      ? "auto auto 1fr auto"
+      : "auto 1fr auto";
 
   const overflow = levels.length - DEPTH_CAP;
   const shown = showAll ? levels : levels.slice(0, DEPTH_CAP);
@@ -680,7 +700,7 @@ function BookColumn({ side, levels, maxSize, baseSym, quoteSym, priceUnit, denom
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: "auto 1fr auto",
+          gridTemplateColumns: gridCols,
           alignItems: "center",
           gap: 1,
           px: 1.5,
@@ -700,9 +720,19 @@ function BookColumn({ side, levels, maxSize, baseSym, quoteSym, priceUnit, denom
             <Box sx={{ textAlign: "right" }}>
               {t("corkboard.book.price")} ({priceUnit})
             </Box>
+            {cashOf && (
+              <Box sx={{ textAlign: "right" }}>
+                {t("corkboard.book.price")} ({t("fx.cashUnit")})
+              </Box>
+            )}
           </>
         ) : (
           <>
+            {cashOf && (
+              <Box sx={{ textAlign: "left" }}>
+                {t("corkboard.book.price")} ({t("fx.cashUnit")})
+              </Box>
+            )}
             <Box sx={{ textAlign: "left" }}>
               {t("corkboard.book.price")} ({priceUnit})
             </Box>
@@ -727,6 +757,7 @@ function BookColumn({ side, levels, maxSize, baseSym, quoteSym, priceUnit, denom
               lvl={lvl}
               maxSize={maxSize}
               denom={denom}
+              cash={cashOf ? cashOf(lvl.price) : null}
               priceColor={priceColor}
               baseSym={baseSym}
               mineHere={lvl.offers.some((o) => o.from === myId)}
@@ -760,6 +791,7 @@ function LevelRow({
   lvl,
   maxSize,
   denom,
+  cash,
   priceColor,
   baseSym,
   mineHere,
@@ -771,6 +803,8 @@ function LevelRow({
   lvl: Level;
   maxSize: number;
   denom: Denom;
+  /** ~Cash unit price for this level (issue #56); null = no cash column. */
+  cash: string | null;
   priceColor: string;
   baseSym: string;
   mineHere: boolean;
@@ -786,6 +820,12 @@ function LevelRow({
   const price = (
     <Box sx={{ color: priceColor, fontWeight: 600, textAlign: isBid ? "right" : "left", fontVariantNumeric: "tabular-nums" }}>
       {fmtPriceDenom(lvl.price, denom)}
+    </Box>
+  );
+  // Innermost cell when present — cash prices hug the divider on both sides.
+  const cashCell = cash != null && (
+    <Box sx={{ color: "text.secondary", textAlign: isBid ? "right" : "left", fontVariantNumeric: "tabular-nums" }}>
+      {cash}
     </Box>
   );
   const size = (
@@ -838,7 +878,12 @@ function LevelRow({
           sx={{
             position: "relative",
             display: "grid",
-            gridTemplateColumns: "auto 1fr auto",
+            gridTemplateColumns:
+              cash != null
+                ? isBid
+                  ? "auto 1fr auto auto"
+                  : "auto auto 1fr auto"
+                : "auto 1fr auto",
             alignItems: "center",
             gap: 1,
             px: 1.5,
@@ -852,9 +897,11 @@ function LevelRow({
               {meta}
               {size}
               {price}
+              {cashCell}
             </>
           ) : (
             <>
+              {cashCell}
               {price}
               {size}
               {meta}
@@ -906,7 +953,7 @@ function OfferRow({
 }) {
   const t = useT();
   const { showToast } = useApp();
-  const { enabled: fxOn, usdPerBtc } = useFx();
+  const { enabled: fxOn, rateOf } = useFx();
   const b = o.body;
   const expiry = b.created ? b.created + (b.ttl_secs || 24 * 3600) : 0;
   const f = freshness(b.created || 0, expiry);
@@ -979,14 +1026,14 @@ function OfferRow({
           : `${fmtLeg(b.get_amount, b.get_asset)} → ${fmtLeg(b.give_amount, b.give_asset)}`}
       </Typography>
 
-      {/* Muted USD-equivalent — one figure values BOTH legs (they are equal at
-          the offer's own implied rate), from the user's manual anchor. */}
+      {/* Muted cash-equivalent — one figure values BOTH legs (they are equal
+          at the offer's own implied rate), from the user's own Cashrate. */}
       {fxOn && (
         <Tooltip title={t("fx.refTip")}>
           <Typography
             sx={{ fontFamily: C.mono, fontSize: 11.5, color: "text.secondary", whiteSpace: "nowrap", cursor: "help" }}
           >
-            {t("fx.approx", { usd: fmtUsd(offerUsd(b, usdPerBtc)) })}
+            {fmtCash(offerCash(b, rateOf))}
           </Typography>
         </Tooltip>
       )}

@@ -23,7 +23,7 @@ import {
 import { useApp } from "../AppContext";
 import { useConfirm } from "../ui/ConfirmProvider";
 import { useDenom } from "../denom";
-import { useFx } from "../fx";
+import { useFx, useFxContext } from "../fx";
 import { useT } from "../i18n";
 import { assessLockFunds, rpc } from "../api/tauri";
 import {
@@ -34,11 +34,11 @@ import {
   denomUnitSats,
   DENOMS,
   fmtBare,
+  fmtCash,
   fmtPrice,
-  fmtUsd,
   hours,
+  offerCash,
   offerProtocols,
-  offerUsd,
   pairKey,
   parseAmount,
   sanitizeAmountInput,
@@ -154,6 +154,8 @@ export default function OfferForm({
   const pair = useMemo(() => pairs.find((p) => p.key === pairKeySel), [pairs, pairKeySel]);
   const base = pair?.base ?? "";
   const quote = pair?.quote ?? "";
+  // Bind the sidebar Cashrate entry to this form's quote coin (issue #56).
+  useFxContext(quote);
 
   // Seed the shared denom once, from our per-base default (mBTC for a BTCX base,
   // coin else), only if it was never chosen — so BTCX prices read well on a fresh
@@ -205,15 +207,15 @@ export default function OfferForm({
   const giveSat = side === "sell" ? baseSats : quoteSats;
   const wantSat = side === "sell" ? quoteSats : baseSats;
 
-  // Muted USD-equivalent of the offer from the user's manual anchor (issue
+  // Muted cash-equivalent of the offer from the user's own Cashrate (issue
   // #56); both legs are equal-valued at the entered price, so one figure
-  // annotates both summary lines. Null (no anchor / no BTC leg) reads "—".
-  const { enabled: fxOn, usdPerBtc } = useFx();
-  const usdLeg = fxOn
-    ? fmtUsd(
-        offerUsd(
+  // annotates both summary lines. No rate set reads "—".
+  const { enabled: fxOn, rateOf } = useFx();
+  const cashLeg = fxOn
+    ? fmtCash(
+        offerCash(
           { give_asset: giveCoin, give_amount: giveSat, get_asset: wantCoin, get_amount: wantSat },
-          usdPerBtc,
+          rateOf,
         ),
       )
     : null;
@@ -397,18 +399,18 @@ export default function OfferForm({
           <Typography sx={{ fontSize: 12.5 }}>
             <Box component="span" sx={{ color: "text.secondary" }}>{t("makeOffer.youGive")}: </Box>
             <Box component="span" sx={{ fontFamily: C.mono }}>{giveStr} {symOf(giveCoin)}</Box>
-            {usdLeg != null && (
+            {cashLeg != null && (
               <Box component="span" sx={{ fontFamily: C.mono, color: "text.secondary" }}>
-                {" "}· {t("fx.approx", { usd: usdLeg })}
+                {" "}· {cashLeg}
               </Box>
             )}
           </Typography>
           <Typography sx={{ fontSize: 12.5 }}>
             <Box component="span" sx={{ color: "text.secondary" }}>{t("makeOffer.youGet")}: </Box>
             <Box component="span" sx={{ fontFamily: C.mono, color: "primary.main" }}>{wantStr} {symOf(wantCoin)}</Box>
-            {usdLeg != null && (
+            {cashLeg != null && (
               <Box component="span" sx={{ fontFamily: C.mono, color: "text.secondary" }}>
-                {" "}· {t("fx.approx", { usd: usdLeg })}
+                {" "}· {cashLeg}
               </Box>
             )}
           </Typography>

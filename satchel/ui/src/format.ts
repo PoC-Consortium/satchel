@@ -294,45 +294,59 @@ export function fmtPrice(p: number): string {
   return new Intl.NumberFormat(undefined, opts).format(p);
 }
 
-// ---- USD reference (manual FX anchor, issue #56) --------------------------
-// A single user-entered anchor (USD per 1 BTC) prices everything shown: BTC
-// outranks every coin in QUOTE_PRIORITY, so any pair involving BTC quotes in
-// BTC, and an offer's two legs are equal-valued at its own implied rate — the
-// BTC leg × anchor therefore values the whole trade. Display-only and opt-in
-// (see fx.tsx); a pair with no BTC leg simply isn't derivable and shows "—".
+// ---- Cashrate (manual FX anchors, issue #56) -------------------------------
+// User-entered rates, one per coin ("what I call 1 BTC / 1 LTC in my money"),
+// price everything shown — currency-NEUTRAL on purpose (the user may think in
+// EUR, USD, RMB, …; Satchel never names the unit, only "~Cash"). An offer's two
+// legs are equal-valued at its own implied rate, so the rated leg × its anchor
+// values the whole trade. Display-only and opt-in (see fx.tsx); an offer with
+// no rated leg simply isn't derivable and shows "—".
 
-/** USD value of one offer (both legs — they are equal at the offer's implied
- *  rate). Null when the offer has no BTC leg or no anchor is set. */
-export function offerUsd(
+/** Cash value of one offer (both legs — they are equal at the offer's implied
+ *  rate). The quote leg's rate is preferred (it's what the sidebar entry binds
+ *  to); the base leg's is the fallback. Null when neither coin has a rate. */
+export function offerCash(
   b: { give_asset: string; give_amount: number; get_asset: string; get_amount: number },
-  usdPerBtc: number | null,
+  rateOf: (coin: string) => number | null,
 ): number | null {
-  if (!usdPerBtc) return null;
-  const btcSat =
-    b.give_asset === "btc" ? b.give_amount : b.get_asset === "btc" ? b.get_amount : null;
-  return btcSat == null ? null : (btcSat / 1e8) * usdPerBtc;
+  const { quote } = baseQuote(b.give_asset, b.get_asset);
+  const legs =
+    b.give_asset === quote
+      ? [
+          { sat: b.give_amount, coin: b.give_asset },
+          { sat: b.get_amount, coin: b.get_asset },
+        ]
+      : [
+          { sat: b.get_amount, coin: b.get_asset },
+          { sat: b.give_amount, coin: b.give_asset },
+        ];
+  for (const l of legs) {
+    const r = rateOf(l.coin);
+    if (r != null) return (l.sat / 1e8) * r;
+  }
+  return null;
 }
 
-/** USD per 1 base coin for a quote-per-base price (in whole quote coin). Only
- *  derivable when the quote is BTC — the anchor's own unit. */
-export function priceUsd(
-  price: number,
-  quote: string,
-  usdPerBtc: number | null,
-): number | null {
-  if (!usdPerBtc || quote !== "btc" || !isFinite(price) || price <= 0) return null;
-  return price * usdPerBtc;
+/** Cash per 1 base coin for a quote-per-base price (in whole quote coin) —
+ *  the ladder's unit price through the quote coin's own rate. */
+export function priceCash(price: number, rate: number | null): number | null {
+  if (rate == null || !isFinite(price) || price <= 0) return null;
+  return price * rate;
 }
 
-/** Locale-formatted USD ("$1,234" / "$4.36" / "$0.0021"), degrading to "—" for
- *  null (anchor unset / pair not derivable). Precision is tiered like fmtPrice:
- *  whole dollars when large, cents mid-range, significant digits when tiny. */
-export function fmtUsd(v: number | null): string {
+/** "~1,234" — a cash value as a locale-formatted number behind the ~ marker
+ *  (approximate, unit deliberately unnamed); "—" for null (no rate set / not
+ *  derivable). Precision tiered like fmtPrice: whole numbers when large, two
+ *  decimals mid-range, significant digits when tiny. */
+export function fmtCash(v: number | null): string {
   if (v == null || !isFinite(v)) return "—";
-  const opts: Intl.NumberFormatOptions = { style: "currency", currency: "USD" };
-  if (v >= 1000) opts.maximumFractionDigits = 0;
-  else if (v > 0 && v < 1) opts.maximumSignificantDigits = 2;
-  return new Intl.NumberFormat(undefined, opts).format(v);
+  const opts: Intl.NumberFormatOptions =
+    v >= 1000
+      ? { maximumFractionDigits: 0 }
+      : v >= 1
+        ? { maximumFractionDigits: 2 }
+        : { maximumSignificantDigits: 2 };
+  return `~${new Intl.NumberFormat(undefined, opts).format(v)}`;
 }
 
 // ---- denomination (display unit) ----------------------------------------
