@@ -36,7 +36,7 @@ use bitcoin::{
     Amount, BlockHash, FeeRate, OutPoint, Psbt, ScriptBuf, Sequence, Transaction, TxOut, Txid,
 };
 
-use crate::chain::{ChainBackend, ElectrumBackend, TxOutInfo, WalletTxInfo};
+use crate::chain::{ChainBackend, ElectrumBackend, SendFee, TxOutInfo, WalletTxInfo};
 use crate::keys::PactSeed;
 use crate::params::ChainParams;
 use crate::registry;
@@ -364,16 +364,17 @@ impl BdkWalletBackend {
         }
     }
 
-    /// Build + sign a spend of `amount_sat` to `spk` at the current market
-    /// feerate, BIP125-replaceable like the Core path's `sendtoaddress`.
+    /// Build + sign a spend of `amount_sat` to `spk` priced by `fee` (market
+    /// estimate at a target, or an explicit user rate), BIP125-replaceable
+    /// like the Core path's `sendtoaddress`.
     fn build_signed(
         &self,
         entry: &mut WalletEntry,
         spk: ScriptBuf,
         amount_sat: u64,
-        conf_target: u16,
+        fee: SendFee,
     ) -> Result<Transaction> {
-        let feerate = FeeRate::from_sat_per_vb(self.chain.fee_rate_for(conf_target, false)?)
+        let feerate = FeeRate::from_sat_per_vb(self.resolve_send_fee(fee)?)
             .context("feerate overflow")?;
         let mut builder = entry.wallet.build_tx();
         builder
@@ -450,6 +451,10 @@ impl ChainBackend for BdkWalletBackend {
         self.chain.fee_rate_for(conf_target, conservative)
     }
 
+    fn fee_estimate(&self, conf_target: u16) -> Result<Option<u64>> {
+        self.chain.fee_estimate(conf_target)
+    }
+
     // -- the nine wallet operations (design doc §3) --
 
     fn wallet_new_address(&self) -> Result<String> {
@@ -465,10 +470,10 @@ impl ChainBackend for BdkWalletBackend {
         })
     }
 
-    fn wallet_send(&self, address: &str, amount_sat: u64, conf_target: u16) -> Result<String> {
+    fn wallet_send(&self, address: &str, amount_sat: u64, fee: SendFee) -> Result<String> {
         let spk = self.params.parse_address(address)?;
         self.with_wallet(true, |entry| {
-            let tx = self.build_signed(entry, spk, amount_sat, conf_target)?;
+            let tx = self.build_signed(entry, spk, amount_sat, fee)?;
             // Broadcast-before-persist (the rc6 commit rule): a crash after
             // broadcast re-learns the tx from our own spk history on the
             // next sync, never double-spends.
@@ -487,8 +492,12 @@ impl ChainBackend for BdkWalletBackend {
         self.with_wallet(true, |entry| {
             // Funding prices at the per-coin ~30-min target (see
             // funding_conf_target), mirroring the Core-RPC backend.
-            let tx =
-                self.build_signed(entry, spk.clone(), amount_sat, self.funding_conf_target())?;
+            let tx = self.build_signed(
+                entry,
+                spk.clone(),
+                amount_sat,
+                SendFee::Target(self.funding_conf_target()),
+            )?;
             let txid = tx.compute_txid();
             let vout = tx
                 .output
@@ -720,6 +729,7 @@ fn wallet_activity(entry: &WalletEntry) -> Vec<WalletTxInfo> {
             direction: direction.into(),
             amount_sat,
             fee_sat,
+            vsize: tx.vsize() as u64,
             confirmations,
             timestamp,
         });

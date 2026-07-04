@@ -25,6 +25,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use clap::Parser;
+use libswap::chain::SendFee;
 use libswap::engine::Engine;
 use libswap::messages::Envelope;
 use libswap::params::{parse_coin_amount, Network};
@@ -336,6 +337,13 @@ impl Params {
             .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
             .with_context(|| format!("param '{name}' must be a u32"))
             .map(|n: u64| n as u32)
+    }
+    fn u64(&self, i: usize, name: &str) -> Result<u64> {
+        let v = self.get(i, name)?;
+        // Accept number or numeric string (bitcoin-cli sends strings).
+        v.as_u64()
+            .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            .with_context(|| format!("param '{name}' must be a u64"))
     }
     fn opt_u64(&self, i: usize, name: &str) -> Option<u64> {
         let v = self.get(i, name).ok()?;
@@ -1506,13 +1514,47 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             let chain = p.str(0, "chain")?;
             let address = p.str(1, "address")?;
             let amount = p.str(2, "amount")?;
+            // Fee: an explicit sat/vB rate (the form's Custom field) wins over
+            // a block target (a preset); neither = the 6-block Normal baseline.
+            // Targets clamp to Core's estimatesmartfee range (1..=1008).
+            let fee = match (p.opt_u64(3, "conf_target"), p.opt_u64(4, "fee_rate")) {
+                (_, Some(rate)) => SendFee::RateSatVb(rate),
+                (Some(target), None) => SendFee::Target(target.clamp(1, 1008) as u16),
+                (None, None) => SendFee::Target(6),
+            };
             let txid = blocking(app, move |e| {
                 let coin = parse_coin(&chain)?;
                 let (_, sat) = parse_coin_amount(&format!("{coin}:{amount}"))?;
-                e.wallet_send(net, &coin, &address, sat)
+                e.wallet_send(net, &coin, &address, sat, fee)
             })
             .await?;
             Ok(json!({ "txid": txid }))
+        }
+        "estimatesendfee" => {
+            // Fee preview for the wallet send form: raw estimator answers for
+            // the Slow/Normal/Fast presets (144/6/1 blocks, phoenix parity) —
+            // null where the estimator has no data — plus the coin's feerate
+            // floor for the Custom field.
+            let chain = p.str(0, "chain")?;
+            let est = blocking(app, move |e| {
+                e.wallet_fee_estimates(net, &parse_coin(&chain)?)
+            })
+            .await?;
+            Ok(serde_json::to_value(est)?)
+        }
+        "bumpfee" => {
+            // RBF-bump an unconfirmed wallet send to `fee_rate` sat/vB (every
+            // wallet send is broadcast BIP125-replaceable). The Activity
+            // dialog's lever for nodeless coins; node-backed coins bump in
+            // the node's own wallet.
+            let chain = p.str(0, "chain")?;
+            let txid = p.str(1, "txid")?;
+            let fee_rate = p.u64(2, "fee_rate")?;
+            let new_txid = blocking(app, move |e| {
+                e.wallet_bumpfee(net, &parse_coin(&chain)?, &txid, fee_rate)
+            })
+            .await?;
+            Ok(json!({ "txid": new_txid }))
         }
         "listtransactions" => {
             // Activity feed of the nodeless wallet (design doc §4): newest

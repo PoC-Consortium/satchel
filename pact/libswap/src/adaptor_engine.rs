@@ -257,7 +257,7 @@ mod tests {
             &self,
             _address: &str,
             _amount_sat: u64,
-            _conf_target: u16,
+            _fee: crate::chain::SendFee,
         ) -> Result<String> {
             unimplemented!()
         }

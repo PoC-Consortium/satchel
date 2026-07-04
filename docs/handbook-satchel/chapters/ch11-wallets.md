@@ -24,16 +24,26 @@ Each card also tells you **where that coin's wallet lives**:
 ## Send, Receive and Activity
 
 Every card carries **Receive** (a fresh address each time — old ones keep
-working, fresh is better for privacy) and **Send** (recipient address + amount;
-the network fee is added on top, picked automatically from the live fee
-market). For a node-backed coin these drive the node's own wallet; for an
-Electrum coin they drive your pact-seed wallet directly.
+working, fresh is better for privacy) and **Send**. The send form takes the
+recipient address and amount, then lets you pick the network fee — added on
+top of the amount — as **Slow / Normal / Fast** presets priced from the live
+fee market, or a **Custom** sat/vB rate. When the market has no estimates
+(a quiet or brand-new chain), the presets grey out and the form falls back to
+a custom rate at the coin's minimum. A **Review** step shows recipient,
+amount, estimated fee and total before anything is broadcast — transactions
+are irreversible, so check the address there. For a node-backed coin these
+drive the node's own wallet; for an Electrum coin they drive your pact-seed
+wallet directly.
 
 Electrum coins add a third button, **Activity** — the wallet's transaction
 history (direction, amount, fee, confirmations), including anything still
-pending. Node-backed coins skip it: your node's own software already keeps that
-history, and the transactions that matter for trading — funding and
-settlement — appear on the **Swaps** page with full on-chain detail either way.
+pending. A pending send you made carries a **Bump** action: every send is
+broadcast replaceable (RBF), so if it's stuck you can re-price it to a higher
+sat/vB rate and the replacement takes its place. Node-backed coins skip the
+Activity dialog: your node's own software already keeps that history (and its
+own fee-bump tooling), and the transactions that matter for trading — funding
+and settlement — appear on the **Swaps** page with full on-chain detail either
+way.
 
 ## The hot-seed warning
 

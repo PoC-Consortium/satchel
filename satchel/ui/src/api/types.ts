@@ -419,8 +419,21 @@ export interface WalletTx {
   direction: "sent" | "received";
   amount_sat: number;
   fee_sat?: number | null;
+  /** Virtual size in vB — with fee_sat this yields the effective feerate an
+   *  RBF bump has to beat. */
+  vsize: number;
   confirmations: number;
   timestamp?: number | null;
+}
+
+/** Fee preview for the send form (`estimatesendfee`): raw estimator answers
+ *  for the Slow/Normal/Fast presets (144/6/1 blocks), null where the
+ *  estimator has no data, plus the coin's feerate floor. */
+export interface SendFeeEstimates {
+  min_sat_per_vb: number;
+  fast?: number | null;
+  normal?: number | null;
+  slow?: number | null;
 }
 
 export interface Pair {
