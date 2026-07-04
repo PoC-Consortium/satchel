@@ -40,6 +40,12 @@ from test_swap_e2e import build_workspace, Corkboard, Party, COINS_TOML
 BLOCK_EVERY_SECS = 4
 REPOST_EVERY_SECS = 60
 
+# --nodeless (playground-electrum.ps1): Alice's btcx becomes the pact-seed bdk
+# wallet over a live electrs (epic #58) — PoCX node on :18443 (+REST), electrs
+# leg, and a faucet for her wizard-created wallet. Default (playground-cork.ps1)
+# is the classic all-Core layout on :19443.
+NODELESS = "--nodeless" in sys.argv[1:]
+
 # Alice's managed pactd (Satchel regtest offset) + its cookie, for the faucet.
 ALICE_RPC = "http://127.0.0.1:9739/"
 ALICE_COOKIE = os.path.join(
@@ -142,15 +148,17 @@ def chain_time(node):
 
 def main():
     build_workspace()
-    # pocx_rest: Alice's btcx runs NODELESS over electrs, and bindex (electrs'
-    # indexer) hardcodes the node's REST endpoint at regtest-default :18443.
-    with Harness(keep=False, with_ltc=True, pocx_rest=True) as h:
+    # pocx_rest (nodeless only): bindex (electrs' indexer) hardcodes the node's
+    # REST endpoint at regtest-default :18443.
+    with Harness(keep=False, with_ltc=True, pocx_rest=NODELESS) as h:
         board = Corkboard(h.workdir)
         board.start()
-        electrs = ElectrsServer(h.workdir, h.pocx)
-        electrs.start()
-        electrs.wait_synced(h.pocx.rpc("getblockcount"))
-        print(f"[satchel-pg] electrs up on {electrs.url} (Alice's nodeless btcx)")
+        electrs = None
+        if NODELESS:
+            electrs = ElectrsServer(h.workdir, h.pocx)
+            electrs.start()
+            electrs.wait_synced(h.pocx.rpc("getblockcount"))
+            print(f"[satchel-pg] electrs up on {electrs.url} (Alice's nodeless btcx)")
 
         # Extra wallets for the two-sided book — created HERE, not in the shared
         # Harness, so the e2e suite's 2-party funding layout stays untouched:
@@ -238,13 +246,13 @@ def main():
   Two headless counterparties make a two-sided book + an LTC sub-book:
     Bob   (:{bob.port}) BUY side — {len(BOB_OFFERS)} give-BTC/get-POCX + {len(BOB_LTC_OFFERS)} give-BTC/get-LTC
     Carol (:{carol.port}) SELL side — {len(CAROL_OFFERS)} give-POCX/get-BTC + {len(CAROL_LTC_OFFERS)} LTC offers
-  Corkboard {board.url} | POCX :18443 (+REST) | BTC :19543 | LTC :19643
-  electrs {electrs.url} — Alice's BTCX is NODELESS (pact-seed bdk wallet)
+  Corkboard {board.url} | POCX :{h.pocx.rpc_port}{" (+REST)" if NODELESS else ""} | BTC :19543 | LTC :19643{f'''
+  electrs {electrs.url} — Alice's BTCX is NODELESS (pact-seed bdk wallet)''' if NODELESS else ""}
   Blocks every {BLOCK_EVERY_SECS}s; both top up taken offers every {REPOST_EVERY_SECS}s (live IDs stable).
 
   In the Satchel window (managed "Alice"):
     1. Wizard -> Create a merchant (write down the mnemonic; pick
-       encrypted or not).
+       encrypted or not).{f'''
     2. Coins tab -> BTCX shows "pact seed wallet" (nodeless via electrs);
        BTC + LTC are node-backed as before.
     3. Wallets tab -> the BTCX card has Receive / Send / Activity; a
@@ -252,7 +260,11 @@ def main():
        wizard (watch the balance appear).
     4. Corkboard tab -> two-sided market incl. LTC pairs; take any side.
     5. Swaps tab -> watch it walk to 'completed' on its own — BTCX legs
-       fund straight from your pact-seed wallet.
+       fund straight from your pact-seed wallet.''' if NODELESS else '''
+    2. Coins tab -> BTCX + BTC + LTC should show configured + connected.
+    3. Corkboard tab -> two-sided market incl. LTC pairs; take any side:
+       give POCX, give BTC, or trade LTC either way.
+    4. Swaps tab -> watch it walk to 'completed' on its own.'''}
 {bar}
 """)
         start_wall = time.time()
@@ -281,7 +293,7 @@ def main():
                         node.generate(1, wallet)
                     except Exception as e:  # noqa: BLE001
                         print(f"[satchel-pg] mine skipped ({wallet}): {e}")
-                if not alice_funded:
+                if NODELESS and not alice_funded:
                     alice_funded = faucet_alice_btcx(h)
                 if time.time() - last_post > REPOST_EVERY_SECS:
                     try:
@@ -295,7 +307,8 @@ def main():
             bob.stop()
             carol.stop()
             board.stop()
-            electrs.stop()
+            if electrs:
+                electrs.stop()
 
 
 if __name__ == "__main__":
