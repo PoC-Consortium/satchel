@@ -29,8 +29,21 @@ import time
 
 sys.stdout.reconfigure(line_buffering=True)
 
-from regtest_harness import Harness, HERE, EXE
+from regtest_harness import (
+    BTC_ELECTRS_ELECTRUM_PORT,
+    BTC_ELECTRS_MONITORING_PORT,
+    EXE,
+    HERE,
+    ElectrsServer,
+    Harness,
+    find_btc_electrs,
+)
+from satchel_playground import FAUCET_BTCX, alice_rpc
 from test_swap_e2e import build_workspace, Party, COINS_TOML
+
+# Starter BTC for nodeless Alice's pact-seed wallet (enough for every
+# sell-side take on the book; bob_btc is coinbase-rich).
+FAUCET_BTC = 0.05
 
 # Per-chain block cadence (seconds). We mirror mainnet RATIOS scaled ~20x — a
 # fast coin and a slower one — rather than instant regtest blocks, so the
@@ -52,6 +65,12 @@ REPOST_EVERY_SECS = 30
 # LOCAL relay that's wiped on teardown, so a short TTL only made offers churn
 # (expire + re-post) mid-session for no benefit.
 NOSTR_RELAY_PORT = 19788
+
+# --nodeless (playground-nostr-nodeless.ps1): ALICE RUNS NO NODES AT ALL --
+# btcx over the PoCX-patched electrs AND btc over the vanilla upstream electrs,
+# wallet on the Pact seed for both, Nostr transport, no LTC. Bob/Carol stay
+# node-backed market makers. The end-user vision stack (epic #58).
+NODELESS = "--nodeless" in sys.argv[1:]
 
 PROTOCOLS = ["pact-htlc-v1", "pact-htlc-v2"]
 
@@ -164,6 +183,27 @@ class NostrRelay:
             self.proc = None
 
 
+def faucet_alice(h):
+    """Nodeless Alice's wallets live on the seed she creates in the wizard, so
+    they can't be pre-funded. Poll until her pactd serves a wallet, then send a
+    starter balance on BOTH coins. Returns True once both are done."""
+    done = True
+    for coin, node, wallet, amount in (
+        ("btcx", h.pocx, "alice_pocx", FAUCET_BTCX),
+        ("btc", h.btc, "bob_btc", FAUCET_BTC),
+    ):
+        try:
+            if alice_rpc("getbalance", coin)["balance_sat"] > 0:
+                continue
+            addr = alice_rpc("getnewaddress", coin)["address"]
+            node.rpc("sendtoaddress", addr, amount, wallet=wallet)
+            print(f"[nostr-pg] faucet: {amount} {coin.upper()} -> Alice's "
+                  f"nodeless wallet ({addr[:24]}...) -- confirms next block")
+        except Exception:  # noqa: BLE001 -- not up yet / wizard pending: retry
+            done = False
+    return done
+
+
 def chain_time(node):
     # Tip block time, used to keep mocktime monotonic across all three chains.
     # litecoind is an older Bitcoin Core fork whose getblockchaininfo has no
@@ -175,9 +215,30 @@ def chain_time(node):
 
 def main():
     build_workspace()
-    with Harness(keep=False, with_ltc=True) as h:
+    # Nodeless: both nodes move to bindex's hardcoded REST ports (pocx 18443,
+    # btc 18332 = the "testnet" default) and each gets an electrs; no LTC.
+    with Harness(keep=False, with_ltc=not NODELESS,
+                 pocx_rest=NODELESS, btc_rest=NODELESS) as h:
         relay = NostrRelay(h.workdir)
         relay.start()
+        pocx_electrs = btc_electrs = None
+        if NODELESS:
+            pocx_electrs = ElectrsServer(h.workdir, h.pocx)
+            pocx_electrs.start()
+            pocx_electrs.wait_synced(h.pocx.rpc("getblockcount"))
+            # Vanilla upstream electrs for BTC: --network testnet only picks
+            # bindex's REST port (18332) + db subdir -- it indexes whatever
+            # chain the node serves (no genesis assertion), here btc regtest.
+            btc_electrs = ElectrsServer(
+                h.workdir, h.btc,
+                electrum_port=BTC_ELECTRS_ELECTRUM_PORT,
+                monitoring_port=BTC_ELECTRS_MONITORING_PORT,
+                network="testnet", binary=find_btc_electrs(),
+                name="btc-electrs")
+            btc_electrs.start()
+            btc_electrs.wait_synced(h.btc.rpc("getblockcount"))
+            print(f"[nostr-pg] electrs up: btcx {pocx_electrs.url} | "
+                  f"btc {btc_electrs.url} (Alice fully nodeless)")
 
         # Same extra wallets as the corkboard playground (two-sided book + Alice
         # funded on ALL THREE coins). See satchel_playground.py for the rationale.
@@ -189,32 +250,33 @@ def main():
         h.pocx.generate(110, "bob_pocx")
         h.btc.generate(110, "alice_btc")
 
-        # Litecoin leg. alice_ltc + carol_ltc are funded (each gives LTC on some
-        # offer); bob_ltc is a receive-only sweep target. LTC coinbase matures at
-        # 100, so 110 deep is spendable.
-        h.ltc.create_wallet("alice_ltc")
-        h.ltc.create_wallet("bob_ltc")
-        h.ltc.create_wallet("carol_ltc")
-        h.ltc.generate(110, "alice_ltc")
-        h.ltc.generate(110, "carol_ltc")
-        print("[nostr-pg] funded carol_pocx + alice_btc + alice_ltc/carol_ltc "
-              f"(carol_pocx: {h.pocx.rpc('getbalance', wallet='carol_pocx')} POCX, "
-              f"alice_btc: {h.btc.rpc('getbalance', wallet='alice_btc')} BTC, "
-              f"alice_ltc: {h.ltc.rpc('getbalance', wallet='alice_ltc')} LTC)")
+        # Litecoin leg (classic mode only; the nodeless stack skips LTC).
+        if not NODELESS:
+            h.ltc.create_wallet("alice_ltc")
+            h.ltc.create_wallet("bob_ltc")
+            h.ltc.create_wallet("carol_ltc")
+            h.ltc.generate(110, "alice_ltc")
+            h.ltc.generate(110, "carol_ltc")
+            print("[nostr-pg] funded carol_pocx + alice_btc + alice_ltc/carol_ltc "
+                  f"(carol_pocx: {h.pocx.rpc('getbalance', wallet='carol_pocx')} POCX, "
+                  f"alice_btc: {h.btc.rpc('getbalance', wallet='alice_btc')} BTC, "
+                  f"alice_ltc: {h.ltc.rpc('getbalance', wallet='alice_ltc')} LTC)")
 
         # RELAYS-ONLY: nostr_relays set, board_url omitted. Brisk 2s tick — fine
         # against the LOCAL relay (public relays would need a slower tick;
         # tick_secs is per-config, default 30s). Bob/Carol get an LTC leg too
         # (own wallet on the LTC node) so they post/serve LTC offers over the
         # relay; a file coin needs --coins-file (coins_file) + the extra --coin.
+        bob_ltc = [] if NODELESS else [("ltc", h.ltc.rpc_url(wallet="bob_ltc"))]
+        carol_ltc = [] if NODELESS else [("ltc", h.ltc.rpc_url(wallet="carol_ltc"))]
         bob = Party("bob", h, h.workdir, "bob_pocx", "bob_btc",
                     nostr_relays=relay.ws_url, auto_fund=True, tick_secs=2,
                     coins_file=COINS_TOML, coin_confs=PLAYGROUND_CONFS,
-                    extra_coins=[("ltc", h.ltc.rpc_url(wallet="bob_ltc"))]).start()
+                    extra_coins=bob_ltc).start()
         carol = Party("carol", h, h.workdir, "carol_pocx", "carol_btc",
                       nostr_relays=relay.ws_url, auto_fund=True, tick_secs=2,
                       coins_file=COINS_TOML, coin_confs=PLAYGROUND_CONFS,
-                      extra_coins=[("ltc", h.ltc.rpc_url(wallet="carol_ltc"))]).start()
+                      extra_coins=carol_ltc).start()
 
         posted = {"bob": [], "carol": [], "bob_ltc": [], "carol_ltc": []}
 
@@ -240,9 +302,10 @@ def main():
         def post_offers():
             topup(bob, "bob", BOB_OFFERS)
             topup(carol, "carol", CAROL_OFFERS)
-            # LTC sub-book, pinned to v1 HTLC.
-            topup(bob, "bob_ltc", BOB_LTC_OFFERS, pin_proto="pact-htlc-v1")
-            topup(carol, "carol_ltc", CAROL_LTC_OFFERS, pin_proto="pact-htlc-v1")
+            if not NODELESS:
+                # LTC sub-book, pinned to v1 HTLC.
+                topup(bob, "bob_ltc", BOB_LTC_OFFERS, pin_proto="pact-htlc-v1")
+                topup(carol, "carol_ltc", CAROL_LTC_OFFERS, pin_proto="pact-htlc-v1")
             ltc_live = len(posted["bob_ltc"]) + len(posted["carol_ltc"])
             print(f"[nostr-pg] {len(posted['bob'])} buy-side (Bob) + "
                   f"{len(posted['carol'])} sell-side (Carol) + "
@@ -259,22 +322,33 @@ def main():
   Nostr relay only:
     Bob   (:{bob.port}) BUY side — {len(BOB_OFFERS)} give-BTC/get-POCX + {len(BOB_LTC_OFFERS)} give-BTC/get-LTC
     Carol (:{carol.port}) SELL side — {len(CAROL_OFFERS)} give-POCX/get-BTC + {len(CAROL_LTC_OFFERS)} LTC offers
-  Relay {relay.ws_url} | POCX :19443 | BTC :19543 | LTC :19643
+  Relay {relay.ws_url} | POCX :{h.pocx.rpc_port} | BTC :{h.btc.rpc_port}{"" if NODELESS else " | LTC :19643"}{f'''
+  electrs: btcx {pocx_electrs.url} | btc {btc_electrs.url}
+  ALICE IS FULLY NODELESS -- both wallets live on her Pact seed.''' if NODELESS else ""}
   Offers use the default TTL; taken offers refill every {REPOST_EVERY_SECS}s.
 
-  In the Satchel window (managed "Alice", relays-only, funded on ALL THREE coins):
-    1. Wizard -> Create a merchant.
+  In the Satchel window (managed "Alice", relays-only):
+    1. Wizard -> Create a merchant.{f'''
+    2. Coins tab -> BTCX and BTC both show "Electrum (local)" -- no nodes.
+    3. Wallets tab -> BOTH cards have Receive / Send / Activity; the faucet
+       drops {FAUCET_BTCX} BTCX + {FAUCET_BTC} BTC right after the wizard.
+    4. Corkboard tab -> board source is the Nostr relay; take either side --
+       every leg funds straight from your pact-seed wallets.
+    5. Swaps tab -> watch it walk to 'completed'.''' if NODELESS else '''
     2. Coins tab -> BTCX + BTC + LTC connected.
     3. Corkboard tab -> board source is the Nostr relay; two-sided market incl.
        LTC pairs; take any side (give POCX, give BTC, or trade LTC either way).
-    4. Swaps tab -> watch it walk to 'completed'.
+    4. Swaps tab -> watch it walk to 'completed'.'''}
   Offers may take a few seconds to appear (the relay poll cycle).
 {bar}
 """)
         start_wall = time.time()
-        legs = ((h.pocx, "alice_pocx", "btcx"), (h.btc, "bob_btc", "btc"), (h.ltc, "alice_ltc", "ltc"))
+        legs = [(h.pocx, "alice_pocx", "btcx"), (h.btc, "bob_btc", "btc")]
+        if not NODELESS:
+            legs.append((h.ltc, "alice_ltc", "ltc"))
         base = max(chain_time(n) for n, _, _ in legs)
         last_post = time.time()
+        alice_funded = False
         # Per-tick mining is BEST-EFFORT: a transient node error (e.g. a momentary
         # `bad-txns-vin-empty` on CreateNewBlock) must NOT crash the driver — that
         # would unwind the Harness and tear every node down, leaving Satchel on a
@@ -303,6 +377,8 @@ def main():
                             node.generate(1, wallet)
                     except Exception as e:  # noqa: BLE001
                         print(f"[nostr-pg] mine skipped ({wallet}): {e}")
+                if NODELESS and not alice_funded:
+                    alice_funded = faucet_alice(h)
                 if time.time() - last_post > REPOST_EVERY_SECS:
                     try:
                         post_offers()
@@ -315,6 +391,10 @@ def main():
             bob.stop()
             carol.stop()
             relay.stop()
+            if pocx_electrs:
+                pocx_electrs.stop()
+            if btc_electrs:
+                btc_electrs.stop()
 
 
 if __name__ == "__main__":

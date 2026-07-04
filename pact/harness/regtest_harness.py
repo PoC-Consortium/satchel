@@ -52,6 +52,14 @@ BTC_RPC_PORT = 19543
 POCX_REST_RPC_PORT = 18443
 ELECTRS_ELECTRUM_PORT = 19750
 ELECTRS_MONITORING_PORT = 19751
+# Vanilla (upstream) electrs for the BTC leg has the same bindex REST hardcode,
+# so a nodeless-BTC stack parks the BTC regtest node on the TESTNET default RPC
+# port and runs electrs with --network testnet (bindex asserts no genesis — the
+# PoCX fork already proves a "regtest" network serving a non-bitcoin chain).
+# Needs a Core v31+ node (/rest/blockpart).
+BTC_REST_RPC_PORT = 18332
+BTC_ELECTRS_ELECTRUM_PORT = 19760
+BTC_ELECTRS_MONITORING_PORT = 19761
 # Litecoin RPC port matches the `ltc` regtest connection default in
 # satchel/coins.toml so the same port story holds end to end. Only used when a
 # Harness is built with_ltc (the playground); the e2e suite never starts it.
@@ -115,17 +123,38 @@ def find_electrs():
         "harness/bin/electrs" + EXE + " or set PACT_ELECTRS_BIN.")
 
 
+def find_btc_electrs():
+    candidates = [
+        os.environ.get("PACT_BTC_ELECTRS_BIN"),
+        os.path.join(HERE, "bin", "btc-electrs" + EXE),
+    ]
+    for candidate in candidates:
+        if candidate and os.path.exists(candidate):
+            return candidate
+    raise FileNotFoundError(
+        "vanilla (upstream) electrs binary not found. Copy it to "
+        "harness/bin/btc-electrs" + EXE + " or set PACT_BTC_ELECTRS_BIN.")
+
+
 class ElectrsServer:
     """The PoCX-patched electrs (romanz fork over bindex-pocx), indexing a
     regtest PoCX node that MUST be on :18443 with -rest=1 (see
     POCX_REST_RPC_PORT above). Electrum RPC on ELECTRS_ELECTRUM_PORT."""
 
     def __init__(self, workdir, node, electrum_port=ELECTRS_ELECTRUM_PORT,
-                 monitoring_port=ELECTRS_MONITORING_PORT):
-        self.dir = os.path.join(workdir, "electrs")
+                 monitoring_port=ELECTRS_MONITORING_PORT,
+                 network="regtest", binary=None, name="electrs"):
+        # `network` picks bindex's hardcoded REST port (regtest→18443,
+        # testnet→18332); `binary` overrides the PoCX-patched default (the
+        # vanilla upstream electrs for a BTC leg); `name` keeps two instances'
+        # dirs/logs apart in one workdir.
+        self.dir = os.path.join(workdir, name)
         os.makedirs(self.dir, exist_ok=True)
         self.electrum_port = electrum_port
         self.monitoring_port = monitoring_port
+        self.network = network
+        self.binary = binary
+        self.name = name
         # electrs authenticates its RPC (non-REST) calls via a cookie FILE
         # whose content is user:pass — hand it the node's credentials.
         self.cookie_path = os.path.join(self.dir, "rpc.cookie")
@@ -141,8 +170,8 @@ class ElectrsServer:
 
     def start(self):
         cmd = [
-            find_electrs(),
-            "--network", "regtest",
+            self.binary or find_electrs(),
+            "--network", self.network,
             "--daemon-rpc-addr", f"127.0.0.1:{self.daemon_port}",
             "--cookie-file", self.cookie_path,
             "--db-dir", os.path.join(self.dir, "db"),
@@ -339,7 +368,8 @@ class Harness:
       btc node:  wallets bob_btc    (funded), alice_btc  (empty)
     """
 
-    def __init__(self, workdir=None, keep=False, with_ltc=False, pocx_rest=False):
+    def __init__(self, workdir=None, keep=False, with_ltc=False, pocx_rest=False,
+                 btc_rest=False):
         self.workdir = workdir or tempfile.mkdtemp(prefix="pact-regtest-")
         self.keep = keep
         # pocx_rest: nodeless/electrs stacks need the PoCX node on the regtest
@@ -350,9 +380,13 @@ class Harness:
                          POCX_REST_RPC_PORT if pocx_rest else POCX_RPC_PORT,
                          POCX_REGTEST_GENESIS,
                          extra_args=["-rest=1"] if pocx_rest else None)
+        # btc_rest: nodeless-BTC stacks need the BTC node on bindex's testnet
+        # default (18332) with REST on — see BTC_REST_RPC_PORT above.
         self.btc = Node("btc", find_btc_bitcoind(),
-                        os.path.join(self.workdir, "btc"), BTC_RPC_PORT,
-                        BTC_REGTEST_GENESIS)
+                        os.path.join(self.workdir, "btc"),
+                        BTC_REST_RPC_PORT if btc_rest else BTC_RPC_PORT,
+                        BTC_REGTEST_GENESIS,
+                        extra_args=["-rest=1"] if btc_rest else None)
         # Optional third chain (Litecoin) — a file-added coin, brought up only by
         # callers that ask for it (the playground). The e2e suite leaves it off
         # so it never depends on a litecoind binary. Wallets/funding for this

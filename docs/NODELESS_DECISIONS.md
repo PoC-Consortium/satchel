@@ -68,6 +68,27 @@ merchant exists. Old 19443 stays in the teardown port sweep for stale runs.
 Dress-rehearsed headless end to end: faucet fired, a v2 board take gave
 47 BTCX from the bdk wallet and completed; balances + activity exact.
 
+## D9 — Nodeless BTC leg: vanilla electrs on the testnet-port trick; Core v31
+
+(2026-07-04, user-requested nostr+fully-nodeless playground.) The vanilla
+upstream electrs has the same bindex REST hardcode as the PoCX fork, so the
+BTC regtest node parks on the TESTNET default RPC port (18332, `-rest=1`)
+and vanilla electrs runs `--network testnet` — bindex asserts no genesis
+(the PoCX fork already proved that), it just indexes whatever the node
+serves. Binaries (gitignored): `harness/bin/btc-electrs.exe` (user-built
+vanilla 0.11.1 from C:\code\pocx\electrum\dist) and
+`harness/bin/btc-bitcoind.exe` upgraded Core v30 → **v31.0** (official
+bitcoincore.org win64 zip; bindex needs `/rest/blockpart`). The whole e2e
+suite runs on the v31 node from here on.
+
+`playground-nostr-nodeless.ps1` + `satchel_playground_nostr.py --nodeless`:
+Alice runs ZERO nodes — btcx over PoCX electrs (:19750), btc over vanilla
+electrs (:19760), both wallets on her Pact seed, Nostr transport, no LTC;
+faucet drops 100 BTCX + 0.05 BTC post-wizard. Bob/Carol stay node-backed.
+Dress-rehearsed headless: both directions completed over Nostr in ~2.5 min
+(realistic confs), each redeem sweeping INTO the respective seed wallet —
+the BTC one through the vanilla electrs.
+
 ## D4 — Parity scenarios chosen (test_nodeless_e2e.py)
 
 (1) v1 nodeless maker (bdk `wallet_send` funds leg A), (2) v2 nodeless taker
