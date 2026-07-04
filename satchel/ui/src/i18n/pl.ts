@@ -446,6 +446,10 @@ export const pl: Bundle = {
       "Ta moneta komunikuje się przez RPC z węzłem w stylu Bitcoin Core; swapy finansuje portfel węzła.",
     connElectrumTip:
       "Ta moneta łączy się z serwerami Electrum — bez węzła. Portfel żyje na Twoim seedzie Pact.",
+    switchHidesTitle: "To ukryje Twój portfel na seedzie Pact",
+    switchHidesBody:
+      "Twój portfel na seedzie Pact wciąż trzyma na tej monecie {balance} {sym}. Przełączenie na połączenie z węzłem go ukryje — monety pozostają bezpieczne na Twoim seedzie i pojawią się z powrotem, gdy tylko wrócisz do Electrum, ale do tego czasu nie będą widoczne ani nie sfinansują swapów. Rozważ najpierw wysłanie ich gdzie indziej.",
+    switchHidesConfirm: "Przełącz mimo to",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nieobsługiwane",
     unsupportedByEngineTip:

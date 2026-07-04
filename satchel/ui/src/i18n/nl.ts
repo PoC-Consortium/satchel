@@ -446,6 +446,10 @@ export const nl: Bundle = {
       "Deze munt praat via RPC met een node in Bitcoin-Core-stijl; de wallet van de node fundt de swaps.",
     connElectrumTip:
       "Deze munt verbindt met Electrum-servers — geen node. De wallet leeft op je Pact-seed.",
+    switchHidesTitle: "Dit verbergt je Pact-seed-wallet",
+    switchHidesBody:
+      "Je Pact-seed-wallet op deze munt bevat nog {balance} {sym}. Overschakelen naar een node-verbinding verbergt hem — de munten blijven veilig op je seed en verschijnen weer zodra je terugschakelt naar Electrum, maar tot die tijd zijn ze niet zichtbaar en funden ze geen swaps. Overweeg ze eerst ergens anders heen te sturen.",
+    switchHidesConfirm: "Toch overschakelen",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Niet ondersteund",
     unsupportedByEngineTip:

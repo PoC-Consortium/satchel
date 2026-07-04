@@ -445,6 +445,10 @@ export const ca: Bundle = {
       "Aquesta moneda parla amb un node tipus Bitcoin Core per RPC; la cartera del node finança els intercanvis.",
     connElectrumTip:
       "Aquesta moneda es connecta a servidors Electrum — sense node. La cartera viu a la teva llavor Pact.",
+    switchHidesTitle: "Això amaga la teva cartera de llavor Pact",
+    switchHidesBody:
+      "La teva cartera de llavor Pact en aquesta moneda encara conté {balance} {sym}. Canviar a una connexió de node l'amaga — les monedes es mantenen segures a la teva llavor i reapareixen tan bon punt tornis a Electrum, però fins llavors no es mostraran ni finançaran intercanvis. Considera enviar-les a un altre lloc primer.",
+    switchHidesConfirm: "Canvia igualment",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "No compatible",
     unsupportedByEngineTip:

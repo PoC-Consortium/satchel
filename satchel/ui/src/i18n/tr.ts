@@ -446,6 +446,10 @@ export const tr: Bundle = {
       "Bu coin, Bitcoin Core tarzı bir düğümle RPC üzerinden konuşur; takasları düğümün cüzdanı fonlar.",
     connElectrumTip:
       "Bu coin Electrum sunucularına bağlanır — düğüm yok. Cüzdan Pact seed'inizde yaşar.",
+    switchHidesTitle: "Bu, pact seed cüzdanınızı gizler",
+    switchHidesBody:
+      "Bu coindeki pact seed cüzdanınızda hâlâ {balance} {sym} var. Bir düğüm bağlantısına geçmek onu gizler — coin'ler seed'inizde güvende kalır ve Electrum'a geri döndüğünüz anda yeniden görünür, ama o zamana kadar görünmezler ve takasları fonlayamazlar. Önce onları başka bir yere göndermeyi düşünün.",
+    switchHidesConfirm: "Yine de geç",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Desteklenmiyor",
     unsupportedByEngineTip:

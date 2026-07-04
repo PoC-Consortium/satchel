@@ -446,6 +446,10 @@ export const sr: Bundle = {
       "Овај новчић комуницира са чвором типа Bitcoin Core преко RPC-а; свопове уплаћује новчаник чвора.",
     connElectrumTip:
       "Овај новчић се повезује на Electrum сервере — без чвора. Новчаник живи на вашем Pact семену.",
+    switchHidesTitle: "Ово скрива ваш новчаник на Pact семену",
+    switchHidesBody:
+      "Ваш новчаник на Pact семену за овај новчић и даље држи {balance} {sym}. Прелазак на везу са чвором га скрива — новчићи остају безбедни на вашем семену и поново се појављују чим се вратите на Electrum, али до тада се неће приказивати нити уплаћивати свопове. Размислите да их прво негде пошаљете.",
+    switchHidesConfirm: "Ипак пређи",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Неподржан",
     unsupportedByEngineTip:

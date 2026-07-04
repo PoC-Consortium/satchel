@@ -446,6 +446,10 @@ export const uk: Bundle = {
       "Ця монета спілкується з вузлом типу Bitcoin Core через RPC; свопи фінансує гаманець вузла.",
     connElectrumTip:
       "Ця монета підключається до серверів Electrum — без вузла. Гаманець живе на вашому Pact seed.",
+    switchHidesTitle: "Це приховає ваш гаманець на Pact seed",
+    switchHidesBody:
+      "Ваш гаманець на Pact seed для цієї монети досі тримає {balance} {sym}. Перемикання на підключення до вузла приховує його — монети залишаються в безпеці на вашому seed і з'являться знову, щойно ви повернетеся на Electrum, але доти вони не відображатимуться й не фінансуватимуть свопи. Можливо, варто спершу надіслати їх кудись.",
+    switchHidesConfirm: "Все одно перемкнути",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Не підтримується",
     unsupportedByEngineTip:

@@ -446,6 +446,10 @@ export const hi: Bundle = {
       "यह coin RPC के ज़रिए Bitcoin-Core-शैली के node से बात करता है; node का wallet स्वैप फंड करता है।",
     connElectrumTip:
       "यह coin Electrum सर्वरों से जुड़ता है — किसी node की ज़रूरत नहीं। यह wallet आपकी Pact seed पर रहता है।",
+    switchHidesTitle: "यह आपका pact-seed wallet छिपा देता है",
+    switchHidesBody:
+      "इस coin पर आपके pact-seed wallet में अभी भी {balance} {sym} है। Node कनेक्शन पर स्विच करने से यह छिप जाता है — coins आपकी seed पर सुरक्षित रहते हैं और जैसे ही आप Electrum पर वापस स्विच करते हैं, फिर दिखने लगते हैं, लेकिन तब तक वे न दिखेंगे और न स्वैप फंड कर पाएंगे। पहले उन्हें कहीं और भेजने पर विचार करें।",
+    switchHidesConfirm: "फिर भी स्विच करें",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "असमर्थित",
     unsupportedByEngineTip:

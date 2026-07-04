@@ -445,6 +445,10 @@ export const gl: Bundle = {
       "Esta moeda fala cun nodo tipo Bitcoin Core por RPC; a carteira do nodo financia os intercambios.",
     connElectrumTip:
       "Esta moeda conéctase a servidores Electrum — sen nodo. A carteira vive na túa semente Pact.",
+    switchHidesTitle: "Isto agocha a túa carteira de semente Pact",
+    switchHidesBody:
+      "A túa carteira de semente Pact nesta moeda aínda contén {balance} {sym}. Cambiar a unha conexión de nodo agóchaa — as moedas seguen a salvo na túa semente e reaparecen en canto volvas a Electrum, pero ata entón non se mostrarán nin financiarán intercambios. Considera envialas a outro sitio primeiro.",
+    switchHidesConfirm: "Cambiar igualmente",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Non admitida",
     unsupportedByEngineTip:

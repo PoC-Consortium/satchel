@@ -446,6 +446,10 @@ export const ro: Bundle = {
       "Această monedă vorbește prin RPC cu un nod în stil Bitcoin Core; portofelul nodului finanțează swap-urile.",
     connElectrumTip:
       "Această monedă se conectează la servere Electrum — fără nod. Portofelul trăiește pe seed-ul tău Pact.",
+    switchHidesTitle: "Asta îți ascunde portofelul pe seed-ul Pact",
+    switchHidesBody:
+      "Portofelul tău pe seed-ul Pact pe această monedă încă deține {balance} {sym}. Trecerea la o conexiune de nod îl ascunde — monedele rămân în siguranță pe seed-ul tău și reapar în clipa în care revii la Electrum, dar până atunci nu vor apărea și nu vor finanța swap-uri. Ia în calcul să le trimiți mai întâi altundeva.",
+    switchHidesConfirm: "Treci oricum",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nesuportat",
     unsupportedByEngineTip:

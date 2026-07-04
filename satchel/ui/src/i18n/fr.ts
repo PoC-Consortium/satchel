@@ -445,6 +445,10 @@ export const fr: Bundle = {
       "Ce coin communique avec un nœud de type Bitcoin Core via RPC ; le portefeuille du nœud finance les swaps.",
     connElectrumTip:
       "Ce coin se connecte à des serveurs Electrum — aucun nœud. Le portefeuille vit sur votre seed Pact.",
+    switchHidesTitle: "Ceci masque votre portefeuille de seed Pact",
+    switchHidesBody:
+      "Votre portefeuille de seed Pact sur ce coin contient encore {balance} {sym}. Passer à une connexion à un nœud le masque — les coins restent en sécurité sur votre seed et réapparaissent dès que vous revenez à Electrum, mais d'ici là ils n'apparaîtront pas et ne financeront pas de swaps. Pensez à les envoyer ailleurs d'abord.",
+    switchHidesConfirm: "Changer quand même",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Non pris en charge",
     unsupportedByEngineTip:
