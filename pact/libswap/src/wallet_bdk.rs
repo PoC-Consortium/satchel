@@ -374,8 +374,8 @@ impl BdkWalletBackend {
         amount_sat: u64,
         fee: SendFee,
     ) -> Result<Transaction> {
-        let feerate = FeeRate::from_sat_per_vb(self.resolve_send_fee(fee)?)
-            .context("feerate overflow")?;
+        let feerate =
+            FeeRate::from_sat_per_vb(self.resolve_send_fee(fee)?).context("feerate overflow")?;
         let mut builder = entry.wallet.build_tx();
         builder
             .add_recipient(spk, Amount::from_sat(amount_sat))
