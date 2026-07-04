@@ -23,6 +23,7 @@ import {
 import { useApp } from "../AppContext";
 import { useConfirm } from "../ui/ConfirmProvider";
 import { useDenom } from "../denom";
+import { useFx } from "../fx";
 import { useT } from "../i18n";
 import { assessLockFunds, rpc } from "../api/tauri";
 import {
@@ -34,8 +35,10 @@ import {
   DENOMS,
   fmtBare,
   fmtPrice,
+  fmtUsd,
   hours,
   offerProtocols,
+  offerUsd,
   pairKey,
   parseAmount,
   sanitizeAmountInput,
@@ -200,6 +203,20 @@ export default function OfferForm({
   const giveStr = side === "sell" ? canonicalAmount(baseAmt) : fmtBare(quoteSats);
   const wantStr = side === "sell" ? fmtBare(quoteSats) : canonicalAmount(baseAmt);
   const giveSat = side === "sell" ? baseSats : quoteSats;
+  const wantSat = side === "sell" ? quoteSats : baseSats;
+
+  // Muted USD-equivalent of the offer from the user's manual anchor (issue
+  // #56); both legs are equal-valued at the entered price, so one figure
+  // annotates both summary lines. Null (no anchor / no BTC leg) reads "—".
+  const { enabled: fxOn, usdPerBtc } = useFx();
+  const usdLeg = fxOn
+    ? fmtUsd(
+        offerUsd(
+          { give_asset: giveCoin, give_amount: giveSat, get_asset: wantCoin, get_amount: wantSat },
+          usdPerBtc,
+        ),
+      )
+    : null;
 
   // Chain-up gate: refuse to post when a leg's own node is down (the engine does
   // too — this is the friendly up-front block).
@@ -380,10 +397,20 @@ export default function OfferForm({
           <Typography sx={{ fontSize: 12.5 }}>
             <Box component="span" sx={{ color: "text.secondary" }}>{t("makeOffer.youGive")}: </Box>
             <Box component="span" sx={{ fontFamily: C.mono }}>{giveStr} {symOf(giveCoin)}</Box>
+            {usdLeg != null && (
+              <Box component="span" sx={{ fontFamily: C.mono, color: "text.secondary" }}>
+                {" "}· {t("fx.approx", { usd: usdLeg })}
+              </Box>
+            )}
           </Typography>
           <Typography sx={{ fontSize: 12.5 }}>
             <Box component="span" sx={{ color: "text.secondary" }}>{t("makeOffer.youGet")}: </Box>
             <Box component="span" sx={{ fontFamily: C.mono, color: "primary.main" }}>{wantStr} {symOf(wantCoin)}</Box>
+            {usdLeg != null && (
+              <Box component="span" sx={{ fontFamily: C.mono, color: "text.secondary" }}>
+                {" "}· {t("fx.approx", { usd: usdLeg })}
+              </Box>
+            )}
           </Typography>
         </Box>
       )}

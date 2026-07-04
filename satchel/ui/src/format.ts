@@ -294,6 +294,47 @@ export function fmtPrice(p: number): string {
   return new Intl.NumberFormat(undefined, opts).format(p);
 }
 
+// ---- USD reference (manual FX anchor, issue #56) --------------------------
+// A single user-entered anchor (USD per 1 BTC) prices everything shown: BTC
+// outranks every coin in QUOTE_PRIORITY, so any pair involving BTC quotes in
+// BTC, and an offer's two legs are equal-valued at its own implied rate — the
+// BTC leg × anchor therefore values the whole trade. Display-only and opt-in
+// (see fx.tsx); a pair with no BTC leg simply isn't derivable and shows "—".
+
+/** USD value of one offer (both legs — they are equal at the offer's implied
+ *  rate). Null when the offer has no BTC leg or no anchor is set. */
+export function offerUsd(
+  b: { give_asset: string; give_amount: number; get_asset: string; get_amount: number },
+  usdPerBtc: number | null,
+): number | null {
+  if (!usdPerBtc) return null;
+  const btcSat =
+    b.give_asset === "btc" ? b.give_amount : b.get_asset === "btc" ? b.get_amount : null;
+  return btcSat == null ? null : (btcSat / 1e8) * usdPerBtc;
+}
+
+/** USD per 1 base coin for a quote-per-base price (in whole quote coin). Only
+ *  derivable when the quote is BTC — the anchor's own unit. */
+export function priceUsd(
+  price: number,
+  quote: string,
+  usdPerBtc: number | null,
+): number | null {
+  if (!usdPerBtc || quote !== "btc" || !isFinite(price) || price <= 0) return null;
+  return price * usdPerBtc;
+}
+
+/** Locale-formatted USD ("$1,234" / "$4.36" / "$0.0021"), degrading to "—" for
+ *  null (anchor unset / pair not derivable). Precision is tiered like fmtPrice:
+ *  whole dollars when large, cents mid-range, significant digits when tiny. */
+export function fmtUsd(v: number | null): string {
+  if (v == null || !isFinite(v)) return "—";
+  const opts: Intl.NumberFormatOptions = { style: "currency", currency: "USD" };
+  if (v >= 1000) opts.maximumFractionDigits = 0;
+  else if (v > 0 && v < 1) opts.maximumSignificantDigits = 2;
+  return new Intl.NumberFormat(undefined, opts).format(v);
+}
+
 // ---- denomination (display unit) ----------------------------------------
 // A view-only preference: amounts are always stored/handled in sats; this only
 // changes how the quote coin is shown (tiny BTC decimals read better as sat /

@@ -19,6 +19,7 @@ import BlockIcon from "@mui/icons-material/Block";
 import { useApp } from "../AppContext";
 import { useContacts } from "../contacts";
 import { useDenom } from "../denom";
+import { useFx } from "../fx";
 import { useNavigate } from "../ui/nav";
 import { useT } from "../i18n";
 import { errMsg, listCoinConfig, rpc } from "../api/tauri";
@@ -34,10 +35,13 @@ import {
   fmtBareLocale,
   fmtDenom,
   fmtPriceDenom,
+  fmtUsd,
   freshness,
   hours,
   offerState,
+  offerUsd,
   pairKey,
+  priceUsd,
 } from "../format";
 import { C } from "../theme";
 import type { BookSide, Denom, OfferState } from "../format";
@@ -68,6 +72,7 @@ export default function CorkboardScreen() {
   // refuses too — this is the friendly up-front block).
   const coinLive = (id?: string) => !!coins.find((c) => c.id === id && c.status === "ok");
   const { denom, setDenom } = useDenom();
+  const { enabled: fxOn, usdPerBtc } = useFx();
   const { get: contactOf, book: contactBook } = useContacts();
   const confirmTake = useTakeConfirm();
   const navigate = useNavigate();
@@ -502,6 +507,15 @@ export default function CorkboardScreen() {
                   <Box sx={{ color: "text.secondary", fontFamily: C.mono }}>
                     {t("corkboard.book.mid", { price: `${fmtPriceDenom(mid, denom)} ${quoteUnit}` })}
                   </Box>
+                  {/* Muted USD-equivalent of the mid, from the user's own manual
+                      anchor (issue #56) — a reference, never a market feed. */}
+                  {fxOn && (
+                    <Tooltip title={t("fx.refTip")}>
+                      <Box sx={{ color: "text.secondary", fontFamily: C.mono, cursor: "help" }}>
+                        {t("fx.approx", { usd: fmtUsd(priceUsd(mid, quote, usdPerBtc)) })}
+                      </Box>
+                    </Tooltip>
+                  )}
                 </>
               )}
             </Box>
@@ -892,6 +906,7 @@ function OfferRow({
 }) {
   const t = useT();
   const { showToast } = useApp();
+  const { enabled: fxOn, usdPerBtc } = useFx();
   const b = o.body;
   const expiry = b.created ? b.created + (b.ttl_secs || 24 * 3600) : 0;
   const f = freshness(b.created || 0, expiry);
@@ -963,6 +978,18 @@ function OfferRow({
           ? `${fmtLeg(b.give_amount, b.give_asset)} → ${fmtLeg(b.get_amount, b.get_asset)}`
           : `${fmtLeg(b.get_amount, b.get_asset)} → ${fmtLeg(b.give_amount, b.give_asset)}`}
       </Typography>
+
+      {/* Muted USD-equivalent — one figure values BOTH legs (they are equal at
+          the offer's own implied rate), from the user's manual anchor. */}
+      {fxOn && (
+        <Tooltip title={t("fx.refTip")}>
+          <Typography
+            sx={{ fontFamily: C.mono, fontSize: 11.5, color: "text.secondary", whiteSpace: "nowrap", cursor: "help" }}
+          >
+            {t("fx.approx", { usd: fmtUsd(offerUsd(b, usdPerBtc)) })}
+          </Typography>
+        </Tooltip>
+      )}
 
       <Tooltip title={t("corkboard.safetyRefundTip")}>
         <Box component="span" sx={{ fontSize: 12, color: "text.secondary", cursor: "help", whiteSpace: "nowrap" }}>

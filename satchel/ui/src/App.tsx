@@ -4,6 +4,7 @@ import { useApp } from "./AppContext";
 import { usePrefs } from "./prefs";
 import { useT } from "./i18n";
 import { DenomProvider } from "./denom";
+import { FxProvider } from "./fx";
 import { ContactsProvider } from "./contacts";
 import { UpdateProvider } from "./update";
 import UpdateDialog from "./components/UpdateDialog";
@@ -95,6 +96,7 @@ export default function App() {
 
   return (
     <DenomProvider>
+    <FxProvider>
     <ContactsProvider>
     <UpdateProvider>
     <ConfirmProvider>
@@ -168,6 +170,7 @@ export default function App() {
     </ConfirmProvider>
     </UpdateProvider>
     </ContactsProvider>
+    </FxProvider>
     </DenomProvider>
   );
 }

@@ -22,6 +22,8 @@ import SettingsBrightnessOutlinedIcon from "@mui/icons-material/SettingsBrightne
 import CloseIcon from "@mui/icons-material/Close";
 import type { ReactNode } from "react";
 import { useApp } from "../AppContext";
+import { useFx } from "../fx";
+import { canonicalAmount, decimalSeparator, parseAmount, sanitizeAmountInput } from "../format";
 import { usePrefs } from "../prefs";
 import { useI18n, useT, LANGUAGES } from "../i18n";
 import type { UiPrefs } from "../api/types";
@@ -87,6 +89,9 @@ function GeneralTab() {
         </Row>
       </Section>
       <Box sx={{ mt: 2.5 }}>
+        <FxSection />
+      </Box>
+      <Box sx={{ mt: 2.5 }}>
         <Section title={t("settings.mode")}>
           <Row label={t("settings.watchOnly")} hint={t("settings.watchOnlyHint")}>
             <Switch
@@ -98,6 +103,48 @@ function GeneralTab() {
         </Section>
       </Box>
     </>
+  );
+}
+
+// USD reference (issue #56) — the manual FX anchor the whole USD display hangs
+// off. One rate (USD per 1 BTC), user-entered, persisted like the denom toggle
+// (localStorage, view-only). Deliberately no feed: BTCX is unlisted so nothing
+// could honestly price it, and Satchel makes zero external calls.
+function FxSection() {
+  const t = useT();
+  const { enabled, setEnabled, anchor, setAnchor } = useFx();
+  // Locale-entered draft (comma-decimal on comma locales); the canonical
+  // dot-decimal form is what persists.
+  const [draft, setDraft] = useState(() => anchor.replace(".", decimalSeparator()));
+
+  return (
+    <Section title={t("fx.section")}>
+      <Row label={t("fx.enable")} hint={t("fx.enableHint")}>
+        <Switch
+          checked={enabled}
+          onChange={(_, on) => setEnabled(on)}
+          inputProps={{ "aria-label": t("fx.enable") }}
+        />
+      </Row>
+      <Row label={t("fx.anchorLabel")} hint={t("fx.anchorHint")}>
+        <TextField
+          size="small"
+          value={draft}
+          disabled={!enabled}
+          inputMode="decimal"
+          autoComplete="off"
+          InputProps={{
+            startAdornment: <Typography sx={{ color: "text.secondary", mr: 0.75 }}>$</Typography>,
+          }}
+          onChange={(e) => {
+            const s = sanitizeAmountInput(e.target.value);
+            setDraft(s);
+            setAnchor(parseAmount(s) > 0 ? canonicalAmount(s) : "");
+          }}
+          sx={{ width: 160 }}
+        />
+      </Row>
+    </Section>
   );
 }
 

@@ -804,6 +804,21 @@ export const en = {
     switchMerchant: "Switch merchant",
     unlock: "Unlock",
   },
+  // Manual USD reference (issue #56) — display-only USD equivalents derived
+  // from ONE user-entered anchor (USD per 1 BTC). Deliberately manual: BTCX is
+  // unlisted so no feed could price it, and Satchel makes no external calls.
+  fx: {
+    section: "USD reference",
+    enable: "Show USD equivalents",
+    enableHint:
+      "Adds a muted USD figure next to prices and amounts, derived only from your own rate below. Display-only — Satchel never fetches prices and makes no network request for this.",
+    anchorLabel: "Your BTC rate (USD)",
+    anchorHint:
+      "What you consider 1 BTC to be worth in US dollars. Every USD figure is derived from this single anchor at each offer's own price — a sanity check against quotes, not a market feed.",
+    approx: "≈ {usd}",
+    refTip:
+      "At your own BTC rate — a reference, not a market price. Both legs of an offer are worth the same at its price. Set the rate in Settings → General.",
+  },
   common: {
     cancel: "Cancel",
     confirm: "Confirm",
@@ -881,9 +896,12 @@ type NewCoinKeys =
   | "switchHidesBody"
   | "switchHidesConfirm";
 
-export type Bundle = Omit<EnBundle, "progress" | "wallets" | "coins" | "seed"> & {
+export type Bundle = Omit<EnBundle, "progress" | "wallets" | "coins" | "seed" | "fx"> & {
   progress: WithOptional<EnBundle["progress"], "funding">;
   wallets: WithOptional<EnBundle["wallets"], NewWalletKeys>;
   coins: WithOptional<EnBundle["coins"], NewCoinKeys>;
   seed: WithOptional<EnBundle["seed"], "wordCountHint">;
+  /** USD-reference copy shipped 2026-07 (issue #56) — optional until the next
+   *  full translation pass. */
+  fx?: EnBundle["fx"];
 };
