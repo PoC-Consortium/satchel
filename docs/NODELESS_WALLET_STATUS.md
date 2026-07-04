@@ -17,10 +17,12 @@ Everything through the playground is DONE and verified:
 - **Satchel UI**: Wallets screen send/receive/activity for nodeless coins,
   "pact seed wallet" label, CoinSetup nodeless (Electrum) mode; wizard
   inherits it. i18n: en + 25 locales (new keys optional in Bundle).
-- **Playground**: `tools/playground-cork.ps1` — Alice's BTCX is NODELESS
-  over electrs, faucet auto-funds her pact-seed wallet after the wizard;
-  BTC + LTC stay node-backed. Dress-rehearsed headless: a v2 board take
-  gave 47 BTCX from the bdk wallet and completed.
+- **Playground**: `tools/playground-nodeless.ps1` — Alice's BTCX is
+  NODELESS over electrs, faucet auto-funds her pact-seed wallet after the
+  wizard; BTC + LTC stay node-backed. Dress-rehearsed headless: a v2 board
+  take gave 47 BTCX from the bdk wallet and completed. The classic
+  all-Core `playground-cork.ps1` is untouched (both share
+  `satchel_playground.py`; the nodeless variant passes `--nodeless`).
 
 Still open after review: pactd deep-rescan affordance (O2), sweep-target
 question (O3), handbook/wiki flip (+1 RPC method count), sub-issues under

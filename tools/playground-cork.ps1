@@ -58,7 +58,7 @@ $PidFile = Join-Path $LogDir "pids.txt"
 # testnet pactd, and the port teardown would kill their live daemon.)
 # Bob/Carol pactd (:19737/8) + adaptor spares (:19739/40),
 # PoCX/BTC/LTC regtest RPC (:19443/:19543/:19643), Corkboard (:19790), Vite (:5173).
-# (18443/19750/19751 belong to the playground-electrum variant; swept here
+# (18443/19750/19751 belong to the playground-nodeless variant; swept here
 # too so a stale electrum run can't poison a cork run.)
 $Ports = 9739, 19737, 19738, 19739, 19740, 19443, 18443, 19543, 19643, 19750, 19751, 19790, 5173
 

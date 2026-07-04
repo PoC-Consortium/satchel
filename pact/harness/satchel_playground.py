@@ -40,7 +40,7 @@ from test_swap_e2e import build_workspace, Corkboard, Party, COINS_TOML
 BLOCK_EVERY_SECS = 4
 REPOST_EVERY_SECS = 60
 
-# --nodeless (playground-electrum.ps1): Alice's btcx becomes the pact-seed bdk
+# --nodeless (playground-nodeless.ps1): Alice's btcx becomes the pact-seed bdk
 # wallet over a live electrs (epic #58) — PoCX node on :18443 (+REST), electrs
 # leg, and a faucet for her wizard-created wallet. Default (playground-cork.ps1)
 # is the classic all-Core layout on :19443.
