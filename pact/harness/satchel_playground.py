@@ -37,8 +37,15 @@ sys.stdout.reconfigure(line_buffering=True)
 from regtest_harness import ElectrsServer, Harness
 from test_swap_e2e import build_workspace, Corkboard, Party, COINS_TOML
 
-BLOCK_EVERY_SECS = 4
-REPOST_EVERY_SECS = 60
+# Timing model mirrored from the nostr playground: per-chain block cadence at
+# mainnet RATIOS scaled ~20x (fast btcx, slower btc/ltc) instead of a uniform
+# instant tick, plus mainnet-like confirmation depths — so fee bumping, the
+# multi-tick-per-block window and the Satchel progress display are exercised
+# realistically. e2e suites are unaffected (they pass no coin_confs).
+BLOCK_SECS = {"btcx": 6, "btc": 12, "ltc": 12}
+BASE_BLOCK_SECS = 6  # miner granularity = the fastest chain's interval
+PLAYGROUND_CONFS = {"btcx": 10, "btc": 6, "ltc": 6}
+REPOST_EVERY_SECS = 30
 
 # --nodeless (playground-nodeless.ps1): Alice's btcx becomes the pact-seed bdk
 # wallet over a live electrs (epic #58) — PoCX node on :18443 (+REST), electrs
@@ -192,12 +199,12 @@ def main():
         # can post and serve LTC offers. A file coin needs --coins-file, passed
         # via coins_file; the leg itself is a generic extra --coin.
         bob = Party("bob", h, h.workdir, "bob_pocx", "bob_btc",
-                    board_url=board.url, auto_fund=True, tick_secs=5,
-                    coins_file=COINS_TOML,
+                    board_url=board.url, auto_fund=True, tick_secs=2,
+                    coins_file=COINS_TOML, coin_confs=PLAYGROUND_CONFS,
                     extra_coins=[("ltc", h.ltc.rpc_url(wallet="bob_ltc"))]).start()
         carol = Party("carol", h, h.workdir, "carol_pocx", "carol_btc",
-                      board_url=board.url, auto_fund=True, tick_secs=5,
-                      coins_file=COINS_TOML,
+                      board_url=board.url, auto_fund=True, tick_secs=2,
+                      coins_file=COINS_TOML, coin_confs=PLAYGROUND_CONFS,
                       extra_coins=[("ltc", h.ltc.rpc_url(wallet="carol_ltc"))]).start()
 
         posted = {"bob": [], "carol": [], "bob_ltc": [], "carol_ltc": []}
@@ -248,7 +255,8 @@ def main():
     Carol (:{carol.port}) SELL side — {len(CAROL_OFFERS)} give-POCX/get-BTC + {len(CAROL_LTC_OFFERS)} LTC offers
   Corkboard {board.url} | POCX :{h.pocx.rpc_port}{" (+REST)" if NODELESS else ""} | BTC :19543 | LTC :19643{f'''
   electrs {electrs.url} — Alice's BTCX is NODELESS (pact-seed bdk wallet)''' if NODELESS else ""}
-  Blocks every {BLOCK_EVERY_SECS}s; both top up taken offers every {REPOST_EVERY_SECS}s (live IDs stable).
+  Blocks: btcx every {BLOCK_SECS["btcx"]}s, btc/ltc every {BLOCK_SECS["btc"]}s (mainnet ratios, ~20x);
+  confirmations btcx {PLAYGROUND_CONFS["btcx"]} / btc {PLAYGROUND_CONFS["btc"]} / ltc {PLAYGROUND_CONFS["ltc"]}; taken offers refill every {REPOST_EVERY_SECS}s.
 
   In the Satchel window (managed "Alice"):
     1. Wizard -> Create a merchant (write down the mnemonic; pick
@@ -268,10 +276,12 @@ def main():
 {bar}
 """)
         start_wall = time.time()
-        legs = ((h.pocx, "alice_pocx"), (h.btc, "bob_btc"), (h.ltc, "alice_ltc"))
-        base = max(chain_time(n) for n, _ in legs)
+        legs = ((h.pocx, "alice_pocx", "btcx"), (h.btc, "bob_btc", "btc"),
+                (h.ltc, "alice_ltc", "ltc"))
+        base = max(chain_time(n) for n, _, _ in legs)
         last_post = time.time()
         alice_funded = False
+        elapsed = 0
         # Per-tick mining is BEST-EFFORT: a transient node error (e.g. a momentary
         # `bad-txns-vin-empty` on CreateNewBlock) must NOT crash the driver — that
         # would unwind the Harness and tear every node down, leaving Satchel on a
@@ -279,18 +289,23 @@ def main():
         # own; failures are logged and skipped, and the next tick retries.
         try:
             while True:
-                time.sleep(BLOCK_EVERY_SECS)
+                time.sleep(BASE_BLOCK_SECS)
+                elapsed += BASE_BLOCK_SECS
                 tip = base
-                for node, _ in legs:
+                for node, _, _ in legs:
                     try:
                         tip = max(tip, chain_time(node))
                     except Exception:  # noqa: BLE001
                         pass
                 now = max(tip, base + int(time.time() - start_wall)) + 1
-                for node, wallet in legs:
+                # Advance every chain's clock each tick (keeps timelocks moving),
+                # but only mine when this chain's own cadence is due — several
+                # scheduler ticks per block, like mainnet, not instant finality.
+                for node, wallet, coin in legs:
                     try:
                         node.set_mocktime(now)
-                        node.generate(1, wallet)
+                        if elapsed % BLOCK_SECS[coin] == 0:
+                            node.generate(1, wallet)
                     except Exception as e:  # noqa: BLE001
                         print(f"[satchel-pg] mine skipped ({wallet}): {e}")
                 if NODELESS and not alice_funded:
