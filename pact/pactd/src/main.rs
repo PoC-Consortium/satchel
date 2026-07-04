@@ -593,8 +593,12 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         "createseed" => {
             let passphrase = p.opt_str(0, "passphrase").filter(|s| !s.is_empty());
             let encrypted = passphrase.is_some();
-            let mnemonic =
-                blocking_mut(app, move |e| e.store.create_seed(passphrase.as_deref())).await?;
+            // Optional word count (12 default | 24) — phoenix parity.
+            let words = p.opt_u64(1, "words").unwrap_or(12) as usize;
+            let mnemonic = blocking_mut(app, move |e| {
+                e.store.create_seed(passphrase.as_deref(), words)
+            })
+            .await?;
             kick_nostr(app);
             // The mnemonic is returned exactly once, for the user to back up.
             Ok(json!({ "mnemonic": mnemonic, "encrypted": encrypted }))
@@ -602,7 +606,9 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         // Generate a fresh mnemonic WITHOUT persisting it — the onboarding flow
         // shows + confirms it, then commits via `importseed`. Read-only.
         "generateseed" => {
-            let mnemonic = blocking(app, |e| e.store.generate_mnemonic()).await?;
+            // Optional word count (12 default | 24) — phoenix parity.
+            let words = p.opt_u64(0, "words").unwrap_or(12) as usize;
+            let mnemonic = blocking(app, move |e| e.store.generate_mnemonic(words)).await?;
             Ok(json!({ "mnemonic": mnemonic }))
         }
         "importseed" => {

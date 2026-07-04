@@ -234,6 +234,8 @@ export const en = {
     enterBody:
       "Type each word — they autocomplete as you go — or paste the whole phrase. We check it before you continue.",
     wordCount: "{n} words",
+    wordCountHint:
+      "12 words is plenty — this is a hot transit wallet, not cold storage. Pick 24 if you prefer the longer phrase.",
     wordAria: "Word {n}",
     checkIncomplete: "Enter all {n} words.",
     checkUnknown: "Some words aren't in the BIP39 wordlist — check the highlighted ones.",
@@ -869,8 +871,9 @@ type NewCoinKeys =
   | "connRpcTip"
   | "connElectrumTip";
 
-export type Bundle = Omit<EnBundle, "progress" | "wallets" | "coins"> & {
+export type Bundle = Omit<EnBundle, "progress" | "wallets" | "coins" | "seed"> & {
   progress: WithOptional<EnBundle["progress"], "funding">;
   wallets: WithOptional<EnBundle["wallets"], NewWalletKeys>;
   coins: WithOptional<EnBundle["coins"], NewCoinKeys>;
+  seed: WithOptional<EnBundle["seed"], "wordCountHint">;
 };

@@ -121,7 +121,7 @@ export default function SeedForm({
     setErr("");
     setBusy(true);
     try {
-      const r = await rpc<{ mnemonic: string }>("generateseed", []);
+      const r = await rpc<{ mnemonic: string }>("generateseed", [wordCount]);
       setMnemonic(r.mnemonic);
       setVerifyIdx(pickVerifyIndices(r.mnemonic.trim().split(/\s+/).length));
       setVerifyIn(["", "", ""]);
@@ -186,6 +186,22 @@ export default function SeedForm({
               onClick={() => setMode("import")}
             />
           </Stack>
+          {mode === "create" && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mt: 2 }}>
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={wordCount}
+                onChange={(_, v: number | null) => v && setWordCount(v)}
+              >
+                <ToggleButton value={12}>{t("seed.wordCount", { n: 12 })}</ToggleButton>
+                <ToggleButton value={24}>{t("seed.wordCount", { n: 24 })}</ToggleButton>
+              </ToggleButtonGroup>
+              <Typography sx={{ color: "text.secondary", fontSize: 12 }}>
+                {t("seed.wordCountHint")}
+              </Typography>
+            </Box>
+          )}
           {err && <ErrLine msg={err} />}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>

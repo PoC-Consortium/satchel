@@ -133,6 +133,9 @@ enum Command {
     Createseed {
         #[arg(long)]
         passphrase: Option<String>,
+        /// Seed length: 12 words (default — hot transit wallet) or 24.
+        #[arg(long, default_value_t = 12)]
+        words: u16,
     },
     /// Import an existing BIP39 mnemonic (optionally encrypted at rest).
     Importseed {
@@ -295,8 +298,8 @@ fn main() -> Result<()> {
             let result = client.call("validatecoin", json!([coin, backend]))?;
             println!("{}", serde_json::to_string_pretty(&result)?);
         }
-        Command::Createseed { passphrase } => {
-            let r = client.call("createseed", json!([passphrase]))?;
+        Command::Createseed { passphrase, words } => {
+            let r = client.call("createseed", json!([passphrase, words]))?;
             println!(
                 "seed created ({}). WRITE THIS DOWN — it is shown only once:\n\n  {}\n",
                 if r["encrypted"].as_bool().unwrap_or(false) {

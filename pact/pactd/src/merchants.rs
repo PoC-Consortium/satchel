@@ -665,7 +665,7 @@ mod tests {
         std::fs::create_dir_all(&m1dir).unwrap();
         // Provision a real (plaintext) seed via the store so identity derives.
         let mut store = libswap::store::Store::open(&m1dir, None).unwrap();
-        let _ = store.create_seed(None).unwrap();
+        let _ = store.create_seed(None, 12).unwrap();
 
         let reg = MerchantRegistry::open(&dir, cfg(), false, true).unwrap();
         let list = reg.list();
@@ -685,7 +685,7 @@ mod tests {
         let dir = temp_dir("flat");
         std::fs::create_dir_all(&dir).unwrap();
         let mut store = libswap::store::Store::open(&dir, None).unwrap();
-        let _ = store.create_seed(None).unwrap();
+        let _ = store.create_seed(None, 12).unwrap();
 
         let mut reg = MerchantRegistry::open(&dir, cfg(), true, false).unwrap();
         assert_eq!(reg.active_id(), Some(FLAT_ID));

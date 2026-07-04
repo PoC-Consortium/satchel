@@ -222,7 +222,7 @@ impl Store {
     /// overwrite key material.
     pub fn init(data_dir: &Path, passphrase: Option<&str>) -> Result<Self> {
         let mut store = Self::open(data_dir, None)?;
-        store.create_seed(passphrase)?;
+        store.create_seed(passphrase, 12)?;
         Ok(store)
     }
 
@@ -370,13 +370,12 @@ impl Store {
 
     /// Generate a new random BIP39 seed and return the mnemonic **once** for
     /// the user to back up — Satchel keeps no recovery copy. Encrypted when a
-    /// passphrase is supplied.
-    pub fn create_seed(&mut self, passphrase: Option<&str>) -> Result<String> {
-        let mut entropy = [0u8; 16];
-        use bitcoin::secp256k1::rand::RngCore;
-        bitcoin::secp256k1::rand::thread_rng().fill_bytes(&mut entropy);
-        let mnemonic = bip39::Mnemonic::from_entropy(&entropy)?;
-        let phrase = mnemonic.to_string();
+    /// passphrase is supplied. `words` is 12 or 24 (phoenix parity): 12
+    /// (128-bit) is the DEFAULT — this is a hot transit wallet, not custody
+    /// storage, and 128 bits already matches secp256k1's security level — 24
+    /// (256-bit) for those who want the longer phrase.
+    pub fn create_seed(&mut self, passphrase: Option<&str>, words: usize) -> Result<String> {
+        let phrase = self.generate_mnemonic(words)?;
         self.install_seed(&phrase, passphrase)?;
         Ok(phrase)
     }
@@ -384,11 +383,17 @@ impl Store {
     /// Generate a fresh random BIP39 mnemonic **without persisting it** — for an
     /// onboarding flow that shows + confirms the phrase before committing. The
     /// mnemonic is only written once it's passed back to [`Self::import_seed`].
-    pub fn generate_mnemonic(&self) -> Result<String> {
-        let mut entropy = [0u8; 16];
+    /// `words`: 12 or 24, see [`Self::create_seed`].
+    pub fn generate_mnemonic(&self, words: usize) -> Result<String> {
+        let bytes = match words {
+            12 => 16,
+            24 => 32,
+            n => bail!("seed length must be 12 or 24 words, not {n}"),
+        };
+        let mut entropy = [0u8; 32];
         use bitcoin::secp256k1::rand::RngCore;
-        bitcoin::secp256k1::rand::thread_rng().fill_bytes(&mut entropy);
-        Ok(bip39::Mnemonic::from_entropy(&entropy)?.to_string())
+        bitcoin::secp256k1::rand::thread_rng().fill_bytes(&mut entropy[..bytes]);
+        Ok(bip39::Mnemonic::from_entropy(&entropy[..bytes])?.to_string())
     }
 
     /// Import a user-supplied BIP39 mnemonic (validated). Returns the
@@ -1274,7 +1279,7 @@ mod tests {
         let mut store = Store::open(&dir, None).unwrap();
         assert!(!store.wallet_status().unwrap().seed_exists);
 
-        let mnemonic = store.create_seed(None).unwrap();
+        let mnemonic = store.create_seed(None, 12).unwrap();
         assert_eq!(mnemonic.split_whitespace().count(), 12);
         let status = store.wallet_status().unwrap();
         assert!(status.seed_exists && !status.encrypted && !status.locked);
@@ -1287,7 +1292,7 @@ mod tests {
         assert_eq!(identity, from_mnemonic);
 
         // Never overwrite an existing seed.
-        assert!(store.create_seed(None).is_err());
+        assert!(store.create_seed(None, 12).is_err());
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -1295,7 +1300,7 @@ mod tests {
     fn create_seed_roundtrip_encrypted_and_unlock() {
         let dir = temp_dir("create-enc");
         let mut store = Store::open(&dir, None).unwrap();
-        store.create_seed(Some("hunter2")).unwrap();
+        store.create_seed(Some("hunter2"), 12).unwrap();
         let status = store.wallet_status().unwrap();
         assert!(
             status.encrypted && !status.locked,
@@ -1360,12 +1365,12 @@ mod tests {
         let dir_b = temp_dir("merchant-b");
         let id_a = {
             let mut s = Store::open(&dir_a, None).unwrap();
-            s.create_seed(None).unwrap();
+            s.create_seed(None, 12).unwrap();
             s.seed().unwrap().identity_pubkey().unwrap()
         };
         let id_b = {
             let mut s = Store::open(&dir_b, Some("pw")).unwrap();
-            s.create_seed(Some("pw")).unwrap();
+            s.create_seed(Some("pw"), 12).unwrap();
             s.seed().unwrap().identity_pubkey().unwrap()
         };
         assert_ne!(
