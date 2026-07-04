@@ -446,6 +446,10 @@ export const el: Bundle = {
       "Αυτό το νόμισμα επικοινωνεί μέσω RPC με έναν κόμβο τύπου Bitcoin Core· το πορτοφόλι του κόμβου χρηματοδοτεί τις ανταλλαγές.",
     connElectrumTip:
       "Αυτό το νόμισμα συνδέεται σε διακομιστές Electrum — χωρίς κόμβο. Το πορτοφόλι ζει στον σπόρο Pact σας.",
+    switchHidesTitle: "Αυτό κρύβει το πορτοφόλι σπόρου Pact σας",
+    switchHidesBody:
+      "Το πορτοφόλι σπόρου Pact σας σε αυτό το νόμισμα κρατά ακόμη {balance} {sym}. Η αλλαγή σε σύνδεση κόμβου το κρύβει — τα νομίσματα μένουν ασφαλή στον σπόρο σας και επανεμφανίζονται μόλις επιστρέψετε στο Electrum, αλλά μέχρι τότε δεν θα εμφανίζονται ούτε θα χρηματοδοτούν ανταλλαγές. Σκεφτείτε να τα στείλετε πρώτα κάπου αλλού.",
+    switchHidesConfirm: "Αλλαγή ούτως ή άλλως",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Μη υποστηριζόμενο",
     unsupportedByEngineTip:

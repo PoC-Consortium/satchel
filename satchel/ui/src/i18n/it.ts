@@ -445,6 +445,10 @@ export const it: Bundle = {
       "Questa coin parla con un nodo in stile Bitcoin Core via RPC; il wallet del nodo finanzia gli swap.",
     connElectrumTip:
       "Questa coin si collega ai server Electrum — nessun nodo. Il wallet vive sul tuo seed Pact.",
+    switchHidesTitle: "Questo nasconde il tuo wallet del seed Pact",
+    switchHidesBody:
+      "Il tuo wallet del seed Pact su questa coin contiene ancora {balance} {sym}. Passare a una connessione al nodo lo nasconde — le coin restano al sicuro sul tuo seed e ricompaiono appena torni a Electrum, ma fino ad allora non compariranno e non finanzieranno swap. Valuta di inviarle altrove prima.",
+    switchHidesConfirm: "Cambia comunque",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Non supportata",
     unsupportedByEngineTip:

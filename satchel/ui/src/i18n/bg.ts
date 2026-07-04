@@ -446,6 +446,10 @@ export const bg: Bundle = {
       "Тази монета говори с възел от типа Bitcoin Core през RPC; портфейлът на възела финансира суаповете.",
     connElectrumTip:
       "Тази монета се свързва с Electrum сървъри — без възел. Портфейлът живее на вашия Pact seed.",
+    switchHidesTitle: "Това скрива вашия портфейл на Pact seed",
+    switchHidesBody:
+      "Портфейлът ви на Pact seed за тази монета все още държи {balance} {sym}. Превключването към връзка с възел го скрива — монетите остават на сигурно на вашия seed и се появяват отново в мига, в който се върнете на Electrum, но дотогава няма да се показват и няма да финансират суапове. Помислете първо да ги изпратите някъде.",
+    switchHidesConfirm: "Превключи въпреки това",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Неподдържана",
     unsupportedByEngineTip:

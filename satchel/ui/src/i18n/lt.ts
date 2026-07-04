@@ -446,6 +446,10 @@ export const lt: Bundle = {
       "Ši moneta bendrauja su Bitcoin-Core tipo mazgu per RPC; mainus finansuoja mazgo piniginė.",
     connElectrumTip:
       "Ši moneta jungiasi prie Electrum serverių — mazgo nereikia. Piniginė gyvena jūsų Pact sėkloje.",
+    switchHidesTitle: "Tai paslepia jūsų Pact sėklos piniginę",
+    switchHidesBody:
+      "Jūsų Pact sėklos piniginėje šioje monetoje vis dar yra {balance} {sym}. Perjungus į mazgo ryšį ji paslepiama — monetos lieka saugios jūsų sėkloje ir vėl pasirodys vos tik perjungsite atgal į Electrum, bet iki tol jos nebus rodomos ir nefinansuos mainų. Apsvarstykite galimybę pirmiausia jas kur nors išsiųsti.",
+    switchHidesConfirm: "Vis tiek perjungti",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nepalaikoma",
     unsupportedByEngineTip:

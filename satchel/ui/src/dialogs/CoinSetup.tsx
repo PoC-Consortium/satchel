@@ -14,8 +14,9 @@ import {
 import ChoiceCard from "../components/ChoiceCard";
 import { composeCoinUrl, errMsg, rpc, saveCoin } from "../api/tauri";
 import { useApp } from "../AppContext";
+import { useConfirm } from "../ui/ConfirmProvider";
 import { useT } from "../i18n";
-import { commas } from "../format";
+import { commas, fmtBare } from "../format";
 import { C } from "../theme";
 import type { CoinConn, CoinConnInput, CoinInfo, NetConnDefaults } from "../api/types";
 
@@ -50,6 +51,7 @@ export default function CoinSetup({
   onSaved: () => void | Promise<void>;
 }) {
   const { log } = useApp();
+  const confirm = useConfirm();
   const t = useT();
 
   // Prefill: a saved structured field wins, else the template, else a default.
@@ -161,6 +163,28 @@ export default function CoinSetup({
     if (!validated) {
       setErr(t("coins.validateFirst"));
       return;
+    }
+    // Wallet-exclusivity follow-up (design D12): switching a FUNDED Electrum
+    // coin to node mode hides the pact-seed wallet — the coins stay safe on
+    // the seed and reappear on switching back, but they vanish from view and
+    // stop funding swaps. Never do that silently. (Balance unreadable — e.g.
+    // servers already down — must not block the switch.)
+    if (saved?.funding_wallet === "pact-seed" && mode === "node") {
+      let hidden = 0;
+      try {
+        hidden = (await rpc<{ balance_sat: number }>("getbalance", [coin.id])).balance_sat;
+      } catch {
+        /* can't read it — don't block the switch */
+      }
+      if (hidden > 0) {
+        const ok = await confirm({
+          title: t("coins.switchHidesTitle"),
+          body: t("coins.switchHidesBody", { balance: fmtBare(hidden), sym: coin.symbol }),
+          confirmLabel: t("coins.switchHidesConfirm"),
+          danger: true,
+        });
+        if (!ok) return;
+      }
     }
     setErr(t("coins.savingReconnecting"));
     setBusy(true);

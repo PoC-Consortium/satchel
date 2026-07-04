@@ -446,6 +446,10 @@ export const id: Bundle = {
       "Koin ini berkomunikasi lewat RPC dengan node bergaya Bitcoin Core; dompet node yang mendanai swap.",
     connElectrumTip:
       "Koin ini terhubung ke server Electrum — tanpa node. Dompetnya hidup di seed Pact Anda.",
+    switchHidesTitle: "Ini menyembunyikan dompet seed pact Anda",
+    switchHidesBody:
+      "Dompet seed pact Anda pada koin ini masih menyimpan {balance} {sym}. Beralih ke koneksi node akan menyembunyikannya — koin tetap aman di seed Anda dan muncul kembali begitu Anda beralih lagi ke Electrum, tapi sampai saat itu koin tidak akan tampil ataupun mendanai swap. Pertimbangkan untuk mengirimnya ke tempat lain dulu.",
+    switchHidesConfirm: "Tetap beralih",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Tidak didukung",
     unsupportedByEngineTip:

@@ -446,6 +446,10 @@ export const ptBR: Bundle = {
       "Esta moeda fala por RPC com um node no estilo Bitcoin Core; a carteira do node financia os swaps.",
     connElectrumTip:
       "Esta moeda se conecta a servidores Electrum — sem node. A carteira vive na sua seed do Pact.",
+    switchHidesTitle: "Isso oculta sua carteira da seed do Pact",
+    switchHidesBody:
+      "Sua carteira da seed do Pact nesta moeda ainda guarda {balance} {sym}. Mudar para uma conexão de node a oculta — as moedas continuam seguras na sua seed e reaparecem no momento em que você voltar para o Electrum, mas até lá elas não vão aparecer nem financiar swaps. Considere enviá-las para outro lugar antes.",
+    switchHidesConfirm: "Mudar mesmo assim",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Não suportada",
     unsupportedByEngineTip:

@@ -446,6 +446,10 @@ export const ru: Bundle = {
       "Эта монета общается с узлом типа Bitcoin Core по RPC; свопы финансирует кошелёк узла.",
     connElectrumTip:
       "Эта монета подключается к серверам Electrum — без узла. Кошелёк живёт на вашем сиде Pact.",
+    switchHidesTitle: "Это скроет ваш кошелёк на сиде Pact",
+    switchHidesBody:
+      "Ваш кошелёк на сиде Pact для этой монеты всё ещё держит {balance} {sym}. Переключение на подключение к узлу скрывает его — монеты остаются в безопасности на вашем сиде и снова появятся, как только вы вернётесь на Electrum, но до тех пор они не будут отображаться и не смогут финансировать свопы. Возможно, стоит сначала отправить их куда-нибудь.",
+    switchHidesConfirm: "Всё равно переключить",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Не поддерживается",
     unsupportedByEngineTip:

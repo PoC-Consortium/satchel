@@ -446,6 +446,10 @@ export const zhCn: Bundle = {
       "此币种通过 RPC 与 Bitcoin Core 风格的节点通信；由节点的钱包为交换注资。",
     connElectrumTip:
       "此币种连接 Electrum 服务器 — 无需节点。钱包依托你的 Pact 种子。",
+    switchHidesTitle: "这会隐藏你的 pact 种子钱包",
+    switchHidesBody:
+      "你在此币种上的 pact 种子钱包仍持有 {balance} {sym}。切换到节点连接会将其隐藏 — 这些币仍安全地保存在你的种子上，并会在你切换回 Electrum 的那一刻重新出现，但在此之前它们不会显示，也无法为交换注资。建议先将它们发送到别处。",
+    switchHidesConfirm: "仍然切换",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "不支持",
     unsupportedByEngineTip:

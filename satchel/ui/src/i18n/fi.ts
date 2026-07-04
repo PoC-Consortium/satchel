@@ -446,6 +446,10 @@ export const fi: Bundle = {
       "Tämä kolikko keskustelee Bitcoin-Core-tyylisen solmun kanssa RPC:n yli; solmun lompakko rahoittaa swapit.",
     connElectrumTip:
       "Tämä kolikko yhdistää Electrum-palvelimiin — ei solmua. Lompakko elää Pact-seedilläsi.",
+    switchHidesTitle: "Tämä piilottaa pact-seed-lompakkosi",
+    switchHidesBody:
+      "Pact-seed-lompakossasi on tällä kolikolla yhä {balance} {sym}. Solmuyhteyteen vaihtaminen piilottaa sen — kolikot pysyvät turvassa seedilläsi ja ilmestyvät takaisin heti, kun vaihdat takaisin Electrumiin, mutta siihen asti ne eivät näy eivätkä rahoita swapeja. Harkitse niiden lähettämistä ensin muualle.",
+    switchHidesConfirm: "Vaihda silti",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Ei tuettu",
     unsupportedByEngineTip:

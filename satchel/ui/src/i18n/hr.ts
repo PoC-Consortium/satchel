@@ -446,6 +446,10 @@ export const hr: Bundle = {
       "Ova kovanica komunicira s čvorom tipa Bitcoin Core putem RPC-a; swapove financira novčanik čvora.",
     connElectrumTip:
       "Ova se kovanica povezuje s Electrum poslužiteljima — bez čvora. Novčanik živi na vašem Pact seedu.",
+    switchHidesTitle: "Ovo skriva vaš novčanik na Pact seedu",
+    switchHidesBody:
+      "Vaš novčanik na Pact seedu za ovu kovanicu još uvijek drži {balance} {sym}. Prebacivanje na vezu s čvorom ga skriva — kovanice ostaju sigurne na vašem seedu i ponovno se pojavljuju čim se vratite na Electrum, no do tada se neće prikazivati niti financirati swapove. Razmislite da ih prvo nekamo pošaljete.",
+    switchHidesConfirm: "Svejedno prebaci",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nepodržano",
     unsupportedByEngineTip:

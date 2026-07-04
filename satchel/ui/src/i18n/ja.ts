@@ -446,6 +446,10 @@ export const ja: Bundle = {
       "このコインは Bitcoin Core 系のノードと RPC で通信します。スワップにはノードのウォレットが資金を入れます。",
     connElectrumTip:
       "このコインは Electrum サーバーに接続します — ノードは不要です。ウォレットはあなたの Pact シード上にあります。",
+    switchHidesTitle: "pact シードウォレットが非表示になります",
+    switchHidesBody:
+      "このコインの pact シードウォレットにはまだ {balance} {sym} が残っています。ノード接続に切り替えるとウォレットは非表示になります — コインはあなたのシード上に安全に保たれ、Electrum に戻した瞬間に再び表示されますが、それまでは表示されず、スワップの資金にもなりません。先にどこかへ送金することを検討してください。",
+    switchHidesConfirm: "それでも切り替える",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "非対応",
     unsupportedByEngineTip:

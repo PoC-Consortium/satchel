@@ -446,6 +446,10 @@ export const sk: Bundle = {
       "Táto minca komunikuje cez RPC s uzlom typu Bitcoin Core; swapy financuje peňaženka uzla.",
     connElectrumTip:
       "Táto minca sa pripája k Electrum serverom — žiadny uzol. Peňaženka žije na vašom Pact seede.",
+    switchHidesTitle: "Týmto skryjete svoju peňaženku pact seedu",
+    switchHidesBody:
+      "Vaša peňaženka pact seedu na tejto minci stále drží {balance} {sym}. Prepnutím na pripojenie k uzlu ju skryjete — mince zostávajú v bezpečí na vašom seede a znovu sa objavia, hneď ako sa prepnete späť na Electrum, ale dovtedy sa nezobrazia ani nebudú financovať swapy. Zvážte, či ich najprv niekam neposlať.",
+    switchHidesConfirm: "Napriek tomu prepnúť",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nepodporované",
     unsupportedByEngineTip:

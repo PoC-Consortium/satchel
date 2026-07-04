@@ -456,6 +456,10 @@ export const en = {
       "This coin talks to a Bitcoin-Core-style node over RPC; the node's wallet funds swaps.",
     connElectrumTip:
       "This coin connects to Electrum servers — no node. The wallet lives on your Pact seed.",
+    switchHidesTitle: "This hides your pact-seed wallet",
+    switchHidesBody:
+      "Your pact-seed wallet on this coin still holds {balance} {sym}. Switching to a node connection hides it — the coins stay safe on your seed and reappear the moment you switch back to Electrum, but until then they won't show up or fund swaps. Consider sending them somewhere first.",
+    switchHidesConfirm: "Switch anyway",
     electrumUrlsLabel: "Electrum servers",
     electrumUrlsHelp:
       "One per line: tcp://host:port or ssl://host:port. Mainnet requires at least two independent servers as cross-checking chain views.",
@@ -872,7 +876,10 @@ type NewCoinKeys =
   | "connElectrumLocal"
   | "connElectrumRemote"
   | "connRpcTip"
-  | "connElectrumTip";
+  | "connElectrumTip"
+  | "switchHidesTitle"
+  | "switchHidesBody"
+  | "switchHidesConfirm";
 
 export type Bundle = Omit<EnBundle, "progress" | "wallets" | "coins" | "seed"> & {
   progress: WithOptional<EnBundle["progress"], "funding">;
