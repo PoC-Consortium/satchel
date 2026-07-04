@@ -12,10 +12,12 @@ References: COMIT `xmr-btc-swap` (Rust), decred `atomicswap` (protocol logic).
 - `pactd` — daemon: local JSON-RPC 2.0 over HTTP (bitcoind-shaped), SQLite
   persistence, automatic refund scheduling (runs as a service; signs
   refunds with no human present — hot by design, bounded exposure)
-- `pact-cli` (binary `pact-cli`) — a thin JSON-RPC client for pactd:
-  offer / accept / redeem / refund and a generic `call` passthrough; the
-  first API client and the proof that the API is sufficient for every
-  later front-end
+- `pact-cli` (binary `pact-cli`) — a thin JSON-RPC client for pactd,
+  bitcoin-cli-shaped: every RPC method is a direct subcommand
+  (`pact-cli getbalance btc`), auth is cookie-autodiscovered, and
+  `pact-cli help` serves the daemon's method catalog; the first API
+  client and the proof that the API is sufficient for every later
+  front-end
 
 ## Key facts
 

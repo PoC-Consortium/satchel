@@ -1,12 +1,17 @@
 //! pact-cli — the bitcoin-cli of Pact: a thin JSON-RPC client for pactd.
 //!
 //! No swap logic and no engine here — every command is a JSON-RPC call to
-//! a running pactd. Auth mirrors bitcoin-cli: read `.cookie` from the data
-//! dir, or pass `--rpcuser`/`--rpcpassword`.
+//! a running pactd. Auth mirrors bitcoin-cli: read `.cookie` (or the
+//! `rpcuser`/`rpcpassword` in `pact.conf`) from the data dir — autodiscovered
+//! from the platform default when `--data-dir` is not given — or pass
+//! `--rpcuser`/`--rpcpassword` explicitly.
 //!
-//! Structured subcommands (offer/accept/recv/fund/redeem/refund/abort/
-//! status/board) wrap an RPC plus the file I/O of the manual handshake;
-//! `pact-cli call <method> [params...]` is the generic passthrough.
+//! Every RPC method is a direct subcommand (`pact-cli getbalance btc`), each
+//! argument JSON-parsed with a plain-string fallback; `pact-cli help` asks
+//! pactd for the full method catalog. The structured subcommands
+//! (offer/accept/recv/fund/redeem/refund/abort/status/board) additionally
+//! wrap the file I/O of the manual handshake; `call <method> [params...]`
+//! remains as the explicit passthrough spelling.
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
@@ -20,15 +25,26 @@ use std::time::Duration;
 #[command(
     name = "pact-cli",
     version,
-    about = "JSON-RPC client for pactd (PoCX trading)"
+    about = "JSON-RPC client for pactd (PoCX trading)",
+    after_help = "Any RPC method is a subcommand: `pact-cli getbalance btc`. \
+                  `pact-cli help` lists them all (asks the daemon).",
+    // `pact-cli help` must reach the daemon's help RPC, not clap's.
+    disable_help_subcommand = true
 )]
 struct Cli {
     /// pactd JSON-RPC URL.
     #[arg(long, default_value = "http://127.0.0.1:9737")]
     rpc: String,
-    /// Data dir to read `.cookie` (and pact.conf) for auth.
+    /// Data dir to read `.cookie` (or pact.conf rpcuser/rpcpassword) for
+    /// auth. Omitted: autodiscovered — the pactd platform default
+    /// (%APPDATA%\Pact, ~/Library/Application Support/Pact, ~/.pact; nested
+    /// per --network), then Satchel's managed pactd dir.
     #[arg(long)]
     data_dir: Option<PathBuf>,
+    /// Network the cookie autodiscovery looks under (mainnet at the root,
+    /// testnet/regtest nested) — mirrors pactd's --network default.
+    #[arg(long, default_value = "regtest")]
+    network: String,
     /// Override auth (instead of the cookie).
     #[arg(long)]
     rpcuser: Option<String>,
@@ -154,6 +170,12 @@ enum Command {
         #[command(subcommand)]
         action: BoardCommand,
     },
+    /// Any RPC method, dispatched directly: `pact-cli <method> [params...]`
+    /// ≡ `call <method> [params...]` — this is how most of pactd's ~60
+    /// methods are reached (`pact-cli help` lists them, including `help`
+    /// itself). The first token is the method name, the rest are params.
+    #[command(external_subcommand)]
+    Rpc(Vec<String>),
 }
 
 #[derive(Subcommand, Debug)]
@@ -191,12 +213,14 @@ fn main() -> Result<()> {
 
     match cli.command {
         Command::Call { method, params } => {
-            let params: Vec<Value> = params
-                .iter()
-                .map(|p| serde_json::from_str(p).unwrap_or_else(|_| Value::String(p.clone())))
-                .collect();
-            let result = client.call(&method, Value::Array(params))?;
-            println!("{}", serde_json::to_string_pretty(&result)?);
+            let result = client.call(&method, json_params(&params))?;
+            print_result(&result)?;
+        }
+        Command::Rpc(argv) => {
+            // Direct dispatch: the first token is the method, the rest params.
+            let (method, params) = argv.split_first().context("missing method")?;
+            let result = client.call(method, json_params(params))?;
+            print_result(&result)?;
         }
         Command::Offer {
             give,
@@ -340,18 +364,113 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/// `user:pass` for HTTP Basic — explicit creds, else the cookie file.
+/// Each param parsed as JSON if possible, else passed as a plain string —
+/// bitcoin-cli's convention, shared by `call` and direct dispatch.
+fn json_params(params: &[String]) -> Value {
+    Value::Array(
+        params
+            .iter()
+            .map(|p| serde_json::from_str(p).unwrap_or_else(|_| Value::String(p.clone())))
+            .collect(),
+    )
+}
+
+/// String results print raw (so `help` reads like a man page, not a JSON
+/// string literal); everything else pretty-prints as JSON.
+fn print_result(result: &Value) -> Result<()> {
+    match result.as_str() {
+        Some(s) => println!("{s}"),
+        None => println!("{}", serde_json::to_string_pretty(result)?),
+    }
+    Ok(())
+}
+
+/// `user:pass` for HTTP Basic. Explicit `--rpcuser`/`--rpcpassword` win; an
+/// explicit `--data-dir` is read strictly (fail loudly, no fallback); with
+/// neither, the platform candidates are searched (#57 P0) so a bare
+/// `pact-cli <method>` works against a default local pactd.
 fn resolve_auth(cli: &Cli) -> Result<String> {
     if let (Some(u), Some(p)) = (&cli.rpcuser, &cli.rpcpassword) {
         return Ok(format!("{u}:{p}"));
     }
-    let dir = cli
-        .data_dir
-        .as_deref()
-        .context("no auth: pass --rpcuser/--rpcpassword or --data-dir (to read .cookie)")?;
-    let cookie = std::fs::read_to_string(dir.join(".cookie"))
-        .with_context(|| format!("reading {}", dir.join(".cookie").display()))?;
-    Ok(cookie.trim().to_string())
+    if let Some(dir) = &cli.data_dir {
+        return auth_from_dir(dir);
+    }
+    let candidates = candidate_data_dirs(&cli.network);
+    for dir in &candidates {
+        if let Ok(auth) = auth_from_dir(dir) {
+            return Ok(auth);
+        }
+    }
+    bail!(
+        "no auth found — searched{} (is pactd running? its .cookie exists only while it does); \
+         pass --data-dir, --network, or --rpcuser/--rpcpassword",
+        candidates
+            .iter()
+            .map(|d| format!(" {}", d.display()))
+            .collect::<String>()
+    )
+}
+
+/// Auth material from one data dir: the `.cookie` (zero-config default,
+/// exists while pactd runs), else `rpcuser`/`rpcpassword` from `pact.conf`.
+fn auth_from_dir(dir: &Path) -> Result<String> {
+    if let Ok(cookie) = std::fs::read_to_string(dir.join(".cookie")) {
+        return Ok(cookie.trim().to_string());
+    }
+    let conf = std::fs::read_to_string(dir.join("pact.conf"))
+        .with_context(|| format!("no .cookie or pact.conf in {}", dir.display()))?;
+    let value = |key: &str| {
+        conf.lines()
+            .map(str::trim)
+            .filter(|l| !l.starts_with('#'))
+            .find_map(|l| l.split_once('=').filter(|(k, _)| k.trim() == key))
+            .map(|(_, v)| v.trim().to_string())
+    };
+    match (value("rpcuser"), value("rpcpassword")) {
+        (Some(u), Some(p)) => Ok(format!("{u}:{p}")),
+        _ => bail!(
+            "no .cookie and no rpcuser/rpcpassword in {}",
+            dir.join("pact.conf").display()
+        ),
+    }
+}
+
+/// Data dirs searched for auth when `--data-dir` is not given, in order:
+/// the pactd platform default (a hand-run `pactd` — keep in sync with
+/// `default_data_dir` in pactd/src/main.rs), then Satchel's managed pactd.
+/// Both nest per network: mainnet at the root, testnet/regtest beneath.
+fn candidate_data_dirs(network: &str) -> Vec<PathBuf> {
+    let net_sub = |base: PathBuf| match network {
+        "mainnet" => base,
+        net => base.join(net),
+    };
+    let mut dirs = Vec::new();
+    if let Some(base) = if cfg!(target_os = "windows") {
+        std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join("Pact"))
+    } else if cfg!(target_os = "macos") {
+        std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Application Support/Pact"))
+    } else {
+        std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".pact"))
+    } {
+        dirs.push(net_sub(base));
+    }
+    // Satchel's managed pactd: `<app-local-data>/org.pocx.satchel/[net]/pactd`
+    // (Tauri's identifier dir). Lets `pact-cli` talk to the daemon Satchel
+    // runs without hunting for its cookie path. NOTE Satchel offsets its
+    // listen port per network (9737/9738/9739) — pass --rpc off-mainnet.
+    if let Some(base) = if cfg!(target_os = "windows") {
+        std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
+    } else if cfg!(target_os = "macos") {
+        std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Application Support"))
+    } else {
+        std::env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
+    } {
+        dirs.push(net_sub(base.join("org.pocx.satchel")).join("pactd"));
+    }
+    dirs
 }
 
 fn read_json(path: &Path) -> Result<Value> {
@@ -466,4 +585,55 @@ fn base64(input: &[u8]) -> String {
         });
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn params_json_else_string() {
+        let v = json_params(&[
+            "btcx:1.5".into(),
+            "600".into(),
+            r#"{"a":1}"#.into(),
+            "true".into(),
+        ]);
+        assert_eq!(v, json!(["btcx:1.5", 600, {"a": 1}, true]));
+    }
+
+    #[test]
+    fn auth_from_dir_cookie_wins_over_conf() {
+        let dir = std::env::temp_dir().join(format!("pact-cli-auth-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // Nothing there yet → error naming the dir.
+        assert!(auth_from_dir(&dir).is_err());
+        // pact.conf credentials work without a cookie…
+        std::fs::write(
+            dir.join("pact.conf"),
+            "# comment\nrpcuser = u\nrpcpassword = p\n",
+        )
+        .unwrap();
+        assert_eq!(auth_from_dir(&dir).unwrap(), "u:p");
+        // …but a live cookie wins (pactd removes it on clean shutdown).
+        std::fs::write(dir.join(".cookie"), "__cookie__:abc\n").unwrap();
+        assert_eq!(auth_from_dir(&dir).unwrap(), "__cookie__:abc");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn candidate_dirs_nest_networks() {
+        // pactd default first, Satchel's managed dir second; test networks
+        // nested, mainnet at the root.
+        let dirs = candidate_data_dirs("regtest");
+        assert_eq!(dirs.len(), 2);
+        assert!(dirs[0].ends_with("regtest"));
+        assert!(dirs[1].ends_with("pactd"));
+        let main = candidate_data_dirs("mainnet");
+        assert!(main
+            .iter()
+            .all(|d| !d.to_string_lossy().contains("regtest")));
+    }
 }

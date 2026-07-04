@@ -7,7 +7,7 @@ This page is a quick reference. For the full flag table, RPC-auth details, and d
 ## Synopsis
 
 ```text
-pactd --data-dir <DIR> [--coins-file <coins.toml>] [--coin <id>=<url[,url]> ...]
+pactd [--data-dir <DIR>] [--coins-file <coins.toml>] [--coin <id>=<url[,url]> ...]
       [--coin-confs <id>=<N> ...] [--listen <addr:port>] [--network <net>]
       [--board-url <url[,url]>] [--nostr-relay <wss://…[,…]>] [--auto-fund]
       [--tick-secs <s>] [--once] [--auto-init] [--merchants]
@@ -17,7 +17,7 @@ pactd --data-dir <DIR> [--coins-file <coins.toml>] [--coin <id>=<url[,url]> ...]
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--data-dir <DIR>` | **required** | Data directory: seed, SQLite, `.cookie`, optional `pact.conf`. In `--merchants` mode this is the *parent* of `merchants/<id>/`. |
+| `--data-dir <DIR>` | platform default | Data directory: seed, SQLite, `.cookie`, optional `pact.conf`. In `--merchants` mode this is the *parent* of `merchants/<id>/`. Default (bitcoind-style): `%APPDATA%\Pact` on Windows, `~/Library/Application Support/Pact` on macOS, `~/.pact` elsewhere — mainnet at the root, `testnet`/`regtest` nested beneath. `pact-cli` autodiscovers the same location. |
 | `--coin <id>=<url[,url]>` | none | Per-coin chain backend, repeatable. First URL = wallet-qualified Core-RPC primary (this is what funds swaps); extra URLs may be Electrum (`tcp://`/`ssl://`). The coin `id` must exist in the registry. |
 | `--coin-confs <id>=<N>` | network default | Per-coin confirmation depth (reorg finality, N≥1); gates auto-redeem and completion. See the default heuristic in [Configuring Coins](Configuring-Coins). |
 | `--listen <addr:port>` | `127.0.0.1:9737` | JSON-RPC listen address. **Loopback only** — a non-loopback address aborts boot. |

@@ -1,13 +1,13 @@
 # JSON-RPC API
 
-[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 60 methods, grouped below by area with a one-line purpose each. This is an index; for full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
+[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 62 methods, grouped below by area with a one-line purpose each. This is an index; the daemon itself serves the authoritative catalog via the `help` method (`pact-cli help`). For full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
 
 ## Conventions
 
 - **Transport:** HTTP `POST /` on `127.0.0.1:9737` (loopback only). `GET /health` is the unauthenticated liveness probe.
 - **Auth:** HTTP Basic, `bitcoind`-style — the per-run cookie at `<data-dir>/.cookie`, or `rpcuser`/`rpcpassword` from an optional `pact.conf`.
 - **Request:** `{ jsonrpc, id, method, params }`. `params` accept either a **positional array or a named object**.
-- **Response:** `{ jsonrpc:"2.0", id, result }` on success, or `{ …, error:{ code:-1, message } }` on failure. Unknown methods return an error.
+- **Response:** `{ jsonrpc:"2.0", id, result }` on success, or `{ …, error:{ code, message } }` on failure. An unknown method returns the standard `-32601` code with a *did-you-mean* suggestion for near-miss names; every other error is `-1` today.
 - **No platform fees:** `platform_fee_sat` is hard-wired `0` everywhere fees are reported.
 - All swap/board/seed methods act on the **active merchant's engine**; with none loaded they error `"no active merchant — create or load one first"`.
 
@@ -16,6 +16,8 @@
 | Method | Purpose |
 |---|---|
 | `getinfo` | Daemon name/version/protocol/network, identity, seed status, coin ids, and a `watch_only` boolean. |
+| `help` | Plain-text method catalog by category; `help <method>` explains one method. |
+| `listmethods` | Machine-readable array of every method name. |
 | `walletstatus` | `{ seed_exists, encrypted, locked }`. |
 | `setwatchonly` | Toggle watch-only mode for the active merchant (`on: bool`); persisted, no relaunch. In watch-only you can browse the board and withdraw your own offers but cannot post/take/fund. |
 | `getfeepolicy` | Active merchant's fee-bump policy `{ max_feerate_sat_vb, reservation_mult, committed_mult }`. |

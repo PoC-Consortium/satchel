@@ -3,9 +3,27 @@
 `pact-cli` is the thin command-line client for `pactd` — the `bitcoin-cli` of
 this stack. It is a hand-rolled HTTP caller (a raw `TcpStream` with a 120-second
 read timeout and chunked-response decoding) that maps subcommands onto JSON-RPC
-methods. This chapter covers its global flags, the structured subcommand table,
-the generic `call` escape hatch (and which methods need it), and a worked
-end-to-end v1 swap.
+methods. This chapter covers its global flags and auth discovery, direct method
+dispatch, the structured subcommand table, and a worked end-to-end v1 swap.
+
+## Direct dispatch and `help`
+
+**Every RPC method is a subcommand of its own name** — the first token that is
+not a structured subcommand is sent to the daemon as the method, with the
+remaining tokens as params (each JSON-parsed if it parses, else passed as a
+string):
+
+```sh
+pact-cli getinfo
+pact-cli getbalance btc
+pact-cli adaptorinit btcx:1.0 btc:0.95 86400 43200
+```
+
+`pact-cli help` asks the daemon for its full method catalog by category;
+`pact-cli help <method>` explains one method; `pact-cli listmethods` returns a
+machine-readable name array. A typo'd method name is answered with the nearest
+real one (`unknown method 'getblance' — did you mean 'getbalance'?`). Clap's
+own usage text stays on `pact-cli --help`.
 
 ## Global flags
 
@@ -14,16 +32,30 @@ These apply to every invocation:
 | Flag | Default | Meaning |
 |---|---|---|
 | `--rpc` | `http://127.0.0.1:9737` | The `pactd` JSON-RPC endpoint. |
-| `--data-dir` | — | Data directory to read the `.cookie` from (cookie auth). |
+| `--data-dir` | autodiscovered | Data directory to read the `.cookie` (or `pact.conf`) from. |
+| `--network` | `regtest` | Network subdir the auth discovery looks under (mirrors `pactd`). |
 | `--rpcuser` | — | Explicit RPC username (overrides cookie auth). |
 | `--rpcpassword` | — | Explicit RPC password. |
 
-Authentication uses the explicit `--rpcuser`/`--rpcpassword` credentials if
-given, otherwise the cookie read from `--data-dir`. This mirrors `bitcoin-cli`.
+Authentication mirrors `bitcoin-cli`: explicit `--rpcuser`/`--rpcpassword` win;
+an explicit `--data-dir` is read strictly (its `.cookie`, else the
+`rpcuser`/`rpcpassword` in its `pact.conf`). With neither flag, the CLI
+searches, in order:
 
-## Subcommands
+1. the `pactd` platform default — `%APPDATA%\Pact` (Windows),
+   `~/Library/Application Support/Pact` (macOS), `~/.pact` (elsewhere) —
+   mainnet at the root, `testnet`/`regtest` nested per `--network`;
+2. Satchel's managed pactd dir
+   (`<app-local-data>/org.pocx.satchel/[net]/pactd`). Satchel offsets its
+   listen port per network (`9737`/`9738`/`9739`), so pass `--rpc` off-mainnet.
 
-The CLI exposes structured subcommands for the common v1 and board operations:
+So against a default local `pactd`, `pact-cli getbalance btc` works with no
+flags at all.
+
+## Structured subcommands
+
+A handful of operations additionally get structured subcommands — they wrap the
+RPC plus the file I/O of the manual v1 handshake, or add flag-style arguments:
 
 | Subcommand | Flags / args | RPC method |
 |---|---|---|
@@ -51,31 +83,13 @@ The CLI exposes structured subcommands for the common v1 and board operations:
 | `board revoke` | `--offer` | `boardrevoke` |
 | `board sync` | — | `tick` |
 
-## The generic `call` escape hatch
+## The explicit `call` spelling
 
-The `pact-cli call <method> [params...]` form invokes **any** RPC method
-directly. Each positional argument is JSON-parsed if it parses, otherwise passed
-as a string — so `call getbalance btc` and `call offer btcx:1.0 btc:0.9 ...`
-both work. This is how you reach everything that has no structured subcommand.
-
-> **Note** — There is a real *CLI gap*: large parts of the RPC surface have no
-> dedicated subcommand and are reachable **only** through `call`. That includes
-> all of the **v2 adaptor** methods (`adaptorinit`, `adaptoraccept`,
-> `adaptorfund`, `adaptorredeem`, …), all **merchant** methods
-> (`createmerchant`, `loadmerchant`, …), the **private-offer** methods
-> (`makeprivateoffer`, `takeoffer`, …), the **wallet** methods (`getbalance`,
-> `getnewaddress`, `sendtoaddress`), and assorted others (`getinfo`,
-> `estimateswapfees`, `generateseed`, `boardstatus`, `listmyoffers`,
-> `listpendingtakes`). For those, use `call`.
-
-For example, to drive a v2 adaptor swap or check a balance:
-
-```sh
-pact-cli call getinfo
-pact-cli call getbalance btc
-pact-cli call adaptorinit btcx:1.0 btc:0.95 86400 43200
-pact-cli call estimateswapfees btcx btc
-```
+`pact-cli call <method> [params...]` is the explicit passthrough spelling of
+direct dispatch — byte-for-byte the same request. It exists for scripts that
+want to make "this token is an RPC method, not a CLI subcommand" unambiguous
+(a structured subcommand name always wins over a same-named method in the bare
+form).
 
 ## Worked example: a v1 swap with two CLIs
 
