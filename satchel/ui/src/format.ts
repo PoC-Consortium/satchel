@@ -334,19 +334,17 @@ export function priceCash(price: number, rate: number | null): number | null {
   return price * rate;
 }
 
-/** "~1,234" — a cash value as a locale-formatted number behind the ~ marker
+/** "~1,234.00" — a cash value as a locale-formatted number behind the ~ marker
  *  (approximate, unit deliberately unnamed); "—" for null (no rate set / not
- *  derivable). Precision tiered like fmtPrice: whole numbers when large, two
- *  decimals mid-range, significant digits when tiny. */
+ *  derivable). ALWAYS exactly two fraction digits, the way money is written —
+ *  a sub-cent value honestly reads "~0.00". */
 export function fmtCash(v: number | null): string {
   if (v == null || !isFinite(v)) return "—";
-  const opts: Intl.NumberFormatOptions =
-    v >= 1000
-      ? { maximumFractionDigits: 0 }
-      : v >= 1
-        ? { maximumFractionDigits: 2 }
-        : { maximumSignificantDigits: 2 };
-  return `~${new Intl.NumberFormat(undefined, opts).format(v)}`;
+  const s = new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(v);
+  return `~${s}`;
 }
 
 // ---- denomination (display unit) ----------------------------------------
