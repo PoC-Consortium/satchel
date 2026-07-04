@@ -118,6 +118,16 @@ addresses and even then "shown twice", not paid twice. Engine sweep
 addresses ride the same path. Unit test pins reveal→cap→recycle→
 payment-frees-a-slot.
 
+## D12 — Wallet exclusivity elevated to design principle; O3 closed
+
+(2026-07-04, user.) One wallet per coin, never mixed: RPC ⇒ node wallet,
+Electrum ⇒ pact-seed wallet; user decides per coin. Verified enforced
+(engine Electrum-only rule, compose pact-seed rule, sweeps return to the
+funding wallet). O3 is thereby CLOSED as NO. Follow-up noted: coin-setup
+should warn when a mode switch would hide a wallet that still holds a
+balance (funds stay safe on the seed; they're just out of view until
+switched back). Full wording in NODELESS_WALLET.md D7.
+
 ## D4 — Parity scenarios chosen (test_nodeless_e2e.py)
 
 (1) v1 nodeless maker (bdk `wallet_send` funds leg A), (2) v2 nodeless taker
