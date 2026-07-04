@@ -1033,7 +1033,8 @@ fn show_main_window(app: &tauri::AppHandle) {
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     // English defaults; the webview pushes localized labels + the live-swap
     // tooltip through `set_tray_status` once it boots (it owns i18n).
-    let show = tauri::menu::MenuItem::with_id(app, "tray-show", "Open Satchel", true, None::<&str>)?;
+    let show =
+        tauri::menu::MenuItem::with_id(app, "tray-show", "Open Satchel", true, None::<&str>)?;
     let quit = tauri::menu::MenuItem::with_id(app, "tray-quit", "Quit", true, None::<&str>)?;
     let menu = tauri::menu::Menu::with_items(app, &[&show, &quit])?;
     let mut tray = tauri::tray::TrayIconBuilder::with_id("main")
