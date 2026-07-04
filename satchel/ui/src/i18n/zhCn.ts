@@ -427,7 +427,7 @@ export const zhCn: Bundle = {
     modeLabel: "连接类型",
     modeNode: "你自己的节点",
     modeNodeDesc: "Core RPC — 由节点的钱包为交换注资。最大程度的自主权。",
-    modeNodeless: "无节点（Electrum）",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "无需节点：链上数据来自 Electrum 服务器，钱包依托你的 Pact 种子。",
     electrumUrlsLabel: "Electrum 服务器",

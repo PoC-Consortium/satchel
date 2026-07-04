@@ -437,13 +437,23 @@ export const en = {
     validateFirst: "Validate the node before saving.",
     savingReconnecting: "Saving & reconnecting…",
     connected: "{coin} connected",
-    // Nodeless (Electrum) connection mode (epic #58).
+    // Electrum connection mode (epic #58) — "nodeless" is internal wording,
+    // the UI says RPC vs Electrum (user decision 2026-07-04).
     modeLabel: "Connection type",
     modeNode: "Your own node",
     modeNodeDesc: "Core RPC — the node's wallet funds swaps. Maximum sovereignty.",
-    modeNodeless: "Nodeless (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "No node needed: chain data comes from Electrum servers and the wallet lives on your Pact seed.",
+    // Connection-kind chip on the coin card: transport + locality.
+    connRpcLocal: "RPC (local)",
+    connRpcRemote: "RPC (remote)",
+    connElectrumLocal: "Electrum (local)",
+    connElectrumRemote: "Electrum (remote)",
+    connRpcTip:
+      "This coin talks to a Bitcoin-Core-style node over RPC; the node's wallet funds swaps.",
+    connElectrumTip:
+      "This coin connects to Electrum servers — no node. The wallet lives on your Pact seed.",
     electrumUrlsLabel: "Electrum servers",
     electrumUrlsHelp:
       "One per line: tcp://host:port or ssl://host:port. Mainnet requires at least two independent servers as cross-checking chain views.",
@@ -851,7 +861,13 @@ type NewCoinKeys =
   | "electrumUrlsHelp"
   | "electrumNeedUrl"
   | "electrumBadUrl"
-  | "validateServers";
+  | "validateServers"
+  | "connRpcLocal"
+  | "connRpcRemote"
+  | "connElectrumLocal"
+  | "connElectrumRemote"
+  | "connRpcTip"
+  | "connElectrumTip";
 
 export type Bundle = Omit<EnBundle, "progress" | "wallets" | "coins"> & {
   progress: WithOptional<EnBundle["progress"], "funding">;

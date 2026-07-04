@@ -427,7 +427,7 @@ export const ja: Bundle = {
     modeLabel: "接続タイプ",
     modeNode: "自分のノード",
     modeNodeDesc: "Core RPC — ノードのウォレットがスワップに資金を入れます。最大限の主権。",
-    modeNodeless: "ノードレス（Electrum）",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "ノードは不要です。チェーンデータは Electrum サーバーから取得され、ウォレットはあなたの Pact シード上にあります。",
     electrumUrlsLabel: "Electrum サーバー",

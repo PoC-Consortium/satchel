@@ -427,7 +427,7 @@ export const sr: Bundle = {
     modeLabel: "Тип везе",
     modeNode: "Сопствени чвор",
     modeNodeDesc: "Core RPC — новчаник чвора уплаћује свопове. Максимална сувереност.",
-    modeNodeless: "Без чвора (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Чвор није потребан: подаци о ланцу долазе са Electrum сервера, а новчаник живи на вашем Pact семену.",
     electrumUrlsLabel: "Electrum сервери",

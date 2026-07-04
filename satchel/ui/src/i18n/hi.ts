@@ -427,7 +427,7 @@ export const hi: Bundle = {
     modeLabel: "कनेक्शन प्रकार",
     modeNode: "आपका अपना node",
     modeNodeDesc: "Core RPC — node का wallet स्वैप फंड करता है। अधिकतम संप्रभुता।",
-    modeNodeless: "Nodeless (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "किसी node की ज़रूरत नहीं: chain डेटा Electrum सर्वरों से आता है और wallet आपकी Pact seed पर रहता है।",
     electrumUrlsLabel: "Electrum सर्वर",

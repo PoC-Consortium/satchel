@@ -427,7 +427,7 @@ export const de: Bundle = {
     modeLabel: "Verbindungstyp",
     modeNode: "Deine eigene Node",
     modeNodeDesc: "Core RPC — die Wallet der Node finanziert Swaps. Maximale Souveränität.",
-    modeNodeless: "Nodeless (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Keine Node nötig: Chain-Daten kommen von Electrum-Servern, und die Wallet lebt auf deinem Pact-Seed.",
     electrumUrlsLabel: "Electrum-Server",

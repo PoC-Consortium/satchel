@@ -427,7 +427,7 @@ export const ru: Bundle = {
     modeLabel: "Тип подключения",
     modeNode: "Свой узел",
     modeNodeDesc: "Core RPC — свопы финансирует кошелёк узла. Максимальный суверенитет.",
-    modeNodeless: "Без узла (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Узел не нужен: данные цепочки приходят с серверов Electrum, а кошелёк живёт на вашем сиде Pact.",
     electrumUrlsLabel: "Серверы Electrum",

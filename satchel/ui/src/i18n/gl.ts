@@ -426,7 +426,7 @@ export const gl: Bundle = {
     modeLabel: "Tipo de conexión",
     modeNode: "O teu propio nodo",
     modeNodeDesc: "Core RPC — a carteira do nodo financia os intercambios. Máxima soberanía.",
-    modeNodeless: "Sen nodo (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Non fai falla nodo: os datos da cadea veñen de servidores Electrum e a carteira vive na túa semente Pact.",
     electrumUrlsLabel: "Servidores Electrum",

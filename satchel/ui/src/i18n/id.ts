@@ -427,7 +427,7 @@ export const id: Bundle = {
     modeLabel: "Jenis koneksi",
     modeNode: "Node Anda sendiri",
     modeNodeDesc: "Core RPC — dompet node yang mendanai swap. Kedaulatan maksimum.",
-    modeNodeless: "Tanpa node (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Tidak perlu node: data chain datang dari server Electrum dan dompetnya hidup di seed Pact Anda.",
     electrumUrlsLabel: "Server Electrum",

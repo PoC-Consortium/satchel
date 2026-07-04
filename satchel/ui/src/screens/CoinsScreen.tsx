@@ -183,6 +183,13 @@ export default function CoinsScreen() {
 // A credentials-free summary of a saved connection: structured host:port + auth
 // kind when present, else the host:port parsed out of a legacy chain_data URL.
 function connSummary(saved: CoinConn): string {
+  if (saved.funding_wallet === "pact-seed") {
+    const urls = (saved.extra_backends?.length ? saved.extra_backends : saved.chain_data.split(","))
+      .map((u) => u.trim())
+      .filter(Boolean);
+    const extra = urls.length > 1 ? ` (+${urls.length - 1})` : "";
+    return `${urls[0] ?? ""}${extra}`;
+  }
   if (saved.rpc_host && saved.rpc_port) {
     const auth = saved.auth_method === "userpass" ? "user/pass" : "cookie";
     return `${saved.rpc_host}:${saved.rpc_port} · ${auth}`;
@@ -190,6 +197,63 @@ function connSummary(saved: CoinConn): string {
   const first = saved.chain_data.split(",")[0] ?? "";
   const at = first.split("@");
   return at.length > 1 ? `${first.split("://")[0]}://${at[at.length - 1]}` : first;
+}
+
+const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+
+function hostOf(url: string): string {
+  const rest = url.split("://").pop() ?? "";
+  const afterAt = rest.split("@").pop() ?? "";
+  return (afterAt.split("/")[0] ?? "").split(":")[0] ?? "";
+}
+
+/// Transport + locality of a saved connection, for the card's kind chip:
+/// RPC (a Bitcoin-Core-style node) vs Electrum (server list, pact-seed
+/// wallet); local when every host is loopback, remote otherwise.
+function connKind(saved: CoinConn): { electrum: boolean; local: boolean } {
+  if (saved.funding_wallet === "pact-seed") {
+    const urls = (saved.extra_backends?.length ? saved.extra_backends : saved.chain_data.split(","))
+      .map((u) => u.trim())
+      .filter(Boolean);
+    return { electrum: true, local: urls.every((u) => LOCAL_HOSTS.has(hostOf(u))) };
+  }
+  const host = saved.rpc_host?.trim() || hostOf(saved.chain_data.split(",")[0] ?? "");
+  return { electrum: false, local: LOCAL_HOSTS.has(host) };
+}
+
+function ConnKindChip({ saved }: { saved: CoinConn }) {
+  const t = useT();
+  const { electrum, local } = connKind(saved);
+  const label = electrum
+    ? local
+      ? t("coins.connElectrumLocal")
+      : t("coins.connElectrumRemote")
+    : local
+      ? t("coins.connRpcLocal")
+      : t("coins.connRpcRemote");
+  return (
+    <Tooltip title={electrum ? t("coins.connElectrumTip") : t("coins.connRpcTip")}>
+      <Box
+        component="span"
+        sx={{
+          fontSize: 10.5,
+          letterSpacing: "0.07em",
+          textTransform: "uppercase",
+          px: 1,
+          py: 0.25,
+          borderRadius: 0.75,
+          border: "1px solid",
+          borderColor: electrum ? C.goodTintBorder : "text.disabled",
+          color: electrum ? C.good : "text.primary",
+          bgcolor: electrum ? C.goodTintBg : C.raised,
+          cursor: "help",
+          ml: "auto",
+        }}
+      >
+        {label}
+      </Box>
+    </Tooltip>
+  );
 }
 
 function StatusPill({ c }: { c: CoinInfo }) {
@@ -269,10 +333,11 @@ function CoinCard({
             <StatusPill c={c} />
           </Box>
         </Box>
-        <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap" }}>
+        <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", alignItems: "center" }}>
           <Cap label="CLTV" on={caps.cltv} />
           <Cap label="SegWit" on={caps.segwit_v0} />
           <Cap label="Taproot" on={caps.taproot} />
+          {saved && <ConnKindChip saved={saved} />}
         </Box>
         {saved && (
           <Typography sx={{ fontSize: 12, color: "text.secondary", fontFamily: C.mono, wordBreak: "break-all" }}>

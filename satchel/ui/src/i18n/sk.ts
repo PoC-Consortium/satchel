@@ -427,7 +427,7 @@ export const sk: Bundle = {
     modeLabel: "Typ pripojenia",
     modeNode: "Vlastný uzol",
     modeNodeDesc: "Core RPC — swapy financuje peňaženka uzla. Maximálna suverenita.",
-    modeNodeless: "Bez uzla (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Žiadny uzol nie je potrebný: dáta reťazca prichádzajú z Electrum serverov a peňaženka žije na vašom Pact seede.",
     electrumUrlsLabel: "Electrum servery",

@@ -427,7 +427,7 @@ export const hr: Bundle = {
     modeLabel: "Vrsta veze",
     modeNode: "Vlastiti čvor",
     modeNodeDesc: "Core RPC — novčanik čvora financira swapove. Maksimalna suverenost.",
-    modeNodeless: "Bez čvora (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Čvor nije potreban: podaci o lancu dolaze s Electrum poslužitelja, a novčanik živi na vašem Pact seedu.",
     electrumUrlsLabel: "Electrum poslužitelji",

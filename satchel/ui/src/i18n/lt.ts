@@ -427,7 +427,7 @@ export const lt: Bundle = {
     modeLabel: "Ryšio tipas",
     modeNode: "Jūsų pačių mazgas",
     modeNodeDesc: "Core RPC — mazgo piniginė finansuoja mainus. Didžiausias suverenumas.",
-    modeNodeless: "Be mazgo (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Mazgo nereikia: grandinės duomenys gaunami iš Electrum serverių, o piniginė gyvena jūsų Pact sėkloje.",
     electrumUrlsLabel: "Electrum serveriai",

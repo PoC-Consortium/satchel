@@ -426,7 +426,7 @@ export const es: Bundle = {
     modeLabel: "Tipo de conexión",
     modeNode: "Tu propio nodo",
     modeNodeDesc: "Core RPC — la cartera del nodo financia los swaps. Máxima soberanía.",
-    modeNodeless: "Sin nodo (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "No hace falta nodo: los datos de la cadena vienen de servidores Electrum y la cartera vive en tu semilla Pact.",
     electrumUrlsLabel: "Servidores Electrum",

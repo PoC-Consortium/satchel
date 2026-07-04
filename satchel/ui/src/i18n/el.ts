@@ -427,7 +427,7 @@ export const el: Bundle = {
     modeLabel: "Τύπος σύνδεσης",
     modeNode: "Ο δικός σας κόμβος",
     modeNodeDesc: "Core RPC — το πορτοφόλι του κόμβου χρηματοδοτεί τις ανταλλαγές. Μέγιστη κυριαρχία.",
-    modeNodeless: "Χωρίς κόμβο (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Δεν χρειάζεται κόμβος: τα δεδομένα της αλυσίδας έρχονται από διακομιστές Electrum και το πορτοφόλι ζει στον σπόρο Pact σας.",
     electrumUrlsLabel: "Διακομιστές Electrum",

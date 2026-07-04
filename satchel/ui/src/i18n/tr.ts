@@ -427,7 +427,7 @@ export const tr: Bundle = {
     modeLabel: "Bağlantı türü",
     modeNode: "Kendi düğümünüz",
     modeNodeDesc: "Core RPC — takasları düğümün cüzdanı fonlar. Azami egemenlik.",
-    modeNodeless: "Düğümsüz (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Düğüm gerekmez: zincir verileri Electrum sunucularından gelir ve cüzdan Pact seed'inizde yaşar.",
     electrumUrlsLabel: "Electrum sunucuları",

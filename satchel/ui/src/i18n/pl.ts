@@ -427,7 +427,7 @@ export const pl: Bundle = {
     modeLabel: "Typ połączenia",
     modeNode: "Twój własny węzeł",
     modeNodeDesc: "Core RPC — portfel węzła finansuje swapy. Maksymalna suwerenność.",
-    modeNodeless: "Bez węzła (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Węzeł niepotrzebny: dane łańcucha pochodzą z serwerów Electrum, a portfel żyje na Twoim seedzie Pact.",
     electrumUrlsLabel: "Serwery Electrum",

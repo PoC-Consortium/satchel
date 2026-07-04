@@ -426,7 +426,7 @@ export const fr: Bundle = {
     modeLabel: "Type de connexion",
     modeNode: "Votre propre nœud",
     modeNodeDesc: "Core RPC — le portefeuille du nœud finance les swaps. Souveraineté maximale.",
-    modeNodeless: "Sans nœud (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Aucun nœud requis : les données de chaîne viennent de serveurs Electrum et le portefeuille vit sur votre seed Pact.",
     electrumUrlsLabel: "Serveurs Electrum",

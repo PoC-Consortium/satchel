@@ -427,7 +427,7 @@ export const fi: Bundle = {
     modeLabel: "Yhteystyyppi",
     modeNode: "Oma solmusi",
     modeNodeDesc: "Core RPC — solmun lompakko rahoittaa swapit. Täysi suvereniteetti.",
-    modeNodeless: "Ilman solmua (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Solmua ei tarvita: ketjudata tulee Electrum-palvelimilta ja lompakko elää Pact-seedilläsi.",
     electrumUrlsLabel: "Electrum-palvelimet",

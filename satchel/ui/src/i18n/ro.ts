@@ -427,7 +427,7 @@ export const ro: Bundle = {
     modeLabel: "Tip de conexiune",
     modeNode: "Propriul tău nod",
     modeNodeDesc: "Core RPC — portofelul nodului finanțează swap-urile. Suveranitate maximă.",
-    modeNodeless: "Fără nod (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Niciun nod necesar: datele lanțului vin de la servere Electrum, iar portofelul trăiește pe seed-ul tău Pact.",
     electrumUrlsLabel: "Servere Electrum",

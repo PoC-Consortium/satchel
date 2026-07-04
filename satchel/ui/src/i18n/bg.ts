@@ -427,7 +427,7 @@ export const bg: Bundle = {
     modeLabel: "Тип връзка",
     modeNode: "Собствен възел",
     modeNodeDesc: "Core RPC — портфейлът на възела финансира суаповете. Максимален суверенитет.",
-    modeNodeless: "Без възел (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Не е нужен възел: данните за веригата идват от Electrum сървъри, а портфейлът живее на вашия Pact seed.",
     electrumUrlsLabel: "Electrum сървъри",

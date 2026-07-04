@@ -427,7 +427,7 @@ export const nl: Bundle = {
     modeLabel: "Verbindingstype",
     modeNode: "Je eigen node",
     modeNodeDesc: "Core RPC — de wallet van de node fundt de swaps. Maximale soevereiniteit.",
-    modeNodeless: "Nodeless (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Geen node nodig: chaindata komt van Electrum-servers en de wallet leeft op je Pact-seed.",
     electrumUrlsLabel: "Electrum-servers",

@@ -427,7 +427,7 @@ export const uk: Bundle = {
     modeLabel: "Тип підключення",
     modeNode: "Власний вузол",
     modeNodeDesc: "Core RPC — свопи фінансує гаманець вузла. Максимальний суверенітет.",
-    modeNodeless: "Без вузла (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Вузол не потрібен: дані ланцюга надходять із серверів Electrum, а гаманець живе на вашому Pact seed.",
     electrumUrlsLabel: "Сервери Electrum",

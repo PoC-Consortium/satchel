@@ -426,7 +426,7 @@ export const ca: Bundle = {
     modeLabel: "Tipus de connexió",
     modeNode: "El teu propi node",
     modeNodeDesc: "Core RPC — la cartera del node finança els intercanvis. Màxima sobirania.",
-    modeNodeless: "Sense node (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "No cal cap node: les dades de la cadena venen de servidors Electrum i la cartera viu a la teva llavor Pact.",
     electrumUrlsLabel: "Servidors Electrum",

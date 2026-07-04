@@ -427,7 +427,7 @@ export const ptBR: Bundle = {
     modeLabel: "Tipo de conexão",
     modeNode: "Seu próprio node",
     modeNodeDesc: "Core RPC — a carteira do node financia os swaps. Soberania máxima.",
-    modeNodeless: "Sem node (Electrum)",
+    modeNodeless: "Electrum",
     modeNodelessDesc:
       "Nenhum node necessário: os dados da chain vêm de servidores Electrum e a carteira vive na sua seed do Pact.",
     electrumUrlsLabel: "Servidores Electrum",
