@@ -52,7 +52,14 @@ blocking the feature.
 
 ## D8 — Playground: Alice's BTCX goes nodeless, with a faucet
 
-`playground-cork.ps1` + `satchel_playground.py`: PoCX node moves to :18443
+**AMENDED (user, 2026-07-04): split into two variants.** The classic
+`playground-cork.ps1` is restored (all-Core Alice, PoCX :19443; its port
+sweep keeps the electrum ports so stale cross-variant runs get cleaned);
+the nodeless stack lives in **`playground-electrum.ps1`**, which drives the
+shared `satchel_playground.py` with `--nodeless`. Everything below
+describes the nodeless variant.
+
+`playground-electrum.ps1` + `satchel_playground.py --nodeless`: PoCX node moves to :18443
 (+REST, D2), one electrs serves Alice; her satchel.json btcx entry is the
 pact-seed/Electrum form (BTC + LTC stay node-backed so both worlds show
 side by side). Her bdk wallet can't be pre-funded (the seed is created in
