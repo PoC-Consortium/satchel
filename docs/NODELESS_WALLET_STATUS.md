@@ -24,7 +24,7 @@ Everything through the playground is DONE and verified:
   all-Core `playground-cork.ps1` is untouched (both share
   `satchel_playground.py`; the nodeless variant passes `--nodeless`).
 
-Still open after review: pactd deep-rescan affordance (O2), sweep-target
+Still open after review: sweep-target
 question (O3), handbook/wiki flip (+1 RPC method count), sub-issues under
 #58 (not filed — user decides), Electrum-over-Tor / multi-server policy
 tuning (hardening, later). Upstream electrs-pocx wishes: a `--rest-url`
@@ -142,9 +142,10 @@ findings from the first run (2026-07-03):
    suite runs on the same binary — regression-ran after the swap).
 
 ## Known TODOs / sharp edges (all noted in code comments too)
-- A fresh wallet with no history full-scans (2×20 scripthash calls) on
+- A fresh wallet with no history full-scans (2×25 scripthash calls) on
   every sync until the first address is revealed — harmless, worth a
-  "scanned once" marker later.
+  "scanned once" marker later. (O2 itself is CLOSED: the Electrum-style
+  handout cap bounds the gap at 20 < STOP_GAP 25, see decision D11.)
 - `Engine::coin_wallet` (Wallets-screen scope label) shows "default
   wallet (not scoped)" for a nodeless coin — Satchel UI work will want a
   "pact seed" label instead.

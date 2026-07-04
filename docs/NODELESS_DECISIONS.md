@@ -105,6 +105,19 @@ regtest both coins point at the playground electrs ports. BTCX
 mainnet/testnet stay TODO until the project's public PoCX servers are live
 (mainnet requires ≥ 2).
 
+## D11 — O2 closed: Electrum-style handout cap instead of deep rescan
+
+(2026-07-04, user decision after weighing Core's keypool-1000 vs the
+"new-address-only-after-use" light option.) `wallet_new_address` reveals
+fresh addresses until **20 revealed-but-unused** are outstanding, then
+recycles the OLDEST unused one (`next_unused_address`). Hard invariant: the
+on-chain gap can never exceed 20, so a restore's full scan (STOP_GAP bumped
+to 25 for margin) is complete BY CONSTRUCTION — no deep-rescan affordance,
+no thousand-query restores, address reuse only past 20 outstanding unpaid
+addresses and even then "shown twice", not paid twice. Engine sweep
+addresses ride the same path. Unit test pins reveal→cap→recycle→
+payment-frees-a-slot.
+
 ## D4 — Parity scenarios chosen (test_nodeless_e2e.py)
 
 (1) v1 nodeless maker (bdk `wallet_send` funds leg A), (2) v2 nodeless taker

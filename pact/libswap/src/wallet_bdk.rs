@@ -45,8 +45,22 @@ use crate::registry;
 /// address this wallet hands out is revealed-then-persisted, so steady-state
 /// syncs never probe beyond the revealed set; the gap only matters when the
 /// sqlite store is fresh for a seed that may have on-chain history
-/// (restore on a new machine). Deep-rescan affordance: design doc O2.
-const STOP_GAP: u32 = 20;
+/// (restore on a new machine). Because address HANDOUT is capped (see
+/// [`MAX_UNUSED_AHEAD`]), the real on-chain gap can never exceed that cap —
+/// this scan width carries a safety margin on top, making a restore's
+/// full scan complete BY CONSTRUCTION. Closes design doc O2 (no deep-rescan
+/// affordance needed).
+const STOP_GAP: u32 = 25;
+
+/// Electrum-style handout cap: never let more than this many revealed-but-
+/// unused external addresses accumulate. Past the cap, [`wallet_handout_spk`]
+/// recycles the OLDEST unused address instead of revealing further — so a
+/// pathological "clicked Receive 30 times, never got paid" session cannot
+/// open a gap a restore's [`STOP_GAP`] scan would miss. Bitcoin Core solves
+/// the same problem with brute width (a 1000-key keypool); Electrum's cap
+/// gets the same guarantee without thousand-query restores. Reuse only ever
+/// means "shown twice", and only past 20 outstanding unpaid addresses.
+const MAX_UNUSED_AHEAD: usize = 20;
 
 fn now_ts() -> u64 {
     std::time::SystemTime::now()
@@ -440,11 +454,7 @@ impl ChainBackend for BdkWalletBackend {
 
     fn wallet_new_address(&self) -> Result<String> {
         self.with_wallet(false, |entry| {
-            let spk = entry
-                .wallet
-                .reveal_next_address(KeychainKind::External)
-                .address
-                .script_pubkey();
+            let spk = wallet_handout_spk(entry);
             spk_to_address(self.params, &spk)
         })
     }
@@ -655,6 +665,24 @@ impl ChainBackend for BdkWalletBackend {
             Ok(new_txid.to_string())
         })
     }
+}
+
+/// Hand out an external address spk under the [`MAX_UNUSED_AHEAD`] cap:
+/// reveal a fresh one while fewer than the cap are outstanding unused, else
+/// recycle the oldest unused one (`next_unused_address` picks the lowest
+/// unused index; it reveals only when nothing is unused). Free function so
+/// the cap invariant is unit-testable without an Electrum server.
+fn wallet_handout_spk(entry: &mut WalletEntry) -> ScriptBuf {
+    let unused = entry
+        .wallet
+        .list_unused_addresses(KeychainKind::External)
+        .count();
+    let info = if unused >= MAX_UNUSED_AHEAD {
+        entry.wallet.next_unused_address(KeychainKind::External)
+    } else {
+        entry.wallet.reveal_next_address(KeychainKind::External)
+    };
+    info.address.script_pubkey()
 }
 
 /// The activity feed off one wallet's canonical tx set (`listtransactions`,
@@ -909,6 +937,72 @@ mod tests {
         let act = wallet_activity(entry);
         assert_eq!(act.len(), 1);
         assert_eq!(act[0].txid, fund_txid.to_string());
+
+        drop(guard);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handout_cap_bounds_the_gap_and_recycles_oldest_unused() {
+        use bitcoin::hashes::Hash;
+
+        let dir = temp_data_dir();
+        let params = btc_mainnet();
+        let seed = PactSeed::from_mnemonic(TEST_MNEMONIC, "").unwrap();
+        let handle = WalletManager::new(&dir).open("btc", params, &seed).unwrap();
+        let mut guard = handle.lock().unwrap();
+        let entry = &mut *guard;
+
+        // 30 handouts, nothing ever paid: exactly MAX_UNUSED_AHEAD distinct
+        // addresses are revealed, then the OLDEST unused one (index 0)
+        // recycles — the on-chain gap is bounded by construction.
+        let mut spks = Vec::new();
+        for _ in 0..30 {
+            spks.push(wallet_handout_spk(entry));
+        }
+        let distinct: std::collections::HashSet<_> = spks.iter().cloned().collect();
+        assert_eq!(distinct.len(), MAX_UNUSED_AHEAD);
+        assert_eq!(
+            entry.wallet.derivation_index(KeychainKind::External),
+            Some((MAX_UNUSED_AHEAD - 1) as u32),
+            "no reveal past the cap"
+        );
+        assert_eq!(
+            spks[MAX_UNUSED_AHEAD], spks[0],
+            "recycles the oldest unused"
+        );
+        assert!(
+            STOP_GAP as usize > MAX_UNUSED_AHEAD,
+            "scan must out-reach the cap"
+        );
+
+        // Pay the oldest one: it leaves the unused set, so the next handout
+        // reveals a FRESH address again (index 20).
+        let paid = Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: vec![bitcoin::TxIn {
+                previous_output: OutPoint {
+                    txid: Txid::from_byte_array([9u8; 32]),
+                    vout: 0,
+                },
+                ..Default::default()
+            }],
+            output: vec![TxOut {
+                value: Amount::from_sat(1_000),
+                script_pubkey: spks[0].clone(),
+            }],
+        };
+        entry.wallet.apply_unconfirmed_txs([(paid, 1_000)]);
+        let next = wallet_handout_spk(entry);
+        assert!(
+            !distinct.contains(&next),
+            "a payment frees the cap for a fresh reveal"
+        );
+        assert_eq!(
+            entry.wallet.derivation_index(KeychainKind::External),
+            Some(MAX_UNUSED_AHEAD as u32)
+        );
 
         drop(guard);
         let _ = std::fs::remove_dir_all(&dir);
