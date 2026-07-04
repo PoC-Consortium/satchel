@@ -18,7 +18,19 @@ import type { UiPrefs } from "./api/types";
 // the call returns), and write through `set_ui_prefs` on every change. Theme +
 // language consumers (MUI color scheme, i18n) sync off `prefs` once it loads.
 
-const DEFAULTS: UiPrefs = { theme: "system", language: "en", nav_open: true };
+const DEFAULTS: UiPrefs = {
+  theme: "system",
+  language: "en",
+  nav_open: true,
+  notify: {
+    enabled: true,
+    swap_started: true,
+    locks: true,
+    completed: true,
+    failed: true,
+    reorg: true,
+  },
+};
 
 interface PrefsCtx {
   prefs: UiPrefs;

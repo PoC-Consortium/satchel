@@ -772,6 +772,43 @@ export const en = {
     feeBumped: "Fee-bumped",
     reorg: "Reorg detected — re-checking",
   },
+  // Desktop notifications + tray (issue #55). Notification bodies reuse the
+  // narrate.* story lines; these are the titles, the Settings toggles, and the
+  // tray tooltip/menu labels (pushed to Rust, which owns no copy of its own).
+  notify: {
+    tab: "Notifications",
+    section: "Desktop notifications",
+    intro:
+      "Swaps take a while and run on their own — get an OS notification when one hits a milestone while Satchel is in the background. Nothing fires while you're looking at the window.",
+    master: "Enable notifications",
+    masterHint: "Master switch — turns every notification below on or off.",
+    evStarted: "Swap started",
+    evStartedHint: "Someone took your offer, or a maker accepted your take.",
+    evLocks: "Locks confirmed",
+    evLocksHint: "A leg's lock confirmed on-chain — yours, theirs, then both locked.",
+    evCompleted: "Swap completed",
+    evCompletedHint: "The swap finished and the coins are settled in your wallet.",
+    evFailed: "Swap refunded or aborted",
+    evFailedHint: "A swap unwound — refunded after a stall, or cancelled.",
+    evReorg: "Reorg warnings",
+    evReorgHint: "A chain reorganization touched a swap you're in — being re-checked.",
+    test: "Send a test notification",
+    testTitle: "Satchel",
+    testBody: "Notifications are working.",
+    denied:
+      "The OS is blocking notifications — allow Satchel in your system notification settings.",
+    titleStarted: "Swap started",
+    titleLocks: "Swap update",
+    titleCompleted: "Swap completed",
+    titleFailed: "Swap not completed",
+    titleReorg: "Reorg warning",
+    reorgBody: "{coin}: chain reorganization detected — confirmations are being re-checked.",
+    trayNone: "Satchel — no swaps in flight",
+    trayOne: "Satchel — 1 swap in flight",
+    trayMany: "Satchel — {count} swaps in flight",
+    trayOpen: "Open Satchel",
+    trayQuit: "Quit",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -896,7 +933,7 @@ type NewCoinKeys =
   | "switchHidesBody"
   | "switchHidesConfirm";
 
-export type Bundle = Omit<EnBundle, "progress" | "wallets" | "coins" | "seed" | "fx"> & {
+export type Bundle = Omit<EnBundle, "progress" | "wallets" | "coins" | "seed" | "fx" | "notify"> & {
   progress: WithOptional<EnBundle["progress"], "funding">;
   wallets: WithOptional<EnBundle["wallets"], NewWalletKeys>;
   coins: WithOptional<EnBundle["coins"], NewCoinKeys>;
@@ -904,4 +941,7 @@ export type Bundle = Omit<EnBundle, "progress" | "wallets" | "coins" | "seed" | 
   /** USD-reference copy shipped 2026-07 (issue #56) — optional until the next
    *  full translation pass. */
   fx?: EnBundle["fx"];
+  /** Desktop notifications + tray (issue #55) — a whole namespace shipped
+   *  2026-07, optional until the next full translation pass. */
+  notify?: EnBundle["notify"];
 };

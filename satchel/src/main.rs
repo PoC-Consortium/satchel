@@ -168,6 +168,9 @@ struct UiPrefs {
     language: String,
     /// Whether the collapsible left nav is expanded.
     nav_open: bool,
+    /// Desktop-notification switches (issue #55). Satchel only persists them;
+    /// the webview decides when to fire (it owns the swap poll + i18n).
+    notify: NotifyPrefs,
 }
 
 impl Default for UiPrefs {
@@ -176,6 +179,40 @@ impl Default for UiPrefs {
             theme: "system".into(),
             language: "en".into(),
             nav_open: true,
+            notify: NotifyPrefs::default(),
+        }
+    }
+}
+
+/// OS-notification toggles (issue #55): one master switch + one per event kind.
+/// All on by default — the events are per-swap milestones (a handful over a
+/// swap's whole life), not chatter.
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[serde(default)]
+struct NotifyPrefs {
+    /// Master switch for all desktop notifications.
+    enabled: bool,
+    /// A counterparty took your offer / your take was accepted.
+    swap_started: bool,
+    /// A leg's lock confirmed on-chain (ours or theirs).
+    locks: bool,
+    /// Swap finished — coins settled in the wallet.
+    completed: bool,
+    /// Swap unwound — refunded or aborted.
+    failed: bool,
+    /// Chain reorg touched a watched swap.
+    reorg: bool,
+}
+
+impl Default for NotifyPrefs {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            swap_started: true,
+            locks: true,
+            completed: true,
+            failed: true,
+            reorg: true,
         }
     }
 }
@@ -581,6 +618,7 @@ fn set_ui_prefs(
     theme: Option<String>,
     language: Option<String>,
     nav_open: Option<bool>,
+    notify: Option<NotifyPrefs>,
 ) -> Result<(), String> {
     let mut cfg = state.config.lock().unwrap();
     if let Some(theme) = theme {
@@ -591,6 +629,9 @@ fn set_ui_prefs(
     }
     if let Some(nav_open) = nav_open {
         cfg.ui.nav_open = nav_open;
+    }
+    if let Some(notify) = notify {
+        cfg.ui.notify = notify;
     }
     save_config(&state.config_dir, &cfg).map_err(|e| format!("{e:#}"))
 }
@@ -967,6 +1008,88 @@ async fn quit_app(app: tauri::AppHandle, keep_running: bool, withdraw: bool) -> 
     Ok(())
 }
 
+/// The tray's menu-item handles (issue #55), kept so `set_tray_status` can
+/// relabel them when the UI language changes (the tray itself is fetched via
+/// `tray_by_id`, but menu items have no id-lookup).
+struct TrayHandles {
+    show: tauri::menu::MenuItem<tauri::Wry>,
+    quit: tauri::menu::MenuItem<tauri::Wry>,
+}
+
+/// Bring the main window back from the tray/taskbar (tray click + "Open").
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
+}
+
+/// Tray presence for active swaps (issue #55). Built for every pactd mode
+/// (external/adopt/managed), before the mode branches in `setup`. Left-click
+/// restores the window; the menu offers Open + Quit, where Quit routes through
+/// the window-close path so the fund-safety ExitGate (JS `onCloseRequested`)
+/// runs — never a raw exit that could strand a live swap.
+fn build_tray(app: &tauri::App) -> tauri::Result<()> {
+    // English defaults; the webview pushes localized labels + the live-swap
+    // tooltip through `set_tray_status` once it boots (it owns i18n).
+    let show = tauri::menu::MenuItem::with_id(app, "tray-show", "Open Satchel", true, None::<&str>)?;
+    let quit = tauri::menu::MenuItem::with_id(app, "tray-quit", "Quit", true, None::<&str>)?;
+    let menu = tauri::menu::Menu::with_items(app, &[&show, &quit])?;
+    app.manage(TrayHandles { show, quit });
+    let mut tray = tauri::tray::TrayIconBuilder::with_id("main")
+        .tooltip("Satchel")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_tray_icon_event(|tray, event| {
+            if let tauri::tray::TrayIconEvent::Click {
+                button: tauri::tray::MouseButton::Left,
+                button_state: tauri::tray::MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main_window(tray.app_handle());
+            }
+        })
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "tray-show" => show_main_window(app),
+            "tray-quit" => {
+                // Show first so the ExitGate dialog (if any) is visible, then
+                // request a close — the webview intercepts and runs the gate.
+                show_main_window(app);
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.close();
+                }
+            }
+            _ => {}
+        });
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.build(app)?;
+    Ok(())
+}
+
+/// Localized tray strings, pushed by the webview (which owns i18n + the swap
+/// poll): the tooltip mirrors the header's live-swap count; the menu labels
+/// follow the UI language.
+#[tauri::command]
+fn set_tray_status(
+    app: tauri::AppHandle,
+    tooltip: String,
+    show_label: String,
+    quit_label: String,
+) -> Result<(), String> {
+    if let Some(tray) = app.tray_by_id("main") {
+        tray.set_tooltip(Some(tooltip.as_str()))
+            .map_err(|e| e.to_string())?;
+    }
+    let h = app.state::<TrayHandles>();
+    h.show.set_text(&show_label).map_err(|e| e.to_string())?;
+    h.quit.set_text(&quit_label).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Open a URL in the user's default browser (for the update dialog's "release
 /// page" link). Tauri's webview blocks external navigation, so the UI hands the
 /// URL here. http(s) only.
@@ -1165,11 +1288,13 @@ mod update {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             pactd_rpc,
             quit_app,
             get_ui_prefs,
             set_ui_prefs,
+            set_tray_status,
             get_contacts,
             set_contacts,
             list_coin_config,
@@ -1185,6 +1310,10 @@ fn main() {
             update::check_app_update
         ])
         .setup(|app| {
+            // Tray presence (issue #55) — before the pactd mode branches so
+            // every mode (external returns early below) gets it.
+            build_tray(app)?;
+
             // Mode 1 — external: attach to a pactd someone else runs.
             //   SATCHEL_PACTD_URL=http://host:port  +  SATCHEL_PACTD_DATADIR=dir
             // (datadir is where we read .cookie; or SATCHEL_PACTD_COOKIE=user:pass)

@@ -9,7 +9,9 @@ import {
   type ReactNode,
 } from "react";
 import { errMsg, getCoinIcon, inTauri, listMerchants, rpc } from "./api/tauri";
-import { adaptorToSwap, pendingTakeToSwap, v1ToSwap } from "./format";
+import { adaptorToSwap, isActive, pendingTakeToSwap, v1ToSwap } from "./format";
+import { notifySwapEvents, updateTray } from "./notify";
+import { usePrefs } from "./prefs";
 import { tr } from "./i18n";
 import { COIN_ICON } from "./assets/coins";
 import type {
@@ -129,6 +131,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [logLines, setLogLines] = useState<LogLine[]>([]);
   const [toast, setToast] = useState<string | null>(null);
 
+  // Notification toggles, reachable from the (stable) refreshSwaps callback
+  // without re-creating the poll interval on every Settings change.
+  const { prefs } = usePrefs();
+  const notifyPrefsRef = useRef(prefs.notify);
+  notifyPrefsRef.current = prefs.notify;
+
   const log = useCallback((msg: string) => {
     const time = new Date().toLocaleTimeString();
     setLogLines((prev) => [{ time, msg }, ...prev].slice(0, 200));
@@ -196,7 +204,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       const realIds = new Set(real.map((s) => s.swap_id));
       const pending = pend.filter((p) => !realIds.has(p.offer_id)).map(pendingTakeToSwap);
-      setSwaps([...real, ...pending]);
+      const next = [...real, ...pending];
+      setSwaps(next);
+      // OS notifications on milestone crossings + tray live-swap count (#55) —
+      // both derived from this poll, both best-effort.
+      notifySwapEvents(next, notifyPrefsRef.current);
+      updateTray(next.filter(isActive).length);
       setConn(true);
     } catch {
       setConn(false);
