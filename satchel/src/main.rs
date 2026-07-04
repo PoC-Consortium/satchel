@@ -1036,7 +1036,6 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let show = tauri::menu::MenuItem::with_id(app, "tray-show", "Open Satchel", true, None::<&str>)?;
     let quit = tauri::menu::MenuItem::with_id(app, "tray-quit", "Quit", true, None::<&str>)?;
     let menu = tauri::menu::Menu::with_items(app, &[&show, &quit])?;
-    app.manage(TrayHandles { show, quit });
     let mut tray = tauri::tray::TrayIconBuilder::with_id("main")
         .tooltip("Satchel")
         .menu(&menu)
@@ -1056,6 +1055,9 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
             "tray-quit" => {
                 // Show first so the ExitGate dialog (if any) is visible, then
                 // request a close — the webview intercepts and runs the gate.
+                // Same race as the window's own X during the first seconds
+                // before ExitGate's listener registers: an ungated close then
+                // stops pactd (no new exposure — parity with the X button).
                 show_main_window(app);
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.close();
@@ -1067,6 +1069,9 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         tray = tray.icon(icon.clone());
     }
     tray.build(app)?;
+    // Managed only once the tray actually exists — set_tray_status treats a
+    // missing TrayHandles as "no tray on this desktop" and no-ops.
+    app.manage(TrayHandles { show, quit });
     Ok(())
 }
 
@@ -1080,11 +1085,13 @@ fn set_tray_status(
     show_label: String,
     quit_label: String,
 ) -> Result<(), String> {
+    let Some(h) = app.try_state::<TrayHandles>() else {
+        return Ok(()); // no tray on this desktop (build_tray failed) — nothing to update
+    };
     if let Some(tray) = app.tray_by_id("main") {
         tray.set_tooltip(Some(tooltip.as_str()))
             .map_err(|e| e.to_string())?;
     }
-    let h = app.state::<TrayHandles>();
     h.show.set_text(&show_label).map_err(|e| e.to_string())?;
     h.quit.set_text(&quit_label).map_err(|e| e.to_string())?;
     Ok(())
@@ -1311,8 +1318,12 @@ fn main() {
         ])
         .setup(|app| {
             // Tray presence (issue #55) — before the pactd mode branches so
-            // every mode (external returns early below) gets it.
-            build_tray(app)?;
+            // every mode (external returns early below) gets it. NON-fatal: a
+            // desktop without a tray host (minimal Linux WMs) must not stop a
+            // funds-watching app from launching — degrade to no tray.
+            if let Err(e) = build_tray(app) {
+                eprintln!("satchel: tray unavailable ({e}) — continuing without it");
+            }
 
             // Mode 1 — external: attach to a pactd someone else runs.
             //   SATCHEL_PACTD_URL=http://host:port  +  SATCHEL_PACTD_DATADIR=dir

@@ -460,7 +460,7 @@ function NotificationsTab() {
   }
 
   const toggle = (key: keyof NotifyPrefs, label: string, hint: string) => (
-    <Row label={label} hint={hint}>
+    <Row key={key} label={label} hint={hint}>
       <Switch
         checked={n[key]}
         disabled={key !== "enabled" && !n.enabled}
@@ -471,31 +471,29 @@ function NotificationsTab() {
   );
 
   async function test() {
-    const ok = await sendTestNotification();
-    setStatus(ok ? "" : t("notify.denied"));
+    setStatus((await sendTestNotification()) ? "" : t("notify.denied"));
   }
 
   // Built outside the JSX so the pref-key string literals aren't flagged by the
   // i18n no-literal-string guard (they are property keys, not display copy) —
   // the same trick FeesTab uses for its field keys.
-  const masterRow = toggle("enabled", t("notify.master"), t("notify.masterHint"));
-  const startedRow = toggle("swap_started", t("notify.evStarted"), t("notify.evStartedHint"));
-  const locksRow = toggle("locks", t("notify.evLocks"), t("notify.evLocksHint"));
-  const completedRow = toggle("completed", t("notify.evCompleted"), t("notify.evCompletedHint"));
-  const failedRow = toggle("failed", t("notify.evFailed"), t("notify.evFailedHint"));
-  const reorgRow = toggle("reorg", t("notify.evReorg"), t("notify.evReorgHint"));
+  const rows = (
+    [
+      ["enabled", "master", "masterHint"],
+      ["swap_started", "evStarted", "evStartedHint"],
+      ["locks", "evLocks", "evLocksHint"],
+      ["completed", "evCompleted", "evCompletedHint"],
+      ["failed", "evFailed", "evFailedHint"],
+      ["reorg", "evReorg", "evReorgHint"],
+    ] as Array<[keyof NotifyPrefs, string, string]>
+  ).map(([key, label, hint]) => toggle(key, t(`notify.${label}`), t(`notify.${hint}`)));
 
   return (
     <Section title={t("notify.section")}>
       <Typography sx={{ color: "text.secondary", fontSize: 13, mb: 1.5 }}>
         {t("notify.intro")}
       </Typography>
-      {masterRow}
-      {startedRow}
-      {locksRow}
-      {completedRow}
-      {failedRow}
-      {reorgRow}
+      {rows}
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mt: 1.5 }}>
         <Button variant="outlined" color="inherit" disabled={!n.enabled} onClick={() => void test()}>
           {t("notify.test")}
