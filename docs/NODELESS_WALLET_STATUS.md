@@ -24,9 +24,9 @@ Everything through the playground is DONE and verified:
   all-Core `playground-cork.ps1` is untouched (both share
   `satchel_playground.py`; the nodeless variant passes `--nodeless`).
 
-Still open after review: sweep-target
-question (O3), handbook/wiki flip (+1 RPC method count), sub-issues under
-#58 (not filed — user decides), Electrum-over-Tor / multi-server policy
+Still open after review (O3 CLOSED by D7/D12 wallet exclusivity; docs
+flipped; #58 merged + closed via PR #67): mode-switch balance warning
+(D12 follow-up), Electrum-over-Tor / multi-server policy
 tuning (hardening, later). Upstream electrs-pocx wishes: a `--rest-url`
 override (bindex hardcodes :18443 on regtest) and a fix for the
 empty-index `headers.subscribe` panic (harness works around both).

@@ -145,6 +145,22 @@ untrusted hint, with local re-verification and clock-driven refunds
 | `find_spend_witness` mempool scan | `getrawmempool` enumeration | `scripthash.get_history` (includes mempool) | equivalent for our watched scripts; already implemented. |
 | block-scan fallback | `getblock v2` | none (history is per-script) | not needed: all watched outputs are script-known. |
 
+### D7 — Wallet exclusivity: one wallet per coin, user picks the world
+
+**PRINCIPLE (user, 2026-07-04).** Per coin there is exactly ONE wallet, chosen
+by the connection mode and never mixed: **RPC ⇒ the node's wallet** (funds
+swaps, receives sweeps), **Electrum ⇒ the pact-seed bdk wallet**. Funding
+comes from and proceeds return to the same wallet, so working capital cycles
+hands-off in either world. Enforced in `Engine::nodeless_backend`
+(Electrum-first lists must be Electrum-only) and `compose_chain_data`
+(pact-seed mode refuses non-Electrum URLs). Scope notes: Electrum URLs behind
+a Core primary stay read-only CHAIN VIEWS (custody exclusivity, not transport
+exclusivity), and in-flight swap keys always live on the seed in both worlds —
+the cut governs where UTXOs rest. This closes **O3** ("sweep node-coin
+proceeds to the seed wallet?") as NO by principle: who wants proceeds on the
+seed switches the coin to Electrum mode wholesale. Known follow-up: warn on a
+mode switch while the now-hidden wallet still holds a balance.
+
 ## 3. The nine `wallet_*` methods on bdk
 
 | Trait method | Used by | bdk implementation |
@@ -215,6 +231,7 @@ persist-before-broadcast discipline and the rc6 commit rule.
   playground (being checked now).
 - **O2** — gap-limit / full-scan policy for restores (bdk default stop-gap
   vs a Satchel "deep rescan" affordance).
-- **O3** — whether the nodeless wallet should also serve as the *sweep
+- **O3 — CLOSED by D7** (wallet exclusivity: no seed-wallet sweeps for
+  node-backed coins). Original question: whether the nodeless wallet should also serve as the *sweep
   target* for Core-backed coins (today sweeps go to the Core wallet;
   keeping that unchanged is the default).
