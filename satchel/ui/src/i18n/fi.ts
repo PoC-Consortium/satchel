@@ -226,6 +226,8 @@ export const fi: Bundle = {
     enterBody:
       "Kirjoita jokainen sana — ne täydentyvät automaattisesti — tai liitä koko lause. Tarkistamme sen ennen kuin jatkat.",
     wordCount: "{n} sanaa",
+    wordCountHint:
+      "12 sanaa riittää hyvin — tämä on kuuma siirtolompakko, ei kylmäsäilytys. Valitse 24, jos haluat mieluummin pidemmän lauseen.",
     wordAria: "Sana {n}",
     checkIncomplete: "Syötä kaikki {n} sanaa.",
     checkUnknown: "Jotkin sanat eivät ole BIP39-sanalistalla — tarkista korostetut.",
@@ -436,6 +438,14 @@ export const fi: Bundle = {
     electrumNeedUrl: "Syötä vähintään yksi Electrum-palvelimen URL (tcp:// tai ssl://).",
     electrumBadUrl: "Electrum-URL:ien on alettava tcp:// tai ssl:// — saatiin: {url}",
     validateServers: "Validoi palvelimet",
+    connRpcLocal: "RPC (paikallinen)",
+    connRpcRemote: "RPC (etä)",
+    connElectrumLocal: "Electrum (paikallinen)",
+    connElectrumRemote: "Electrum (etä)",
+    connRpcTip:
+      "Tämä kolikko keskustelee Bitcoin-Core-tyylisen solmun kanssa RPC:n yli; solmun lompakko rahoittaa swapit.",
+    connElectrumTip:
+      "Tämä kolikko yhdistää Electrum-palvelimiin — ei solmua. Lompakko elää Pact-seedilläsi.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Ei tuettu",
     unsupportedByEngineTip:
@@ -483,6 +493,8 @@ export const fi: Bundle = {
     receiveTitle: "Vastaanota {sym}",
     receiveIntro:
       "Tuore osoite pact-seed-lompakostasi. Tänne lähetetyt kolikot näkyvät saldossa, kun ne on vahvistettu.",
+    receiveIntroRpc:
+      "Tuore osoite solmusi lompakosta. Tänne lähetetyt kolikot näkyvät saldossa, kun ne on vahvistettu.",
     receiveFreshNote:
       "Joka kerta kun avaat tämän ikkunan, saat tuoreen osoitteen. Vanhat osoitteet toimivat edelleen — tuoreet ovat vain parempia yksityisyydelle.",
     sendTitle: "Lähetä {sym}",

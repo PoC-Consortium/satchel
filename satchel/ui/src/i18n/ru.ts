@@ -226,6 +226,8 @@ export const ru: Bundle = {
     enterBody:
       "Вводите каждое слово — они автодополняются по ходу — или вставьте всю фразу. Мы проверим её перед продолжением.",
     wordCount: "{n} слов",
+    wordCountHint:
+      "12 слов вполне достаточно — это горячий транзитный кошелёк, а не холодное хранилище. Выберите 24, если предпочитаете более длинную фразу.",
     wordAria: "Слово {n}",
     checkIncomplete: "Введите все {n} слов.",
     checkUnknown: "Некоторых слов нет в списке BIP39 — проверьте выделенные.",
@@ -436,6 +438,14 @@ export const ru: Bundle = {
     electrumNeedUrl: "Введите хотя бы один URL сервера Electrum (tcp:// или ssl://).",
     electrumBadUrl: "URL Electrum должны начинаться с tcp:// или ssl:// — получено: {url}",
     validateServers: "Проверить серверы",
+    connRpcLocal: "RPC (локальный)",
+    connRpcRemote: "RPC (удалённый)",
+    connElectrumLocal: "Electrum (локальный)",
+    connElectrumRemote: "Electrum (удалённый)",
+    connRpcTip:
+      "Эта монета общается с узлом типа Bitcoin Core по RPC; свопы финансирует кошелёк узла.",
+    connElectrumTip:
+      "Эта монета подключается к серверам Electrum — без узла. Кошелёк живёт на вашем сиде Pact.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Не поддерживается",
     unsupportedByEngineTip:
@@ -483,6 +493,8 @@ export const ru: Bundle = {
     receiveTitle: "Получить {sym}",
     receiveIntro:
       "Свежий адрес из вашего кошелька на сиде Pact. Отправленные сюда монеты появятся в балансе после подтверждения.",
+    receiveIntroRpc:
+      "Свежий адрес из кошелька вашего узла. Отправленные сюда монеты появятся в балансе после подтверждения.",
     receiveFreshNote:
       "Каждый раз при открытии этого диалога вы получаете свежий адрес. Старые адреса продолжают работать — свежие просто лучше для приватности.",
     sendTitle: "Отправить {sym}",

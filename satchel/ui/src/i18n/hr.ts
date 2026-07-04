@@ -226,6 +226,8 @@ export const hr: Bundle = {
     enterBody:
       "Upišite svaku riječ — automatski se dovršavaju dok pišete — ili zalijepite cijelu frazu. Provjeravamo je prije nego što nastavite.",
     wordCount: "{n} riječi",
+    wordCountHint:
+      "12 riječi sasvim je dovoljno — ovo je vrući tranzitni novčanik, a ne hladna pohrana. Odaberite 24 ako vam je draža dulja fraza.",
     wordAria: "Riječ {n}",
     checkIncomplete: "Unesite svih {n} riječi.",
     checkUnknown: "Neke riječi nisu u BIP39 popisu riječi — provjerite istaknute.",
@@ -436,6 +438,14 @@ export const hr: Bundle = {
     electrumNeedUrl: "Unesite barem jedan URL Electrum poslužitelja (tcp:// ili ssl://).",
     electrumBadUrl: "Electrum URL-ovi moraju počinjati s tcp:// ili ssl:// — dobiveno: {url}",
     validateServers: "Provjeri poslužitelje",
+    connRpcLocal: "RPC (lokalni)",
+    connRpcRemote: "RPC (udaljeni)",
+    connElectrumLocal: "Electrum (lokalni)",
+    connElectrumRemote: "Electrum (udaljeni)",
+    connRpcTip:
+      "Ova kovanica komunicira s čvorom tipa Bitcoin Core putem RPC-a; swapove financira novčanik čvora.",
+    connElectrumTip:
+      "Ova se kovanica povezuje s Electrum poslužiteljima — bez čvora. Novčanik živi na vašem Pact seedu.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nepodržano",
     unsupportedByEngineTip:
@@ -483,6 +493,8 @@ export const hr: Bundle = {
     receiveTitle: "Primi {sym}",
     receiveIntro:
       "Svježa adresa iz vašeg novčanika na Pact seedu. Kovanice poslane ovamo pojavljuju se u stanju nakon potvrde.",
+    receiveIntroRpc:
+      "Svježa adresa iz novčanika vašeg čvora. Kovanice poslane ovamo pojavljuju se u stanju nakon potvrde.",
     receiveFreshNote:
       "Svaki put kad otvorite ovaj dijalog dobivate svježu adresu. Stare adrese i dalje rade — svježe su jednostavno bolje za privatnost.",
     sendTitle: "Pošalji {sym}",

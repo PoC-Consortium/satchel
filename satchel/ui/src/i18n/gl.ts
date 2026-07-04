@@ -226,6 +226,8 @@ export const gl: Bundle = {
     enterBody:
       "Escribe cada palabra — autocompletanse a medida que avanzas — ou pega a frase enteira. Compróbase antes de continuar.",
     wordCount: "{n} palabras",
+    wordCountHint:
+      "Con 12 palabras chega de sobra — esta é unha carteira de tránsito en quente, non almacenamento en frío. Escolle 24 se prefires a frase máis longa.",
     wordAria: "Palabra {n}",
     checkIncomplete: "Introduce as {n} palabras.",
     checkUnknown: "Algunhas palabras non están na lista de palabras BIP39 — revisa as resaltadas.",
@@ -435,6 +437,14 @@ export const gl: Bundle = {
     electrumNeedUrl: "Introduce polo menos unha URL de servidor Electrum (tcp:// ou ssl://).",
     electrumBadUrl: "As URL de Electrum deben comezar por tcp:// ou ssl:// — recibido: {url}",
     validateServers: "Validar servidores",
+    connRpcLocal: "RPC (local)",
+    connRpcRemote: "RPC (remoto)",
+    connElectrumLocal: "Electrum (local)",
+    connElectrumRemote: "Electrum (remoto)",
+    connRpcTip:
+      "Esta moeda fala cun nodo tipo Bitcoin Core por RPC; a carteira do nodo financia os intercambios.",
+    connElectrumTip:
+      "Esta moeda conéctase a servidores Electrum — sen nodo. A carteira vive na túa semente Pact.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Non admitida",
     unsupportedByEngineTip:
@@ -481,6 +491,8 @@ export const gl: Bundle = {
     receiveTitle: "Recibir {sym}",
     receiveIntro:
       "Un enderezo novo da túa carteira de semente Pact. As moedas enviadas aquí aparecen no saldo unha vez confirmadas.",
+    receiveIntroRpc:
+      "Un enderezo novo da carteira do teu nodo. As moedas enviadas aquí aparecen no saldo unha vez confirmadas.",
     receiveFreshNote:
       "Cada vez que abres este diálogo obtés un enderezo novo. Os enderezos antigos seguen funcionando — os novos simplemente son mellores para a privacidade.",
     sendTitle: "Enviar {sym}",

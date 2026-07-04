@@ -226,6 +226,8 @@ export const fr: Bundle = {
     enterBody:
       "Tapez chaque mot — ils se complètent automatiquement à mesure — ou collez la phrase entière. Nous la vérifions avant que vous continuiez.",
     wordCount: "{n} mots",
+    wordCountHint:
+      "12 mots suffisent largement — c'est un portefeuille de transit chaud, pas du stockage à froid. Choisissez 24 si vous préférez la phrase plus longue.",
     wordAria: "Mot {n}",
     checkIncomplete: "Saisissez les {n} mots.",
     checkUnknown: "Certains mots ne figurent pas dans la liste de mots BIP39 — vérifiez ceux qui sont surlignés.",
@@ -435,6 +437,14 @@ export const fr: Bundle = {
     electrumNeedUrl: "Saisissez au moins une URL de serveur Electrum (tcp:// ou ssl://).",
     electrumBadUrl: "Les URL Electrum doivent commencer par tcp:// ou ssl:// — reçu : {url}",
     validateServers: "Valider les serveurs",
+    connRpcLocal: "RPC (local)",
+    connRpcRemote: "RPC (distant)",
+    connElectrumLocal: "Electrum (local)",
+    connElectrumRemote: "Electrum (distant)",
+    connRpcTip:
+      "Ce coin communique avec un nœud de type Bitcoin Core via RPC ; le portefeuille du nœud finance les swaps.",
+    connElectrumTip:
+      "Ce coin se connecte à des serveurs Electrum — aucun nœud. Le portefeuille vit sur votre seed Pact.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Non pris en charge",
     unsupportedByEngineTip:
@@ -481,6 +491,8 @@ export const fr: Bundle = {
     receiveTitle: "Recevoir {sym}",
     receiveIntro:
       "Une adresse fraîche de votre portefeuille de seed Pact. Les coins envoyés ici apparaissent dans le solde une fois confirmés.",
+    receiveIntroRpc:
+      "Une adresse fraîche du portefeuille de votre nœud. Les coins envoyés ici apparaissent dans le solde une fois confirmés.",
     receiveFreshNote:
       "Chaque fois que vous ouvrez ce dialogue, vous obtenez une adresse fraîche. Les anciennes adresses restent valables — les fraîches sont simplement meilleures pour la confidentialité.",
     sendTitle: "Envoyer {sym}",

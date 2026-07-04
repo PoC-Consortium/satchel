@@ -226,6 +226,8 @@ export const zhCn: Bundle = {
     enterBody:
       "逐词输入 — 输入时会自动补全 — 或粘贴整段助记词。我们会在你继续前进行校验。",
     wordCount: "{n} 个词",
+    wordCountHint:
+      "12 个词就足够了 — 这是一个用于中转的热钱包，不是冷存储。如果你偏好更长的助记词，可选 24 个。",
     wordAria: "第 {n} 个词",
     checkIncomplete: "请输入全部 {n} 个词。",
     checkUnknown: "有些词不在 BIP39 词表中 — 请检查高亮的部分。",
@@ -436,6 +438,14 @@ export const zhCn: Bundle = {
     electrumNeedUrl: "请至少输入一个 Electrum 服务器 URL（tcp:// 或 ssl://）。",
     electrumBadUrl: "Electrum URL 必须以 tcp:// 或 ssl:// 开头 — 收到的是：{url}",
     validateServers: "验证服务器",
+    connRpcLocal: "RPC（本地）",
+    connRpcRemote: "RPC（远程）",
+    connElectrumLocal: "Electrum（本地）",
+    connElectrumRemote: "Electrum（远程）",
+    connRpcTip:
+      "此币种通过 RPC 与 Bitcoin Core 风格的节点通信；由节点的钱包为交换注资。",
+    connElectrumTip:
+      "此币种连接 Electrum 服务器 — 无需节点。钱包依托你的 Pact 种子。",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "不支持",
     unsupportedByEngineTip:
@@ -483,6 +493,8 @@ export const zhCn: Bundle = {
     receiveTitle: "接收 {sym}",
     receiveIntro:
       "来自你 pact 种子钱包的一个全新地址。发送到这里的币在确认后会计入余额。",
+    receiveIntroRpc:
+      "来自你节点钱包的一个全新地址。发送到这里的币在确认后会计入余额。",
     receiveFreshNote:
       "每次打开此对话框都会得到一个全新地址。旧地址仍然有效 — 新地址只是更有利于隐私。",
     sendTitle: "发送 {sym}",

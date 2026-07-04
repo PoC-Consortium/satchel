@@ -226,6 +226,8 @@ export const pl: Bundle = {
     enterBody:
       "Wpisuj każde słowo — uzupełniają się automatycznie w trakcie pisania — lub wklej całą frazę. Sprawdzamy ją, zanim przejdziesz dalej.",
     wordCount: "{n} słów",
+    wordCountHint:
+      "12 słów w zupełności wystarczy — to gorący portfel tranzytowy, a nie zimne przechowywanie. Wybierz 24, jeśli wolisz dłuższą frazę.",
     wordAria: "Słowo {n}",
     checkIncomplete: "Wpisz wszystkie {n} słów.",
     checkUnknown: "Niektóre słowa nie są na liście słów BIP39 — sprawdź podświetlone.",
@@ -436,6 +438,14 @@ export const pl: Bundle = {
     electrumNeedUrl: "Wpisz co najmniej jeden URL serwera Electrum (tcp:// lub ssl://).",
     electrumBadUrl: "URL-e Electrum muszą zaczynać się od tcp:// lub ssl:// — otrzymano: {url}",
     validateServers: "Zweryfikuj serwery",
+    connRpcLocal: "RPC (lokalny)",
+    connRpcRemote: "RPC (zdalny)",
+    connElectrumLocal: "Electrum (lokalny)",
+    connElectrumRemote: "Electrum (zdalny)",
+    connRpcTip:
+      "Ta moneta komunikuje się przez RPC z węzłem w stylu Bitcoin Core; swapy finansuje portfel węzła.",
+    connElectrumTip:
+      "Ta moneta łączy się z serwerami Electrum — bez węzła. Portfel żyje na Twoim seedzie Pact.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nieobsługiwane",
     unsupportedByEngineTip:
@@ -483,6 +493,8 @@ export const pl: Bundle = {
     receiveTitle: "Odbierz {sym}",
     receiveIntro:
       "Świeży adres z Twojego portfela na seedzie Pact. Monety wysłane tutaj pojawią się w saldzie po potwierdzeniu.",
+    receiveIntroRpc:
+      "Świeży adres z portfela Twojego węzła. Monety wysłane tutaj pojawią się w saldzie po potwierdzeniu.",
     receiveFreshNote:
       "Za każdym otwarciem tego okna dostajesz świeży adres. Stare adresy nadal działają — świeże są po prostu lepsze dla prywatności.",
     sendTitle: "Wyślij {sym}",

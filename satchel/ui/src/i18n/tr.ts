@@ -226,6 +226,8 @@ export const tr: Bundle = {
     enterBody:
       "Her sözcüğü yazın — yazdıkça otomatik tamamlanırlar — veya tüm ifadeyi yapıştırın. Devam etmeden önce kontrol ederiz.",
     wordCount: "{n} sözcük",
+    wordCountHint:
+      "12 sözcük fazlasıyla yeter — bu bir sıcak geçiş cüzdanıdır, soğuk depolama değil. Daha uzun ifadeyi tercih ediyorsanız 24'ü seçin.",
     wordAria: "Sözcük {n}",
     checkIncomplete: "{n} sözcüğün tamamını girin.",
     checkUnknown: "Bazı sözcükler BIP39 sözcük listesinde yok — vurgulananları kontrol edin.",
@@ -436,6 +438,14 @@ export const tr: Bundle = {
     electrumNeedUrl: "En az bir Electrum sunucu URL'si girin (tcp:// veya ssl://).",
     electrumBadUrl: "Electrum URL'leri tcp:// veya ssl:// ile başlamalı — gelen: {url}",
     validateServers: "Sunucuları doğrula",
+    connRpcLocal: "RPC (yerel)",
+    connRpcRemote: "RPC (uzak)",
+    connElectrumLocal: "Electrum (yerel)",
+    connElectrumRemote: "Electrum (uzak)",
+    connRpcTip:
+      "Bu coin, Bitcoin Core tarzı bir düğümle RPC üzerinden konuşur; takasları düğümün cüzdanı fonlar.",
+    connElectrumTip:
+      "Bu coin Electrum sunucularına bağlanır — düğüm yok. Cüzdan Pact seed'inizde yaşar.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Desteklenmiyor",
     unsupportedByEngineTip:
@@ -483,6 +493,8 @@ export const tr: Bundle = {
     receiveTitle: "{sym} al",
     receiveIntro:
       "Pact seed cüzdanınızdan taze bir adres. Buraya gönderilen coin'ler onaylandığında bakiyede görünür.",
+    receiveIntroRpc:
+      "Düğümünüzün cüzdanından taze bir adres. Buraya gönderilen coin'ler onaylandığında bakiyede görünür.",
     receiveFreshNote:
       "Bu pencereyi her açtığınızda taze bir adres alırsınız. Eski adresler çalışmaya devam eder — taze olanlar yalnızca gizlilik için daha iyidir.",
     sendTitle: "{sym} gönder",

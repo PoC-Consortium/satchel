@@ -226,6 +226,8 @@ export const nl: Bundle = {
     enterBody:
       "Typ elk woord — ze worden automatisch aangevuld terwijl je typt — of plak de hele zin. We controleren hem voordat je verdergaat.",
     wordCount: "{n} woorden",
+    wordCountHint:
+      "12 woorden is ruim voldoende — dit is een hot transit-wallet, geen cold storage. Kies 24 als je liever de langere zin hebt.",
     wordAria: "Woord {n}",
     checkIncomplete: "Voer alle {n} woorden in.",
     checkUnknown: "Sommige woorden staan niet in de BIP39-woordenlijst — controleer de gemarkeerde.",
@@ -436,6 +438,14 @@ export const nl: Bundle = {
     electrumNeedUrl: "Voer minstens één Electrum-server-URL in (tcp:// of ssl://).",
     electrumBadUrl: "Electrum-URL's moeten beginnen met tcp:// of ssl:// — kreeg: {url}",
     validateServers: "Servers valideren",
+    connRpcLocal: "RPC (lokaal)",
+    connRpcRemote: "RPC (extern)",
+    connElectrumLocal: "Electrum (lokaal)",
+    connElectrumRemote: "Electrum (extern)",
+    connRpcTip:
+      "Deze munt praat via RPC met een node in Bitcoin-Core-stijl; de wallet van de node fundt de swaps.",
+    connElectrumTip:
+      "Deze munt verbindt met Electrum-servers — geen node. De wallet leeft op je Pact-seed.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Niet ondersteund",
     unsupportedByEngineTip:
@@ -483,6 +493,8 @@ export const nl: Bundle = {
     receiveTitle: "{sym} ontvangen",
     receiveIntro:
       "Een vers adres uit je Pact-seed-wallet. Munten die hierheen gestuurd worden verschijnen in het saldo zodra ze bevestigd zijn.",
+    receiveIntroRpc:
+      "Een vers adres uit de wallet van je node. Munten die hierheen gestuurd worden verschijnen in het saldo zodra ze bevestigd zijn.",
     receiveFreshNote:
       "Elke keer dat je dit venster opent krijg je een vers adres. Oude adressen blijven werken — verse zijn alleen beter voor je privacy.",
     sendTitle: "{sym} versturen",

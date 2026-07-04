@@ -226,6 +226,8 @@ export const hi: Bundle = {
     enterBody:
       "हर शब्द टाइप करें — जैसे-जैसे आप बढ़ते हैं वे अपने आप पूरे होते हैं — या पूरा phrase पेस्ट करें। आगे बढ़ने से पहले हम इसे जाँचते हैं।",
     wordCount: "{n} शब्द",
+    wordCountHint:
+      "12 शब्द काफ़ी हैं — यह आवाजाही के लिए एक hot wallet है, cold storage नहीं। लंबा phrase पसंद हो तो 24 चुनें।",
     wordAria: "शब्द {n}",
     checkIncomplete: "सभी {n} शब्द दर्ज करें।",
     checkUnknown: "कुछ शब्द BIP39 wordlist में नहीं हैं — हाइलाइट किए गए शब्दों की जाँच करें।",
@@ -436,6 +438,14 @@ export const hi: Bundle = {
     electrumNeedUrl: "कम से कम एक Electrum सर्वर URL दर्ज करें (tcp:// या ssl://)।",
     electrumBadUrl: "Electrum URLs की शुरुआत tcp:// या ssl:// से होनी चाहिए — मिला: {url}",
     validateServers: "सर्वर सत्यापित करें",
+    connRpcLocal: "RPC (लोकल)",
+    connRpcRemote: "RPC (रिमोट)",
+    connElectrumLocal: "Electrum (लोकल)",
+    connElectrumRemote: "Electrum (रिमोट)",
+    connRpcTip:
+      "यह coin RPC के ज़रिए Bitcoin-Core-शैली के node से बात करता है; node का wallet स्वैप फंड करता है।",
+    connElectrumTip:
+      "यह coin Electrum सर्वरों से जुड़ता है — किसी node की ज़रूरत नहीं। यह wallet आपकी Pact seed पर रहता है।",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "असमर्थित",
     unsupportedByEngineTip:
@@ -483,6 +493,8 @@ export const hi: Bundle = {
     receiveTitle: "{sym} प्राप्त करें",
     receiveIntro:
       "आपके pact-seed wallet से एक नया पता। यहाँ भेजे गए coins कन्फ़र्म होते ही बैलेंस में दिखते हैं।",
+    receiveIntroRpc:
+      "आपके node के wallet से एक नया पता। यहाँ भेजे गए coins कन्फ़र्म होते ही बैलेंस में दिखते हैं।",
     receiveFreshNote:
       "हर बार जब आप यह डायलॉग खोलते हैं तो आपको एक नया पता मिलता है। पुराने पते काम करते रहते हैं — नए पते बस गोपनीयता के लिए बेहतर हैं।",
     sendTitle: "{sym} भेजें",

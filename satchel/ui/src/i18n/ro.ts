@@ -226,6 +226,8 @@ export const ro: Bundle = {
     enterBody:
       "Scrie fiecare cuvânt — se completează automat pe măsură ce avansezi — sau lipește întreaga frază. O verificăm înainte să continui.",
     wordCount: "{n} cuvinte",
+    wordCountHint:
+      "12 cuvinte sunt de ajuns — acesta este un portofel fierbinte de tranzit, nu stocare la rece. Alege 24 dacă preferi fraza mai lungă.",
     wordAria: "Cuvântul {n}",
     checkIncomplete: "Introdu toate cele {n} cuvinte.",
     checkUnknown: "Unele cuvinte nu sunt în lista BIP39 — verifică-le pe cele evidențiate.",
@@ -436,6 +438,14 @@ export const ro: Bundle = {
     electrumNeedUrl: "Introdu cel puțin un URL de server Electrum (tcp:// sau ssl://).",
     electrumBadUrl: "URL-urile Electrum trebuie să înceapă cu tcp:// sau ssl:// — primit: {url}",
     validateServers: "Validează serverele",
+    connRpcLocal: "RPC (local)",
+    connRpcRemote: "RPC (la distanță)",
+    connElectrumLocal: "Electrum (local)",
+    connElectrumRemote: "Electrum (la distanță)",
+    connRpcTip:
+      "Această monedă vorbește prin RPC cu un nod în stil Bitcoin Core; portofelul nodului finanțează swap-urile.",
+    connElectrumTip:
+      "Această monedă se conectează la servere Electrum — fără nod. Portofelul trăiește pe seed-ul tău Pact.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nesuportat",
     unsupportedByEngineTip:
@@ -483,6 +493,8 @@ export const ro: Bundle = {
     receiveTitle: "Primește {sym}",
     receiveIntro:
       "O adresă proaspătă din portofelul tău pe seed-ul Pact. Monedele trimise aici apar în sold odată confirmate.",
+    receiveIntroRpc:
+      "O adresă proaspătă din portofelul nodului tău. Monedele trimise aici apar în sold odată confirmate.",
     receiveFreshNote:
       "De fiecare dată când deschizi acest dialog primești o adresă proaspătă. Adresele vechi continuă să funcționeze — cele proaspete sunt doar mai bune pentru confidențialitate.",
     sendTitle: "Trimite {sym}",

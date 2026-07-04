@@ -226,6 +226,8 @@ export const id: Bundle = {
     enterBody:
       "Ketik tiap kata — terisi otomatis sambil Anda mengetik — atau tempel seluruh frasa. Kami memeriksanya sebelum Anda lanjut.",
     wordCount: "{n} kata",
+    wordCountHint:
+      "12 kata sudah lebih dari cukup — ini dompet transit panas, bukan penyimpanan dingin. Pilih 24 jika Anda lebih suka frasa yang lebih panjang.",
     wordAria: "Kata {n}",
     checkIncomplete: "Masukkan semua {n} kata.",
     checkUnknown: "Beberapa kata tidak ada di daftar kata BIP39 — periksa yang disorot.",
@@ -436,6 +438,14 @@ export const id: Bundle = {
     electrumNeedUrl: "Masukkan setidaknya satu URL server Electrum (tcp:// atau ssl://).",
     electrumBadUrl: "URL Electrum harus diawali tcp:// atau ssl:// — yang didapat: {url}",
     validateServers: "Validasi server",
+    connRpcLocal: "RPC (lokal)",
+    connRpcRemote: "RPC (jarak jauh)",
+    connElectrumLocal: "Electrum (lokal)",
+    connElectrumRemote: "Electrum (jarak jauh)",
+    connRpcTip:
+      "Koin ini berkomunikasi lewat RPC dengan node bergaya Bitcoin Core; dompet node yang mendanai swap.",
+    connElectrumTip:
+      "Koin ini terhubung ke server Electrum — tanpa node. Dompetnya hidup di seed Pact Anda.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Tidak didukung",
     unsupportedByEngineTip:
@@ -483,6 +493,8 @@ export const id: Bundle = {
     receiveTitle: "Terima {sym}",
     receiveIntro:
       "Alamat baru dari dompet seed pact Anda. Koin yang dikirim ke sini muncul di saldo setelah terkonfirmasi.",
+    receiveIntroRpc:
+      "Alamat baru dari dompet node Anda. Koin yang dikirim ke sini muncul di saldo setelah terkonfirmasi.",
     receiveFreshNote:
       "Setiap kali Anda membuka dialog ini, Anda mendapat alamat baru. Alamat lama tetap berfungsi — alamat baru hanya lebih baik untuk privasi.",
     sendTitle: "Kirim {sym}",

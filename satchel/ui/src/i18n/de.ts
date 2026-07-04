@@ -226,6 +226,8 @@ export const de: Bundle = {
     enterBody:
       "Tippe jedes Wort — sie vervollständigen sich automatisch — oder füge die ganze Phrase ein. Wir prüfen sie, bevor du fortfährst.",
     wordCount: "{n} Wörter",
+    wordCountHint:
+      "12 Wörter reichen völlig — das ist eine heiße Transit-Wallet, kein Cold Storage. Wähle 24, wenn du die längere Phrase bevorzugst.",
     wordAria: "Wort {n}",
     checkIncomplete: "Gib alle {n} Wörter ein.",
     checkUnknown: "Einige Wörter sind nicht in der BIP39-Wortliste — prüfe die markierten.",
@@ -436,6 +438,14 @@ export const de: Bundle = {
     electrumNeedUrl: "Gib mindestens eine Electrum-Server-URL ein (tcp:// oder ssl://).",
     electrumBadUrl: "Electrum-URLs müssen mit tcp:// oder ssl:// beginnen — erhalten: {url}",
     validateServers: "Server validieren",
+    connRpcLocal: "RPC (lokal)",
+    connRpcRemote: "RPC (entfernt)",
+    connElectrumLocal: "Electrum (lokal)",
+    connElectrumRemote: "Electrum (entfernt)",
+    connRpcTip:
+      "Dieser Coin spricht per RPC mit einer Node im Bitcoin-Core-Stil; die Wallet der Node finanziert die Swaps.",
+    connElectrumTip:
+      "Dieser Coin verbindet sich mit Electrum-Servern — ganz ohne Node. Die Wallet lebt auf deinem Pact-Seed.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nicht unterstützt",
     unsupportedByEngineTip:
@@ -483,6 +493,8 @@ export const de: Bundle = {
     receiveTitle: "{sym} empfangen",
     receiveIntro:
       "Eine frische Adresse aus deiner Pact-Seed-Wallet. Coins, die hierher gesendet werden, erscheinen im Guthaben, sobald sie bestätigt sind.",
+    receiveIntroRpc:
+      "Eine frische Adresse aus der Wallet deiner Node. Coins, die hierher gesendet werden, erscheinen im Guthaben, sobald sie bestätigt sind.",
     receiveFreshNote:
       "Jedes Mal, wenn du diesen Dialog öffnest, bekommst du eine frische Adresse. Alte Adressen funktionieren weiter — frische sind nur besser für die Privatsphäre.",
     sendTitle: "{sym} senden",

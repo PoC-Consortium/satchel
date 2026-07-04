@@ -226,6 +226,8 @@ export const cs: Bundle = {
     enterBody:
       "Pište každé slovo — během psaní se automaticky doplňují — nebo vložte celou frázi. Než budete pokračovat, zkontrolujeme ji.",
     wordCount: "{n} slov",
+    wordCountHint:
+      "12 slov bohatě stačí — toto je horká tranzitní peněženka, ne studené úložiště. Pokud dáváte přednost delší frázi, zvolte 24.",
     wordAria: "Slovo {n}",
     checkIncomplete: "Zadejte všech {n} slov.",
     checkUnknown: "Některá slova nejsou v seznamu slov BIP39 — zkontrolujte zvýrazněná.",
@@ -436,6 +438,14 @@ export const cs: Bundle = {
     electrumNeedUrl: "Zadejte alespoň jednu URL Electrum serveru (tcp:// nebo ssl://).",
     electrumBadUrl: "URL Electrum serverů musí začínat tcp:// nebo ssl:// — zadáno: {url}",
     validateServers: "Ověřit servery",
+    connRpcLocal: "RPC (lokální)",
+    connRpcRemote: "RPC (vzdálené)",
+    connElectrumLocal: "Electrum (lokální)",
+    connElectrumRemote: "Electrum (vzdálené)",
+    connRpcTip:
+      "Tato mince komunikuje přes RPC s uzlem typu Bitcoin Core; swapy financuje peněženka uzlu.",
+    connElectrumTip:
+      "Tato mince se připojuje k Electrum serverům — žádný uzel. Peněženka žije na vašem Pact seedu.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nepodporováno",
     unsupportedByEngineTip:
@@ -483,6 +493,8 @@ export const cs: Bundle = {
     receiveTitle: "Přijmout {sym}",
     receiveIntro:
       "Čerstvá adresa z vaší peněženky pact seedu. Mince sem poslané se po potvrzení objeví v zůstatku.",
+    receiveIntroRpc:
+      "Čerstvá adresa z peněženky vašeho uzlu. Mince sem poslané se po potvrzení objeví v zůstatku.",
     receiveFreshNote:
       "Při každém otevření tohoto dialogu dostanete čerstvou adresu. Staré adresy fungují dál — čerstvé jsou jen lepší pro soukromí.",
     sendTitle: "Odeslat {sym}",

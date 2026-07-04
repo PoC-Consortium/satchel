@@ -226,6 +226,8 @@ export const uk: Bundle = {
     enterBody:
       "Вводьте кожне слово — вони автодоповнюються по ходу — або вставте всю фразу. Ми перевіримо її, перш ніж ви продовжите.",
     wordCount: "{n} слів",
+    wordCountHint:
+      "12 слів цілком достатньо — це гарячий транзитний гаманець, а не холодне сховище. Оберіть 24, якщо вам більше до вподоби довша фраза.",
     wordAria: "Слово {n}",
     checkIncomplete: "Введіть усі {n} слів.",
     checkUnknown: "Деяких слів немає у словнику BIP39 — перевірте підсвічені.",
@@ -436,6 +438,14 @@ export const uk: Bundle = {
     electrumNeedUrl: "Введіть хоча б один URL сервера Electrum (tcp:// або ssl://).",
     electrumBadUrl: "URL Electrum мають починатися з tcp:// або ssl:// — отримано: {url}",
     validateServers: "Перевірити сервери",
+    connRpcLocal: "RPC (локальний)",
+    connRpcRemote: "RPC (віддалений)",
+    connElectrumLocal: "Electrum (локальний)",
+    connElectrumRemote: "Electrum (віддалений)",
+    connRpcTip:
+      "Ця монета спілкується з вузлом типу Bitcoin Core через RPC; свопи фінансує гаманець вузла.",
+    connElectrumTip:
+      "Ця монета підключається до серверів Electrum — без вузла. Гаманець живе на вашому Pact seed.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Не підтримується",
     unsupportedByEngineTip:
@@ -483,6 +493,8 @@ export const uk: Bundle = {
     receiveTitle: "Отримати {sym}",
     receiveIntro:
       "Свіжа адреса з вашого гаманця на Pact seed. Надіслані сюди монети з'являться в балансі після підтвердження.",
+    receiveIntroRpc:
+      "Свіжа адреса з гаманця вашого вузла. Надіслані сюди монети з'являться в балансі після підтвердження.",
     receiveFreshNote:
       "Щоразу, коли ви відкриваєте цей діалог, ви отримуєте свіжу адресу. Старі адреси продовжують працювати — свіжі просто кращі для приватності.",
     sendTitle: "Надіслати {sym}",

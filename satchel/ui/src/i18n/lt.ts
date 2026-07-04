@@ -226,6 +226,8 @@ export const lt: Bundle = {
     enterBody:
       "Įveskite kiekvieną žodį — jie automatiškai užbaigiami jums rašant — arba įklijuokite visą frazę. Prieš tęsiant ją patikriname.",
     wordCount: "{n} žodžių",
+    wordCountHint:
+      "12 žodžių visiškai pakanka — tai karšta tranzito piniginė, ne šaltoji saugykla. Rinkitės 24, jei norite ilgesnės frazės.",
     wordAria: "Žodis {n}",
     checkIncomplete: "Įveskite visus {n} žodžius.",
     checkUnknown: "Kai kurių žodžių nėra BIP39 žodžių sąraše — patikrinkite paryškintus.",
@@ -436,6 +438,14 @@ export const lt: Bundle = {
     electrumNeedUrl: "Įveskite bent vieną Electrum serverio URL (tcp:// arba ssl://).",
     electrumBadUrl: "Electrum URL turi prasidėti tcp:// arba ssl:// — gauta: {url}",
     validateServers: "Patikrinti serverius",
+    connRpcLocal: "RPC (vietinis)",
+    connRpcRemote: "RPC (nuotolinis)",
+    connElectrumLocal: "Electrum (vietinis)",
+    connElectrumRemote: "Electrum (nuotolinis)",
+    connRpcTip:
+      "Ši moneta bendrauja su Bitcoin-Core tipo mazgu per RPC; mainus finansuoja mazgo piniginė.",
+    connElectrumTip:
+      "Ši moneta jungiasi prie Electrum serverių — mazgo nereikia. Piniginė gyvena jūsų Pact sėkloje.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nepalaikoma",
     unsupportedByEngineTip:
@@ -483,6 +493,8 @@ export const lt: Bundle = {
     receiveTitle: "Gauti {sym}",
     receiveIntro:
       "Naujas adresas iš jūsų Pact sėklos piniginės. Čia atsiųstos monetos likutyje pasirodys, kai bus patvirtintos.",
+    receiveIntroRpc:
+      "Naujas adresas iš jūsų mazgo piniginės. Čia atsiųstos monetos likutyje pasirodys, kai bus patvirtintos.",
     receiveFreshNote:
       "Kaskart atidarę šį langą gausite naują adresą. Seni adresai veikia toliau — nauji tiesiog geresni privatumui.",
     sendTitle: "Siųsti {sym}",

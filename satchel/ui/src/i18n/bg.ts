@@ -226,6 +226,8 @@ export const bg: Bundle = {
     enterBody:
       "Въведете всяка дума — те се допълват автоматично, докато пишете — или поставете цялата фраза. Проверяваме я, преди да продължите.",
     wordCount: "{n} думи",
+    wordCountHint:
+      "12 думи са напълно достатъчни — това е горещ транзитен портфейл, а не студено съхранение. Изберете 24, ако предпочитате по-дългата фраза.",
     wordAria: "Дума {n}",
     checkIncomplete: "Въведете всичките {n} думи.",
     checkUnknown: "Някои думи не са в BIP39 списъка — проверете отбелязаните.",
@@ -436,6 +438,14 @@ export const bg: Bundle = {
     electrumNeedUrl: "Въведете поне един URL на Electrum сървър (tcp:// или ssl://).",
     electrumBadUrl: "Electrum URL адресите трябва да започват с tcp:// или ssl:// — получено: {url}",
     validateServers: "Валидирай сървърите",
+    connRpcLocal: "RPC (локален)",
+    connRpcRemote: "RPC (отдалечен)",
+    connElectrumLocal: "Electrum (локален)",
+    connElectrumRemote: "Electrum (отдалечен)",
+    connRpcTip:
+      "Тази монета говори с възел от типа Bitcoin Core през RPC; портфейлът на възела финансира суаповете.",
+    connElectrumTip:
+      "Тази монета се свързва с Electrum сървъри — без възел. Портфейлът живее на вашия Pact seed.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Неподдържана",
     unsupportedByEngineTip:
@@ -483,6 +493,8 @@ export const bg: Bundle = {
     receiveTitle: "Получи {sym}",
     receiveIntro:
       "Свеж адрес от портфейла ви на Pact seed. Монетите, изпратени тук, се появяват в баланса след потвърждение.",
+    receiveIntroRpc:
+      "Свеж адрес от портфейла на вашия възел. Монетите, изпратени тук, се появяват в баланса след потвърждение.",
     receiveFreshNote:
       "Всеки път, когато отворите този диалог, получавате свеж адрес. Старите адреси продължават да работят — свежите просто са по-добри за поверителността.",
     sendTitle: "Изпрати {sym}",

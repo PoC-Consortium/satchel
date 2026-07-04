@@ -226,6 +226,8 @@ export const ca: Bundle = {
     enterBody:
       "Escriu cada paraula — s'autocompleten a mesura que avances — o enganxa la frase sencera. La comprovem abans de continuar.",
     wordCount: "{n} paraules",
+    wordCountHint:
+      "Amb 12 paraules n'hi ha de sobres — aquesta és una cartera de trànsit calenta, no emmagatzematge en fred. Tria 24 si prefereixes la frase més llarga.",
     wordAria: "Paraula {n}",
     checkIncomplete: "Introdueix les {n} paraules.",
     checkUnknown: "Algunes paraules no són a la llista de paraules BIP39 — revisa les marcades.",
@@ -435,6 +437,14 @@ export const ca: Bundle = {
     electrumNeedUrl: "Introdueix almenys una URL de servidor Electrum (tcp:// o ssl://).",
     electrumBadUrl: "Les URL d'Electrum han de començar per tcp:// o ssl:// — s'ha rebut: {url}",
     validateServers: "Valida els servidors",
+    connRpcLocal: "RPC (local)",
+    connRpcRemote: "RPC (remot)",
+    connElectrumLocal: "Electrum (local)",
+    connElectrumRemote: "Electrum (remot)",
+    connRpcTip:
+      "Aquesta moneda parla amb un node tipus Bitcoin Core per RPC; la cartera del node finança els intercanvis.",
+    connElectrumTip:
+      "Aquesta moneda es connecta a servidors Electrum — sense node. La cartera viu a la teva llavor Pact.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "No compatible",
     unsupportedByEngineTip:
@@ -481,6 +491,8 @@ export const ca: Bundle = {
     receiveTitle: "Rep {sym}",
     receiveIntro:
       "Una adreça nova de la teva cartera de llavor Pact. Les monedes enviades aquí apareixen al saldo un cop confirmades.",
+    receiveIntroRpc:
+      "Una adreça nova de la cartera del teu node. Les monedes enviades aquí apareixen al saldo un cop confirmades.",
     receiveFreshNote:
       "Cada vegada que obres aquest diàleg obtens una adreça nova. Les adreces antigues continuen funcionant — les noves simplement són millors per a la privadesa.",
     sendTitle: "Envia {sym}",

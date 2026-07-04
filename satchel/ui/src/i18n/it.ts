@@ -226,6 +226,8 @@ export const it: Bundle = {
     enterBody:
       "Digita ogni parola — si auto-completano man mano — oppure incolla l'intera frase. La verifichiamo prima di continuare.",
     wordCount: "{n} parole",
+    wordCountHint:
+      "12 parole bastano e avanzano — questo è un wallet di transito caldo, non cold storage. Scegli 24 se preferisci la frase più lunga.",
     wordAria: "Parola {n}",
     checkIncomplete: "Inserisci tutte le {n} parole.",
     checkUnknown: "Alcune parole non sono nella wordlist BIP39 — controlla quelle evidenziate.",
@@ -435,6 +437,14 @@ export const it: Bundle = {
     electrumNeedUrl: "Inserisci almeno un URL di server Electrum (tcp:// o ssl://).",
     electrumBadUrl: "Gli URL Electrum devono iniziare con tcp:// o ssl:// — ricevuto: {url}",
     validateServers: "Valida i server",
+    connRpcLocal: "RPC (locale)",
+    connRpcRemote: "RPC (remoto)",
+    connElectrumLocal: "Electrum (locale)",
+    connElectrumRemote: "Electrum (remoto)",
+    connRpcTip:
+      "Questa coin parla con un nodo in stile Bitcoin Core via RPC; il wallet del nodo finanzia gli swap.",
+    connElectrumTip:
+      "Questa coin si collega ai server Electrum — nessun nodo. Il wallet vive sul tuo seed Pact.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Non supportata",
     unsupportedByEngineTip:
@@ -481,6 +491,8 @@ export const it: Bundle = {
     receiveTitle: "Ricevi {sym}",
     receiveIntro:
       "Un indirizzo nuovo dal tuo wallet del seed Pact. Le coin inviate qui compaiono nel saldo una volta confermate.",
+    receiveIntroRpc:
+      "Un indirizzo nuovo dal wallet del tuo nodo. Le coin inviate qui compaiono nel saldo una volta confermate.",
     receiveFreshNote:
       "Ogni volta che apri questa finestra ottieni un indirizzo nuovo. Gli indirizzi vecchi continuano a funzionare — quelli nuovi sono semplicemente migliori per la privacy.",
     sendTitle: "Invia {sym}",

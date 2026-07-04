@@ -226,6 +226,8 @@ export const ja: Bundle = {
     enterBody:
       "各単語を入力してください — 入力に応じてオートコンプリートされます — またはフレーズ全体を貼り付けてください。続行する前に検証します。",
     wordCount: "{n} 語",
+    wordCountHint:
+      "12 語で十分です — これはコールドストレージではなく、一時的な中継用のホットウォレットです。長いフレーズがよければ 24 語を選んでください。",
     wordAria: "単語 {n}",
     checkIncomplete: "{n} 語すべてを入力してください。",
     checkUnknown: "一部の単語が BIP39 のワードリストにありません — ハイライトされたものを確認してください。",
@@ -436,6 +438,14 @@ export const ja: Bundle = {
     electrumNeedUrl: "Electrum サーバーの URL を少なくとも 1 つ入力してください（tcp:// または ssl://）。",
     electrumBadUrl: "Electrum の URL は tcp:// または ssl:// で始まる必要があります — 入力値: {url}",
     validateServers: "サーバーを検証",
+    connRpcLocal: "RPC（ローカル）",
+    connRpcRemote: "RPC（リモート）",
+    connElectrumLocal: "Electrum（ローカル）",
+    connElectrumRemote: "Electrum（リモート）",
+    connRpcTip:
+      "このコインは Bitcoin Core 系のノードと RPC で通信します。スワップにはノードのウォレットが資金を入れます。",
+    connElectrumTip:
+      "このコインは Electrum サーバーに接続します — ノードは不要です。ウォレットはあなたの Pact シード上にあります。",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "非対応",
     unsupportedByEngineTip:
@@ -483,6 +493,8 @@ export const ja: Bundle = {
     receiveTitle: "{sym} を受け取る",
     receiveIntro:
       "pact シードウォレットからの新しいアドレスです。ここに送られたコインは、確認後に残高へ反映されます。",
+    receiveIntroRpc:
+      "ノードのウォレットからの新しいアドレスです。ここに送られたコインは、確認後に残高へ反映されます。",
     receiveFreshNote:
       "このダイアログを開くたびに新しいアドレスが発行されます。古いアドレスも引き続き使えます — 新しいアドレスの方がプライバシーに優れているだけです。",
     sendTitle: "{sym} を送る",
