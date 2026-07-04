@@ -15,6 +15,30 @@ use crate::{coins_file, CoinConn};
 /// Errors with a clear message when cookie/creds are missing — the setup form
 /// surfaces these at validate time.
 pub fn compose_chain_data(conn: &CoinConn, network: &str) -> Result<String> {
+    // Nodeless (epic #58): the pact-seed funding wallet has NO Core primary —
+    // the chain data is the Electrum URL list verbatim (pactd's engine
+    // dispatches to the bdk wallet when the first URL isn't http://). Nothing
+    // to recompose at launch (no cookie), so auth_method stays None and
+    // `effective_chain_data` uses the stored string as-is.
+    if conn.funding_wallet == "pact-seed" {
+        let urls: Vec<String> = conn
+            .extra_backends
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        anyhow::ensure!(
+            !urls.is_empty(),
+            "a nodeless coin needs at least one Electrum server URL"
+        );
+        for url in &urls {
+            anyhow::ensure!(
+                url.starts_with("tcp://") || url.starts_with("ssl://"),
+                "Electrum URLs must start with tcp:// or ssl:// — got {url:?}"
+            );
+        }
+        return Ok(urls.join(","));
+    }
     let host = conn.rpc_host.as_deref().unwrap_or("127.0.0.1").trim();
     let port = conn.rpc_port.context("an RPC port is required")?;
     let auth_method = conn.auth_method.as_deref().unwrap_or("cookie");
@@ -105,6 +129,29 @@ mod tests {
             wallet: Some("alice".into()),
             extra_backends: vec![],
         }
+    }
+
+    #[test]
+    fn composes_nodeless_pact_seed_as_electrum_only_list() {
+        // Nodeless (epic #58): funding_wallet "pact-seed" ⇒ chain_data is the
+        // Electrum URL list verbatim, no Core primary, whatever auth fields say.
+        let mut c = base("cookie");
+        c.funding_wallet = "pact-seed".into();
+        c.extra_backends = vec![
+            " tcp://127.0.0.1:19750 ".into(),
+            "ssl://electrum.example.org:50002".into(),
+        ];
+        let url = compose_chain_data(&c, "regtest").unwrap();
+        assert_eq!(
+            url,
+            "tcp://127.0.0.1:19750,ssl://electrum.example.org:50002"
+        );
+
+        // No URLs / a non-Electrum URL must refuse.
+        c.extra_backends = vec![];
+        assert!(compose_chain_data(&c, "regtest").is_err());
+        c.extra_backends = vec!["http://127.0.0.1:8332".into()];
+        assert!(compose_chain_data(&c, "regtest").is_err());
     }
 
     #[test]

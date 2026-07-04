@@ -545,6 +545,12 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 let wallet = blocking(app, move |e| Ok(e.coin_wallet(&wid)))
                     .await
                     .unwrap_or(None);
+                // Nodeless (Electrum-only, pact-seed bdk wallet) — the UI keys
+                // the send/receive/activity surface off this (epic #58).
+                let nid = def.id.to_string();
+                let nodeless = blocking(app, move |e| Ok(e.coin_nodeless(&nid)))
+                    .await
+                    .unwrap_or(false);
                 coins.push(json!({
                     "id": def.id,
                     "display_name": def.display_name,
@@ -559,6 +565,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                     "confirmations": confirmations,
                     "default_confirmations": default_confirmations,
                     "wallet": wallet,
+                    "nodeless": nodeless,
                 }));
             }
             Ok(json!({ "network": format!("{net:?}").to_lowercase(), "coins": coins }))
@@ -586,8 +593,12 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         "createseed" => {
             let passphrase = p.opt_str(0, "passphrase").filter(|s| !s.is_empty());
             let encrypted = passphrase.is_some();
-            let mnemonic =
-                blocking_mut(app, move |e| e.store.create_seed(passphrase.as_deref())).await?;
+            // Optional word count (12 default | 24) — phoenix parity.
+            let words = p.opt_u64(1, "words").unwrap_or(12) as usize;
+            let mnemonic = blocking_mut(app, move |e| {
+                e.store.create_seed(passphrase.as_deref(), words)
+            })
+            .await?;
             kick_nostr(app);
             // The mnemonic is returned exactly once, for the user to back up.
             Ok(json!({ "mnemonic": mnemonic, "encrypted": encrypted }))
@@ -595,7 +606,9 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         // Generate a fresh mnemonic WITHOUT persisting it — the onboarding flow
         // shows + confirms it, then commits via `importseed`. Read-only.
         "generateseed" => {
-            let mnemonic = blocking(app, |e| e.store.generate_mnemonic()).await?;
+            // Optional word count (12 default | 24) — phoenix parity.
+            let words = p.opt_u64(0, "words").unwrap_or(12) as usize;
+            let mnemonic = blocking(app, move |e| e.store.generate_mnemonic(words)).await?;
             Ok(json!({ "mnemonic": mnemonic }))
         }
         "importseed" => {
@@ -1057,6 +1070,17 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             })
             .await?;
             Ok(json!({ "txid": txid }))
+        }
+        "listtransactions" => {
+            // Activity feed of the nodeless wallet (design doc §4): newest
+            // first, each entry txid/direction/amount/fee/confirmations/time.
+            // Core-backed coins refuse (their wallet stays read-only here).
+            let chain = p.str(0, "chain")?;
+            let txs = blocking(app, move |e| {
+                e.wallet_transactions(net, &parse_coin(&chain)?)
+            })
+            .await?;
+            Ok(json!({ "transactions": txs }))
         }
         other => bail!("unknown method '{other}'"),
     }

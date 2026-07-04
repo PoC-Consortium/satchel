@@ -226,6 +226,8 @@ export const id: Bundle = {
     enterBody:
       "Ketik tiap kata — terisi otomatis sambil Anda mengetik — atau tempel seluruh frasa. Kami memeriksanya sebelum Anda lanjut.",
     wordCount: "{n} kata",
+    wordCountHint:
+      "12 kata sudah lebih dari cukup — ini dompet transit panas, bukan penyimpanan dingin. Pilih 24 jika Anda lebih suka frasa yang lebih panjang.",
     wordAria: "Kata {n}",
     checkIncomplete: "Masukkan semua {n} kata.",
     checkUnknown: "Beberapa kata tidak ada di daftar kata BIP39 — periksa yang disorot.",
@@ -423,6 +425,27 @@ export const id: Bundle = {
     validateFirst: "Validasi node sebelum menyimpan.",
     savingReconnecting: "Menyimpan & menyambung ulang…",
     connected: "{coin} terhubung",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "Jenis koneksi",
+    modeNode: "Node Anda sendiri",
+    modeNodeDesc: "Core RPC — dompet node yang mendanai swap. Kedaulatan maksimum.",
+    modeNodeless: "Electrum",
+    modeNodelessDesc:
+      "Tidak perlu node: data chain datang dari server Electrum dan dompetnya hidup di seed Pact Anda.",
+    electrumUrlsLabel: "Server Electrum",
+    electrumUrlsHelp:
+      "Satu per baris: tcp://host:port atau ssl://host:port. Mainnet membutuhkan setidaknya dua server independen sebagai pemeriksa silang pandangan chain.",
+    electrumNeedUrl: "Masukkan setidaknya satu URL server Electrum (tcp:// atau ssl://).",
+    electrumBadUrl: "URL Electrum harus diawali tcp:// atau ssl:// — yang didapat: {url}",
+    validateServers: "Validasi server",
+    connRpcLocal: "RPC (lokal)",
+    connRpcRemote: "RPC (jarak jauh)",
+    connElectrumLocal: "Electrum (lokal)",
+    connElectrumRemote: "Electrum (jarak jauh)",
+    connRpcTip:
+      "Koin ini berkomunikasi lewat RPC dengan node bergaya Bitcoin Core; dompet node yang mendanai swap.",
+    connElectrumTip:
+      "Koin ini terhubung ke server Electrum — tanpa node. Dompetnya hidup di seed Pact Anda.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Tidak didukung",
     unsupportedByEngineTip:
@@ -456,6 +479,46 @@ export const id: Bundle = {
     walletDefaultHint:
       "Tidak ada dompet yang diatur untuk koin ini, jadi RPC memakai dompet bawaan node. Atur satu di Pengaturan → Koin untuk mencakupkan setiap panggilan ke dompet tertentu.",
     balanceLabel: "Saldo {symbol}",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "dompet seed pact",
+    pactSeedHint:
+      "Koin ini berjalan tanpa node: dompetnya hidup di seed Pact Anda, disinkronkan dari server Electrum — tidak perlu node. Kirim, terima, dan riwayat semuanya ada di sini.",
+    receive: "Terima",
+    send: "Kirim",
+    activity: "Aktivitas",
+    copy: "Salin",
+    copied: "Tersalin",
+    close: "Tutup",
+    refresh: "Segarkan",
+    receiveTitle: "Terima {sym}",
+    receiveIntro:
+      "Alamat baru dari dompet seed pact Anda. Koin yang dikirim ke sini muncul di saldo setelah terkonfirmasi.",
+    receiveIntroRpc:
+      "Alamat baru dari dompet node Anda. Koin yang dikirim ke sini muncul di saldo setelah terkonfirmasi.",
+    receiveFreshNote:
+      "Setiap kali Anda membuka dialog ini, Anda mendapat alamat baru. Alamat lama tetap berfungsi — alamat baru hanya lebih baik untuk privasi.",
+    sendTitle: "Kirim {sym}",
+    sendIntro: "Dapat dibelanjakan: {balance} {sym}.",
+    sendAddressLabel: "Alamat {sym} penerima",
+    sendAmountLabel: "Jumlah",
+    sendNeedAddress: "Masukkan alamat penerima.",
+    sendNeedAmount: "Masukkan jumlah.",
+    sendOverBalance: "Melebihi saldo yang dapat dibelanjakan.",
+    sendFeeNote:
+      "Biaya jaringan ditambahkan di atasnya, dipilih otomatis dari pasar biaya terkini.",
+    sendBroadcast: "Terkirim — {txid}… sedang dalam perjalanan ({sym}).",
+    sendConfirm: "Kirim",
+    activityTitle: "Aktivitas {sym}",
+    activityEmpty: "Belum ada apa-apa — terima koin atau selesaikan swap dan itu akan muncul di sini.",
+    activityWhen: "Kapan",
+    activityDirection: "Arah",
+    activityAmount: "Jumlah ({sym})",
+    activityFee: "Biaya",
+    activityConfs: "Konfirmasi",
+    activityTxid: "Transaksi",
+    activityPending: "tertunda",
+    activitySent: "Terkirim",
+    activityReceived: "Diterima",
   },
   corkboard: {
     noBoardTitle: "Tidak ada Corkboard terhubung",

@@ -234,6 +234,8 @@ export const en = {
     enterBody:
       "Type each word — they autocomplete as you go — or paste the whole phrase. We check it before you continue.",
     wordCount: "{n} words",
+    wordCountHint:
+      "12 words is plenty — this is a hot transit wallet, not cold storage. Pick 24 if you prefer the longer phrase.",
     wordAria: "Word {n}",
     checkIncomplete: "Enter all {n} words.",
     checkUnknown: "Some words aren't in the BIP39 wordlist — check the highlighted ones.",
@@ -437,6 +439,29 @@ export const en = {
     validateFirst: "Validate the node before saving.",
     savingReconnecting: "Saving & reconnecting…",
     connected: "{coin} connected",
+    // Electrum connection mode (epic #58) — "nodeless" is internal wording,
+    // the UI says RPC vs Electrum (user decision 2026-07-04).
+    modeLabel: "Connection type",
+    modeNode: "Your own node",
+    modeNodeDesc: "Core RPC — the node's wallet funds swaps. Maximum sovereignty.",
+    modeNodeless: "Electrum",
+    modeNodelessDesc:
+      "No node needed: chain data comes from Electrum servers and the wallet lives on your Pact seed.",
+    // Connection-kind chip on the coin card: transport + locality.
+    connRpcLocal: "RPC (local)",
+    connRpcRemote: "RPC (remote)",
+    connElectrumLocal: "Electrum (local)",
+    connElectrumRemote: "Electrum (remote)",
+    connRpcTip:
+      "This coin talks to a Bitcoin-Core-style node over RPC; the node's wallet funds swaps.",
+    connElectrumTip:
+      "This coin connects to Electrum servers — no node. The wallet lives on your Pact seed.",
+    electrumUrlsLabel: "Electrum servers",
+    electrumUrlsHelp:
+      "One per line: tcp://host:port or ssl://host:port. Mainnet requires at least two independent servers as cross-checking chain views.",
+    electrumNeedUrl: "Enter at least one Electrum server URL (tcp:// or ssl://).",
+    electrumBadUrl: "Electrum URLs must start with tcp:// or ssl:// — got: {url}",
+    validateServers: "Validate servers",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Unsupported",
     unsupportedByEngineTip:
@@ -470,6 +495,45 @@ export const en = {
     walletDefaultHint:
       "No wallet set for this coin, so RPCs use the node's default wallet. Set one in Settings → Coins to scope every call to a specific wallet.",
     balanceLabel: "{symbol} balance",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "pact seed wallet",
+    pactSeedHint:
+      "This coin runs nodeless: its wallet lives on your Pact seed, synced from Electrum servers — no node required. Send, receive and history live right here.",
+    receive: "Receive",
+    send: "Send",
+    activity: "Activity",
+    copy: "Copy",
+    copied: "Copied",
+    close: "Close",
+    refresh: "Refresh",
+    receiveTitle: "Receive {sym}",
+    receiveIntro:
+      "A fresh address from your pact-seed wallet. Coins sent here appear in the balance once confirmed.",
+    receiveIntroRpc:
+      "A fresh address from your node's wallet. Coins sent here appear in the balance once confirmed.",
+    receiveFreshNote:
+      "Every time you open this dialog you get a fresh address. Old addresses keep working — fresh ones are just better for privacy.",
+    sendTitle: "Send {sym}",
+    sendIntro: "Spendable: {balance} {sym}.",
+    sendAddressLabel: "Recipient {sym} address",
+    sendAmountLabel: "Amount",
+    sendNeedAddress: "Enter the recipient address.",
+    sendNeedAmount: "Enter an amount.",
+    sendOverBalance: "More than the spendable balance.",
+    sendFeeNote: "The network fee is added on top, picked automatically from the live fee market.",
+    sendBroadcast: "Sent — {txid}… is on its way ({sym}).",
+    sendConfirm: "Send",
+    activityTitle: "{sym} activity",
+    activityEmpty: "Nothing yet — receive coins or complete a swap and it shows up here.",
+    activityWhen: "When",
+    activityDirection: "Direction",
+    activityAmount: "Amount ({sym})",
+    activityFee: "Fee",
+    activityConfs: "Confs",
+    activityTxid: "Transaction",
+    activityPending: "pending",
+    activitySent: "Sent",
+    activityReceived: "Received",
   },
   corkboard: {
     noBoardTitle: "No Corkboard connected",
@@ -746,11 +810,73 @@ export const en = {
   },
 };
 
-// `progress.funding` (#3) is OPTIONAL in Bundle so a new phase label can ship in
-// en.ts without re-translating all 26 bundles at once — a locale missing it falls
-// back to English at runtime (see the i18n index `t`). Translators fill it in later.
+// `progress.funding` (#3) and the nodeless-wallet keys (epic #58) are OPTIONAL
+// in Bundle so new copy can ship in en.ts without re-translating all 26 bundles
+// at once — a locale missing a key falls back to English at runtime (see the
+// i18n index `t`). Translators fill them in later.
 type EnBundle = typeof en;
-export type Bundle = Omit<EnBundle, "progress"> & {
-  progress: Omit<EnBundle["progress"], "funding"> &
-    Partial<Pick<EnBundle["progress"], "funding">>;
+
+/** Namespace with the given keys made optional (English-fallback at runtime). */
+type WithOptional<NS, K extends keyof NS> = Omit<NS, K> & Partial<Pick<NS, K>>;
+
+/** Nodeless-wallet copy shipped 2026-07 (epic #58) — optional until the next
+ *  full translation pass. */
+type NewWalletKeys =
+  | "pactSeed"
+  | "pactSeedHint"
+  | "receive"
+  | "send"
+  | "activity"
+  | "copy"
+  | "copied"
+  | "close"
+  | "refresh"
+  | "receiveTitle"
+  | "receiveIntro"
+  | "receiveIntroRpc"
+  | "receiveFreshNote"
+  | "sendTitle"
+  | "sendIntro"
+  | "sendAddressLabel"
+  | "sendAmountLabel"
+  | "sendNeedAddress"
+  | "sendNeedAmount"
+  | "sendOverBalance"
+  | "sendFeeNote"
+  | "sendBroadcast"
+  | "sendConfirm"
+  | "activityTitle"
+  | "activityEmpty"
+  | "activityWhen"
+  | "activityDirection"
+  | "activityAmount"
+  | "activityFee"
+  | "activityConfs"
+  | "activityTxid"
+  | "activityPending"
+  | "activitySent"
+  | "activityReceived";
+type NewCoinKeys =
+  | "modeLabel"
+  | "modeNode"
+  | "modeNodeDesc"
+  | "modeNodeless"
+  | "modeNodelessDesc"
+  | "electrumUrlsLabel"
+  | "electrumUrlsHelp"
+  | "electrumNeedUrl"
+  | "electrumBadUrl"
+  | "validateServers"
+  | "connRpcLocal"
+  | "connRpcRemote"
+  | "connElectrumLocal"
+  | "connElectrumRemote"
+  | "connRpcTip"
+  | "connElectrumTip";
+
+export type Bundle = Omit<EnBundle, "progress" | "wallets" | "coins" | "seed"> & {
+  progress: WithOptional<EnBundle["progress"], "funding">;
+  wallets: WithOptional<EnBundle["wallets"], NewWalletKeys>;
+  coins: WithOptional<EnBundle["coins"], NewCoinKeys>;
+  seed: WithOptional<EnBundle["seed"], "wordCountHint">;
 };

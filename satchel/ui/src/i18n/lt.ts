@@ -226,6 +226,8 @@ export const lt: Bundle = {
     enterBody:
       "Įveskite kiekvieną žodį — jie automatiškai užbaigiami jums rašant — arba įklijuokite visą frazę. Prieš tęsiant ją patikriname.",
     wordCount: "{n} žodžių",
+    wordCountHint:
+      "12 žodžių visiškai pakanka — tai karšta tranzito piniginė, ne šaltoji saugykla. Rinkitės 24, jei norite ilgesnės frazės.",
     wordAria: "Žodis {n}",
     checkIncomplete: "Įveskite visus {n} žodžius.",
     checkUnknown: "Kai kurių žodžių nėra BIP39 žodžių sąraše — patikrinkite paryškintus.",
@@ -423,6 +425,27 @@ export const lt: Bundle = {
     validateFirst: "Prieš įrašydami patikrinkite mazgą.",
     savingReconnecting: "Įrašoma ir prisijungiama iš naujo…",
     connected: "{coin} prijungta",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "Ryšio tipas",
+    modeNode: "Jūsų pačių mazgas",
+    modeNodeDesc: "Core RPC — mazgo piniginė finansuoja mainus. Didžiausias suverenumas.",
+    modeNodeless: "Electrum",
+    modeNodelessDesc:
+      "Mazgo nereikia: grandinės duomenys gaunami iš Electrum serverių, o piniginė gyvena jūsų Pact sėkloje.",
+    electrumUrlsLabel: "Electrum serveriai",
+    electrumUrlsHelp:
+      "Po vieną eilutėje: tcp://host:port arba ssl://host:port. Mainnet reikalauja bent dviejų nepriklausomų serverių, kurie kryžmiškai tikrina grandinės vaizdą.",
+    electrumNeedUrl: "Įveskite bent vieną Electrum serverio URL (tcp:// arba ssl://).",
+    electrumBadUrl: "Electrum URL turi prasidėti tcp:// arba ssl:// — gauta: {url}",
+    validateServers: "Patikrinti serverius",
+    connRpcLocal: "RPC (vietinis)",
+    connRpcRemote: "RPC (nuotolinis)",
+    connElectrumLocal: "Electrum (vietinis)",
+    connElectrumRemote: "Electrum (nuotolinis)",
+    connRpcTip:
+      "Ši moneta bendrauja su Bitcoin-Core tipo mazgu per RPC; mainus finansuoja mazgo piniginė.",
+    connElectrumTip:
+      "Ši moneta jungiasi prie Electrum serverių — mazgo nereikia. Piniginė gyvena jūsų Pact sėkloje.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nepalaikoma",
     unsupportedByEngineTip:
@@ -456,6 +479,45 @@ export const lt: Bundle = {
     walletDefaultHint:
       "Šiai monetai nenustatyta jokia piniginė, todėl RPC naudoja mazgo numatytąją piniginę. Nustatykite ją skiltyje Nustatymai → Monetos, kad kiekvienas iškvietimas būtų apribotas konkrečiai piniginei.",
     balanceLabel: "{symbol} likutis",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "Pact sėklos piniginė",
+    pactSeedHint:
+      "Ši moneta veikia be mazgo: jos piniginė gyvena jūsų Pact sėkloje ir sinchronizuojama iš Electrum serverių — mazgo nereikia. Siuntimas, gavimas ir istorija yra čia pat.",
+    receive: "Gauti",
+    send: "Siųsti",
+    activity: "Veikla",
+    copy: "Kopijuoti",
+    copied: "Nukopijuota",
+    close: "Uždaryti",
+    refresh: "Atnaujinti",
+    receiveTitle: "Gauti {sym}",
+    receiveIntro:
+      "Naujas adresas iš jūsų Pact sėklos piniginės. Čia atsiųstos monetos likutyje pasirodys, kai bus patvirtintos.",
+    receiveIntroRpc:
+      "Naujas adresas iš jūsų mazgo piniginės. Čia atsiųstos monetos likutyje pasirodys, kai bus patvirtintos.",
+    receiveFreshNote:
+      "Kaskart atidarę šį langą gausite naują adresą. Seni adresai veikia toliau — nauji tiesiog geresni privatumui.",
+    sendTitle: "Siųsti {sym}",
+    sendIntro: "Išleidžiama: {balance} {sym}.",
+    sendAddressLabel: "Gavėjo {sym} adresas",
+    sendAmountLabel: "Suma",
+    sendNeedAddress: "Įveskite gavėjo adresą.",
+    sendNeedAmount: "Įveskite sumą.",
+    sendOverBalance: "Daugiau nei išleidžiamas likutis.",
+    sendFeeNote: "Tinklo mokestis pridedamas papildomai ir parenkamas automatiškai pagal esamą mokesčių rinką.",
+    sendBroadcast: "Išsiųsta — {txid}… jau kelyje ({sym}).",
+    sendConfirm: "Siųsti",
+    activityTitle: "{sym} veikla",
+    activityEmpty: "Kol kas nieko — gaukite monetų arba užbaikite mainus, ir tai pasirodys čia.",
+    activityWhen: "Kada",
+    activityDirection: "Kryptis",
+    activityAmount: "Suma ({sym})",
+    activityFee: "Mokestis",
+    activityConfs: "Patvirtinimai",
+    activityTxid: "Transakcija",
+    activityPending: "laukiama",
+    activitySent: "Išsiųsta",
+    activityReceived: "Gauta",
   },
   corkboard: {
     noBoardTitle: "Neprijungta jokia Corkboard",

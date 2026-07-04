@@ -79,6 +79,26 @@ pub struct TxOutInfo {
     pub confirmations: u64,
 }
 
+/// One entry of the nodeless wallet's activity feed (`listtransactions`,
+/// design doc §4): direction + net amount from the wallet's point of view.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct WalletTxInfo {
+    pub txid: String,
+    /// `"sent"` or `"received"` — the wallet's NET direction. A self-transfer
+    /// nets to a pure fee payment and reads as `"sent"` with `amount_sat` 0.
+    pub direction: String,
+    /// Net value moved, excluding the fee on sends: what the recipient got
+    /// (sent) or what landed in our keychains (received).
+    pub amount_sat: u64,
+    /// `None` when the wallet doesn't own every input (a receive — the fee was
+    /// paid by the sender and isn't ours to report).
+    pub fee_sat: Option<u64>,
+    pub confirmations: u64,
+    /// Block time for confirmed txs, first-seen time for mempool ones. `None`
+    /// only for a built-but-unbroadcast funding awaiting its two-phase release.
+    pub timestamp: Option<u64>,
+}
+
 pub trait ChainBackend {
     fn params(&self) -> &ChainParams;
 
@@ -196,6 +216,27 @@ pub trait ChainBackend {
         _amount_sat: u64,
     ) -> Result<(String, u32, String)> {
         bail!("this backend cannot build funding transactions without broadcasting")
+    }
+
+    /// Release the input reservation of a [`Self::wallet_build_funding`] tx that
+    /// will NEVER be broadcast (the swap went terminal before its two-phase
+    /// broadcast). `tx_hex` is the exact signed tx the build returned. Without
+    /// this, the built tx's inputs stay reserved forever — Core keeps them in
+    /// `lockunspent` until a node restart, and the bdk wallet persists the
+    /// phantom unbroadcast tx across restarts. Callers gate on the tx being
+    /// absent from the chain AND our own broadcast flag; implementations may
+    /// add their own refusal for an on-chain tx. Default: no-op (chain-only
+    /// backends never built anything).
+    fn wallet_cancel_funding(&self, _tx_hex: &str) -> Result<()> {
+        Ok(())
+    }
+
+    /// The wallet's transaction history, newest first — the activity feed behind
+    /// the `listtransactions` RPC (design doc §4). Only the nodeless bdk wallet
+    /// serves this (Core-backed coins stay read-only in Satchel by design), so
+    /// the default refuses.
+    fn wallet_transactions(&self) -> Result<Vec<WalletTxInfo>> {
+        bail!("wallet activity requires a nodeless (Electrum-backed) coin")
     }
 
     /// Whether the node's wallet is encrypted AND currently locked — it can read
@@ -651,6 +692,26 @@ impl ChainBackend for CoreRpcBackend {
         Ok((tx.compute_txid().to_string(), vout, signed_hex))
     }
 
+    fn wallet_cancel_funding(&self, tx_hex: &str) -> Result<()> {
+        // Undo wallet_build_funding's `lockUnspents`: unlock exactly the built
+        // tx's inputs. Per-input and error-tolerant — an input already unlocked
+        // (node restarted; Core's locks are memory-only) must not fail the
+        // cancel of the rest.
+        let tx: Transaction = bitcoin::consensus::encode::deserialize(&hex::decode(tx_hex)?)
+            .context("decode built funding tx for cancel")?;
+        for input in &tx.input {
+            let op = &input.previous_output;
+            let _ = self.rpc.call(
+                "lockunspent",
+                &[
+                    json!(true),
+                    json!([{ "txid": op.txid.to_string(), "vout": op.vout }]),
+                ],
+            );
+        }
+        Ok(())
+    }
+
     fn wallet_balance(&self) -> Result<u64> {
         let balance = self.rpc.call("getbalance", &[])?;
         let coins = balance.as_f64().context("getbalance: non-numeric")?;
@@ -778,9 +839,9 @@ impl ChainBackend for CoreRpcBackend {
 }
 
 /// Chain-data backend speaking the Electrum protocol — the same client
-/// for BTC (any public Electrum server) and PoCX (`electrs-pocx`, which
-/// serves Electrum RPC alongside the Esplora REST API used by the
-/// explorer).
+/// for BTC (any public Electrum server) and PoCX (`electrs-pocx`, the
+/// dedicated Electrum server; the explorer's indexer
+/// `esplora-electrs-pocx` also serves Electrum RPC).
 ///
 /// Chain data only: it has no wallet, so it cannot be the primary backend
 /// (funding and sweep addresses come from a Core-RPC wallet URL).
@@ -812,7 +873,7 @@ impl ElectrumBackend {
 
     /// Electrum addresses outputs by the SHA256 of the scriptPubKey,
     /// reversed (display order).
-    fn scripthash(spk: &ScriptBuf) -> String {
+    pub(crate) fn scripthash(spk: &ScriptBuf) -> String {
         use bitcoin::hashes::{sha256, Hash};
         let mut digest = sha256::Hash::hash(spk.as_bytes()).to_byte_array();
         digest.reverse();
@@ -820,7 +881,7 @@ impl ElectrumBackend {
     }
 
     /// (height, raw tip header) from headers.subscribe.
-    fn tip(&self) -> Result<(u64, Vec<u8>)> {
+    pub(crate) fn tip(&self) -> Result<(u64, Vec<u8>)> {
         let tip = self.raw("blockchain.headers.subscribe", vec![])?;
         let height = tip["height"]
             .as_u64()
@@ -837,7 +898,7 @@ impl ElectrumBackend {
         }
     }
 
-    fn get_raw_tx(&self, txid: &str) -> Result<Transaction> {
+    pub(crate) fn get_raw_tx(&self, txid: &str) -> Result<Transaction> {
         let hex_tx = self.raw(
             "blockchain.transaction.get",
             vec![electrum_client::Param::String(txid.into())],
@@ -846,7 +907,23 @@ impl ElectrumBackend {
         bitcoin::consensus::encode::deserialize(&bytes).context("transaction.get: bad tx")
     }
 
-    fn history(&self, spk: &ScriptBuf) -> Result<Vec<(String, i64)>> {
+    /// (block hash hex, header timestamp) at `height` — raw header bytes
+    /// hashed via [`ChainParams::header_hash`] (PoCX 286-byte headers safe).
+    /// The nodeless wallet's chain source uses this for bdk anchors and
+    /// checkpoints.
+    pub(crate) fn header_at(&self, height: u64) -> Result<(String, u32)> {
+        let raw = self.raw(
+            "blockchain.block.header",
+            vec![electrum_client::Param::Usize(height as usize)],
+        )?;
+        let raw = hex::decode(raw.as_str().context("block.header: non-string")?)?;
+        Ok((
+            self.params.header_hash(&raw)?,
+            self.params.header_time(&raw)?,
+        ))
+    }
+
+    pub(crate) fn history(&self, spk: &ScriptBuf) -> Result<Vec<(String, i64)>> {
         let entries = self.raw(
             "blockchain.scripthash.get_history",
             vec![electrum_client::Param::String(Self::scripthash(spk))],
@@ -872,6 +949,56 @@ impl ChainBackend for ElectrumBackend {
     }
 
     fn verify_chain(&self) -> Result<()> {
+        // Capability handshake first. Everything we call afterwards is
+        // MANDATORY protocol-1.4 surface (scripthash history/listunspent,
+        // headers, transaction get/broadcast, estimatefee), so there is no
+        // per-method probing — the three real risks are an old protocol, a
+        // PRUNED server (a restored seed's full scan would silently miss
+        // history), and the wrong chain. `server.version` also matters for
+        // politeness: some public servers drop clients that skip negotiation.
+        let ver = self.raw(
+            "server.version",
+            vec![
+                electrum_client::Param::String("satchel".into()),
+                electrum_client::Param::String("1.4".into()),
+            ],
+        )?;
+        let proto = ver
+            .as_array()
+            .and_then(|a| a.get(1))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        anyhow::ensure!(
+            proto.parse::<f32>().map(|p| p >= 1.4).unwrap_or(false),
+            "Electrum server negotiated protocol {proto:?} — need 1.4+ \
+             (server: {})",
+            ver.as_array()
+                .and_then(|a| a.first())
+                .and_then(|v| v.as_str())
+                .unwrap_or("?")
+        );
+        // features: strict where advertised, lenient where absent.
+        if let Ok(features) = self.raw("server.features", vec![]) {
+            if let Some(genesis) = features["genesis_hash"].as_str() {
+                anyhow::ensure!(
+                    genesis == self.params.genesis_hash,
+                    "Electrum server advertises the wrong chain: genesis \
+                     {genesis}, expected {} ({} {:?})",
+                    self.params.genesis_hash,
+                    self.params.coin_id,
+                    self.params.network
+                );
+            }
+            let pruning = &features["pruning"];
+            anyhow::ensure!(
+                pruning.is_null() || pruning.as_u64() == Some(0),
+                "Electrum server is PRUNED (keeps {} blocks) — a pruned server \
+                 cannot serve full wallet history; use an unpruned one",
+                pruning
+            );
+        }
+        // Deep genesis check: fetch header 0 and hash it OURSELVES — validates
+        // both the chain and our (PoCX-aware) header parsing on this server.
         let raw = self.raw(
             "blockchain.block.header",
             vec![electrum_client::Param::Usize(0)],
@@ -1128,6 +1255,15 @@ impl MultiBackend {
         Ok(Self { backends })
     }
 
+    /// Assemble from prebuilt backends — the nodeless path builds its own
+    /// primary (a `wallet_bdk::BdkWalletBackend`) before the remaining
+    /// Electrum views join (docs/NODELESS_WALLET.md D5). `backends[0]` is
+    /// the primary, exactly as with [`MultiBackend::new`].
+    pub fn from_backends(backends: Vec<Box<dyn ChainBackend>>) -> Result<Self> {
+        anyhow::ensure!(!backends.is_empty(), "no backends given");
+        Ok(Self { backends })
+    }
+
     fn primary(&self) -> &dyn ChainBackend {
         self.backends[0].as_ref()
     }
@@ -1312,6 +1448,14 @@ impl ChainBackend for MultiBackend {
     ) -> Result<(String, u32, String)> {
         // Wallet op: the primary (Core) backend owns the funding UTXOs.
         self.primary().wallet_build_funding(address, amount_sat)
+    }
+
+    fn wallet_cancel_funding(&self, tx_hex: &str) -> Result<()> {
+        self.primary().wallet_cancel_funding(tx_hex)
+    }
+
+    fn wallet_transactions(&self) -> Result<Vec<WalletTxInfo>> {
+        self.primary().wallet_transactions()
     }
 
     fn wallet_balance(&self) -> Result<u64> {

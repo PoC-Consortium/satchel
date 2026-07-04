@@ -52,9 +52,25 @@ and connect two coins as below.
 
 ## The connection form
 
-Setting up a coin means telling Satchel **where your node is** and **how to log
-in to it**. This is the form that does it. It's filled in with sensible defaults,
-so often you'll only change a field or two.
+The first choice in the form is the **connection type** — where this coin's
+chain data and wallet should live:
+
+- **Your own node** — Core RPC. The node's wallet funds swaps; maximum
+  sovereignty. The rest of this section describes its fields.
+- **Electrum** — no node at all. Chain data comes from Electrum servers and
+  the wallet lives on **your Pact seed** (the servers never see your keys). The
+  form becomes a single list of server URLs, one per line
+  (`tcp://host:port` or `ssl://host:port`), pre-filled with the defaults
+  shipped for the coin. On **mainnet at least two independent servers** are
+  required — they cross-check each other's view of the chain. *Validate
+  servers* runs the same genesis check as for a node, plus a capability
+  handshake (protocol version; pruned servers are refused). This is the
+  quick path for a coin whose node you don't want to sync — say, Bitcoin,
+  when you already run a BTCX node.
+
+Choosing **Your own node** means telling Satchel **where your node is** and
+**how to log in to it**. It's filled in with sensible defaults, so often
+you'll only change a field or two.
 
 The fields, in order:
 

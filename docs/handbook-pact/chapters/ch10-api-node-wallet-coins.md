@@ -199,7 +199,16 @@ active network. Each entry:
 | `getbalance` | `chain` | `{ balance_sat }` | no |
 | `getnewaddress` | `chain` | `{ address }` | yes (advances HD index) |
 | `sendtoaddress` | `chain`, `address`, `amount` | `{ txid }` | yes (broadcasts) |
+| `listtransactions` | `chain` | `{ transactions: [...] }` | no |
 
 `chain` is a coin id (e.g. `btc`). `amount` for `sendtoaddress` is a decimal
 string in whole coin units. `getnewaddress` advances the HD derivation index;
 `sendtoaddress` constructs and broadcasts a payment.
+
+`listtransactions` serves the activity feed of an **Electrum-connected
+(nodeless) coin** — each entry carries `txid`, `direction` (`"sent"` /
+`"received"`), the net `amount_sat` (fee excluded on sends), `fee_sat` (absent
+when the wallet doesn't own every input), `confirmations`, and `timestamp`
+(block time; first-seen for mempool entries; absent for a built-but-unreleased
+v2 funding). Newest first. Node-backed coins refuse — the node wallet keeps
+its own history.

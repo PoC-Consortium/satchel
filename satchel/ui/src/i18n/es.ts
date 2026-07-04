@@ -226,6 +226,8 @@ export const es: Bundle = {
     enterBody:
       "Escribe cada palabra — se autocompletan a medida que avanzas — o pega la frase completa. La comprobamos antes de que continúes.",
     wordCount: "{n} palabras",
+    wordCountHint:
+      "Con 12 palabras basta y sobra — esta es una cartera de tránsito en caliente, no almacenamiento en frío. Elige 24 si prefieres la frase más larga.",
     wordAria: "Palabra {n}",
     checkIncomplete: "Introduce las {n} palabras.",
     checkUnknown: "Algunas palabras no están en la lista BIP39 — revisa las resaltadas.",
@@ -423,6 +425,26 @@ export const es: Bundle = {
     validateFirst: "Valida el nodo antes de guardar.",
     savingReconnecting: "Guardando y reconectando…",
     connected: "{coin} conectada",
+    modeLabel: "Tipo de conexión",
+    modeNode: "Tu propio nodo",
+    modeNodeDesc: "Core RPC — la cartera del nodo financia los swaps. Máxima soberanía.",
+    modeNodeless: "Electrum",
+    modeNodelessDesc:
+      "No hace falta nodo: los datos de la cadena vienen de servidores Electrum y la cartera vive en tu semilla Pact.",
+    electrumUrlsLabel: "Servidores Electrum",
+    electrumUrlsHelp:
+      "Uno por línea: tcp://host:port o ssl://host:port. Mainnet requiere al menos dos servidores independientes que contrasten entre sí sus vistas de la cadena.",
+    electrumNeedUrl: "Introduce al menos una URL de servidor Electrum (tcp:// o ssl://).",
+    electrumBadUrl: "Las URL de Electrum deben empezar por tcp:// o ssl:// — recibido: {url}",
+    validateServers: "Validar servidores",
+    connRpcLocal: "RPC (local)",
+    connRpcRemote: "RPC (remoto)",
+    connElectrumLocal: "Electrum (local)",
+    connElectrumRemote: "Electrum (remoto)",
+    connRpcTip:
+      "Esta moneda habla con un nodo tipo Bitcoin Core por RPC; la cartera del nodo financia los swaps.",
+    connElectrumTip:
+      "Esta moneda se conecta a servidores Electrum — sin nodo. La cartera vive en tu semilla Pact.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "No soportada",
     unsupportedByEngineTip:
@@ -456,6 +478,45 @@ export const es: Bundle = {
     walletDefaultHint:
       "No hay cartera definida para esta moneda, así que los RPC usan la cartera por defecto del nodo. Define una en Ajustes → Monedas para acotar cada llamada a una cartera concreta.",
     balanceLabel: "Saldo {symbol}",
+    pactSeed: "cartera de semilla Pact",
+    pactSeedHint:
+      "Esta moneda funciona sin nodo: su cartera vive en tu semilla Pact, sincronizada desde servidores Electrum — no hace falta ningún nodo. Enviar, recibir y el historial están aquí mismo.",
+    receive: "Recibir",
+    send: "Enviar",
+    activity: "Actividad",
+    copy: "Copiar",
+    copied: "Copiado",
+    close: "Cerrar",
+    refresh: "Actualizar",
+    receiveTitle: "Recibir {sym}",
+    receiveIntro:
+      "Una dirección nueva de tu cartera de semilla Pact. Las monedas enviadas aquí aparecen en el saldo una vez confirmadas.",
+    receiveIntroRpc:
+      "Una dirección nueva de la cartera de tu nodo. Las monedas enviadas aquí aparecen en el saldo una vez confirmadas.",
+    receiveFreshNote:
+      "Cada vez que abres este diálogo obtienes una dirección nueva. Las direcciones antiguas siguen funcionando — las nuevas simplemente son mejores para la privacidad.",
+    sendTitle: "Enviar {sym}",
+    sendIntro: "Disponible para gastar: {balance} {sym}.",
+    sendAddressLabel: "Dirección {sym} del destinatario",
+    sendAmountLabel: "Importe",
+    sendNeedAddress: "Introduce la dirección del destinatario.",
+    sendNeedAmount: "Introduce un importe.",
+    sendOverBalance: "Más que el saldo disponible para gastar.",
+    sendFeeNote:
+      "La comisión de red se añade aparte, elegida automáticamente según el mercado de comisiones en vivo.",
+    sendBroadcast: "Enviado — {txid}… está en camino ({sym}).",
+    sendConfirm: "Enviar",
+    activityTitle: "Actividad de {sym}",
+    activityEmpty: "Nada todavía — recibe monedas o completa un swap y aparecerá aquí.",
+    activityWhen: "Cuándo",
+    activityDirection: "Sentido",
+    activityAmount: "Importe ({sym})",
+    activityFee: "Comisión",
+    activityConfs: "Confs",
+    activityTxid: "Transacción",
+    activityPending: "pendiente",
+    activitySent: "Enviado",
+    activityReceived: "Recibido",
   },
   corkboard: {
     noBoardTitle: "Ningún Corkboard conectado",

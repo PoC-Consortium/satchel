@@ -190,7 +190,8 @@ class Party:
     def __init__(self, name, harness, workdir, pocx_wallet, btc_wallet,
                  duplicate_backends=False, board_url=None, auto_fund=False,
                  tick_secs=0, auto_init=True, coin_confs=None, nostr_relays=None,
-                 extra_coins=None, coins_file=None):
+                 extra_coins=None, coins_file=None,
+                 pocx_url=None, btc_url=None):
         self.name = name
         self.auto_init = auto_init
         # Additional coins beyond the built-in btcx/btc legs, as a list of
@@ -202,8 +203,10 @@ class Party:
         # `--coin-confs btc=2` (reorg-safety/finality gate).
         self.coin_confs = coin_confs or {}
         self.data_dir = os.path.join(workdir, f"pact-{name}")
-        self.pocx_url = harness.pocx.rpc_url(wallet=pocx_wallet)
-        self.btc_url = harness.btc.rpc_url(wallet=btc_wallet)
+        # Explicit URL overrides win (the nodeless parity suite hands a
+        # tcp:// Electrum URL for a coin instead of the node's Core RPC).
+        self.pocx_url = pocx_url or harness.pocx.rpc_url(wallet=pocx_wallet)
+        self.btc_url = btc_url or harness.btc.rpc_url(wallet=btc_wallet)
         if duplicate_backends:
             # Exercises the spec §10 multi-backend path (agreement checks,
             # conservative clocks). Same node twice — plumbing test only.

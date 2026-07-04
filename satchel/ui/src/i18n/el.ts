@@ -226,6 +226,8 @@ export const el: Bundle = {
     enterBody:
       "Πληκτρολογήστε κάθε λέξη — συμπληρώνονται αυτόματα καθώς προχωράτε — ή επικολλήστε ολόκληρη τη φράση. Την ελέγχουμε πριν συνεχίσετε.",
     wordCount: "{n} λέξεις",
+    wordCountHint:
+      "Οι 12 λέξεις υπεραρκούν — αυτό είναι ένα θερμό πορτοφόλι διέλευσης, όχι ψυχρή αποθήκευση. Επιλέξτε 24 αν προτιμάτε τη μεγαλύτερη φράση.",
     wordAria: "Λέξη {n}",
     checkIncomplete: "Εισαγάγετε και τις {n} λέξεις.",
     checkUnknown: "Ορισμένες λέξεις δεν είναι στη λίστα λέξεων BIP39 — ελέγξτε τις επισημασμένες.",
@@ -423,6 +425,27 @@ export const el: Bundle = {
     validateFirst: "Επικυρώστε τον κόμβο πριν την αποθήκευση.",
     savingReconnecting: "Αποθήκευση & επανασύνδεση…",
     connected: "{coin} συνδεδεμένο",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "Τύπος σύνδεσης",
+    modeNode: "Ο δικός σας κόμβος",
+    modeNodeDesc: "Core RPC — το πορτοφόλι του κόμβου χρηματοδοτεί τις ανταλλαγές. Μέγιστη κυριαρχία.",
+    modeNodeless: "Electrum",
+    modeNodelessDesc:
+      "Δεν χρειάζεται κόμβος: τα δεδομένα της αλυσίδας έρχονται από διακομιστές Electrum και το πορτοφόλι ζει στον σπόρο Pact σας.",
+    electrumUrlsLabel: "Διακομιστές Electrum",
+    electrumUrlsHelp:
+      "Ένας ανά γραμμή: tcp://host:port ή ssl://host:port. Το mainnet απαιτεί τουλάχιστον δύο ανεξάρτητους διακομιστές, που διασταυρώνουν μεταξύ τους τις όψεις της αλυσίδας.",
+    electrumNeedUrl: "Εισαγάγετε τουλάχιστον ένα URL διακομιστή Electrum (tcp:// ή ssl://).",
+    electrumBadUrl: "Τα URL Electrum πρέπει να ξεκινούν με tcp:// ή ssl:// — δόθηκε: {url}",
+    validateServers: "Επικύρωση διακομιστών",
+    connRpcLocal: "RPC (τοπικό)",
+    connRpcRemote: "RPC (απομακρυσμένο)",
+    connElectrumLocal: "Electrum (τοπικό)",
+    connElectrumRemote: "Electrum (απομακρυσμένο)",
+    connRpcTip:
+      "Αυτό το νόμισμα επικοινωνεί μέσω RPC με έναν κόμβο τύπου Bitcoin Core· το πορτοφόλι του κόμβου χρηματοδοτεί τις ανταλλαγές.",
+    connElectrumTip:
+      "Αυτό το νόμισμα συνδέεται σε διακομιστές Electrum — χωρίς κόμβο. Το πορτοφόλι ζει στον σπόρο Pact σας.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Μη υποστηριζόμενο",
     unsupportedByEngineTip:
@@ -456,6 +479,46 @@ export const el: Bundle = {
     walletDefaultHint:
       "Δεν έχει οριστεί πορτοφόλι για αυτό το νόμισμα, οπότε τα RPC χρησιμοποιούν το προεπιλεγμένο πορτοφόλι του κόμβου. Ορίστε ένα στις Ρυθμίσεις → Νομίσματα για να περιορίσετε κάθε κλήση σε ένα συγκεκριμένο πορτοφόλι.",
     balanceLabel: "υπόλοιπο {symbol}",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "πορτοφόλι σπόρου Pact",
+    pactSeedHint:
+      "Αυτό το νόμισμα λειτουργεί χωρίς κόμβο: το πορτοφόλι του ζει στον σπόρο Pact σας, συγχρονισμένο από διακομιστές Electrum — δεν απαιτείται κόμβος. Αποστολή, λήψη και ιστορικό βρίσκονται ακριβώς εδώ.",
+    receive: "Λήψη",
+    send: "Αποστολή",
+    activity: "Δραστηριότητα",
+    copy: "Αντιγραφή",
+    copied: "Αντιγράφηκε",
+    close: "Κλείσιμο",
+    refresh: "Ανανέωση",
+    receiveTitle: "Λήψη {sym}",
+    receiveIntro:
+      "Μια φρέσκια διεύθυνση από το πορτοφόλι σπόρου Pact σας. Τα νομίσματα που στέλνονται εδώ εμφανίζονται στο υπόλοιπο μόλις επιβεβαιωθούν.",
+    receiveIntroRpc:
+      "Μια φρέσκια διεύθυνση από το πορτοφόλι του κόμβου σας. Τα νομίσματα που στέλνονται εδώ εμφανίζονται στο υπόλοιπο μόλις επιβεβαιωθούν.",
+    receiveFreshNote:
+      "Κάθε φορά που ανοίγετε αυτό το παράθυρο παίρνετε μια φρέσκια διεύθυνση. Οι παλιές διευθύνσεις συνεχίζουν να λειτουργούν — οι φρέσκιες είναι απλώς καλύτερες για την ιδιωτικότητα.",
+    sendTitle: "Αποστολή {sym}",
+    sendIntro: "Διαθέσιμο για δαπάνη: {balance} {sym}.",
+    sendAddressLabel: "Διεύθυνση {sym} παραλήπτη",
+    sendAmountLabel: "Ποσό",
+    sendNeedAddress: "Εισαγάγετε τη διεύθυνση του παραλήπτη.",
+    sendNeedAmount: "Εισαγάγετε ένα ποσό.",
+    sendOverBalance: "Περισσότερο από το διαθέσιμο για δαπάνη υπόλοιπο.",
+    sendFeeNote:
+      "Η χρέωση δικτύου προστίθεται επιπλέον, επιλεγμένη αυτόματα από τη ζωντανή αγορά χρεώσεων.",
+    sendBroadcast: "Στάλθηκε — το {txid}… είναι καθ' οδόν ({sym}).",
+    sendConfirm: "Αποστολή",
+    activityTitle: "Δραστηριότητα {sym}",
+    activityEmpty: "Τίποτα ακόμα — λάβετε νομίσματα ή ολοκληρώστε μια ανταλλαγή και θα εμφανιστεί εδώ.",
+    activityWhen: "Πότε",
+    activityDirection: "Κατεύθυνση",
+    activityAmount: "Ποσό ({sym})",
+    activityFee: "Χρέωση",
+    activityConfs: "Επιβ.",
+    activityTxid: "Συναλλαγή",
+    activityPending: "σε εκκρεμότητα",
+    activitySent: "Στάλθηκε",
+    activityReceived: "Λήφθηκε",
   },
   corkboard: {
     noBoardTitle: "Δεν υπάρχει συνδεδεμένο Corkboard",

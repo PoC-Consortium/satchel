@@ -226,6 +226,8 @@ export const it: Bundle = {
     enterBody:
       "Digita ogni parola — si auto-completano man mano — oppure incolla l'intera frase. La verifichiamo prima di continuare.",
     wordCount: "{n} parole",
+    wordCountHint:
+      "12 parole bastano e avanzano — questo è un wallet di transito caldo, non cold storage. Scegli 24 se preferisci la frase più lunga.",
     wordAria: "Parola {n}",
     checkIncomplete: "Inserisci tutte le {n} parole.",
     checkUnknown: "Alcune parole non sono nella wordlist BIP39 — controlla quelle evidenziate.",
@@ -423,6 +425,26 @@ export const it: Bundle = {
     validateFirst: "Valida il nodo prima di salvare.",
     savingReconnecting: "Salvataggio e riconnessione…",
     connected: "{coin} connessa",
+    modeLabel: "Tipo di connessione",
+    modeNode: "Il tuo nodo",
+    modeNodeDesc: "Core RPC — il wallet del nodo finanzia gli swap. Massima sovranità.",
+    modeNodeless: "Electrum",
+    modeNodelessDesc:
+      "Nessun nodo necessario: i dati della chain arrivano dai server Electrum e il wallet vive sul tuo seed Pact.",
+    electrumUrlsLabel: "Server Electrum",
+    electrumUrlsHelp:
+      "Uno per riga: tcp://host:port o ssl://host:port. La mainnet richiede almeno due server indipendenti che verifichino a vicenda le viste della chain.",
+    electrumNeedUrl: "Inserisci almeno un URL di server Electrum (tcp:// o ssl://).",
+    electrumBadUrl: "Gli URL Electrum devono iniziare con tcp:// o ssl:// — ricevuto: {url}",
+    validateServers: "Valida i server",
+    connRpcLocal: "RPC (locale)",
+    connRpcRemote: "RPC (remoto)",
+    connElectrumLocal: "Electrum (locale)",
+    connElectrumRemote: "Electrum (remoto)",
+    connRpcTip:
+      "Questa coin parla con un nodo in stile Bitcoin Core via RPC; il wallet del nodo finanzia gli swap.",
+    connElectrumTip:
+      "Questa coin si collega ai server Electrum — nessun nodo. Il wallet vive sul tuo seed Pact.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Non supportata",
     unsupportedByEngineTip:
@@ -456,6 +478,45 @@ export const it: Bundle = {
     walletDefaultHint:
       "Nessun wallet impostato per questa coin, quindi le RPC usano il wallet predefinito del nodo. Impostane uno in Impostazioni → Coin per limitare ogni chiamata a un wallet specifico.",
     balanceLabel: "Saldo {symbol}",
+    pactSeed: "wallet del seed Pact",
+    pactSeedHint:
+      "Questa coin funziona senza nodo: il suo wallet vive sul tuo seed Pact, sincronizzato dai server Electrum — nessun nodo richiesto. Invio, ricezione e cronologia sono proprio qui.",
+    receive: "Ricevi",
+    send: "Invia",
+    activity: "Attività",
+    copy: "Copia",
+    copied: "Copiato",
+    close: "Chiudi",
+    refresh: "Aggiorna",
+    receiveTitle: "Ricevi {sym}",
+    receiveIntro:
+      "Un indirizzo nuovo dal tuo wallet del seed Pact. Le coin inviate qui compaiono nel saldo una volta confermate.",
+    receiveIntroRpc:
+      "Un indirizzo nuovo dal wallet del tuo nodo. Le coin inviate qui compaiono nel saldo una volta confermate.",
+    receiveFreshNote:
+      "Ogni volta che apri questa finestra ottieni un indirizzo nuovo. Gli indirizzi vecchi continuano a funzionare — quelli nuovi sono semplicemente migliori per la privacy.",
+    sendTitle: "Invia {sym}",
+    sendIntro: "Spendibile: {balance} {sym}.",
+    sendAddressLabel: "Indirizzo {sym} del destinatario",
+    sendAmountLabel: "Importo",
+    sendNeedAddress: "Inserisci l'indirizzo del destinatario.",
+    sendNeedAmount: "Inserisci un importo.",
+    sendOverBalance: "Più del saldo spendibile.",
+    sendFeeNote:
+      "La commissione di rete si aggiunge a parte, scelta automaticamente dal mercato delle commissioni in tempo reale.",
+    sendBroadcast: "Inviato — {txid}… è in viaggio ({sym}).",
+    sendConfirm: "Invia",
+    activityTitle: "Attività {sym}",
+    activityEmpty: "Ancora nulla — ricevi coin o completa uno swap e comparirà qui.",
+    activityWhen: "Quando",
+    activityDirection: "Direzione",
+    activityAmount: "Importo ({sym})",
+    activityFee: "Commissione",
+    activityConfs: "Confs",
+    activityTxid: "Transazione",
+    activityPending: "in attesa",
+    activitySent: "Inviato",
+    activityReceived: "Ricevuto",
   },
   corkboard: {
     noBoardTitle: "Nessun Corkboard connesso",

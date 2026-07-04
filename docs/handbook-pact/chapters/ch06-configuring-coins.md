@@ -55,6 +55,31 @@ bech32_hrp   = "rltc"
 > A `coins.toml` entry may also carry a `connection` sub-table with RPC defaults;
 > that is Satchel's concern and is ignored by the engine.
 
+### Nodeless (Electrum-only) coins
+
+A coin whose backend list has **no `http://` primary** runs **nodeless**
+(epic #58): the first `tcp://`/`ssl://` URL becomes a bdk wallet on the Pact
+seed's BIP-86 branch (`m/86'/<bip32_coin_type>'/0'`), synced over the same raw
+Electrum calls the chain-data backends use; any further URLs join as
+independent chain views. All nine `wallet_*` operations — funding, the v2
+two-phase build, CPFP, RBF bump — are served by that wallet, and the
+`listtransactions` RPC exposes its activity feed. Rules and guarantees:
+
+- **Mainnet requires ≥ 2 Electrum servers** — a single lying or withholding
+  server must never be the only view of the chain while funds move (spec §10).
+- Every server passes a **capability handshake** before use:
+  `server.version` (protocol 1.4+), `server.features` cross-checks
+  (`genesis_hash` must match; **pruned servers are refused** — a restored
+  seed's history scan would be silently incomplete), and a deep check that
+  fetches header 0 and hashes it locally (which also validates PoCX's 286-byte
+  headers against that server).
+- A locked or absent seed degrades to **chain-reads-only** and surfaces as
+  `wallet_locked` — exactly like an encrypted, locked Core wallet.
+- Default server lists ship per coin in `coins.toml`
+  (`connection.electrum = [...]`) and pre-fill Satchel's setup form.
+- An Electrum-FIRST list must be Electrum-only; with a Core-RPC primary,
+  Electrum URLs remain plain chain-data views as before.
+
 ### Per-coin minimum feerate
 
 pactd derives its funding and spend feerate from the node's `estimatesmartfee`,

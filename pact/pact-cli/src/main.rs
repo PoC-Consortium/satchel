@@ -111,6 +111,11 @@ enum Command {
     RescueStatus,
     /// Seed lifecycle: show whether a seed exists / is encrypted / locked.
     Walletstatus,
+    /// Wallet activity of a nodeless coin, newest first (epic #58).
+    Transactions {
+        /// Coin id (e.g. `btcx`) — must be a nodeless (Electrum-backed) coin.
+        coin: String,
+    },
     /// List shipped coins: which are configured + live connection status.
     Coins,
     /// List derived swap-pair availability for the current setup.
@@ -128,6 +133,9 @@ enum Command {
     Createseed {
         #[arg(long)]
         passphrase: Option<String>,
+        /// Seed length: 12 words (default — hot transit wallet) or 24.
+        #[arg(long, default_value_t = 12)]
+        words: u16,
     },
     /// Import an existing BIP39 mnemonic (optionally encrypted at rest).
     Importseed {
@@ -274,6 +282,10 @@ fn main() -> Result<()> {
             let result = client.call("walletstatus", json!([]))?;
             println!("{}", serde_json::to_string_pretty(&result)?);
         }
+        Command::Transactions { coin } => {
+            let result = client.call("listtransactions", json!([coin]))?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        }
         Command::Coins => {
             let result = client.call("listcoins", json!([]))?;
             println!("{}", serde_json::to_string_pretty(&result)?);
@@ -286,8 +298,8 @@ fn main() -> Result<()> {
             let result = client.call("validatecoin", json!([coin, backend]))?;
             println!("{}", serde_json::to_string_pretty(&result)?);
         }
-        Command::Createseed { passphrase } => {
-            let r = client.call("createseed", json!([passphrase]))?;
+        Command::Createseed { passphrase, words } => {
+            let r = client.call("createseed", json!([passphrase, words]))?;
             println!(
                 "seed created ({}). WRITE THIS DOWN — it is shown only once:\n\n  {}\n",
                 if r["encrypted"].as_bool().unwrap_or(false) {

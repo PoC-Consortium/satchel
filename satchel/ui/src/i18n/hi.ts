@@ -226,6 +226,8 @@ export const hi: Bundle = {
     enterBody:
       "हर शब्द टाइप करें — जैसे-जैसे आप बढ़ते हैं वे अपने आप पूरे होते हैं — या पूरा phrase पेस्ट करें। आगे बढ़ने से पहले हम इसे जाँचते हैं।",
     wordCount: "{n} शब्द",
+    wordCountHint:
+      "12 शब्द काफ़ी हैं — यह आवाजाही के लिए एक hot wallet है, cold storage नहीं। लंबा phrase पसंद हो तो 24 चुनें।",
     wordAria: "शब्द {n}",
     checkIncomplete: "सभी {n} शब्द दर्ज करें।",
     checkUnknown: "कुछ शब्द BIP39 wordlist में नहीं हैं — हाइलाइट किए गए शब्दों की जाँच करें।",
@@ -423,6 +425,27 @@ export const hi: Bundle = {
     validateFirst: "सहेजने से पहले node सत्यापित करें।",
     savingReconnecting: "सहेजा जा रहा है और पुनः कनेक्ट हो रहा है…",
     connected: "{coin} कनेक्टेड",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "कनेक्शन प्रकार",
+    modeNode: "आपका अपना node",
+    modeNodeDesc: "Core RPC — node का wallet स्वैप फंड करता है। अधिकतम संप्रभुता।",
+    modeNodeless: "Electrum",
+    modeNodelessDesc:
+      "किसी node की ज़रूरत नहीं: chain डेटा Electrum सर्वरों से आता है और wallet आपकी Pact seed पर रहता है।",
+    electrumUrlsLabel: "Electrum सर्वर",
+    electrumUrlsHelp:
+      "प्रति पंक्ति एक: tcp://host:port या ssl://host:port। Mainnet के लिए कम से कम दो स्वतंत्र सर्वर चाहिए, जो chain के दृश्यों की आपस में जाँच करते हैं।",
+    electrumNeedUrl: "कम से कम एक Electrum सर्वर URL दर्ज करें (tcp:// या ssl://)।",
+    electrumBadUrl: "Electrum URLs की शुरुआत tcp:// या ssl:// से होनी चाहिए — मिला: {url}",
+    validateServers: "सर्वर सत्यापित करें",
+    connRpcLocal: "RPC (लोकल)",
+    connRpcRemote: "RPC (रिमोट)",
+    connElectrumLocal: "Electrum (लोकल)",
+    connElectrumRemote: "Electrum (रिमोट)",
+    connRpcTip:
+      "यह coin RPC के ज़रिए Bitcoin-Core-शैली के node से बात करता है; node का wallet स्वैप फंड करता है।",
+    connElectrumTip:
+      "यह coin Electrum सर्वरों से जुड़ता है — किसी node की ज़रूरत नहीं। यह wallet आपकी Pact seed पर रहता है।",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "असमर्थित",
     unsupportedByEngineTip:
@@ -456,6 +479,46 @@ export const hi: Bundle = {
     walletDefaultHint:
       "इस coin के लिए कोई wallet सेट नहीं है, इसलिए RPCs node के डिफ़ॉल्ट wallet का उपयोग करते हैं। हर कॉल को एक विशिष्ट wallet तक सीमित करने के लिए Settings → Coins में एक सेट करें।",
     balanceLabel: "{symbol} बैलेंस",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "pact seed wallet",
+    pactSeedHint:
+      "यह coin बिना node के चलता है: इसका wallet आपकी Pact seed पर रहता है, जो Electrum सर्वरों से सिंक होता है — किसी node की ज़रूरत नहीं। भेजना, प्राप्त करना और इतिहास सब यहीं है।",
+    receive: "प्राप्त करें",
+    send: "भेजें",
+    activity: "गतिविधि",
+    copy: "कॉपी करें",
+    copied: "कॉपी हो गया",
+    close: "बंद करें",
+    refresh: "रिफ़्रेश करें",
+    receiveTitle: "{sym} प्राप्त करें",
+    receiveIntro:
+      "आपके pact-seed wallet से एक नया पता। यहाँ भेजे गए coins कन्फ़र्म होते ही बैलेंस में दिखते हैं।",
+    receiveIntroRpc:
+      "आपके node के wallet से एक नया पता। यहाँ भेजे गए coins कन्फ़र्म होते ही बैलेंस में दिखते हैं।",
+    receiveFreshNote:
+      "हर बार जब आप यह डायलॉग खोलते हैं तो आपको एक नया पता मिलता है। पुराने पते काम करते रहते हैं — नए पते बस गोपनीयता के लिए बेहतर हैं।",
+    sendTitle: "{sym} भेजें",
+    sendIntro: "खर्च-योग्य: {balance} {sym}।",
+    sendAddressLabel: "प्राप्तकर्ता का {sym} पता",
+    sendAmountLabel: "राशि",
+    sendNeedAddress: "प्राप्तकर्ता का पता दर्ज करें।",
+    sendNeedAmount: "एक राशि दर्ज करें।",
+    sendOverBalance: "खर्च-योग्य बैलेंस से अधिक।",
+    sendFeeNote:
+      "नेटवर्क शुल्क ऊपर से जुड़ता है, जो लाइव फ़ी मार्केट से अपने आप चुना जाता है।",
+    sendBroadcast: "भेज दिया — {txid}… रास्ते में है ({sym})।",
+    sendConfirm: "भेजें",
+    activityTitle: "{sym} गतिविधि",
+    activityEmpty: "अभी कुछ नहीं — coins प्राप्त करें या एक स्वैप पूरा करें और वह यहाँ दिखेगा।",
+    activityWhen: "कब",
+    activityDirection: "दिशा",
+    activityAmount: "राशि ({sym})",
+    activityFee: "शुल्क",
+    activityConfs: "Confs",
+    activityTxid: "लेनदेन",
+    activityPending: "लंबित",
+    activitySent: "भेजा गया",
+    activityReceived: "प्राप्त हुआ",
   },
   corkboard: {
     noBoardTitle: "कोई Corkboard कनेक्ट नहीं",

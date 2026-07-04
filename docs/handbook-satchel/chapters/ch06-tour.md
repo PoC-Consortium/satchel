@@ -36,7 +36,7 @@ The navigation items are grouped so related tasks sit together:
 Below the groups:
 
 - **Swaps** — your full trade history and the swaps currently running.
-- **Wallets** — read-only balances from your own coin nodes.
+- **Wallets** — per-coin balances with **Send** and **Receive** (node-backed, or a pact-seed wallet over Electrum servers; Electrum coins add an **Activity** history).
 - **Contacts** — your private nicknames and standings for the people you trade
   with, kept only on this device.
 - **Relays** — a read-only monitor of your Nostr relays, so you can see at a

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  One-shot Satchel v2 playground: cleanup -> setup -> run.
+  One-shot Satchel NODELESS playground (epic #58): cleanup -> setup -> run.
 
 .DESCRIPTION
   Brings up the full regtest stack for click-testing v2 (Taproot/MuSig2 adaptor)
@@ -57,10 +57,11 @@ $PidFile = Join-Path $LogDir "pids.txt"
 # OUR pactd is 9739. NEVER list 9737/9738 here — those are the user's mainnet /
 # testnet pactd, and the port teardown would kill their live daemon.)
 # Bob/Carol pactd (:19737/8) + adaptor spares (:19739/40),
-# PoCX/BTC/LTC regtest RPC (:19443/:19543/:19643), Corkboard (:19790), Vite (:5173).
-# (18443/19750/19751 belong to the playground-nodeless variant; swept here
-# too so a stale electrum run can't poison a cork run.)
-$Ports = 9739, 19737, 19738, 19739, 19740, 19443, 18443, 19543, 19643, 19750, 19751, 19790, 5173
+# PoCX regtest RPC+REST (:18443 - bindex/electrs hardcodes the regtest default;
+# the user's mainnet node is NOT on this port), BTC/LTC regtest RPC
+# (:19543/:19643), electrs (:19750 Electrum, :19751 monitoring), Corkboard
+# (:19790), Vite (:5173). 19443 stays listed to sweep pre-nodeless stale runs.
+$Ports = 9739, 19737, 19738, 19739, 19740, 18443, 19443, 19543, 19643, 19750, 19751, 19790, 5173
 
 # Force-kill a process tree by PID. Routes through `cmd /c ... 2>nul` so the
 # native stderr ("process not found" for an already-dead PID) is swallowed by
@@ -137,7 +138,7 @@ $pactdPath = (Join-Path $Repo "pact\target\debug\pactd.exe") -replace '\\', '/'
 # pre-wired so Alice is ready to trade immediately. (Single-quoted JSON line:
 # the `@` in the RPC URLs must stay literal.)
 $coinsJson = if ($FirstRun) { '[]' } else {
-  '[{ "coin_id": "btcx", "chain_data": "http://pactharness:pactharness@127.0.0.1:19443/wallet/alice_pocx", "funding_wallet": "core-rpc", "confirmations": 10 }, { "coin_id": "btc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19543/wallet/alice_btc", "funding_wallet": "core-rpc", "confirmations": 6 }, { "coin_id": "ltc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19643/wallet/alice_ltc", "funding_wallet": "core-rpc", "confirmations": 6 }]'
+  '[{ "coin_id": "btcx", "chain_data": "tcp://127.0.0.1:19750", "funding_wallet": "pact-seed", "extra_backends": ["tcp://127.0.0.1:19750"], "confirmations": 10 }, { "coin_id": "btc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19543/wallet/alice_btc", "funding_wallet": "core-rpc", "confirmations": 6 }, { "coin_id": "ltc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19643/wallet/alice_ltc", "funding_wallet": "core-rpc", "confirmations": 6 }]'
 }
 $satchelJson = @"
 {
@@ -175,7 +176,7 @@ $env:LITECOIND     = Join-Path $Repo "pact\harness\bin\litecoind.exe"
 # Infra + Bob + Carol. build_workspace() inside it builds pactd.exe, so by the
 # time the banner prints, the binary Satchel spawns exists.
 Write-Host "[playground] starting regtest stack + Bob/Carol (building if needed) ..."
-$pg = Start-Process -FilePath "python" -ArgumentList "satchel_playground.py" `
+$pg = Start-Process -FilePath "python" -ArgumentList "satchel_playground.py","--nodeless" `
     -WorkingDirectory (Join-Path $Repo "pact\harness") `
     -RedirectStandardOutput (Join-Path $LogDir "playground.out.log") `
     -RedirectStandardError  (Join-Path $LogDir "playground.err.log") `
@@ -231,15 +232,19 @@ Write-Host "  The Satchel window will open shortly (first build can take a bit).
 Write-Host ""
 if ($FirstRun) {
     Write-Host "  FIRST-RUN: no coins pre-wired -> step through onboarding + coin"
-    Write-Host "  setup. Configure the coins against the playground nodes:"
-    Write-Host "    BTCX : 127.0.0.1:19443  user/pass  pactharness / pactharness  wallet alice_pocx"
+    Write-Host "  setup. Configure the coins against the playground stack:"
+    Write-Host "    BTCX : NODELESS (Electrum) -> tcp://127.0.0.1:19750"
+    Write-Host "           (or node mode: 127.0.0.1:18443 user/pass pactharness/pactharness wallet alice_pocx)"
     Write-Host "    BTC  : 127.0.0.1:19543  user/pass  pactharness / pactharness  wallet alice_btc"
     Write-Host "    LTC  : 127.0.0.1:19643  user/pass  pactharness / pactharness  wallet alice_ltc"
     Write-Host "    (auth = user/pass, NOT cookie; confirmations blank = regtest default 1)"
 } else {
-    Write-Host "  In the window: wizard -> create merchant; Coins tab shows all"
-    Write-Host "  three connected; Corkboard -> take any side (incl. LTC); Swaps"
-    Write-Host "  tab walks it to 'completed', badged 'Private (Taproot)'."
+    Write-Host "  In the window: wizard -> create merchant; Coins tab: BTCX is"
+    Write-Host "  NODELESS ('pact seed wallet' via electrs), BTC + LTC node-backed."
+    Write-Host "  Wallets tab: BTCX card has Receive/Send/Activity; the faucet"
+    Write-Host "  drops 100 BTCX right after the wizard. Corkboard -> take any"
+    Write-Host "  side; Swaps tab walks to 'completed' - BTCX legs fund from"
+    Write-Host "  your pact-seed wallet."
 }
 Write-Host ""
 Write-Host "  CLOSE THE SATCHEL WINDOW to tear the whole stack down."

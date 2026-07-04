@@ -85,6 +85,8 @@ export interface NetConnDefaults {
   datadir: string;
   cookie_subpath: string;
   wallet: string;
+  /** Default Electrum servers for the nodeless mode (pre-fill the URL list). */
+  electrum?: string[];
 }
 
 /** One coin template (connection defaults + presentation) for the picker. */
@@ -108,7 +110,8 @@ export interface CoinTemplateList {
 export interface CoinConnInput {
   rpc_host?: string;
   rpc_port?: number;
-  auth_method: string;
+  /** Absent for the nodeless (pact-seed) mode — nothing to recompose. */
+  auth_method?: string;
   rpc_user?: string;
   rpc_password?: string;
   datadir?: string;
@@ -387,6 +390,19 @@ export interface CoinInfo {
   /** Core wallet this coin's RPC is scoped to (from the configured URL); null
    *  when none is set — the node's default wallet (not explicitly scoped). */
   wallet?: string | null;
+  /** Nodeless coin (Electrum-only backends, epic #58): the wallet is the bdk
+   *  one derived from the Pact seed — send/receive/activity apply. */
+  nodeless?: boolean;
+}
+
+/** One row of the nodeless wallet's activity feed (`listtransactions`). */
+export interface WalletTx {
+  txid: string;
+  direction: "sent" | "received";
+  amount_sat: number;
+  fee_sat?: number | null;
+  confirmations: number;
+  timestamp?: number | null;
 }
 
 export interface Pair {

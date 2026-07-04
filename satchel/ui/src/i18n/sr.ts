@@ -226,6 +226,8 @@ export const sr: Bundle = {
     enterBody:
       "Унесите сваку реч — допуњавају се аутоматски како куцате — или налепите целу фразу. Проверавамо је пре него што наставите.",
     wordCount: "{n} речи",
+    wordCountHint:
+      "12 речи је сасвим довољно — ово је врући транзитни новчаник, а не хладно складиште. Изаберите 24 ако више волите дужу фразу.",
     wordAria: "Реч {n}",
     checkIncomplete: "Унесите свих {n} речи.",
     checkUnknown: "Неке речи нису на BIP39 листи речи — проверите означене.",
@@ -423,6 +425,27 @@ export const sr: Bundle = {
     validateFirst: "Проверите чвор пре чувања.",
     savingReconnecting: "Чување и поновно повезивање…",
     connected: "{coin} повезан",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "Тип везе",
+    modeNode: "Сопствени чвор",
+    modeNodeDesc: "Core RPC — новчаник чвора уплаћује свопове. Максимална сувереност.",
+    modeNodeless: "Electrum",
+    modeNodelessDesc:
+      "Чвор није потребан: подаци о ланцу долазе са Electrum сервера, а новчаник живи на вашем Pact семену.",
+    electrumUrlsLabel: "Electrum сервери",
+    electrumUrlsHelp:
+      "Један по реду: tcp://host:port или ssl://host:port. Mainnet захтева бар два независна сервера који унакрсно проверавају стање ланца.",
+    electrumNeedUrl: "Унесите бар један URL Electrum сервера (tcp:// или ssl://).",
+    electrumBadUrl: "Electrum URL-ови морају почињати са tcp:// или ssl:// — добијено: {url}",
+    validateServers: "Провери сервере",
+    connRpcLocal: "RPC (локални)",
+    connRpcRemote: "RPC (удаљени)",
+    connElectrumLocal: "Electrum (локални)",
+    connElectrumRemote: "Electrum (удаљени)",
+    connRpcTip:
+      "Овај новчић комуницира са чвором типа Bitcoin Core преко RPC-а; свопове уплаћује новчаник чвора.",
+    connElectrumTip:
+      "Овај новчић се повезује на Electrum сервере — без чвора. Новчаник живи на вашем Pact семену.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Неподржан",
     unsupportedByEngineTip:
@@ -456,6 +479,45 @@ export const sr: Bundle = {
     walletDefaultHint:
       "За овај новчић није постављен новчаник, па RPC-ови користе подразумевани новчаник чвора. Поставите један у Подешавања → Новчићи да бисте сваки позив ограничили на одређени новчаник.",
     balanceLabel: "{symbol} стање",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "новчаник на Pact семену",
+    pactSeedHint:
+      "Овај новчић ради без чвора: његов новчаник живи на вашем Pact семену, синхронизован са Electrum сервера — чвор није потребан. Слање, пријем и историја су управо овде.",
+    receive: "Прими",
+    send: "Пошаљи",
+    activity: "Активност",
+    copy: "Копирај",
+    copied: "Копирано",
+    close: "Затвори",
+    refresh: "Освежи",
+    receiveTitle: "Прими {sym}",
+    receiveIntro:
+      "Свежа адреса из вашег новчаника на Pact семену. Новчићи послати овде појављују се у стању након потврде.",
+    receiveIntroRpc:
+      "Свежа адреса из новчаника вашег чвора. Новчићи послати овде појављују се у стању након потврде.",
+    receiveFreshNote:
+      "Сваки пут када отворите овај дијалог добијате свежу адресу. Старе адресе и даље раде — свеже су просто боље за приватност.",
+    sendTitle: "Пошаљи {sym}",
+    sendIntro: "Расположиво: {balance} {sym}.",
+    sendAddressLabel: "{sym} адреса примаоца",
+    sendAmountLabel: "Износ",
+    sendNeedAddress: "Унесите адресу примаоца.",
+    sendNeedAmount: "Унесите износ.",
+    sendOverBalance: "Више од расположивог стања.",
+    sendFeeNote: "Мрежна накнада се додаје поврх износа и бира се аутоматски према тренутном тржишту накнада.",
+    sendBroadcast: "Послато — {txid}… је на путу ({sym}).",
+    sendConfirm: "Пошаљи",
+    activityTitle: "Активност {sym}",
+    activityEmpty: "Још ништа — примите новчиће или завршите своп и појавиће се овде.",
+    activityWhen: "Када",
+    activityDirection: "Смер",
+    activityAmount: "Износ ({sym})",
+    activityFee: "Накнада",
+    activityConfs: "Потв.",
+    activityTxid: "Трансакција",
+    activityPending: "на чекању",
+    activitySent: "Послато",
+    activityReceived: "Примљено",
   },
   corkboard: {
     noBoardTitle: "Нема повезаног Corkboard-а",

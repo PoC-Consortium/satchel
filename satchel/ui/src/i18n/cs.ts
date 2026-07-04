@@ -226,6 +226,8 @@ export const cs: Bundle = {
     enterBody:
       "Pište každé slovo — během psaní se automaticky doplňují — nebo vložte celou frázi. Než budete pokračovat, zkontrolujeme ji.",
     wordCount: "{n} slov",
+    wordCountHint:
+      "12 slov bohatě stačí — toto je horká tranzitní peněženka, ne studené úložiště. Pokud dáváte přednost delší frázi, zvolte 24.",
     wordAria: "Slovo {n}",
     checkIncomplete: "Zadejte všech {n} slov.",
     checkUnknown: "Některá slova nejsou v seznamu slov BIP39 — zkontrolujte zvýrazněná.",
@@ -423,6 +425,27 @@ export const cs: Bundle = {
     validateFirst: "Před uložením ověřte uzel.",
     savingReconnecting: "Ukládání a opětovné připojování…",
     connected: "{coin} připojeno",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "Typ připojení",
+    modeNode: "Vlastní uzel",
+    modeNodeDesc: "Core RPC — swapy financuje peněženka uzlu. Maximální suverenita.",
+    modeNodeless: "Electrum",
+    modeNodelessDesc:
+      "Žádný uzel není potřeba: data řetězce přicházejí z Electrum serverů a peněženka žije na vašem Pact seedu.",
+    electrumUrlsLabel: "Electrum servery",
+    electrumUrlsHelp:
+      "Jeden na řádek: tcp://host:port nebo ssl://host:port. Mainnet vyžaduje alespoň dva nezávislé servery jako vzájemnou kontrolu pohledů na řetězec.",
+    electrumNeedUrl: "Zadejte alespoň jednu URL Electrum serveru (tcp:// nebo ssl://).",
+    electrumBadUrl: "URL Electrum serverů musí začínat tcp:// nebo ssl:// — zadáno: {url}",
+    validateServers: "Ověřit servery",
+    connRpcLocal: "RPC (lokální)",
+    connRpcRemote: "RPC (vzdálené)",
+    connElectrumLocal: "Electrum (lokální)",
+    connElectrumRemote: "Electrum (vzdálené)",
+    connRpcTip:
+      "Tato mince komunikuje přes RPC s uzlem typu Bitcoin Core; swapy financuje peněženka uzlu.",
+    connElectrumTip:
+      "Tato mince se připojuje k Electrum serverům — žádný uzel. Peněženka žije na vašem Pact seedu.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Nepodporováno",
     unsupportedByEngineTip:
@@ -456,6 +479,46 @@ export const cs: Bundle = {
     walletDefaultHint:
       "Pro tuto minci není nastavena žádná peněženka, takže RPC používají výchozí peněženku uzlu. Nastavte ji v Nastavení → Mince, abyste vázali každé volání na konkrétní peněženku.",
     balanceLabel: "zůstatek {symbol}",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "peněženka pact seedu",
+    pactSeedHint:
+      "Tato mince běží bez uzlu: její peněženka žije na vašem Pact seedu a synchronizuje se z Electrum serverů — žádný uzel není potřeba. Odesílání, přijímání i historie jsou přímo tady.",
+    receive: "Přijmout",
+    send: "Odeslat",
+    activity: "Aktivita",
+    copy: "Kopírovat",
+    copied: "Zkopírováno",
+    close: "Zavřít",
+    refresh: "Obnovit",
+    receiveTitle: "Přijmout {sym}",
+    receiveIntro:
+      "Čerstvá adresa z vaší peněženky pact seedu. Mince sem poslané se po potvrzení objeví v zůstatku.",
+    receiveIntroRpc:
+      "Čerstvá adresa z peněženky vašeho uzlu. Mince sem poslané se po potvrzení objeví v zůstatku.",
+    receiveFreshNote:
+      "Při každém otevření tohoto dialogu dostanete čerstvou adresu. Staré adresy fungují dál — čerstvé jsou jen lepší pro soukromí.",
+    sendTitle: "Odeslat {sym}",
+    sendIntro: "K utracení: {balance} {sym}.",
+    sendAddressLabel: "Adresa příjemce {sym}",
+    sendAmountLabel: "Částka",
+    sendNeedAddress: "Zadejte adresu příjemce.",
+    sendNeedAmount: "Zadejte částku.",
+    sendOverBalance: "Více než utratitelný zůstatek.",
+    sendFeeNote:
+      "Síťový poplatek se přičítá navíc a vybírá se automaticky podle aktuálního trhu poplatků.",
+    sendBroadcast: "Odesláno — {txid}… je na cestě ({sym}).",
+    sendConfirm: "Odeslat",
+    activityTitle: "Aktivita {sym}",
+    activityEmpty: "Zatím nic — přijměte mince nebo dokončete swap a objeví se to tady.",
+    activityWhen: "Kdy",
+    activityDirection: "Směr",
+    activityAmount: "Částka ({sym})",
+    activityFee: "Poplatek",
+    activityConfs: "Potvrzení",
+    activityTxid: "Transakce",
+    activityPending: "čeká",
+    activitySent: "Odesláno",
+    activityReceived: "Přijato",
   },
   corkboard: {
     noBoardTitle: "Žádný Corkboard připojen",

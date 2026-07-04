@@ -55,9 +55,11 @@ capabilities = { cltv = true, segwit_v0 = true, taproot = true }
   consensus  = { header_format = "pocx", magic = "6df248b4", default_p2p_port = 18338, p2pkh_prefix = 127, p2sh_prefix = 132, wif_prefix = 239, bech32_hrp = "tpocx", genesis_hash = "181c51a172fe20c203e463f6f203b7d9be388fa0f1282e507192f94d24a57e81" }
   connection = { rpc_host = "127.0.0.1", rpc_port = 18332, auth_method = "cookie", datadir = "%NODEDIR%/Bitcoin-PoCX", cookie_subpath = "testnet/.cookie", wallet = "" }
 
+  # TODO(nodeless): add `electrum = [...]` defaults to mainnet/testnet once the
+  # project's public PoCX Electrum servers are live (mainnet needs >= 2).
   [coin.regtest]
   consensus  = { header_format = "pocx", magic = "fabfb5da", default_p2p_port = 18444, p2pkh_prefix = 111, p2sh_prefix = 196, wif_prefix = 239, bech32_hrp = "rpocx", genesis_hash = "2a98a52253aeff06093948b00568d380b7634621bc606403127973c9acbbfde0" }
-  connection = { rpc_host = "127.0.0.1", rpc_port = 19443, auth_method = "cookie", datadir = "%NODEDIR%/Bitcoin-PoCX", cookie_subpath = "regtest/.cookie", wallet = "" }
+  connection = { rpc_host = "127.0.0.1", rpc_port = 19443, auth_method = "cookie", datadir = "%NODEDIR%/Bitcoin-PoCX", cookie_subpath = "regtest/.cookie", wallet = "", electrum = ["tcp://127.0.0.1:19750"] }
 
 # ---------------------------------------------------------------------------
 [[coin]]
@@ -72,15 +74,15 @@ capabilities = { cltv = true, segwit_v0 = true, taproot = true }
 
   [coin.mainnet]
   consensus  = { header_format = "bitcoin", magic = "f9beb4d9", default_p2p_port = 8333, p2pkh_prefix = 0, p2sh_prefix = 5, wif_prefix = 128, bech32_hrp = "bc", genesis_hash = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" }
-  connection = { rpc_host = "127.0.0.1", rpc_port = 8332, auth_method = "cookie", datadir = "%NODEDIR%/Bitcoin", cookie_subpath = ".cookie", wallet = "" }
+  connection = { rpc_host = "127.0.0.1", rpc_port = 8332, auth_method = "cookie", datadir = "%NODEDIR%/Bitcoin", cookie_subpath = ".cookie", wallet = "", electrum = ["ssl://electrum.blockstream.info:50002", "ssl://electrum.emzy.de:50002"] }
 
   [coin.testnet]
   consensus  = { header_format = "bitcoin", magic = "0b110907", default_p2p_port = 18333, p2pkh_prefix = 111, p2sh_prefix = 196, wif_prefix = 239, bech32_hrp = "tb", genesis_hash = "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943" }
-  connection = { rpc_host = "127.0.0.1", rpc_port = 18332, auth_method = "cookie", datadir = "%NODEDIR%/Bitcoin", cookie_subpath = "testnet3/.cookie", wallet = "" }
+  connection = { rpc_host = "127.0.0.1", rpc_port = 18332, auth_method = "cookie", datadir = "%NODEDIR%/Bitcoin", cookie_subpath = "testnet3/.cookie", wallet = "", electrum = ["ssl://electrum.blockstream.info:60002"] }
 
   [coin.regtest]
   consensus  = { header_format = "bitcoin", magic = "fabfb5da", default_p2p_port = 18444, p2pkh_prefix = 111, p2sh_prefix = 196, wif_prefix = 239, bech32_hrp = "bcrt", genesis_hash = "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206" }
-  connection = { rpc_host = "127.0.0.1", rpc_port = 19543, auth_method = "cookie", datadir = "%NODEDIR%/Bitcoin", cookie_subpath = "regtest/.cookie", wallet = "" }
+  connection = { rpc_host = "127.0.0.1", rpc_port = 19543, auth_method = "cookie", datadir = "%NODEDIR%/Bitcoin", cookie_subpath = "regtest/.cookie", wallet = "", electrum = ["tcp://127.0.0.1:19760"] }
 
 # ---------------------------------------------------------------------------
 # Litecoin — the first real third coin (not built-in; lives purely as data).

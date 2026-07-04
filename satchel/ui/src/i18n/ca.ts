@@ -226,6 +226,8 @@ export const ca: Bundle = {
     enterBody:
       "Escriu cada paraula — s'autocompleten a mesura que avances — o enganxa la frase sencera. La comprovem abans de continuar.",
     wordCount: "{n} paraules",
+    wordCountHint:
+      "Amb 12 paraules n'hi ha de sobres — aquesta és una cartera de trànsit calenta, no emmagatzematge en fred. Tria 24 si prefereixes la frase més llarga.",
     wordAria: "Paraula {n}",
     checkIncomplete: "Introdueix les {n} paraules.",
     checkUnknown: "Algunes paraules no són a la llista de paraules BIP39 — revisa les marcades.",
@@ -423,6 +425,26 @@ export const ca: Bundle = {
     validateFirst: "Valida el node abans de desar.",
     savingReconnecting: "Desant i tornant a connectar…",
     connected: "{coin} connectat",
+    modeLabel: "Tipus de connexió",
+    modeNode: "El teu propi node",
+    modeNodeDesc: "Core RPC — la cartera del node finança els intercanvis. Màxima sobirania.",
+    modeNodeless: "Electrum",
+    modeNodelessDesc:
+      "No cal cap node: les dades de la cadena venen de servidors Electrum i la cartera viu a la teva llavor Pact.",
+    electrumUrlsLabel: "Servidors Electrum",
+    electrumUrlsHelp:
+      "Un per línia: tcp://host:port o ssl://host:port. La mainnet requereix almenys dos servidors independents que contrastin entre si les seves vistes de la cadena.",
+    electrumNeedUrl: "Introdueix almenys una URL de servidor Electrum (tcp:// o ssl://).",
+    electrumBadUrl: "Les URL d'Electrum han de començar per tcp:// o ssl:// — s'ha rebut: {url}",
+    validateServers: "Valida els servidors",
+    connRpcLocal: "RPC (local)",
+    connRpcRemote: "RPC (remot)",
+    connElectrumLocal: "Electrum (local)",
+    connElectrumRemote: "Electrum (remot)",
+    connRpcTip:
+      "Aquesta moneda parla amb un node tipus Bitcoin Core per RPC; la cartera del node finança els intercanvis.",
+    connElectrumTip:
+      "Aquesta moneda es connecta a servidors Electrum — sense node. La cartera viu a la teva llavor Pact.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "No compatible",
     unsupportedByEngineTip:
@@ -456,6 +478,45 @@ export const ca: Bundle = {
     walletDefaultHint:
       "No hi ha cap cartera definida per a aquesta moneda, així que els RPC fan servir la cartera per defecte del node. Defineix-ne una a Configuració → Monedes per limitar cada crida a una cartera concreta.",
     balanceLabel: "saldo {symbol}",
+    pactSeed: "cartera de llavor Pact",
+    pactSeedHint:
+      "Aquesta moneda funciona sense node: la seva cartera viu a la teva llavor Pact, sincronitzada des de servidors Electrum — no cal cap node. Enviar, rebre i l'historial són aquí mateix.",
+    receive: "Rep",
+    send: "Envia",
+    activity: "Activitat",
+    copy: "Copia",
+    copied: "Copiat",
+    close: "Tanca",
+    refresh: "Actualitza",
+    receiveTitle: "Rep {sym}",
+    receiveIntro:
+      "Una adreça nova de la teva cartera de llavor Pact. Les monedes enviades aquí apareixen al saldo un cop confirmades.",
+    receiveIntroRpc:
+      "Una adreça nova de la cartera del teu node. Les monedes enviades aquí apareixen al saldo un cop confirmades.",
+    receiveFreshNote:
+      "Cada vegada que obres aquest diàleg obtens una adreça nova. Les adreces antigues continuen funcionant — les noves simplement són millors per a la privadesa.",
+    sendTitle: "Envia {sym}",
+    sendIntro: "Disponible per gastar: {balance} {sym}.",
+    sendAddressLabel: "Adreça {sym} del destinatari",
+    sendAmountLabel: "Import",
+    sendNeedAddress: "Introdueix l'adreça del destinatari.",
+    sendNeedAmount: "Introdueix un import.",
+    sendOverBalance: "Més que el saldo disponible per gastar.",
+    sendFeeNote:
+      "La comissió de xarxa s'afegeix a part, triada automàticament segons el mercat de comissions en directe.",
+    sendBroadcast: "Enviat — {txid}… és de camí ({sym}).",
+    sendConfirm: "Envia",
+    activityTitle: "Activitat de {sym}",
+    activityEmpty: "Encara res — rep monedes o completa un intercanvi i apareixerà aquí.",
+    activityWhen: "Quan",
+    activityDirection: "Sentit",
+    activityAmount: "Import ({sym})",
+    activityFee: "Comissió",
+    activityConfs: "Confs",
+    activityTxid: "Transacció",
+    activityPending: "pendent",
+    activitySent: "Enviat",
+    activityReceived: "Rebut",
   },
   corkboard: {
     noBoardTitle: "Cap Corkboard connectat",

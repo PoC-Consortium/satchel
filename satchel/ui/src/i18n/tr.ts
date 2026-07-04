@@ -226,6 +226,8 @@ export const tr: Bundle = {
     enterBody:
       "Her sözcüğü yazın — yazdıkça otomatik tamamlanırlar — veya tüm ifadeyi yapıştırın. Devam etmeden önce kontrol ederiz.",
     wordCount: "{n} sözcük",
+    wordCountHint:
+      "12 sözcük fazlasıyla yeter — bu bir sıcak geçiş cüzdanıdır, soğuk depolama değil. Daha uzun ifadeyi tercih ediyorsanız 24'ü seçin.",
     wordAria: "Sözcük {n}",
     checkIncomplete: "{n} sözcüğün tamamını girin.",
     checkUnknown: "Bazı sözcükler BIP39 sözcük listesinde yok — vurgulananları kontrol edin.",
@@ -423,6 +425,27 @@ export const tr: Bundle = {
     validateFirst: "Kaydetmeden önce düğümü doğrulayın.",
     savingReconnecting: "Kaydediliyor ve yeniden bağlanılıyor…",
     connected: "{coin} bağlandı",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "Bağlantı türü",
+    modeNode: "Kendi düğümünüz",
+    modeNodeDesc: "Core RPC — takasları düğümün cüzdanı fonlar. Azami egemenlik.",
+    modeNodeless: "Electrum",
+    modeNodelessDesc:
+      "Düğüm gerekmez: zincir verileri Electrum sunucularından gelir ve cüzdan Pact seed'inizde yaşar.",
+    electrumUrlsLabel: "Electrum sunucuları",
+    electrumUrlsHelp:
+      "Her satıra bir tane: tcp://host:port veya ssl://host:port. Mainnet, zincir görünümlerini çapraz doğrulamak için en az iki bağımsız sunucu gerektirir.",
+    electrumNeedUrl: "En az bir Electrum sunucu URL'si girin (tcp:// veya ssl://).",
+    electrumBadUrl: "Electrum URL'leri tcp:// veya ssl:// ile başlamalı — gelen: {url}",
+    validateServers: "Sunucuları doğrula",
+    connRpcLocal: "RPC (yerel)",
+    connRpcRemote: "RPC (uzak)",
+    connElectrumLocal: "Electrum (yerel)",
+    connElectrumRemote: "Electrum (uzak)",
+    connRpcTip:
+      "Bu coin, Bitcoin Core tarzı bir düğümle RPC üzerinden konuşur; takasları düğümün cüzdanı fonlar.",
+    connElectrumTip:
+      "Bu coin Electrum sunucularına bağlanır — düğüm yok. Cüzdan Pact seed'inizde yaşar.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Desteklenmiyor",
     unsupportedByEngineTip:
@@ -456,6 +479,45 @@ export const tr: Bundle = {
     walletDefaultHint:
       "Bu coin için cüzdan ayarlanmamış, bu yüzden RPC'ler düğümün varsayılan cüzdanını kullanır. Her çağrıyı belirli bir cüzdana kapsamlandırmak için Ayarlar → Coin'ler bölümünden bir tane ayarlayın.",
     balanceLabel: "{symbol} bakiyesi",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "pact seed cüzdanı",
+    pactSeedHint:
+      "Bu coin düğümsüz çalışır: cüzdanı Pact seed'inizde yaşar ve Electrum sunucularından eşitlenir — düğüm gerekmez. Gönderme, alma ve geçmiş tam burada.",
+    receive: "Al",
+    send: "Gönder",
+    activity: "Etkinlik",
+    copy: "Kopyala",
+    copied: "Kopyalandı",
+    close: "Kapat",
+    refresh: "Yenile",
+    receiveTitle: "{sym} al",
+    receiveIntro:
+      "Pact seed cüzdanınızdan taze bir adres. Buraya gönderilen coin'ler onaylandığında bakiyede görünür.",
+    receiveIntroRpc:
+      "Düğümünüzün cüzdanından taze bir adres. Buraya gönderilen coin'ler onaylandığında bakiyede görünür.",
+    receiveFreshNote:
+      "Bu pencereyi her açtığınızda taze bir adres alırsınız. Eski adresler çalışmaya devam eder — taze olanlar yalnızca gizlilik için daha iyidir.",
+    sendTitle: "{sym} gönder",
+    sendIntro: "Harcanabilir: {balance} {sym}.",
+    sendAddressLabel: "Alıcının {sym} adresi",
+    sendAmountLabel: "Miktar",
+    sendNeedAddress: "Alıcı adresini girin.",
+    sendNeedAmount: "Bir miktar girin.",
+    sendOverBalance: "Harcanabilir bakiyeden fazla.",
+    sendFeeNote: "Ağ ücreti üste eklenir ve canlı ücret piyasasından otomatik olarak seçilir.",
+    sendBroadcast: "Gönderildi — {txid}… yolda ({sym}).",
+    sendConfirm: "Gönder",
+    activityTitle: "{sym} etkinliği",
+    activityEmpty: "Henüz bir şey yok — coin alın veya bir takas tamamlayın, burada görünür.",
+    activityWhen: "Ne zaman",
+    activityDirection: "Yön",
+    activityAmount: "Miktar ({sym})",
+    activityFee: "Ücret",
+    activityConfs: "Onay",
+    activityTxid: "İşlem",
+    activityPending: "beklemede",
+    activitySent: "Gönderildi",
+    activityReceived: "Alındı",
   },
   corkboard: {
     noBoardTitle: "Bağlı Corkboard yok",

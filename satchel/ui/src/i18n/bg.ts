@@ -226,6 +226,8 @@ export const bg: Bundle = {
     enterBody:
       "Въведете всяка дума — те се допълват автоматично, докато пишете — или поставете цялата фраза. Проверяваме я, преди да продължите.",
     wordCount: "{n} думи",
+    wordCountHint:
+      "12 думи са напълно достатъчни — това е горещ транзитен портфейл, а не студено съхранение. Изберете 24, ако предпочитате по-дългата фраза.",
     wordAria: "Дума {n}",
     checkIncomplete: "Въведете всичките {n} думи.",
     checkUnknown: "Някои думи не са в BIP39 списъка — проверете отбелязаните.",
@@ -423,6 +425,27 @@ export const bg: Bundle = {
     validateFirst: "Валидирайте възела преди запазване.",
     savingReconnecting: "Запазване и повторно свързване…",
     connected: "{coin} свързана",
+    // Nodeless (Electrum) connection mode (epic #58).
+    modeLabel: "Тип връзка",
+    modeNode: "Собствен възел",
+    modeNodeDesc: "Core RPC — портфейлът на възела финансира суаповете. Максимален суверенитет.",
+    modeNodeless: "Electrum",
+    modeNodelessDesc:
+      "Не е нужен възел: данните за веригата идват от Electrum сървъри, а портфейлът живее на вашия Pact seed.",
+    electrumUrlsLabel: "Electrum сървъри",
+    electrumUrlsHelp:
+      "По един на ред: tcp://host:port или ssl://host:port. Mainnet изисква поне два независими сървъра, които кръстосано сверяват веригата.",
+    electrumNeedUrl: "Въведете поне един URL на Electrum сървър (tcp:// или ssl://).",
+    electrumBadUrl: "Electrum URL адресите трябва да започват с tcp:// или ssl:// — получено: {url}",
+    validateServers: "Валидирай сървърите",
+    connRpcLocal: "RPC (локален)",
+    connRpcRemote: "RPC (отдалечен)",
+    connElectrumLocal: "Electrum (локален)",
+    connElectrumRemote: "Electrum (отдалечен)",
+    connRpcTip:
+      "Тази монета говори с възел от типа Bitcoin Core през RPC; портфейлът на възела финансира суаповете.",
+    connElectrumTip:
+      "Тази монета се свързва с Electrum сървъри — без възел. Портфейлът живее на вашия Pact seed.",
     // Template picker (a coins.toml coin the engine version doesn't support).
     unsupportedByEngine: "Неподдържана",
     unsupportedByEngineTip:
@@ -456,6 +479,45 @@ export const bg: Bundle = {
     walletDefaultHint:
       "Няма зададен портфейл за тази монета, така че RPC-тата използват портфейла по подразбиране на възела. Задайте такъв в Настройки → Монети, за да ограничите всяко извикване до конкретен портфейл.",
     balanceLabel: "Баланс {symbol}",
+    // ---- nodeless (pact-seed bdk) wallet: send / receive / activity --------
+    pactSeed: "портфейл на Pact seed",
+    pactSeedHint:
+      "Тази монета работи без възел: портфейлът ѝ живее на вашия Pact seed и се синхронизира от Electrum сървъри — не е нужен възел. Изпращане, получаване и история — точно тук.",
+    receive: "Получи",
+    send: "Изпрати",
+    activity: "Активност",
+    copy: "Копирай",
+    copied: "Копирано",
+    close: "Затвори",
+    refresh: "Обнови",
+    receiveTitle: "Получи {sym}",
+    receiveIntro:
+      "Свеж адрес от портфейла ви на Pact seed. Монетите, изпратени тук, се появяват в баланса след потвърждение.",
+    receiveIntroRpc:
+      "Свеж адрес от портфейла на вашия възел. Монетите, изпратени тук, се появяват в баланса след потвърждение.",
+    receiveFreshNote:
+      "Всеки път, когато отворите този диалог, получавате свеж адрес. Старите адреси продължават да работят — свежите просто са по-добри за поверителността.",
+    sendTitle: "Изпрати {sym}",
+    sendIntro: "Налично за харчене: {balance} {sym}.",
+    sendAddressLabel: "{sym} адрес на получателя",
+    sendAmountLabel: "Сума",
+    sendNeedAddress: "Въведете адреса на получателя.",
+    sendNeedAmount: "Въведете сума.",
+    sendOverBalance: "Повече от наличния баланс.",
+    sendFeeNote: "Мрежовата такса се добавя отгоре и се избира автоматично от текущия пазар на такси.",
+    sendBroadcast: "Изпратено — {txid}… е на път ({sym}).",
+    sendConfirm: "Изпрати",
+    activityTitle: "Активност на {sym}",
+    activityEmpty: "Още нищо — получете монети или завършете суап и то ще се появи тук.",
+    activityWhen: "Кога",
+    activityDirection: "Посока",
+    activityAmount: "Сума ({sym})",
+    activityFee: "Такса",
+    activityConfs: "Потв.",
+    activityTxid: "Транзакция",
+    activityPending: "чакаща",
+    activitySent: "Изпратено",
+    activityReceived: "Получено",
   },
   corkboard: {
     noBoardTitle: "Няма свързан Corkboard",
