@@ -17,11 +17,11 @@ interface Bal {
   error?: string;
 }
 
-// Satchel's wallet view is read-only for CORE-backed coins: it shows the hot
-// transit balance so you can see what's available to swap; the node wallet
-// stays your own tool. A NODELESS coin (epic #58) is different — its wallet
-// lives on the Pact seed and Satchel is its only UI, so those cards grow
-// send / receive / activity.
+// Every configured coin's card offers Send / Receive (user decision
+// 2026-07-04: RPC-backed wallets get them too — the engine's
+// getnewaddress/sendtoaddress always worked against the node wallet).
+// Activity stays Electrum-only: listtransactions reads the bdk tx graph;
+// an RPC coin's node wallet has its own tooling for history.
 export default function WalletScreen() {
   const { setConn, setSymbol, watchOnly } = useApp();
   const navigate = useNavigate();
@@ -170,21 +170,21 @@ function WalletCard({
           </Typography>
         </Box>
       </CardContent>
-      {c.nodeless && (
-        <CardContent sx={{ pt: 0, pb: "12px !important" }}>
-          <Stack direction="row" spacing={1}>
-            <Button size="small" variant="outlined" onClick={() => setDialog("receive")}>
-              {t("wallets.receive")}
-            </Button>
-            <Button size="small" variant="outlined" onClick={() => setDialog("send")}>
-              {t("wallets.send")}
-            </Button>
+      <CardContent sx={{ pt: 0, pb: "12px !important" }}>
+        <Stack direction="row" spacing={1}>
+          <Button size="small" variant="outlined" onClick={() => setDialog("receive")}>
+            {t("wallets.receive")}
+          </Button>
+          <Button size="small" variant="outlined" onClick={() => setDialog("send")}>
+            {t("wallets.send")}
+          </Button>
+          {c.nodeless && (
             <Button size="small" color="inherit" onClick={() => setDialog("activity")}>
               {t("wallets.activity")}
             </Button>
-          </Stack>
-        </CardContent>
-      )}
+          )}
+        </Stack>
+      </CardContent>
       {dialog === "receive" && <ReceiveDialog coin={c} onClose={() => setDialog(null)} />}
       {dialog === "send" && (
         <SendDialog

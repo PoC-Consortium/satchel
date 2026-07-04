@@ -509,6 +509,8 @@ export const en = {
     receiveTitle: "Receive {sym}",
     receiveIntro:
       "A fresh address from your pact-seed wallet. Coins sent here appear in the balance once confirmed.",
+    receiveIntroRpc:
+      "A fresh address from your node's wallet. Coins sent here appear in the balance once confirmed.",
     receiveFreshNote:
       "Every time you open this dialog you get a fresh address. Old addresses keep working — fresh ones are just better for privacy.",
     sendTitle: "Send {sym}",
@@ -831,6 +833,7 @@ type NewWalletKeys =
   | "refresh"
   | "receiveTitle"
   | "receiveIntro"
+  | "receiveIntroRpc"
   | "receiveFreshNote"
   | "sendTitle"
   | "sendIntro"

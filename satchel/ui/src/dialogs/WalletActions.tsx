@@ -53,7 +53,9 @@ export function ReceiveDialog({ coin, onClose }: { coin: CoinInfo; onClose: () =
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{t("wallets.receiveTitle", { sym: coin.symbol })}</DialogTitle>
       <DialogContent>
-        <DialogContentText sx={{ mb: 2 }}>{t("wallets.receiveIntro")}</DialogContentText>
+        <DialogContentText sx={{ mb: 2 }}>
+          {coin.nodeless ? t("wallets.receiveIntro") : t("wallets.receiveIntroRpc")}
+        </DialogContentText>
         {err ? (
           <Alert icon={false} variant="outlined" severity="error">
             {err}
