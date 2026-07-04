@@ -60,7 +60,9 @@ export default function CoinSetup({
     saved?.funding_wallet === "pact-seed" ? "electrum" : "node",
   );
   const [electrumUrls, setElectrumUrls] = useState(
-    saved?.funding_wallet === "pact-seed" ? (saved?.extra_backends ?? []).join("\n") : "",
+    saved?.funding_wallet === "pact-seed"
+      ? (saved?.extra_backends ?? []).join("\n")
+      : (template?.electrum ?? []).join("\n"),
   );
   const [host, setHost] = useState(pick(saved?.rpc_host, template?.rpc_host, "127.0.0.1"));
   const [port, setPort] = useState(String(saved?.rpc_port ?? template?.rpc_port ?? ""));

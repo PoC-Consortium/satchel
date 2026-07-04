@@ -85,6 +85,8 @@ export interface NetConnDefaults {
   datadir: string;
   cookie_subpath: string;
   wallet: string;
+  /** Default Electrum servers for the nodeless mode (pre-fill the URL list). */
+  electrum?: string[];
 }
 
 /** One coin template (connection defaults + presentation) for the picker. */

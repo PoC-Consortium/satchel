@@ -89,6 +89,22 @@ Dress-rehearsed headless: both directions completed over Nostr in ~2.5 min
 (realistic confs), each redeem sweeping INTO the respective seed wallet —
 the BTC one through the vanilla electrs.
 
+## D10 — Electrum capability handshake + pre-shipped server defaults
+
+(2026-07-04.) `ElectrumBackend::verify_chain` now negotiates
+`server.version` (protocol 1.4+ required; skipping negotiation gets you
+dropped by some public servers), checks `server.features` where advertised
+(genesis_hash must match; PRUNED servers refused — a restored seed's full
+scan would silently miss history), and keeps the deep header-0 hash check.
+Everything else we call is mandatory 1.4 surface, so no per-method probing.
+
+coins.toml `connection` blocks gain an `electrum = [...]` list that
+pre-fills the setup form's server field: BTC mainnet ships
+blockstream + emzy (two independent operators), BTC testnet blockstream,
+regtest both coins point at the playground electrs ports. BTCX
+mainnet/testnet stay TODO until the project's public PoCX servers are live
+(mainnet requires ≥ 2).
+
 ## D4 — Parity scenarios chosen (test_nodeless_e2e.py)
 
 (1) v1 nodeless maker (bdk `wallet_send` funds leg A), (2) v2 nodeless taker

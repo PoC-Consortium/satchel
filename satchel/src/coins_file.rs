@@ -69,6 +69,10 @@ struct ConnDoc {
     cookie_subpath: Option<String>,
     #[serde(default)]
     wallet: Option<String>,
+    /// Default Electrum servers for the NODELESS mode (epic #58) — pre-fill
+    /// the setup form's server list so the no-node path is one click.
+    #[serde(default)]
+    electrum: Vec<String>,
 }
 
 impl CoinDoc {
@@ -203,6 +207,7 @@ pub fn templates_json(config_dir: &Path, network: &str) -> serde_json::Value {
                         .cookie_subpath
                         .unwrap_or_else(|| default_cookie_subpath(network).to_string()),
                     "wallet": conn.wallet.unwrap_or_default(),
+                    "electrum": conn.electrum,
                 },
             })
         })

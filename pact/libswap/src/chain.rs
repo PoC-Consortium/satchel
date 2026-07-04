@@ -949,6 +949,56 @@ impl ChainBackend for ElectrumBackend {
     }
 
     fn verify_chain(&self) -> Result<()> {
+        // Capability handshake first. Everything we call afterwards is
+        // MANDATORY protocol-1.4 surface (scripthash history/listunspent,
+        // headers, transaction get/broadcast, estimatefee), so there is no
+        // per-method probing — the three real risks are an old protocol, a
+        // PRUNED server (a restored seed's full scan would silently miss
+        // history), and the wrong chain. `server.version` also matters for
+        // politeness: some public servers drop clients that skip negotiation.
+        let ver = self.raw(
+            "server.version",
+            vec![
+                electrum_client::Param::String("satchel".into()),
+                electrum_client::Param::String("1.4".into()),
+            ],
+        )?;
+        let proto = ver
+            .as_array()
+            .and_then(|a| a.get(1))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        anyhow::ensure!(
+            proto.parse::<f32>().map(|p| p >= 1.4).unwrap_or(false),
+            "Electrum server negotiated protocol {proto:?} — need 1.4+ \
+             (server: {})",
+            ver.as_array()
+                .and_then(|a| a.first())
+                .and_then(|v| v.as_str())
+                .unwrap_or("?")
+        );
+        // features: strict where advertised, lenient where absent.
+        if let Ok(features) = self.raw("server.features", vec![]) {
+            if let Some(genesis) = features["genesis_hash"].as_str() {
+                anyhow::ensure!(
+                    genesis == self.params.genesis_hash,
+                    "Electrum server advertises the wrong chain: genesis \
+                     {genesis}, expected {} ({} {:?})",
+                    self.params.genesis_hash,
+                    self.params.coin_id,
+                    self.params.network
+                );
+            }
+            let pruning = &features["pruning"];
+            anyhow::ensure!(
+                pruning.is_null() || pruning.as_u64() == Some(0),
+                "Electrum server is PRUNED (keeps {} blocks) — a pruned server \
+                 cannot serve full wallet history; use an unpruned one",
+                pruning
+            );
+        }
+        // Deep genesis check: fetch header 0 and hash it OURSELVES — validates
+        // both the chain and our (PoCX-aware) header parsing on this server.
         let raw = self.raw(
             "blockchain.block.header",
             vec![electrum_client::Param::Usize(0)],
