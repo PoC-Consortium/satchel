@@ -21,18 +21,28 @@
 !include "WinMessages.nsh"
 
 ; Stop any pactd / pact-cli running FROM THIS INSTALL DIR before files are
-; (over)written. Tauri's NSIS template only handles the main app (satchel.exe);
-; sidecars are invisible to it, and a deliberately-detached pactd (C6
-; keep-running-on-close) survives Satchel's exit BY DESIGN — which is correct
-; in operation but wrong during an upgrade: it holds a lock on pactd.exe (the
-; overwrite fails or silently keeps the old engine) and the next Satchel would
-; re-adopt the OLD binary. Path-scoped via $_.Path so a dev build or playground
-; pactd running from elsewhere is never touched. A hard stop is tolerated by
-; design (state is persisted around every broadcast; chain-watch resumes the
-; swap when the new pactd comes up).
+; (over)written. Tauri's NSIS template only handles the main app (satchel.exe,
+; via CheckIfAppIsRunning right after this hook); sidecars are invisible to it,
+; and a deliberately-detached pactd (C6 keep-running-on-close) survives
+; Satchel's exit BY DESIGN — which is correct in operation but wrong during an
+; upgrade: it holds a lock on pactd.exe (the overwrite fails or silently keeps
+; the old engine) and the next Satchel would re-adopt the OLD binary.
+; Path-scoped so a dev build or playground pactd running from elsewhere is
+; never touched. A hard stop is tolerated by design (state is persisted around
+; every broadcast; chain-watch resumes the swap when the new pactd comes up).
+;
+; WHY CIM AND NOT `Get-Process | Where Path -like ...` (the bug this replaces,
+; issue #63): NSIS installers are 32-bit, so nsExec's `powershell` resolves to
+; the 32-bit PowerShell in SysWOW64 — and there `(Get-Process).Path` (backed by
+; Process.MainModule) is EMPTY for 64-bit targets like pactd, so the path
+; filter silently matched nothing and nothing was ever stopped. WMI's
+; Win32_Process.ExecutablePath is bitness-agnostic. Kill is by PID, and the
+; loop re-queries until the processes are actually GONE (Stop-Process returns
+; before the OS releases the exe lock), bounded by a 15 s deadline so a
+; zombie can never hang the installer.
 !macro _STOP_INSTDIR_DAEMONS
   Push $0
-  nsExec::Exec `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-Process pactd,pact-cli -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '$INSTDIR\*' } | Stop-Process -Force -ErrorAction SilentlyContinue"`
+  nsExec::Exec `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$dir='$INSTDIR'; $$names=@('pactd.exe','pact-cli.exe'); $$deadline=(Get-Date).AddSeconds(15); do { $$procs=@(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $$names -contains $$_.Name -and $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith($$dir + '\', [System.StringComparison]::OrdinalIgnoreCase) }); if (-not $$procs) { break }; $$procs | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 250 } while ((Get-Date) -lt $$deadline)"`
   Pop $0
 !macroend
 
