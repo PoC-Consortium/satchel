@@ -545,8 +545,20 @@ const METHODS: &[(&str, &str, &str, &str)] = &[
     (
         "wallet",
         "sendtoaddress",
-        "<coin> <address> <amount>",
+        "<coin> <address> <amount> [conf_target] [fee_rate]",
         "Send from the coin's wallet; amount in coin units (e.g. 0.5), or 'all' to sweep (fee off the amount).",
+    ),
+    (
+        "wallet",
+        "estimatesendfee",
+        "<coin>",
+        "Fee preview for the send form: slow/normal/fast sat/vB (null = no estimate) + the coin's floor.",
+    ),
+    (
+        "wallet",
+        "bumpfee",
+        "<coin> <txid> <fee_rate>",
+        "RBF-bump an unconfirmed wallet send to fee_rate sat/vB (nodeless coins; live-swap fundings refused).",
     ),
     (
         "wallet",
