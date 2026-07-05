@@ -18,6 +18,9 @@ miniscript = "12"
 # so the bundled libsqlite3-sys stays a single native link.
 bdk_wallet = { version = "2", features = ["rusqlite"] }
 electrum-client = "0.21"
+# libswap dials Electrum ssl:// itself (accept-any-cert verifier, chain.rs);
+# pactd separately installs the process CryptoProvider. Same 0.23 as the tree.
+rustls = "0.23"
 bech32 = "0.11"
 bip39 = "2"
 
