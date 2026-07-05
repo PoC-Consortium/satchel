@@ -91,6 +91,13 @@ fn btc_kvb_to_sat_vb(btc_kvb: f64) -> u64 {
     ((btc_kvb * 1e8) / 1000.0).round() as u64
 }
 
+/// Electrum socket bounds: TCP connect and per-request read/write. Generous —
+/// a single request is one JSON line each way — but FINITE: a stalled remote
+/// server must error out instead of hanging an engine call (and with it every
+/// queued RPC).
+const ELECTRUM_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+const ELECTRUM_IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// How a wallet send prices itself: a market estimate at a block target
 /// (funding and the Slow/Normal/Fast presets) or an explicit user-chosen
 /// rate (the send form's Custom field, and the phoenix-style fallback when
@@ -1063,8 +1070,19 @@ fn connect_electrum_ssl(
     let (host, _port) = addr
         .rsplit_once(':')
         .with_context(|| format!("Electrum ssl URL needs host:port, got {addr:?}"))?;
-    let tcp = std::net::TcpStream::connect(addr)
+    // Bounded connect + per-request I/O: a stalled REMOTE server must FAIL,
+    // not hang — pactd serializes all RPCs on one lock, so an unbounded read
+    // here froze the whole app (rc10 field report).
+    let sock = std::net::ToSocketAddrs::to_socket_addrs(addr)
+        .with_context(|| format!("resolving Electrum server {addr}"))?
+        .next()
+        .with_context(|| format!("Electrum server {addr} resolved to no address"))?;
+    let tcp = std::net::TcpStream::connect_timeout(&sock, ELECTRUM_CONNECT_TIMEOUT)
         .with_context(|| format!("connecting to Electrum server {addr}"))?;
+    tcp.set_read_timeout(Some(ELECTRUM_IO_TIMEOUT))
+        .context("electrum read timeout")?;
+    tcp.set_write_timeout(Some(ELECTRUM_IO_TIMEOUT))
+        .context("electrum write timeout")?;
     // pactd installs aws-lc-rs as the process default in main() (the wss
     // fix); standalone users of libswap (tests, examples) fall back here.
     let provider = rustls::crypto::CryptoProvider::get_default()
@@ -1099,7 +1117,7 @@ impl ElectrumBackend {
         } else {
             let addr = url.strip_prefix("tcp://").unwrap_or(url);
             ElectrumConn::Tcp(
-                electrum_client::raw_client::RawClient::new(addr, None)
+                electrum_client::raw_client::RawClient::new(addr, Some(ELECTRUM_IO_TIMEOUT))
                     .with_context(|| format!("connecting to Electrum server {url}"))?,
             )
         };
