@@ -562,6 +562,8 @@ export const id: Bundle = {
     filterAll: "Semua",
     filterMine: "Milik saya",
     allPairs: "Semua pasangan",
+    wireMismatchTip:
+      "Penawaran ini diposting oleh rilis Satchel yang tidak kompatibel — salah satu dari kalian harus memperbarui sebelum dapat bertransaksi.",
     allPairsTip:
       "Jelajahi setiap pasangan di papan, termasuk koin yang belum Anda atur — penawaran itu hanya bisa dilihat sampai Anda menghubungkan koinnya.",
     noOffers: "Tidak ada penawaran yang bisa Anda ambil sekarang",

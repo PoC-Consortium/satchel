@@ -564,6 +564,8 @@ export const ca: Bundle = {
     filterAll: "Totes",
     filterMine: "Meves",
     allPairs: "Tots els parells",
+    wireMismatchTip:
+      "Aquesta oferta l'ha publicada una versió incompatible de Satchel — un de vosaltres ha d'actualitzar abans de poder operar.",
     allPairsTip:
       "Navega per tots els parells del tauler, incloses les monedes que no has configurat — aquestes ofertes són només de visualització fins que connectis la moneda.",
     noOffers: "No hi ha cap oferta que puguis acceptar ara mateix",

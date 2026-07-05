@@ -562,6 +562,8 @@ export const hr: Bundle = {
     filterAll: "Sve",
     filterMine: "Moje",
     allPairs: "Svi parovi",
+    wireMismatchTip:
+      "Ovu je ponudu objavila nekompatibilna verzija Satchela — jedan od vas mora ažurirati prije trgovanja.",
     allPairsTip:
       "Pregledajte svaki par na ploči, uključujući kovanice koje niste postavili — te su ponude samo za pregled dok ne povežete kovanicu.",
     noOffers: "Trenutno nema ponuda koje možete preuzeti",

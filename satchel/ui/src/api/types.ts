@@ -179,6 +179,10 @@ export interface Info {
   /** Watch-only mode: a viewer session (no coins) that browses the board and
    *  may withdraw its own offers, but can't post/take/fund. */
   watch_only?: boolean;
+  /** Wire-compatibility epoch this pactd speaks per protocol family (rc10),
+   *  e.g. { "pact-htlc-v1": 1, "pact-htlc-v2": 2 }. Offers whose signed
+   *  `wire` differs are badged un-takeable. */
+  wire_epochs?: Record<string, number>;
 }
 
 /** A swap leg's chain ref (older builds used `asset` instead of `coin_id`). */
@@ -335,6 +339,10 @@ export interface OfferBody {
   t2_secs: number;
   /** "pact-htlc-v1" (HTLC) or "pact-htlc-v2" (Taproot/MuSig2 adaptor). */
   protocol?: string;
+  /** Wire-compatibility epoch of `protocol` (rc10); absent = 1 (pre-rc10
+   *  maker). Compared against getinfo's `wire_epochs` — a mismatch means
+   *  the offer is view-only (the engine refuses the take anyway). */
+  wire?: number;
 }
 
 export interface Offer {

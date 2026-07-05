@@ -562,6 +562,8 @@ export const tr: Bundle = {
     filterAll: "Tümü",
     filterMine: "Benimkiler",
     allPairs: "Tüm pariteler",
+    wireMismatchTip:
+      "Bu teklif uyumsuz bir Satchel sürümünden gönderildi — takas yapabilmeniz için birinizin güncellemesi gerekiyor.",
     allPairsTip:
       "Kurmadığınız coin'ler dahil panodaki her pariteye göz atın — o teklifler, coin'i bağlayana kadar yalnızca görüntülenebilir.",
     noOffers: "Şu anda alabileceğiniz teklif yok",

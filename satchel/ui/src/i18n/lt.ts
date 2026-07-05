@@ -562,6 +562,8 @@ export const lt: Bundle = {
     filterAll: "Visi",
     filterMine: "Mano",
     allPairs: "Visos poros",
+    wireMismatchTip:
+      "Šį pasiūlymą paskelbė nesuderinama „Satchel“ versija — vienas iš jūsų turi atsinaujinti, kad galėtumėte prekiauti.",
     allPairsTip:
       "Naršykite visas lentos poras, įskaitant monetas, kurių nesukonfigūravote — tie pasiūlymai yra tik peržiūrai, kol neprijungsite monetos.",
     noOffers: "Šiuo metu nėra pasiūlymų, kuriuos galėtumėte priimti",

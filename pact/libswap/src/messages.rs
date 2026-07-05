@@ -27,6 +27,11 @@ pub struct ChainRef {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InitBody {
     pub protocol: String,
+    /// Wire-compatibility epoch (see [`crate::wire_epoch`]); absent
+    /// (pre-rc10 peers) parses as 1. The receiver rejects a mismatch
+    /// up-front instead of failing mid-handshake.
+    #[serde(default = "crate::board::default_wire")]
+    pub wire: u32,
     pub chain_a: ChainRef,
     pub chain_b: ChainRef,
     pub amount_a: u64,
@@ -50,6 +55,10 @@ pub struct InitBody {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AcceptBody {
+    /// Wire-compatibility epoch echoed back (see [`crate::wire_epoch`]);
+    /// absent (pre-rc10 peers) parses as 1.
+    #[serde(default = "crate::board::default_wire")]
+    pub wire: u32,
     pub bob_redeem_pubkey_a: String,
     pub bob_refund_pubkey_b: String,
 }
@@ -80,6 +89,12 @@ pub struct AbortBody {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InitV2Body {
     pub protocol: String,
+    /// Wire-compatibility epoch (see [`crate::wire_epoch`]); absent
+    /// (pre-rc10 peers) parses as 1. The participant rejects a mismatch
+    /// up-front — the alternative is a partial-signature failure deep in
+    /// the MuSig2 handshake.
+    #[serde(default = "crate::board::default_wire")]
+    pub wire: u32,
     pub chain_a: ChainRef,
     pub chain_b: ChainRef,
     pub amount_a: u64,
@@ -115,6 +130,11 @@ pub struct InitV2Body {
 /// `accept` (Bob → Alice): Bob's keys — both parties can now build both legs.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AcceptV2Body {
+    /// Wire-compatibility epoch echoed back (see [`crate::wire_epoch`]);
+    /// absent (pre-rc10 peers) parses as 1. The initiator gates on it so an
+    /// old participant is refused before any funding is built.
+    #[serde(default = "crate::board::default_wire")]
+    pub wire: u32,
     pub bob_swap_a: String,
     pub bob_swap_b: String,
     pub bob_refund_b: String,

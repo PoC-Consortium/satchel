@@ -1098,6 +1098,7 @@ impl Engine {
 
         let body = InitBody {
             protocol: crate::PROTOCOL_VERSION.into(),
+            wire: crate::WIRE_V1,
             chain_a: chain_a.clone(),
             chain_b: chain_b.clone(),
             amount_a: give.1,
@@ -1167,6 +1168,13 @@ impl Engine {
             "unknown protocol {} (we speak {})",
             body.protocol,
             crate::PROTOCOL_VERSION
+        );
+        ensure!(
+            body.wire == crate::WIRE_V1,
+            "peer speaks {} wire v{}, this build speaks v{} — both sides must run compatible releases",
+            body.protocol,
+            body.wire,
+            crate::WIRE_V1
         );
         chain_params(&body.chain_a)?;
         chain_params(&body.chain_b)?;
@@ -1240,6 +1248,7 @@ impl Engine {
         self.store.put(&record)?;
         let _ = self.snapshot_v1(&record); // rescue snapshot at accept (#54)
         let body = AcceptBody {
+            wire: crate::WIRE_V1,
             bob_redeem_pubkey_a,
             bob_refund_pubkey_b,
         };
@@ -1294,6 +1303,7 @@ impl Engine {
         let redeem_feerate_b = self.adaptor_redeem_feerate(&chain_b);
         let body = crate::messages::InitV2Body {
             protocol: crate::adaptor_swap::PROTOCOL_V2.into(),
+            wire: crate::WIRE_V2,
             chain_a: chain_a.clone(),
             chain_b: chain_b.clone(),
             amount_a,
@@ -1388,6 +1398,16 @@ impl Engine {
             body.protocol,
             crate::adaptor_swap::PROTOCOL_V2
         );
+        // Wire gate BEFORE any key material is derived: an epoch mismatch
+        // would otherwise surface as a partial-signature failure deep in the
+        // MuSig2 handshake (or worse, divergent redeem sighashes).
+        ensure!(
+            body.wire == crate::WIRE_V2,
+            "peer speaks {} wire v{}, this build speaks v{} — both sides must run compatible releases",
+            body.protocol,
+            body.wire,
+            crate::WIRE_V2
+        );
         ensure!(
             body.chain_a.network == body.chain_b.network,
             "both legs must be on the same network"
@@ -1438,6 +1458,7 @@ impl Engine {
         // counter. Parsing T here also validates it before we sign anything.
         let anchor = parse_pubkey(&body.adaptor_point, "adaptor point")?.serialize();
         let body_out = crate::messages::AcceptV2Body {
+            wire: crate::WIRE_V2,
             bob_swap_a: seed
                 .swap_pubkey_anchored(coin_of(&body.chain_a)?, &anchor)?
                 .to_string(),
@@ -1863,6 +1884,12 @@ impl Engine {
                 let b: crate::messages::AcceptV2Body =
                     serde_json::from_value(envelope.body.clone())
                         .context("malformed accept-v2 body")?;
+                ensure!(
+                    b.wire == crate::WIRE_V2,
+                    "peer speaks pact-htlc-v2 wire v{}, this build speaks v{} — both sides must run compatible releases",
+                    b.wire,
+                    crate::WIRE_V2
+                );
                 parse_pubkey(&b.bob_swap_a, "bob swap A")?;
                 parse_pubkey(&b.bob_swap_b, "bob swap B")?;
                 b.bob_refund_b
@@ -3167,6 +3194,12 @@ impl Engine {
                 );
                 let body: AcceptBody = serde_json::from_value(envelope.body.clone())
                     .context("malformed accept body")?;
+                ensure!(
+                    body.wire == crate::WIRE_V1,
+                    "peer speaks pact-htlc-v1 wire v{}, this build speaks v{} — both sides must run compatible releases",
+                    body.wire,
+                    crate::WIRE_V1
+                );
                 parse_pubkey(&body.bob_redeem_pubkey_a, "bob redeem A")?;
                 parse_pubkey(&body.bob_refund_pubkey_b, "bob refund B")?;
                 rec.bob_redeem_pubkey_a = Some(body.bob_redeem_pubkey_a);
@@ -5459,6 +5492,7 @@ impl Engine {
         // wallet can cover across all our live offers in this coin combined.
         self.ensure_can_fund_new_offer(network, &give.0, give.1)?;
         let body = crate::board::OfferBody {
+            wire: crate::wire_epoch(&proto),
             protocol: proto,
             network: format!("{network:?}").to_lowercase(),
             give_asset: give.0,
@@ -5681,6 +5715,13 @@ impl Engine {
             "offer protocol {} unsupported",
             body.protocol
         );
+        ensure!(
+            body.wire == crate::wire_epoch(&body.protocol),
+            "offer speaks {} wire v{}, this build speaks v{} — maker and taker must run compatible releases",
+            body.protocol,
+            body.wire,
+            crate::wire_epoch(&body.protocol)
+        );
         ensure!(!body.expired(local_now()), "offer has expired");
         ensure!(offer.from != self.identity()?, "that is our own offer");
         // Don't signal a take we can't honor: parse the offer's network, then
@@ -5715,6 +5756,9 @@ impl Engine {
             serde_json::json!({
                 "offer": serde_json::to_value(&offer)?,
                 "taken_at": local_now(),
+                // The TAKER's wire epoch for this protocol — the maker gates
+                // on it (an offer's own epoch only proves the maker's side).
+                "wire": crate::wire_epoch(&body.protocol),
             }),
         )?;
         self.relay_send_all(&offer.from, &take)
@@ -5785,6 +5829,7 @@ impl Engine {
         let proto = resolve_offer_protocol(&give.0, &get.0, network, protocol)?;
 
         let body = crate::board::OfferBody {
+            wire: crate::wire_epoch(&proto),
             protocol: proto,
             network: format!("{network:?}").to_lowercase(),
             give_asset: give.0,
@@ -5834,6 +5879,13 @@ impl Engine {
             "offer protocol {} unsupported",
             body.protocol
         );
+        ensure!(
+            body.wire == crate::wire_epoch(&body.protocol),
+            "offer speaks {} wire v{}, this build speaks v{} — maker and taker must run compatible releases",
+            body.protocol,
+            body.wire,
+            crate::wire_epoch(&body.protocol)
+        );
         ensure!(!body.expired(local_now()), "offer has expired");
         ensure!(
             offer.from != self.identity()?,
@@ -5865,13 +5917,14 @@ impl Engine {
             &serde_json::to_string(&offer)?,
             local_now(),
         )?;
-        // Same signed `taken_at` staleness stamp as a board take.
+        // Same signed `taken_at` staleness stamp + taker wire as a board take.
         let take = self.signed_envelope(
             "take",
             &offer.swap_id,
             serde_json::json!({
                 "offer": serde_json::to_value(&offer)?,
                 "taken_at": local_now(),
+                "wire": crate::wire_epoch(&body.protocol),
             }),
         )?;
         self.relay_send_all(&offer.from, &take)
@@ -6348,6 +6401,24 @@ impl Engine {
                 if body.expired(local_now()) {
                     self.reject_take(&envelope.from, &offer.swap_id, "offer expired")?;
                     return event(&offer.swap_id, "take-rejected", "offer expired".into());
+                }
+                // Wire gate: a taker on a different wire epoch cannot complete
+                // the handshake — refuse before serving so the offer stays
+                // live and the taker gets a clear reason (a pre-rc10 taker
+                // sends no `wire`, which parses as epoch 1).
+                let take_wire = envelope.body["wire"].as_u64().unwrap_or(1) as u32;
+                let our_wire = crate::wire_epoch(&body.protocol);
+                if take_wire != our_wire {
+                    self.reject_take(
+                        &envelope.from,
+                        &offer.swap_id,
+                        "incompatible release (protocol wire version) — please update Satchel",
+                    )?;
+                    return event(
+                        &offer.swap_id,
+                        "take-rejected",
+                        format!("taker wire v{take_wire}, ours v{our_wire}; offer stays live"),
+                    );
                 }
                 // Fixed-size offers, no partial fills: first take wins.
                 let served_key = format!("offer_served:{}", offer.swap_id);
@@ -7699,6 +7770,7 @@ mod tests {
     ) {
         let body = crate::board::OfferBody {
             protocol: "pact-htlc-v1".into(),
+            wire: crate::WIRE_V1,
             network: format!("{network:?}").to_lowercase(),
             give_asset: give_asset.into(),
             give_amount,

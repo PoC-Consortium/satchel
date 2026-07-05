@@ -562,6 +562,8 @@ export const zhCn: Bundle = {
     filterAll: "全部",
     filterMine: "我的",
     allPairs: "全部交易对",
+    wireMismatchTip:
+      "此报价由不兼容的 Satchel 版本发布——你们中一方需要更新后才能交易。",
     allPairsTip:
       "浏览牌板上的每个交易对，包括你尚未设置的币种 — 那些报价在你连接该币之前仅供查看。",
     noOffers: "目前没有你可以接受的报价",

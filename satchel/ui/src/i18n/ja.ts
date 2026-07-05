@@ -562,6 +562,8 @@ export const ja: Bundle = {
     filterAll: "すべて",
     filterMine: "自分",
     allPairs: "すべてのペア",
+    wireMismatchTip:
+      "このオファーは互換性のないバージョンの Satchel から投稿されました。取引するには、どちらかが更新する必要があります。",
     allPairsTip:
       "まだ設定していないコインも含め、掲示板上のあらゆるペアを閲覧できます — そうしたオファーは、そのコインを接続するまで閲覧のみです。",
     noOffers: "今すぐ取れるオファーはありません",

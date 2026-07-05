@@ -560,6 +560,8 @@ export const gl: Bundle = {
     filterAll: "Todas",
     filterMine: "Miñas",
     allPairs: "Todos os pares",
+    wireMismatchTip:
+      "Esta oferta publicouna unha versión incompatible de Satchel — un de vós debe actualizar antes de poder operar.",
     allPairsTip:
       "Navega por todos os pares do taboleiro, incluídas moedas que non configuraches — esas ofertas son só de consulta ata que conectes a moeda.",
     noOffers: "Non hai ofertas que poidas tomar agora mesmo",

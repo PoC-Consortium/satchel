@@ -562,6 +562,8 @@ export const ro: Bundle = {
     filterAll: "Toate",
     filterMine: "Ale mele",
     allPairs: "Toate perechile",
+    wireMismatchTip:
+      "Această ofertă a fost publicată de o versiune incompatibilă de Satchel — unul dintre voi trebuie să actualizeze înainte de a putea tranzacționa.",
     allPairsTip:
       "Răsfoiește fiecare pereche de pe board, inclusiv monedele pe care nu le-ai configurat — acele oferte sunt doar de vizualizat până conectezi moneda.",
     noOffers: "Nicio ofertă pe care o poți accepta acum",

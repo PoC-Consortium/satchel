@@ -41,3 +41,29 @@ pub mod wallet_bdk;
 
 pub use fee_policy::FeeBumpPolicy;
 pub use pact_proto::PROTOCOL_VERSION;
+
+// ---- protocol wire-compatibility epochs (rc10) -----------------------------
+// Swap protocols demand byte-identical transaction construction on both
+// sides, so nearly every amendment is a hard break. Each protocol family
+// therefore carries a single monotonic WIRE EPOCH: equal epochs can trade,
+// anything else is refused up-front (offers badge un-takeable, takes and
+// handshakes reject cleanly) instead of failing deep inside the handshake.
+// A missing `wire` field on the wire parses as 1 — the pre-rc10 era.
+
+/// v1 (classic HTLC) wire epoch — unchanged since the first release.
+pub const WIRE_V1: u32 = 1;
+/// v2 (Taproot/MuSig2 adaptor) wire epoch — bumped 1→2 in rc10: the
+/// co-signed redeem's input sequence (part of the shared MuSig2 sighash)
+/// became non-replaceable, see `taproot::build_keypath_redeem`.
+pub const WIRE_V2: u32 = 2;
+
+/// The wire epoch THIS build speaks for `protocol`. Unknown protocol names
+/// map to 1 — every path that consumes an offer/handshake validates the
+/// protocol name itself before (or right after) consulting the epoch.
+pub fn wire_epoch(protocol: &str) -> u32 {
+    if protocol == adaptor_swap::PROTOCOL_V2 {
+        WIRE_V2
+    } else {
+        WIRE_V1
+    }
+}

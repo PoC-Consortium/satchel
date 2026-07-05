@@ -562,6 +562,8 @@ export const hi: Bundle = {
     filterAll: "सभी",
     filterMine: "मेरे",
     allPairs: "सभी pairs",
+    wireMismatchTip:
+      "यह offer एक असंगत Satchel रिलीज़ से पोस्ट किया गया — व्यापार से पहले आप दोनों में से एक को अपडेट करना होगा।",
     allPairsTip:
       "बोर्ड के हर pair को ब्राउज़ करें, उन coins समेत जो आपने सेट अप नहीं किए — वे offers तब तक केवल देखने के लिए हैं जब तक आप उस coin को कनेक्ट नहीं करते।",
     noOffers: "अभी आप कोई offer नहीं ले सकते",

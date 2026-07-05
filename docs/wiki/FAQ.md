@@ -21,7 +21,7 @@ Fee-bumping is now automatic market-tracking: the engine bumps stuck swap transa
 No — per coin you choose **your own node** (RPC; the node's wallet funds swaps) or **Electrum servers** (no node: chain data from the servers, the wallet on your Pact seed; mainnet requires ≥ 2 independent servers as cross-checking views). You still need **at least two coins live** before Satchel lets you trade. See [Configuring Coins](Configuring-Coins).
 
 **Can different release candidates swap with each other?**
-v1 (HTLC) — yes. v2 (Taproot) — not across rc9/rc10: rc10 changes how the co-signed redeem is built, so a mixed-version v2 handshake aborts cleanly before any funding. Settle or abort live v2 swaps before upgrading; swaps already past the handshake finish on the version that made them.
+v1 (HTLC) — yes. v2 (Taproot) — not across rc9/rc10: rc10 changes how the co-signed redeem is built. Since rc10 every offer and handshake message carries its protocol's **wire epoch** (v1 = 1, v2 = 2): an incompatible offer is badged un-takeable on the Corkboard, and a mixed-version take or handshake is refused up-front with a clear reason — nothing ever fails mid-swap. Settle or abort live v2 swaps before upgrading; swaps already past the handshake finish on the version that made them.
 
 **Does this run on mainnet?**
 Yes. Both v1 (HTLC) and v2 (Taproot/MuSig2 adaptor) run on mainnet, reviewed. You alone hold your keys — safeguard your recovery phrase.

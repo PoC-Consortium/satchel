@@ -581,6 +581,8 @@ export const en = {
     filterAll: "All",
     filterMine: "Mine",
     allPairs: "All pairs",
+    wireMismatchTip:
+      "This offer was posted by an incompatible Satchel release — one of you needs to update before you can trade.",
     allPairsTip:
       "Browse every pair on the board, including coins you haven't set up — those offers are view-only until you connect the coin.",
     noOffers: "No offers you can take right now",

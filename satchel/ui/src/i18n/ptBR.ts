@@ -562,6 +562,8 @@ export const ptBR: Bundle = {
     filterAll: "Todas",
     filterMine: "Minhas",
     allPairs: "Todos os pares",
+    wireMismatchTip:
+      "Esta oferta foi publicada por uma versão incompatível do Satchel — um de vocês precisa atualizar antes de poder negociar.",
     allPairsTip:
       "Navegue por todos os pares do board, incluindo moedas que você ainda não configurou — essas ofertas ficam apenas para visualização até você conectar a moeda.",
     noOffers: "Nenhuma oferta que você possa aceitar agora",

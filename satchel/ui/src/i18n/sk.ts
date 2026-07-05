@@ -562,6 +562,8 @@ export const sk: Bundle = {
     filterAll: "Všetky",
     filterMine: "Moje",
     allPairs: "Všetky páry",
+    wireMismatchTip:
+      "Túto ponuku zverejnila nekompatibilná verzia Satchelu — jeden z vás musí aktualizovať, kým budete môcť obchodovať.",
     allPairsTip:
       "Prehliadajte všetky páry na nástenke vrátane mincí, ktoré ste si nenastavili — tie ponuky sú iba na zobrazenie, kým mincu nepripojíte.",
     noOffers: "Žiadne ponuky, ktoré môžete práve teraz prijať",

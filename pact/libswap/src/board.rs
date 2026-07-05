@@ -162,6 +162,11 @@ impl Noticeboard for BoardClient {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OfferBody {
     pub protocol: String,
+    /// Wire-compatibility epoch of `protocol` (see [`crate::wire_epoch`]).
+    /// Signed with the body; absent (a pre-rc10 maker) parses as 1, so old
+    /// v1 offers stay takeable and old v2 offers gate cleanly.
+    #[serde(default = "default_wire")]
+    pub wire: u32,
     pub network: String,
     pub give_asset: String,
     pub give_amount: u64,
@@ -174,6 +179,11 @@ pub struct OfferBody {
     /// verified from the envelope alone (the board's listing TTL is
     /// only a courtesy).
     pub created: u64,
+}
+
+/// Absent `wire` on any wire body = epoch 1, the pre-rc10 era.
+pub(crate) fn default_wire() -> u32 {
+    1
 }
 
 impl OfferBody {
@@ -241,4 +251,37 @@ pub fn init_matches_offer(init_body: &Value, offer: &OfferBody, now: u64) -> Res
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod wire_tests {
+    use super::*;
+
+    /// The wire epochs are PROTOCOL constants (rc10): absent `wire` on a
+    /// pre-rc10 body parses as 1, v1 stays 1, v2 is 2. Changing an epoch is
+    /// a deliberate flag-day — see `crate::wire_epoch`.
+    #[test]
+    fn wire_defaults_and_epochs() {
+        let old: OfferBody = serde_json::from_value(serde_json::json!({
+            "protocol": "pact-htlc-v1",
+            "network": "regtest",
+            "give_asset": "btcx",
+            "give_amount": 1u64,
+            "get_asset": "btc",
+            "get_amount": 1u64,
+            "t1_secs": 1u32,
+            "t2_secs": 1u32,
+            "ttl_secs": null,
+            "created": 0u64,
+        }))
+        .expect("a pre-rc10 offer body (no `wire`) must still parse");
+        assert_eq!(old.wire, 1);
+        assert_eq!(crate::wire_epoch(crate::PROTOCOL_VERSION), crate::WIRE_V1);
+        assert_eq!(
+            crate::wire_epoch(crate::adaptor_swap::PROTOCOL_V2),
+            crate::WIRE_V2
+        );
+        assert_eq!(crate::WIRE_V1, 1);
+        assert_eq!(crate::WIRE_V2, 2);
+    }
 }

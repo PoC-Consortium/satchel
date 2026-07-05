@@ -562,6 +562,8 @@ export const nl: Bundle = {
     filterAll: "Alle",
     filterMine: "Mijne",
     allPairs: "Alle paren",
+    wireMismatchTip:
+      "Deze aanbieding is geplaatst door een incompatibele Satchel-versie — een van jullie moet updaten voordat je kunt handelen.",
     allPairsTip:
       "Blader door elk paar op het bord, ook munten die je niet hebt ingesteld — die aanbiedingen zijn alleen te bekijken tot je de munt verbindt.",
     noOffers: "Geen aanbiedingen die je nu kunt aannemen",

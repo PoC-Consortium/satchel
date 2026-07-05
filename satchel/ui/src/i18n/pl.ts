@@ -562,6 +562,8 @@ export const pl: Bundle = {
     filterAll: "Wszystkie",
     filterMine: "Moje",
     allPairs: "Wszystkie pary",
+    wireMismatchTip:
+      "Ta oferta pochodzi z niezgodnej wersji Satchel — jedno z was musi zaktualizować, zanim będziecie mogli handlować.",
     allPairsTip:
       "Przeglądaj wszystkie pary na tablicy, także z monetami, których nie skonfigurowałeś — te oferty są tylko do podglądu, dopóki nie połączysz monety.",
     noOffers: "Brak ofert, które możesz teraz przyjąć",
