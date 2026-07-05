@@ -76,6 +76,21 @@ fn is_already_broadcast(err: &anyhow::Error) -> bool {
 /// fee resolution and the per-backend estimators.
 pub(crate) const SANITY_MAX_SAT_PER_VB: u64 = 10_000;
 
+/// Estimator answer (BTC per kvB, Core `estimatesmartfee` and Electrum
+/// `blockchain.estimatefee` alike) → integer sat/vB, ROUNDED to nearest
+/// (phoenix parity — its send form shows `round(feerate·1e8/100)/10`).
+/// `ceil` here silently DOUBLED every fee at the bottom of the market:
+/// a 1.01 sat/vB estimate became 2 on both the send presets and the whole
+/// trading path (funding, redeem, refund, nurse market term). Rounding down
+/// by a fraction is safe everywhere this feeds — every trading tx class has
+/// an escalation path (v1 funding RBF, v2 funding/redeem CPFP, refund
+/// rebuild, user-send bump), and callers floor the result at 1 /
+/// `min_feerate_sat_vb`. The one conversion that must NEVER round down —
+/// the BIP125 incremental-relay increment — keeps its own `ceil`.
+fn btc_kvb_to_sat_vb(btc_kvb: f64) -> u64 {
+    ((btc_kvb * 1e8) / 1000.0).round() as u64
+}
+
 /// How a wallet send prices itself: a market estimate at a block target
 /// (funding and the Slow/Normal/Fast presets) or an explicit user-chosen
 /// rate (the send form's Custom field, and the phoenix-style fallback when
@@ -407,7 +422,7 @@ impl CoreRpcBackend {
             .call("estimatesmartfee", &args)
             .ok()
             .and_then(|r| r["feerate"].as_f64()) // BTC per kvB
-            .map(|btc_kvb| ((btc_kvb * 1e8) / 1000.0).ceil() as u64)
+            .map(btc_kvb_to_sat_vb)
             .map(|est| {
                 est.clamp(1, SANITY_MAX_SAT_PER_VB)
                     .max(self.params.min_feerate_sat_vb)
@@ -1415,7 +1430,7 @@ impl ChainBackend for ElectrumBackend {
             .ok()
             .and_then(|v| v.as_f64())
             .filter(|btc_kb| *btc_kb > 0.0) // -1 = no estimate available
-            .map(|btc_kb| ((btc_kb * 1e8) / 1000.0).ceil() as u64)
+            .map(btc_kvb_to_sat_vb)
             .map(|est| {
                 est.clamp(1, SANITY_MAX_SAT_PER_VB)
                     .max(self.params.min_feerate_sat_vb)
@@ -1742,7 +1757,7 @@ impl ChainBackend for MultiBackend {
 
 #[cfg(test)]
 mod funding_conf_target_tests {
-    use super::funding_conf_target_for;
+    use super::{btc_kvb_to_sat_vb, funding_conf_target_for};
 
     #[test]
     fn derives_per_coin_target_from_30min_cap() {
@@ -1760,5 +1775,18 @@ mod funding_conf_target_tests {
         // A nonsense 0 spacing can't occur (coins require it), but the guard must
         // not divide by zero — it falls back to the standard baseline (6).
         assert_eq!(funding_conf_target_for(0), 6);
+    }
+
+    #[test]
+    fn estimator_conversion_rounds_like_phoenix() {
+        // 0.00001012 BTC/kvB = 1.012 sat/vB — the real bottom-of-market shape
+        // that `ceil` used to double to 2 (rc10 field report).
+        assert_eq!(btc_kvb_to_sat_vb(0.00001012), 1);
+        assert_eq!(btc_kvb_to_sat_vb(0.00001000), 1);
+        // ≥ .5 rounds up, matching phoenix's Math.round.
+        assert_eq!(btc_kvb_to_sat_vb(0.00001500), 2);
+        assert_eq!(btc_kvb_to_sat_vb(0.00009873), 10);
+        // Sub-relay dust rounds to 0 — callers clamp to ≥ 1 / the coin floor.
+        assert_eq!(btc_kvb_to_sat_vb(0.00000040), 0);
     }
 }
