@@ -12,20 +12,20 @@ authentication, and the scheduler model.
 unauthenticated `GET /health`), loopback-only:
 
 ```text
-pactd --data-dir <DIR> [--coins-file <coins.toml>] [--coin <id>=<url[,url]> ...]
+pactd [--data-dir <DIR>] [--coins-file <coins.toml>] [--coin <id>=<url[,url]> ...]
       [--coin-confs <id>=<N> ...] [--listen <addr:port>] [--network <net>]
       [--board-url <url[,url]>] [--nostr-relay <wss://…[,…]>] [--auto-fund]
       [--tick-secs <s>] [--once] [--auto-init] [--merchants]
 ```
 
-Only `--data-dir` is required. With no `--coin`, the daemon starts but cannot
-move funds on any chain until a backend is attached.
+No flag is required. With no `--coin`, the daemon starts but cannot move funds
+on any chain until a backend is attached.
 
 ## Flags
 
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
-| `--data-dir` | path | **required** | Data directory holding the seed, SQLite state, `.cookie`, and `pact.conf`. In `--merchants` mode this is the *parent* of `merchants/<id>/`. |
+| `--data-dir` | path | platform default | Data directory holding the seed, SQLite state, `.cookie`, and `pact.conf`. In `--merchants` mode this is the *parent* of `merchants/<id>/`. Defaults bitcoind-style to `%APPDATA%\Pact` (Windows), `~/Library/Application Support/Pact` (macOS), `~/.pact` (elsewhere), with mainnet at the root and `testnet`/`regtest` nested beneath — `pact-cli` autodiscovers the same location. |
 | `--coins-file` | path | none | A `coins.toml` adding coins beyond the two built-ins (`btcx`, `btc`); merged at startup. A file coin whose id collides with a built-in is dropped. A bad file logs and falls back to the built-ins rather than refusing boot. |
 | `--coin` | repeatable `id=url[,url]` | none | Per-coin chain backend. The first URL is the wallet-qualified Core-RPC primary that funds swaps; the rest may be Electrum (`tcp://` / `ssl://`). The coin id must be in the registry; the last `--coin` for a given id wins. |
 | `--coin-confs` | repeatable `id=N` | network/spacing default | Per-coin confirmation depth (reorg finality, `N ≥ 1`). Gates auto-redeem and completion in v1 and v2. Omitted coins use the default heuristic (see the chapter *Coins, Pairs & Capabilities*). |

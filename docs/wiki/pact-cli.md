@@ -1,22 +1,41 @@
 # pact-cli
 
-`pact-cli` is a thin JSON-RPC client for [pactd](Running-pactd) — the `bitcoin-cli` of the suite. It connects over loopback HTTP, reads the cookie for auth, and prints the daemon's JSON response.
+`pact-cli` is a thin JSON-RPC client for [pactd](Running-pactd) — the `bitcoin-cli` of the suite. It connects over loopback HTTP, autodiscovers the cookie for auth, and prints the daemon's response.
 
 This page is a quick reference. For full argument details and worked examples, see the **Pact handbook** chapters on the CLI: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
+
+## Zero-config usage
+
+Against a default local `pactd`, no flags are needed — **every RPC method is a direct subcommand**, and auth is found automatically:
+
+```sh
+pact-cli getinfo
+pact-cli getbalance btc
+pact-cli help              # the daemon's full method catalog, by category
+pact-cli help sendtoaddress
+```
+
+Each argument is parsed as JSON when possible, else passed as a plain string (bitcoin-cli's convention). A typo'd method suggests the nearest real one (`unknown method 'getblance' — did you mean 'getbalance'?`).
+
+## Auth discovery
+
+Explicit `--rpcuser`/`--rpcpassword` win; an explicit `--data-dir` is read strictly. With neither, these dirs are searched for a `.cookie` (or `rpcuser`/`rpcpassword` in `pact.conf`), in order:
+
+1. the `pactd` platform default — `%APPDATA%\Pact` (Windows), `~/Library/Application Support/Pact` (macOS), `~/.pact` (elsewhere); mainnet at the root, `testnet`/`regtest` nested per `--network`;
+2. Satchel's managed pactd dir (`<app-local-data>/org.pocx.satchel/[net]/pactd`). Note Satchel offsets its listen port per network (`9737`/`9738`/`9739`) — pass `--rpc` off-mainnet.
 
 ## Global flags
 
 | Flag | Default | Meaning |
 |---|---|---|
 | `--rpc <url>` | `http://127.0.0.1:9737` | pactd JSON-RPC endpoint. |
-| `--data-dir <DIR>` | none | Where to read the `.cookie` for auth. |
-| `--rpcuser` / `--rpcpassword` | none | Explicit credentials (else the cookie is used). |
+| `--data-dir <DIR>` | autodiscovered | Where to read the `.cookie` / `pact.conf` for auth. |
+| `--network <net>` | `regtest` | Network subdir the auth discovery looks under (mirrors pactd's default). |
+| `--rpcuser` / `--rpcpassword` | none | Explicit credentials (skip discovery entirely). |
 
-```sh
-pact-cli --data-dir ./alice getinfo
-```
+## Structured subcommands
 
-## Subcommands
+Beyond direct method dispatch, a handful of subcommands wrap an RPC **plus file I/O** for the manual (file-passing) swap handshake, or add flag-style arguments:
 
 | Subcommand | Args | RPC method |
 |---|---|---|
@@ -43,16 +62,17 @@ pact-cli --data-dir ./alice getinfo
 | `board revoke` | `--offer` | `boardrevoke` |
 | `board sync` | — | `tick` |
 
-## The `call` escape hatch
+## Direct dispatch (and `call`)
 
-Any RPC method is reachable via the generic passthrough, with each argument JSON-parsed (falling back to a plain string):
+Any other RPC method is a subcommand of its own name; `call <method> [params...]` remains as the explicit passthrough spelling of the same thing:
 
 ```sh
-pact-cli call estimateswapfees btcx btc
-pact-cli call adaptorinit btcx:100000 btc:100000 600 300
+pact-cli estimateswapfees btcx btc
+pact-cli adaptorinit btcx:100000 btc:100000 600 300
+pact-cli listmethods                # machine-readable name array
 ```
 
-> **Note — CLI gap.** There are no structured subcommands for v2 adaptor swaps, merchants, private offers, `getbalance`/`getnewaddress`/`sendtoaddress`, `getinfo`, `estimateswapfees`, `generateseed`, `boardstatus`, `listmyoffers`, or `listpendingtakes`. Reach those through `pact-cli call <method>` — see the [JSON-RPC API](JSON-RPC-API) index for the full list.
+See `pact-cli help` (the daemon's catalog) or the [JSON-RPC API](JSON-RPC-API) index for the full method list.
 
 ## See also
 

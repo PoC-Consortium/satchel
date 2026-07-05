@@ -81,9 +81,12 @@ fn init_logging(data_dir: &Path) -> Option<tracing_appender::non_blocking::Worke
 #[derive(Parser, Debug)]
 #[command(name = "pactd", version, about = "Pact swap daemon (PoCX trading)")]
 struct Args {
-    /// Data directory (seed, SQLite state, .cookie, pact.conf).
+    /// Data directory (seed, SQLite state, .cookie, pact.conf). Defaults to
+    /// the platform data dir — %APPDATA%\Pact on Windows, ~/Library/
+    /// Application Support/Pact on macOS, ~/.pact elsewhere — nested per
+    /// network (mainnet at the root, testnet/regtest beneath), bitcoind-style.
     #[arg(long)]
-    data_dir: PathBuf,
+    data_dir: Option<PathBuf>,
     /// Optional coin-templates file (`coins.toml`) that adds coins beyond the
     /// two built-ins (btcx, btc). Loaded at startup and merged with the
     /// built-ins (a file coin that collides with a built-in id is dropped).
@@ -316,11 +319,15 @@ impl Params {
         }
     }
     fn str(&self, i: usize, name: &str) -> Result<String> {
-        Ok(self
-            .get(i, name)?
-            .as_str()
-            .with_context(|| format!("param '{name}' must be a string"))?
-            .to_string())
+        // Accept a JSON string, or render a scalar back to one — the CLI
+        // JSON-parses each arg, so `sendtoaddress btc <addr> 0.5` arrives as a
+        // number and must not be rejected for it (bitcoin-cli coerces too).
+        match self.get(i, name)? {
+            Value::String(s) => Ok(s.clone()),
+            Value::Number(n) => Ok(n.to_string()),
+            Value::Bool(b) => Ok(b.to_string()),
+            _ => bail!("param '{name}' must be a string"),
+        }
     }
     fn u32(&self, i: usize, name: &str) -> Result<u32> {
         let v = self.get(i, name)?;
@@ -429,12 +436,448 @@ fn coin_confs_from_args(args: &Args) -> Result<BTreeMap<String, u32>> {
     Ok(map)
 }
 
+/// The public RPC catalog: (category, name, args, summary) per method, in the
+/// order `help` prints them. Drives `help`, `listmethods` and the
+/// unknown-method suggestion. KEEP IN SYNC with the `dispatch` match below —
+/// the `catalog_matches_dispatch` test calls every cataloged name and fails on
+/// one that falls through to "unknown method". The regtest-only
+/// `_settestfeerate` hook is deliberately unlisted.
+const METHODS: &[(&str, &str, &str, &str)] = &[
+    (
+        "control",
+        "getinfo",
+        "",
+        "Daemon summary: version, protocol, network, identity, seed state, configured coins.",
+    ),
+    (
+        "control",
+        "help",
+        "[method]",
+        "List all methods by category, or show what one method does.",
+    ),
+    (
+        "control",
+        "listmethods",
+        "",
+        "Machine-readable array of all method names.",
+    ),
+    ("control", "stop", "", "Shut pactd down cleanly."),
+    (
+        "control",
+        "tick",
+        "",
+        "One coordination + scheduler pass (relay sync, then auto-redeem/refund/fee-bump).",
+    ),
+    (
+        "coins",
+        "listcoins",
+        "",
+        "Shipped coins: which are configured, live connection status, tip height, confirmations.",
+    ),
+    (
+        "coins",
+        "listpairs",
+        "",
+        "Derived swap-pair availability for the current coin setup.",
+    ),
+    (
+        "coins",
+        "validatecoin",
+        "<coin_id> <chain_data>",
+        "Genesis-validate a proposed backend URL list for a coin without saving it.",
+    ),
+    (
+        "coins",
+        "estimateswapfees",
+        "<give_coin> <get_coin>",
+        "Fee preview for a prospective swap on the given pair.",
+    ),
+    (
+        "wallet",
+        "walletstatus",
+        "",
+        "Seed lifecycle: whether a seed exists / is encrypted / is locked.",
+    ),
+    (
+        "wallet",
+        "createseed",
+        "[passphrase] [words]",
+        "Create + persist a seed (12 or 24 words); the mnemonic is returned exactly once.",
+    ),
+    (
+        "wallet",
+        "generateseed",
+        "[words]",
+        "Generate a fresh mnemonic WITHOUT persisting it (onboarding show-then-confirm).",
+    ),
+    (
+        "wallet",
+        "importseed",
+        "<mnemonic> [passphrase]",
+        "Import an existing BIP39 mnemonic (optionally encrypted at rest).",
+    ),
+    (
+        "wallet",
+        "unlock",
+        "<passphrase>",
+        "Unlock an encrypted seed for this session (held in memory only).",
+    ),
+    (
+        "wallet",
+        "getbalance",
+        "<coin>",
+        "Wallet balance (sat) for a configured coin.",
+    ),
+    (
+        "wallet",
+        "getnewaddress",
+        "<coin>",
+        "Fresh receive address for a configured coin.",
+    ),
+    (
+        "wallet",
+        "sendtoaddress",
+        "<coin> <address> <amount>",
+        "Send from the coin's wallet; amount in coin units (e.g. 0.5).",
+    ),
+    (
+        "wallet",
+        "listtransactions",
+        "<coin>",
+        "Wallet activity of a nodeless coin, newest first.",
+    ),
+    (
+        "wallet",
+        "getfeepolicy",
+        "",
+        "The active merchant's fee-bump policy.",
+    ),
+    (
+        "wallet",
+        "setfeepolicy",
+        "[max_feerate_sat_vb] [reservation_mult] [committed_mult]",
+        "Update fee-bump policy fields; only the fields supplied change.",
+    ),
+    (
+        "wallet",
+        "setwatchonly",
+        "<on>",
+        "Enter/leave watch-only mode (browse + withdraw own offers, never post/take/fund).",
+    ),
+    (
+        "merchants",
+        "createmerchant",
+        "[label]",
+        "Create a new merchant (its own seed + state under merchants/<id>/).",
+    ),
+    ("merchants", "listmerchants", "", "List all merchants."),
+    (
+        "merchants",
+        "loadmerchant",
+        "<id>",
+        "Load a merchant as the active one.",
+    ),
+    (
+        "merchants",
+        "renamemerchant",
+        "<id> <label>",
+        "Relabel a merchant.",
+    ),
+    ("merchants", "unloadmerchant", "", "Unload the active merchant."),
+    (
+        "merchants",
+        "getmerchantinfo",
+        "[id]",
+        "Details for one merchant (default: the active one).",
+    ),
+    ("swaps", "listswaps", "", "All v1 swap records."),
+    (
+        "swaps",
+        "listadaptorswaps",
+        "",
+        "All v2 (adaptor) swap records.",
+    ),
+    (
+        "swaps",
+        "swapprogress",
+        "",
+        "Live per-swap progress: confirmation depth + latest scheduler action.",
+    ),
+    (
+        "swaps",
+        "listpendingtakes",
+        "",
+        "Outstanding takes still awaiting the maker's init.",
+    ),
+    (
+        "swaps",
+        "listmyoffers",
+        "",
+        "Our own board offers with lifecycle state and expiries.",
+    ),
+    ("swaps", "getswap", "<swap_id>", "One v1 swap record."),
+    (
+        "swaps",
+        "dumpswap",
+        "<swap_id>",
+        "Dev-shareable dump of one swap: secrets-scrubbed record + its pactd log lines.",
+    ),
+    (
+        "swaps",
+        "offer",
+        "<give> <get> <t1> <t2>",
+        "Start a v1 swap as initiator (amounts as coin:value); returns the init envelope.",
+    ),
+    (
+        "swaps",
+        "acceptoffer",
+        "<envelope>",
+        "Accept a v1 init envelope; returns the accept envelope.",
+    ),
+    (
+        "swaps",
+        "recv",
+        "<envelope>",
+        "Ingest a counterparty v1 message (accept/funded/redeemed/abort).",
+    ),
+    (
+        "swaps",
+        "fund",
+        "<swap_id>",
+        "Fund our HTLC leg and notify the counterparty.",
+    ),
+    (
+        "swaps",
+        "redeem",
+        "<swap_id>",
+        "Redeem the counterparty HTLC (initiator: reveals the preimage).",
+    ),
+    (
+        "swaps",
+        "refund",
+        "<swap_id>",
+        "Broadcast the refund for our HTLC (valid once MTP >= T).",
+    ),
+    (
+        "swaps",
+        "abort",
+        "<swap_id> [reason]",
+        "Cancel a v1/v2 swap before funding, or drop a pending take (id = offer id).",
+    ),
+    (
+        "adaptor (v2)",
+        "adaptorinit",
+        "<give> <get> <t1> <t2>",
+        "Start a v2 adaptor swap as initiator; returns the init envelope.",
+    ),
+    (
+        "adaptor (v2)",
+        "adaptoraccept",
+        "<envelope>",
+        "Accept a v2 init envelope.",
+    ),
+    (
+        "adaptor (v2)",
+        "adaptorrecv",
+        "<envelope>",
+        "Ingest a counterparty v2 message.",
+    ),
+    (
+        "adaptor (v2)",
+        "adaptorfundingready",
+        "<swap_id> <txid> <vout>",
+        "Announce our funding outpoint for the v2 handshake.",
+    ),
+    (
+        "adaptor (v2)",
+        "adaptornonces",
+        "<swap_id>",
+        "Produce our musig2 nonces envelope.",
+    ),
+    (
+        "adaptor (v2)",
+        "adaptorsign",
+        "<swap_id>",
+        "Produce our partial signatures envelope.",
+    ),
+    (
+        "adaptor (v2)",
+        "adaptorassemble",
+        "<swap_id>",
+        "Assemble the counterparty's partials into complete redeem/refund txs.",
+    ),
+    (
+        "adaptor (v2)",
+        "adaptorfund",
+        "<swap_id>",
+        "Broadcast our v2 funding transaction.",
+    ),
+    (
+        "adaptor (v2)",
+        "adaptorredeem",
+        "<swap_id>",
+        "Broadcast the v2 redeem for the counterparty leg.",
+    ),
+    (
+        "adaptor (v2)",
+        "adaptorrefund",
+        "<swap_id>",
+        "Broadcast the v2 refund for our leg.",
+    ),
+    (
+        "board",
+        "boardlistoffers",
+        "[board]",
+        "Offers on a configured board (default: the first).",
+    ),
+    (
+        "board",
+        "boardpostoffer",
+        "<give> <get> <t1_secs> <t2_secs> [protocol] [ttl_secs]",
+        "Post an offer to every configured board.",
+    ),
+    ("board", "boardtake", "<offer_id>", "Take a board offer."),
+    (
+        "board",
+        "boardrevoke",
+        "<offer_id>",
+        "Withdraw one of our board offers (terminal).",
+    ),
+    (
+        "board",
+        "boardstatus",
+        "",
+        "Relay connectivity: one entry per configured Nostr relay.",
+    ),
+    (
+        "board",
+        "makeprivateoffer",
+        "<give> <get> <t1_secs> <t2_secs> [protocol] [ttl_secs]",
+        "Build + sign an off-market offer slip (never posted to a board).",
+    ),
+    (
+        "board",
+        "takeoffer",
+        "<slip>",
+        "Take a private offer from a pasted slip.",
+    ),
+    ("board", "listprivateoffers", "", "Our own private offer slips."),
+    (
+        "board",
+        "cancelprivateoffer",
+        "<offer_id>",
+        "Cancel one of our private offer slips.",
+    ),
+    (
+        "rescue",
+        "rescuestatus",
+        "",
+        "Read-only: how many in-flight swaps `restorefromrelay` would recover.",
+    ),
+    (
+        "rescue",
+        "restorefromrelay",
+        "<no args — read the warning first>",
+        "Adopt in-flight swaps from our encrypted relay snapshots (seed-only rescue). ONLY once the machine that ran them is retired — two live drivers can double-fund a swap.",
+    ),
+];
+
+/// Typed marker for JSON-RPC -32601 (method not found) — the one place the
+/// transport layer distinguishes an error kind (issue #57 P1; broader typed
+/// codes stay open as P2).
+#[derive(Debug)]
+struct MethodNotFound(String);
+
+impl std::fmt::Display for MethodNotFound {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for MethodNotFound {}
+
+/// Build the "unknown method" error, suggesting the nearest cataloged name
+/// when it is plausibly a typo (edit distance scaled to the input length).
+fn method_not_found(method: &str) -> anyhow::Error {
+    let nearest = METHODS
+        .iter()
+        .map(|(_, n, _, _)| *n)
+        .min_by_key(|n| edit_distance(method, n));
+    let hint = match nearest {
+        Some(n) if edit_distance(method, n) <= 2.max(method.len() / 3) => {
+            format!(" — did you mean '{n}'?")
+        }
+        _ => String::new(),
+    };
+    anyhow::Error::new(MethodNotFound(format!(
+        "unknown method '{method}'{hint} (see 'help')"
+    )))
+}
+
+/// Plain Levenshtein distance (two-row DP) for the did-you-mean suggestion.
+fn edit_distance(a: &str, b: &str) -> usize {
+    let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.iter().enumerate() {
+        let mut row = vec![i + 1];
+        for (j, cb) in b.iter().enumerate() {
+            let sub = prev[j] + usize::from(ca != cb);
+            row.push(sub.min(prev[j + 1] + 1).min(row[j] + 1));
+        }
+        prev = row;
+    }
+    prev[b.len()]
+}
+
+/// Render `help` / `help <method>` as plain text, bitcoin-cli style (the CLI
+/// prints string results raw, so this reads like a man page, not JSON).
+fn render_help(topic: Option<&str>) -> Result<String> {
+    let Some(topic) = topic else {
+        let mut out = String::new();
+        let mut last_cat = "";
+        for (cat, name, args, _) in METHODS {
+            if *cat != last_cat {
+                if !out.is_empty() {
+                    out.push('\n');
+                }
+                out.push_str(&format!("== {cat} ==\n"));
+                last_cat = cat;
+            }
+            out.push_str(name);
+            if !args.is_empty() {
+                out.push(' ');
+                out.push_str(args);
+            }
+            out.push('\n');
+        }
+        out.push_str("\nhelp <method> explains one method; any method is callable as `pact-cli <method> [params...]`.");
+        return Ok(out);
+    };
+    let topic = topic.to_ascii_lowercase();
+    let (_, name, args, summary) = METHODS
+        .iter()
+        .find(|(_, n, _, _)| *n == topic)
+        .ok_or_else(|| method_not_found(&topic))?;
+    Ok(if args.is_empty() {
+        format!("{name}\n\n{summary}")
+    } else {
+        format!("{name} {args}\n\n{summary}")
+    })
+}
+
 /// Dispatch one JSON-RPC method. Result payloads match the old REST bodies
 /// so clients only change transport, not shapes.
 async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
     let p = Params(params);
     let net = app.network;
     match method {
+        "help" => Ok(Value::String(render_help(
+            p.opt_str(0, "method").as_deref(),
+        )?)),
+        "listmethods" => Ok(json!(METHODS
+            .iter()
+            .map(|(_, n, _, _)| *n)
+            .collect::<Vec<_>>())),
         "getinfo" => {
             // Tolerate a missing/locked seed: a fresh merchant (first run) or
             // a locked encrypted one has no identity to show yet. The UI uses
@@ -1082,7 +1525,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             .await?;
             Ok(json!({ "transactions": txs }))
         }
-        other => bail!("unknown method '{other}'"),
+        other => Err(method_not_found(other)),
     }
 }
 
@@ -1101,10 +1544,19 @@ struct RpcRequest {
 async fn rpc(State(app): State<App>, Json(req): Json<RpcRequest>) -> Json<Value> {
     match dispatch(&app, &req.method, req.params).await {
         Ok(result) => Json(json!({ "jsonrpc": "2.0", "id": req.id, "result": result })),
-        Err(err) => Json(json!({
-            "jsonrpc": "2.0", "id": req.id,
-            "error": { "code": -1, "message": format!("{err:#}") }
-        })),
+        Err(err) => {
+            // JSON-RPC "method not found" gets its standard code; everything
+            // else stays -1 for now (typed codes are #57 P2).
+            let code = if err.is::<MethodNotFound>() {
+                -32601
+            } else {
+                -1
+            };
+            Json(json!({
+                "jsonrpc": "2.0", "id": req.id,
+                "error": { "code": code, "message": format!("{err:#}") }
+            }))
+        }
     }
 }
 
@@ -1201,6 +1653,25 @@ fn write_cookie(data_dir: &Path) -> Result<String> {
     Ok(creds)
 }
 
+/// Platform-default data dir (#57 P0), bitcoind-style, nested per network so
+/// mainnet/testnet/regtest coexist: mainnet at the root, the test networks
+/// beneath it. `network` must already be validated (see [`parse_network`]).
+/// pact-cli mirrors this in its cookie autodiscovery — keep the two in sync.
+fn default_data_dir(network: &str) -> Result<PathBuf> {
+    let base = if cfg!(target_os = "windows") {
+        std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join("Pact"))
+    } else if cfg!(target_os = "macos") {
+        std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Application Support/Pact"))
+    } else {
+        std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".pact"))
+    }
+    .context("no --data-dir and no platform default (HOME/APPDATA unset)")?;
+    Ok(match network {
+        "mainnet" => base,
+        net => base.join(net),
+    })
+}
+
 fn parse_network(name: &str) -> Result<Network> {
     match name {
         "regtest" => Ok(Network::Regtest),
@@ -1268,9 +1739,17 @@ async fn main() -> Result<()> {
     // Install the provider explicitly, before any relay connection is attempted.
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let args = Args::parse();
-    // Keep the file-writer guard alive for the whole process (flushes on drop).
-    let _log_guard = init_logging(&args.data_dir);
     let network = parse_network(&args.network)?;
+    // Resolve the data dir (explicit flag or the platform default) and make
+    // sure it exists before anything (logging, seed, cookie) writes into it.
+    let data_dir = match &args.data_dir {
+        Some(d) => d.clone(),
+        None => default_data_dir(&args.network)?,
+    };
+    std::fs::create_dir_all(&data_dir)
+        .with_context(|| format!("creating data dir {}", data_dir.display()))?;
+    // Keep the file-writer guard alive for the whole process (flushes on drop).
+    let _log_guard = init_logging(&data_dir);
     let passphrase = std::env::var("PACT_PASSPHRASE").ok();
 
     // Load extra coins from coins.toml (if any) BEFORE anything touches the
@@ -1292,9 +1771,9 @@ async fn main() -> Result<()> {
         }
     }
 
-    if args.auto_init && !args.data_dir.join(libswap::store::SEED_FILE).exists() {
-        libswap::store::Store::init(&args.data_dir, passphrase.as_deref())?;
-        tracing::info!(data_dir = %args.data_dir.display(), "first run: created seed + state db");
+    if args.auto_init && !data_dir.join(libswap::store::SEED_FILE).exists() {
+        libswap::store::Store::init(&data_dir, passphrase.as_deref())?;
+        tracing::info!(data_dir = %data_dir.display(), "first run: created seed + state db");
     }
 
     // C10: pactd owns the merchant registry. The `--data-dir` is the *parent*;
@@ -1303,7 +1782,7 @@ async fn main() -> Result<()> {
     // root — detected here so that legacy path stays a single `default` merchant.
     let coins = coins_from_args(&args)?;
     let coin_confirmations = coin_confs_from_args(&args)?;
-    let flat_seed_present = args.data_dir.join(libswap::store::SEED_FILE).exists();
+    let flat_seed_present = data_dir.join(libswap::store::SEED_FILE).exists();
     let engine_cfg = EngineConfig {
         coins,
         coin_confirmations,
@@ -1312,13 +1791,8 @@ async fn main() -> Result<()> {
         auto_fund: args.auto_fund,
         passphrase: passphrase.clone(),
     };
-    let registry = MerchantRegistry::open(
-        &args.data_dir,
-        engine_cfg,
-        flat_seed_present,
-        args.merchants,
-    )
-    .context("opening merchant registry (run with --auto-init or createmerchant first)")?;
+    let registry = MerchantRegistry::open(&data_dir, engine_cfg, flat_seed_present, args.merchants)
+        .context("opening merchant registry (run with --auto-init or createmerchant first)")?;
 
     if args.once {
         // One scheduler pass over the active merchant (the flat/CLI seed).
@@ -1339,8 +1813,8 @@ async fn main() -> Result<()> {
     );
 
     // Auth material: cookie (always) + optional pact.conf credentials.
-    let cookie = write_cookie(&args.data_dir)?;
-    let conf = read_conf(&args.data_dir);
+    let cookie = write_cookie(&data_dir)?;
+    let conf = read_conf(&data_dir);
     let mut creds = vec![cookie];
     if let (Some(u), Some(pw)) = (conf.get("rpcuser"), conf.get("rpcpassword")) {
         creds.push(format!("{u}:{pw}"));
@@ -1469,7 +1943,7 @@ async fn main() -> Result<()> {
         .layer(axum::middleware::from_fn_with_state(app.clone(), auth))
         .with_state(app.clone());
 
-    tracing::info!(listen = %args.listen, cookie = %args.data_dir.join(COOKIE_FILE).display(), "pactd JSON-RPC listening");
+    tracing::info!(listen = %args.listen, cookie = %data_dir.join(COOKIE_FILE).display(), "pactd JSON-RPC listening");
     let listener = tokio::net::TcpListener::bind(args.listen).await?;
     let shutdown = app.shutdown.clone();
     axum::serve(listener, router)
@@ -1504,7 +1978,7 @@ async fn main() -> Result<()> {
     }
 
     // Cookie is per-run, like bitcoind: remove on clean shutdown.
-    let _ = std::fs::remove_file(args.data_dir.join(COOKIE_FILE));
+    let _ = std::fs::remove_file(data_dir.join(COOKIE_FILE));
     Ok(())
 }
 
@@ -1556,6 +2030,96 @@ mod tests {
     }
 
     #[test]
+    fn edit_distance_basics() {
+        assert_eq!(edit_distance("getbalance", "getbalance"), 0);
+        assert_eq!(edit_distance("getblance", "getbalance"), 1);
+        assert_eq!(edit_distance("", "abc"), 3);
+        assert_eq!(edit_distance("abc", ""), 3);
+    }
+
+    #[test]
+    fn unknown_method_suggests_nearest() {
+        let msg = format!("{}", method_not_found("getblance"));
+        assert!(msg.contains("did you mean 'getbalance'"), "{msg}");
+        // Something far from every method gets no misleading suggestion.
+        let msg = format!("{}", method_not_found("zzzzzzzzzzzzzzzz"));
+        assert!(!msg.contains("did you mean"), "{msg}");
+    }
+
+    #[test]
+    fn help_lists_and_details() {
+        let all = render_help(None).unwrap();
+        assert!(all.contains("== control ==") && all.contains("getbalance <coin>"));
+        let one = render_help(Some("abort")).unwrap();
+        assert!(one.starts_with("abort <swap_id> [reason]"), "{one}");
+        // Case-insensitive lookup; unknown topic errors with the suggestion.
+        assert!(render_help(Some("GETINFO")).is_ok());
+        assert!(render_help(Some("nope")).is_err());
+    }
+
+    #[tokio::test]
+    async fn catalog_matches_dispatch() {
+        // Every cataloged method must be recognized by `dispatch` — a
+        // fall-through to "unknown method" means METHODS drifted from the
+        // match. An empty registry is enough: recognition happens before any
+        // engine work (those calls fail later, with a different error).
+        let dir = std::env::temp_dir().join(format!("pactd-catalog-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let cfg = EngineConfig {
+            coins: BTreeMap::new(),
+            coin_confirmations: BTreeMap::new(),
+            board_url: None,
+            nostr_relays: None,
+            auto_fund: false,
+            passphrase: None,
+        };
+        let registry = MerchantRegistry::open(&dir, cfg, false, false).unwrap();
+        let app = App {
+            registry: Arc::new(Mutex::new(registry)),
+            network: Network::Regtest,
+            auth_headers: Arc::new(Vec::new()),
+            shutdown: Arc::new(Notify::new()),
+            nostr: None,
+        };
+        for (_, name, _, _) in METHODS {
+            if let Err(e) = dispatch(&app, name, json!([])).await {
+                assert!(
+                    !format!("{e:#}").contains("unknown method"),
+                    "'{name}' is cataloged but not dispatched"
+                );
+            }
+        }
+        // And a typo'd call is refused with the -32601 marker + suggestion.
+        let err = dispatch(&app, "getblance", json!([])).await.unwrap_err();
+        assert!(err.is::<MethodNotFound>());
+        assert!(format!("{err}").contains("did you mean 'getbalance'"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn default_data_dir_nests_test_networks() {
+        // mainnet at the root, test networks nested beneath it.
+        let main = default_data_dir("mainnet").unwrap();
+        let reg = default_data_dir("regtest").unwrap();
+        assert!(reg.ends_with("regtest"));
+        assert!(reg.starts_with(&main));
+        assert!(default_data_dir("testnet").unwrap().ends_with("testnet"));
+    }
+
+    #[test]
+    fn params_str_coerces_scalars() {
+        // The CLI JSON-parses args, so `sendtoaddress btc <addr> 0.5` arrives
+        // as a number — str() must render scalars back, not reject them.
+        let p = Params(json!(["plain", 0.5, 12, true, [1]]));
+        assert_eq!(p.str(0, "a").unwrap(), "plain");
+        assert_eq!(p.str(1, "b").unwrap(), "0.5");
+        assert_eq!(p.str(2, "c").unwrap(), "12");
+        assert_eq!(p.str(3, "d").unwrap(), "true");
+        assert!(p.str(4, "e").is_err());
+    }
+
+    #[test]
     fn coin_arg_parsing() {
         // coin_id=urls, case-normalized, multi-backend list preserved.
         assert_eq!(
@@ -1574,7 +2138,7 @@ mod tests {
 
     fn args_with(coins: Vec<&str>) -> Args {
         Args {
-            data_dir: PathBuf::from("."),
+            data_dir: Some(PathBuf::from(".")),
             coins_file: None,
             coins: coins.into_iter().map(String::from).collect(),
             coin_confs: vec![],

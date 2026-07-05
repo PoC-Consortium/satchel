@@ -124,15 +124,18 @@ curl -s --user "$(cat ~/.pact/.cookie)" \
   http://127.0.0.1:9737/
 ```
 
-The same call through `pact-cli` (which reads `.cookie` from `--data-dir`):
+The same call through `pact-cli` (which autodiscovers the `.cookie` — an
+explicit `--data-dir` also works):
 
 ```sh
-pact-cli --data-dir ~/.pact call getinfo
+pact-cli getinfo
 ```
 
-`pact-cli call <method> [params...]` is a generic passthrough: each argument is
-parsed as JSON if possible, otherwise treated as a string. It reaches **any**
-RPC method, including those without a dedicated subcommand.
+Any method is callable this way — `pact-cli <method> [params...]` — with each
+argument parsed as JSON if possible, otherwise treated as a string. `pact-cli
+help` lists the daemon's full catalog, and an unknown method is refused with
+JSON-RPC code `-32601` and a *did-you-mean* suggestion (all other errors are
+code `-1` today).
 
 > **Note** — `platform_fee_sat` is always `0`. There are no platform fees
 > anywhere in the engine; the field exists only so fee previews have a
