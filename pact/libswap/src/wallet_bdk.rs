@@ -90,13 +90,6 @@ fn spk_to_address(params: &ChainParams, spk: &ScriptBuf) -> Result<String> {
 pub struct WalletEntry {
     pub(crate) wallet: PersistedWallet<Connection>,
     pub(crate) conn: Connection,
-    /// Last SUCCESSFUL Electrum sync of this wallet. Read paths (balance,
-    /// activity — the UI polls them) reuse the cached bdk state inside
-    /// [`WALLET_SYNC_INTERVAL`] instead of re-walking every revealed spk
-    /// over the network: against a REMOTE server one sync takes tens of
-    /// seconds, and pactd serializes all RPCs on one lock, so an unthrottled
-    /// sync-per-poll starved the whole app (rc10 field report).
-    pub(crate) last_sync: Option<std::time::Instant>,
 }
 
 /// Shared handle to one coin's wallet.
@@ -163,11 +156,7 @@ impl WalletManager {
                 .map_err(|e| anyhow!("creating wallet db {}: {e}", db_path.display()))?,
         };
 
-        let handle: WalletHandle = Arc::new(Mutex::new(WalletEntry {
-            wallet,
-            conn,
-            last_sync: None,
-        }));
+        let handle: WalletHandle = Arc::new(Mutex::new(WalletEntry { wallet, conn }));
         wallets.insert(coin_id.to_string(), handle.clone());
         Ok(handle)
     }
@@ -180,19 +169,7 @@ impl WalletManager {
 /// PoCX-safe anchors from raw headers, and a checkpoint update that always
 /// connects to the wallet's local chain (genesis at worst). This is the
 /// unforked-bdk chain source of design doc D3.
-/// Reuse cached wallet state inside this window; sync again after it. Blocks
-/// are minutes apart on every shipped coin, so 30 s staleness is invisible —
-/// and sends apply their own tx to the cache immediately (broadcast-before-
-/// persist), so a send after a send never double-spends.
-const WALLET_SYNC_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
-
 fn sync_entry(entry: &mut WalletEntry, chain: &ElectrumBackend) -> Result<()> {
-    if entry
-        .last_sync
-        .is_some_and(|t| t.elapsed() < WALLET_SYNC_INTERVAL)
-    {
-        return Ok(());
-    }
     let params = chain.params();
     // Fresh store (nothing ever revealed) → gap-limit scan for a restored
     // seed's history. Steady state → revealed spks only.
@@ -201,78 +178,109 @@ fn sync_entry(entry: &mut WalletEntry, chain: &ElectrumBackend) -> Result<()> {
         .derivation_index(KeychainKind::External)
         .is_none();
 
-    let mut tx_update = TxUpdate::<ConfirmationBlockTime>::default();
-    let mut fetched: HashSet<Txid> = HashSet::new();
-    let mut headers: BTreeMap<u32, (BlockHash, u64)> = BTreeMap::new();
+    // Phase A — scripthash histories, BATCHED (one round-trip per batch;
+    // pre-batching this was one round-trip PER ADDRESS, which took tens of
+    // seconds against a remote server while holding the global engine lock).
+    let mut last_active: BTreeMap<KeychainKind, u32> = BTreeMap::new();
+    let mut all_history: Vec<(String, i64)> = Vec::new();
+    for keychain in [KeychainKind::External, KeychainKind::Internal] {
+        if full_scan {
+            // Windowed gap scan: STOP_GAP spks per batch, stop once a full
+            // STOP_GAP run of consecutive unused spks has been seen —
+            // identical result to the old per-spk walk (a window may peek a
+            // few spks past the stop point; pure reads, harmless).
+            let (mut index, mut gap) = (0u32, 0u32);
+            'windows: loop {
+                let spks: Vec<ScriptBuf> = (index..index + STOP_GAP)
+                    .map(|i| {
+                        entry
+                            .wallet
+                            .peek_address(keychain, i)
+                            .address
+                            .script_pubkey()
+                    })
+                    .collect();
+                for (offset, history) in chain.histories(&spks)?.into_iter().enumerate() {
+                    if history.is_empty() {
+                        gap += 1;
+                        if gap >= STOP_GAP {
+                            break 'windows;
+                        }
+                    } else {
+                        last_active.insert(keychain, index + offset as u32);
+                        gap = 0;
+                        all_history.extend(history);
+                    }
+                }
+                index += STOP_GAP;
+            }
+        } else if let Some(last) = entry.wallet.derivation_index(keychain) {
+            let spks: Vec<ScriptBuf> = (0..=last)
+                .map(|i| {
+                    entry
+                        .wallet
+                        .peek_address(keychain, i)
+                        .address
+                        .script_pubkey()
+                })
+                .collect();
+            for history in chain.histories(&spks)? {
+                all_history.extend(history);
+            }
+        }
+    }
+
+    // Phase B — sort the finds: which tx bodies we still need (deduped),
+    // which heights need headers for anchors, what sits in the mempool.
     // One timestamp for the whole sync pass: `seen_ats` is a SET of
     // (txid, ts) pairs (bdk_chain 0.23), so a tx surfacing in several spk
     // histories must insert the identical pair to dedupe.
     let sync_ts = now_ts();
+    let mut fetched: HashSet<Txid> = HashSet::new();
+    let mut need_txs: Vec<String> = Vec::new();
+    let mut anchor_reqs: Vec<(Txid, u32)> = Vec::new();
     let mut seen_ats: HashSet<(Txid, u64)> = HashSet::new();
-    let mut last_active: BTreeMap<KeychainKind, u32> = BTreeMap::new();
-
-    let mut process_spk = |entry: &WalletEntry,
-                           tx_update: &mut TxUpdate<ConfirmationBlockTime>,
-                           spk: &ScriptBuf|
-     -> Result<bool> {
-        let _ = entry; // spks are peeked from the wallet by the callers
-        let history = chain.history(spk)?;
-        for (txid_hex, height) in &history {
-            let txid = Txid::from_str(txid_hex).context("electrum history txid")?;
-            if fetched.insert(txid) {
-                tx_update.txs.push(Arc::new(chain.get_raw_tx(txid_hex)?));
-            }
-            if *height > 0 {
-                let height = u32::try_from(*height).context("history height")?;
-                let (hash, time) = match headers.entry(height) {
-                    std::collections::btree_map::Entry::Occupied(e) => *e.get(),
-                    std::collections::btree_map::Entry::Vacant(v) => {
-                        let (hash_hex, time) = chain.header_at(u64::from(height))?;
-                        *v.insert((BlockHash::from_str(&hash_hex)?, u64::from(time)))
-                    }
-                };
-                tx_update.anchors.insert((
-                    ConfirmationBlockTime {
-                        block_id: BlockId { height, hash },
-                        confirmation_time: time,
-                    },
-                    txid,
-                ));
-            } else {
-                // 0 = mempool, -1 = mempool with unconfirmed parents.
-                seen_ats.insert((txid, sync_ts));
-            }
+    for (txid_hex, height) in &all_history {
+        let txid = Txid::from_str(txid_hex).context("electrum history txid")?;
+        if fetched.insert(txid) {
+            need_txs.push(txid_hex.clone());
         }
-        Ok(!history.is_empty())
-    };
-
-    for keychain in [KeychainKind::External, KeychainKind::Internal] {
-        if full_scan {
-            let (mut index, mut gap) = (0u32, 0u32);
-            while gap < STOP_GAP {
-                let spk = entry
-                    .wallet
-                    .peek_address(keychain, index)
-                    .address
-                    .script_pubkey();
-                if process_spk(entry, &mut tx_update, &spk)? {
-                    last_active.insert(keychain, index);
-                    gap = 0;
-                } else {
-                    gap += 1;
-                }
-                index += 1;
-            }
-        } else if let Some(last) = entry.wallet.derivation_index(keychain) {
-            for index in 0..=last {
-                let spk = entry
-                    .wallet
-                    .peek_address(keychain, index)
-                    .address
-                    .script_pubkey();
-                process_spk(entry, &mut tx_update, &spk)?;
-            }
+        if *height > 0 {
+            let height = u32::try_from(*height).context("history height")?;
+            anchor_reqs.push((txid, height));
+        } else {
+            // 0 = mempool, -1 = mempool with unconfirmed parents.
+            seen_ats.insert((txid, sync_ts));
         }
+    }
+
+    // Phase C — tx bodies, one batch. Phase D — headers, one batch.
+    let mut tx_update = TxUpdate::<ConfirmationBlockTime>::default();
+    for tx in chain.get_raw_txs(&need_txs)? {
+        tx_update.txs.push(Arc::new(tx));
+    }
+    let need_heights: Vec<u64> = anchor_reqs
+        .iter()
+        .map(|(_, h)| u64::from(*h))
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let mut headers: BTreeMap<u32, (BlockHash, u64)> = BTreeMap::new();
+    for (height, (hash_hex, time)) in need_heights.iter().zip(chain.headers_at(&need_heights)?) {
+        headers.insert(
+            u32::try_from(*height).context("header height")?,
+            (BlockHash::from_str(&hash_hex)?, u64::from(time)),
+        );
+    }
+    for (txid, height) in anchor_reqs {
+        let (hash, time) = headers[&height];
+        tx_update.anchors.insert((
+            ConfirmationBlockTime {
+                block_id: BlockId { height, hash },
+                confirmation_time: time,
+            },
+            txid,
+        ));
     }
     tx_update.seen_ats = seen_ats;
 
@@ -285,7 +293,6 @@ fn sync_entry(entry: &mut WalletEntry, chain: &ElectrumBackend) -> Result<()> {
             chain: Some(chain_cp),
         })
         .map_err(|e| anyhow!("bdk chain update does not connect: {e}"))?;
-    entry.last_sync = Some(std::time::Instant::now());
     Ok(())
 }
 

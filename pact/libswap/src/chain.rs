@@ -1054,6 +1054,26 @@ impl ElectrumConn {
             Self::Ssl(c) => c.raw_call(method, params),
         }
     }
+
+    /// One JSON-RPC batch: all `calls` in a single round-trip, results in
+    /// call order. THE latency lever for the wallet sync — a scan is dozens
+    /// of tiny requests, and against a remote server each round-trip is an
+    /// RTT (the pre-batching scan took tens of seconds and starved the one
+    /// global engine lock; see the rc10 field reports).
+    fn raw_batch(
+        &self,
+        calls: Vec<(String, Vec<electrum_client::Param>)>,
+    ) -> std::result::Result<Vec<Value>, electrum_client::Error> {
+        use electrum_client::ElectrumApi;
+        let mut batch = electrum_client::Batch::default();
+        for (method, params) in calls {
+            batch.raw(method, params);
+        }
+        match self {
+            Self::Tcp(c) => c.batch_call(&batch),
+            Self::Ssl(c) => c.batch_call(&batch),
+        }
+    }
 }
 
 /// Accept-any-certificate verifier that still advertises the provider's REAL
@@ -1223,6 +1243,105 @@ impl ElectrumBackend {
             self.params.header_hash(&raw)?,
             self.params.header_time(&raw)?,
         ))
+    }
+
+    /// Batched `get_history` for many spks — ONE round-trip, results in spk
+    /// order (parsing identical to [`Self::history`]). The wallet scan is
+    /// dozens of these; batching is what makes a remote-server sync take a
+    /// few RTTs instead of tens of seconds on the global engine lock.
+    pub(crate) fn histories(&self, spks: &[ScriptBuf]) -> Result<Vec<Vec<(String, i64)>>> {
+        if spks.is_empty() {
+            return Ok(Vec::new());
+        }
+        let calls = spks
+            .iter()
+            .map(|spk| {
+                (
+                    "blockchain.scripthash.get_history".to_string(),
+                    vec![electrum_client::Param::String(Self::scripthash(spk))],
+                )
+            })
+            .collect();
+        let results = self
+            .client
+            .raw_batch(calls)
+            .context("electrum batch get_history")?;
+        Ok(results
+            .iter()
+            .map(|entries| {
+                entries
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|e| {
+                        Some((
+                            e["tx_hash"].as_str()?.to_string(),
+                            e["height"].as_i64().unwrap_or(0),
+                        ))
+                    })
+                    .collect()
+            })
+            .collect())
+    }
+
+    /// Batched `transaction.get` — one round-trip, results in txid order.
+    pub(crate) fn get_raw_txs(&self, txids: &[String]) -> Result<Vec<Transaction>> {
+        if txids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let calls = txids
+            .iter()
+            .map(|t| {
+                (
+                    "blockchain.transaction.get".to_string(),
+                    vec![electrum_client::Param::String(t.clone())],
+                )
+            })
+            .collect();
+        let results = self
+            .client
+            .raw_batch(calls)
+            .context("electrum batch transaction.get")?;
+        results
+            .iter()
+            .map(|hex_tx| {
+                let bytes = hex::decode(hex_tx.as_str().context("transaction.get: non-string")?)?;
+                bitcoin::consensus::encode::deserialize(&bytes).context("transaction.get: bad tx")
+            })
+            .collect()
+    }
+
+    /// Batched `block.header` → (hash hex, timestamp) per height, in height
+    /// order — raw bytes through the PoCX-safe header helpers, same as
+    /// [`Self::header_at`].
+    pub(crate) fn headers_at(&self, heights: &[u64]) -> Result<Vec<(String, u32)>> {
+        if heights.is_empty() {
+            return Ok(Vec::new());
+        }
+        let calls = heights
+            .iter()
+            .map(|h| {
+                (
+                    "blockchain.block.header".to_string(),
+                    vec![electrum_client::Param::Usize(*h as usize)],
+                )
+            })
+            .collect();
+        let results = self
+            .client
+            .raw_batch(calls)
+            .context("electrum batch block.header")?;
+        results
+            .iter()
+            .map(|raw| {
+                let raw = hex::decode(raw.as_str().context("block.header: non-string")?)?;
+                Ok((
+                    self.params.header_hash(&raw)?,
+                    self.params.header_time(&raw)?,
+                ))
+            })
+            .collect()
     }
 
     pub(crate) fn history(&self, spk: &ScriptBuf) -> Result<Vec<(String, i64)>> {
