@@ -505,6 +505,8 @@ export const lt: Bundle = {
     sendIntro: "Išleidžiama: {balance} {sym}.",
     sendAddressLabel: "Gavėjo {sym} adresas",
     sendAmountLabel: "Suma",
+    sendMax: "Maks.",
+    sendAllNote: "Siunčiama viskas — tinklo mokestis išskaičiuojamas iš šios sumos.",
     sendNeedAddress: "Įveskite gavėjo adresą.",
     sendNeedAmount: "Įveskite sumą.",
     sendNeedFee: "Pasirinkite mokesčio tarifą.",
@@ -559,6 +561,9 @@ export const lt: Bundle = {
     boardSettings: "Konfigūruoti skiltyje Nustatymai",
     filterAll: "Visi",
     filterMine: "Mano",
+    allPairs: "Visos poros",
+    allPairsTip:
+      "Naršykite visas lentos poras, įskaitant monetas, kurių nesukonfigūravote — tie pasiūlymai yra tik peržiūrai, kol neprijungsite monetos.",
     noOffers: "Šiuo metu nėra pasiūlymų, kuriuos galėtumėte priimti",
     noOffersBody:
       "Pasiūlymai pasirodo čia, kai tik sudarytojas paskelbia vieną poros, kurią sukonfigūravote. Taip pat galite paskelbti savo.",
@@ -777,6 +782,44 @@ export const lt: Bundle = {
     feeBumped: "Mokestis padidintas",
     reorg: "Aptiktas reorg — tikrinama iš naujo",
   },
+  notify: {
+    tab: "Pranešimai",
+    section: "Darbalaukio pranešimai",
+    intro:
+      "Mainai užtrunka ir vyksta savaime — gaukite OS pranešimą, kai jie pasiekia svarbų etapą, kol Satchel veikia fone. Kol žiūrite į langą, niekas nerodoma.",
+    master: "Įjungti pranešimus",
+    masterHint: "Pagrindinis jungiklis — įjungia arba išjungia visus žemiau esančius pranešimus.",
+    evStarted: "Mainai pradėti",
+    evStartedHint: "Kažkas priėmė jūsų pasiūlymą arba sudarytojas priėmė jūsų priėmimą.",
+    evLocks: "Užrakinimai patvirtinti",
+    evLocksHint:
+      "Vienos atkarpos užrakinimas patvirtintas grandinėje — jūsų, jų, tada abu užrakinta.",
+    evCompleted: "Mainai baigti",
+    evCompletedHint: "Mainai užbaigti ir monetos jau jūsų piniginėje.",
+    evFailed: "Mainai grąžinti arba nutraukti",
+    evFailedHint: "Mainai atsuko atgal — grąžinta po užstrigimo arba atšaukta.",
+    evReorg: "Reorg įspėjimai",
+    evReorgHint:
+      "Grandinės reorganizacija palietė mainus, kuriuose dalyvaujate — tikrinama iš naujo.",
+    test: "Siųsti bandomąjį pranešimą",
+    testTitle: "Satchel",
+    testBody: "Pranešimai veikia.",
+    denied:
+      "OS blokuoja pranešimus — leiskite Satchel sistemos pranešimų nustatymuose.",
+    testSent:
+      "Perduota OS. Jei pranešimas nepasirodė: kūrimo (nesupakuotos) versijos dažnai nuslopinamos — Windows patikimai rodo pranešimus tik įdiegtoms programoms. Įdiegta Satchel praneša įprastai; taip pat patikrinkite režimą „Netrukdyti“ / pranešimų nustatymus.",
+    titleStarted: "Mainai pradėti",
+    titleLocks: "Mainų atnaujinimas",
+    titleCompleted: "Mainai baigti",
+    titleFailed: "Mainai neužbaigti",
+    titleReorg: "Reorg įspėjimas",
+    reorgBody: "{coin}: aptikta grandinės reorganizacija — patvirtinimai tikrinami iš naujo.",
+    trayNone: "Satchel — vykstančių mainų nėra",
+    trayOne: "Satchel — vyksta 1 mainai",
+    trayMany: "Satchel — vyksta {count} mainai(-ų)",
+    trayOpen: "Atidaryti Satchel",
+    trayQuit: "Išeiti",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -808,6 +851,16 @@ export const lt: Bundle = {
       "Šio prekiautojo sėkla užšifruota. Įveskite jos slaptafrazę, kad atrakintumėte šiai sesijai — Satchel laiko ją tik atmintyje ir pamiršta išeidama.",
     switchMerchant: "Perjungti prekiautoją",
     unlock: "Atrakinti",
+  },
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "Kiek, jūsų manymu, 1 {sym} vertas jūsų pačių pinigais — EUR, USD, RMB, kuo tik mąstote. Kiekvienas ~Cash skaičius kildinamas iš jūsų kursų, įsimenamų kiekvienai monetai. Tik rodymui — Satchel niekada neparsisiunčia kainų.",
+    cashrateNoContext:
+      "Čia papilkinta — kursas susiejamas su pora, kurią žiūrite. Atidarykite Corkboard arba pasiūlymo formą, kad nustatytumėte jos kotiruojamos monetos kursą.",
+    cashUnit: "~Cash",
+    refTip:
+      "Pagal jūsų pačių Cashrate — jūsų atskaita, ne rinkos kaina. Abi pasiūlymo atkarpos jo paties kaina vertos tiek pat. Kursus nustatykite per antraštės lustelį.",
   },
   common: {
     cancel: "Atšaukti",

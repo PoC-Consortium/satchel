@@ -505,6 +505,8 @@ export const ja: Bundle = {
     sendIntro: "利用可能: {balance} {sym}。",
     sendAddressLabel: "受取先の {sym} アドレス",
     sendAmountLabel: "金額",
+    sendMax: "最大",
+    sendAllNote: "全額を送金します — ネットワーク手数料はこの金額から差し引かれます。",
     sendNeedAddress: "受取先のアドレスを入力してください。",
     sendNeedAmount: "金額を入力してください。",
     sendNeedFee: "手数料レートを選択してください。",
@@ -559,6 +561,9 @@ export const ja: Bundle = {
     boardSettings: "設定で構成",
     filterAll: "すべて",
     filterMine: "自分",
+    allPairs: "すべてのペア",
+    allPairsTip:
+      "まだ設定していないコインも含め、掲示板上のあらゆるペアを閲覧できます — そうしたオファーは、そのコインを接続するまで閲覧のみです。",
     noOffers: "今すぐ取れるオファーはありません",
     noOffersBody:
       "設定したペアにメーカーがオファーを投稿すると、すぐにここに表示されます。自分でオファーを投稿することもできます。",
@@ -777,6 +782,42 @@ export const ja: Bundle = {
     feeBumped: "手数料を引き上げ",
     reorg: "再編成を検出 — 再確認中",
   },
+  notify: {
+    tab: "通知",
+    section: "デスクトップ通知",
+    intro:
+      "スワップは時間がかかり、自動で進みます — Satchel がバックグラウンドにある間に節目に達すると、OS 通知を受け取れます。ウィンドウを見ている間は何も通知されません。",
+    master: "通知を有効にする",
+    masterHint: "マスタースイッチ — 以下のすべての通知をまとめてオン/オフします。",
+    evStarted: "スワップ開始",
+    evStartedHint: "誰かがあなたのオファーを取ったか、メーカーがあなたのテイクを受け入れました。",
+    evLocks: "ロック確定",
+    evLocksHint: "片方の脚のロックがオンチェーンで確定 — あなた、相手、そして双方のロック完了。",
+    evCompleted: "スワップ完了",
+    evCompletedHint: "スワップが終わり、コインがあなたのウォレットに収まりました。",
+    evFailed: "スワップの返金または中止",
+    evFailedHint: "スワップが巻き戻されました — 停滞後の返金、またはキャンセルです。",
+    evReorg: "再編成の警告",
+    evReorgHint: "チェーンの再編成が参加中のスワップに影響しました — 再確認中です。",
+    test: "テスト通知を送る",
+    testTitle: "Satchel",
+    testBody: "通知は機能しています。",
+    denied:
+      "OS が通知をブロックしています — システムの通知設定で Satchel を許可してください。",
+    testSent:
+      "OS に引き渡しました。トーストが表示されなかった場合: 開発（未パッケージ）ビルドは抑制されがちです — Windows はインストール済みアプリのトーストしか確実に表示しません。インストール版の Satchel なら通常どおり通知されます。応答不可モードや通知設定も確認してください。",
+    titleStarted: "スワップ開始",
+    titleLocks: "スワップの更新",
+    titleCompleted: "スワップ完了",
+    titleFailed: "スワップ未完了",
+    titleReorg: "再編成の警告",
+    reorgBody: "{coin}: チェーンの再編成を検出 — 承認数を再確認しています。",
+    trayNone: "Satchel — 進行中のスワップなし",
+    trayOne: "Satchel — 1 件のスワップが進行中",
+    trayMany: "Satchel — {count} 件のスワップが進行中",
+    trayOpen: "Satchel を開く",
+    trayQuit: "終了",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -808,6 +849,16 @@ export const ja: Bundle = {
       "このマーチャントのシードは暗号化されています。このセッションで解除するにはパスフレーズを入力してください — Satchel はメモリ内にのみ保持し、終了時に忘れます。",
     switchMerchant: "マーチャントを切り替え",
     unlock: "解除",
+  },
+  fx: {
+    cashrate: "Cashrate（{sym}）",
+    cashrateTip:
+      "1 {sym} をあなた自身のお金でいくらと見なすか — EUR、USD、RMB など、あなたが普段考える通貨で。すべての ~Cash の数値はあなたのレートから導かれ、コインごとに記憶されます。表示専用 — Satchel が価格を取得することは決してありません。",
+    cashrateNoContext:
+      "ここではグレー表示です — レートは今見ているペアに紐づきます。Corkboard かオファーフォームを開いて、そのクオートコインのレートを設定してください。",
+    cashUnit: "~Cash",
+    refTip:
+      "あなた自身の Cashrate による値 — あなたの基準であって、市場価格ではありません。オファーの両脚は、そのオファー自身の価格では同じ価値です。レートはヘッダーのチップから設定します。",
   },
   common: {
     cancel: "キャンセル",

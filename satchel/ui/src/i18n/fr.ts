@@ -503,6 +503,8 @@ export const fr: Bundle = {
     sendIntro: "Dépensable : {balance} {sym}.",
     sendAddressLabel: "Adresse {sym} du destinataire",
     sendAmountLabel: "Montant",
+    sendMax: "Max",
+    sendAllNote: "Vous envoyez tout — les frais de réseau sont déduits de ce montant.",
     sendNeedAddress: "Saisissez l'adresse du destinataire.",
     sendNeedAmount: "Saisissez un montant.",
     sendNeedFee: "Choisissez un taux de frais.",
@@ -561,6 +563,9 @@ export const fr: Bundle = {
     boardSettings: "Configurer dans Paramètres",
     filterAll: "Toutes",
     filterMine: "Les miennes",
+    allPairs: "Toutes les paires",
+    allPairsTip:
+      "Parcourez toutes les paires du tableau, y compris les coins que vous n'avez pas configurés — ces offres restent en lecture seule tant que vous n'avez pas connecté le coin.",
     noOffers: "Aucune offre que vous puissiez prendre pour le moment",
     noOffersBody:
       "Les offres apparaissent ici dès qu'un maker en publie une pour une paire que vous avez configurée. Vous pouvez aussi publier les vôtres.",
@@ -779,6 +784,45 @@ export const fr: Bundle = {
     feeBumped: "Frais augmentés",
     reorg: "Réorg détectée — nouvelle vérification",
   },
+  notify: {
+    tab: "Notifications",
+    section: "Notifications de bureau",
+    intro:
+      "Les swaps prennent du temps et avancent tout seuls — recevez une notification de l'OS quand l'un d'eux franchit une étape pendant que Satchel est en arrière-plan. Rien ne se déclenche pendant que vous regardez la fenêtre.",
+    master: "Activer les notifications",
+    masterHint: "Interrupteur général — active ou désactive toutes les notifications ci-dessous.",
+    evStarted: "Swap démarré",
+    evStartedHint: "Quelqu'un a pris votre offre, ou un maker a accepté votre prise.",
+    evLocks: "Verrouillages confirmés",
+    evLocksHint:
+      "Le verrouillage d'une jambe est confirmé on-chain — le vôtre, le leur, puis les deux verrouillés.",
+    evCompleted: "Swap terminé",
+    evCompletedHint: "Le swap s'est terminé et les coins sont réglés dans votre portefeuille.",
+    evFailed: "Swap remboursé ou annulé",
+    evFailedHint: "Un swap s'est défait — remboursé après un blocage, ou annulé.",
+    evReorg: "Avertissements de réorg",
+    evReorgHint:
+      "Une réorganisation de chaîne a touché un swap auquel vous participez — nouvelle vérification en cours.",
+    test: "Envoyer une notification de test",
+    testTitle: "Satchel",
+    testBody: "Les notifications fonctionnent.",
+    denied:
+      "L'OS bloque les notifications — autorisez Satchel dans les paramètres de notifications de votre système.",
+    testSent:
+      "Remise à l'OS. Si aucun toast n'est apparu : les builds de développement (non empaquetées) sont souvent supprimées — Windows n'affiche les toasts de façon fiable que pour les applications installées. Le Satchel installé notifie normalement ; vérifiez aussi Ne pas déranger / les paramètres de notifications.",
+    titleStarted: "Swap démarré",
+    titleLocks: "Mise à jour du swap",
+    titleCompleted: "Swap terminé",
+    titleFailed: "Swap non terminé",
+    titleReorg: "Avertissement de réorg",
+    reorgBody:
+      "{coin} : réorganisation de chaîne détectée — les confirmations sont en cours de re-vérification.",
+    trayNone: "Satchel — aucun swap en plein vol",
+    trayOne: "Satchel — 1 swap en plein vol",
+    trayMany: "Satchel — {count} swaps en plein vol",
+    trayOpen: "Ouvrir Satchel",
+    trayQuit: "Quitter",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -810,6 +854,16 @@ export const fr: Bundle = {
       "La seed de ce merchant est chiffrée. Saisissez sa phrase secrète pour le déverrouiller pour cette session — Satchel ne la garde qu'en mémoire et l'oublie en quittant.",
     switchMerchant: "Changer de merchant",
     unlock: "Déverrouiller",
+  },
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "Ce que vaut 1 {sym} dans votre propre monnaie — EUR, USD, RMB, celle dans laquelle vous pensez. Chaque chiffre ~Cash dérive de vos taux, mémorisés par coin. Affichage uniquement — Satchel ne récupère jamais de prix.",
+    cashrateNoContext:
+      "Grisé ici — le taux se lie à la paire que vous regardez. Ouvrez le Corkboard ou un formulaire d'offre pour définir le taux de son coin de cotation.",
+    cashUnit: "~Cash",
+    refTip:
+      "À votre propre Cashrate — votre référence, pas un prix de marché. Les deux jambes d'une offre valent la même chose à son propre prix. Définissez les taux via la puce d'en-tête.",
   },
   common: {
     cancel: "Annuler",

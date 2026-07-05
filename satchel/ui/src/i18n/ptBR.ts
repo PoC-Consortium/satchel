@@ -505,6 +505,8 @@ export const ptBR: Bundle = {
     sendIntro: "Disponível para gastar: {balance} {sym}.",
     sendAddressLabel: "Endereço {sym} do destinatário",
     sendAmountLabel: "Quantia",
+    sendMax: "Máx",
+    sendAllNote: "Enviando tudo — a taxa de rede sai desta quantia.",
     sendNeedAddress: "Informe o endereço do destinatário.",
     sendNeedAmount: "Informe uma quantia.",
     sendNeedFee: "Escolha uma taxa.",
@@ -559,6 +561,9 @@ export const ptBR: Bundle = {
     boardSettings: "Configurar em Configurações",
     filterAll: "Todas",
     filterMine: "Minhas",
+    allPairs: "Todos os pares",
+    allPairsTip:
+      "Navegue por todos os pares do board, incluindo moedas que você ainda não configurou — essas ofertas ficam apenas para visualização até você conectar a moeda.",
     noOffers: "Nenhuma oferta que você possa aceitar agora",
     noOffersBody:
       "As ofertas aparecem aqui assim que um maker publicar uma para um par que você configurou. Você também pode publicar a sua.",
@@ -777,6 +782,42 @@ export const ptBR: Bundle = {
     feeBumped: "Taxa aumentada",
     reorg: "Reorg detectada — verificando novamente",
   },
+  notify: {
+    tab: "Notificações",
+    section: "Notificações da área de trabalho",
+    intro:
+      "Swaps demoram e correm por conta própria — receba uma notificação do sistema quando um deles atingir um marco enquanto o Satchel está em segundo plano. Nada dispara enquanto você está olhando para a janela.",
+    master: "Ativar notificações",
+    masterHint: "Interruptor geral — liga ou desliga todas as notificações abaixo.",
+    evStarted: "Swap iniciado",
+    evStartedHint: "Alguém aceitou sua oferta, ou um maker aceitou o seu aceite.",
+    evLocks: "Bloqueios confirmados",
+    evLocksHint: "O bloqueio de uma perna foi confirmado on-chain — o seu, o deles e então ambos bloqueados.",
+    evCompleted: "Swap concluído",
+    evCompletedHint: "O swap terminou e as moedas estão liquidadas na sua carteira.",
+    evFailed: "Swap com refund ou abortado",
+    evFailedHint: "Um swap foi desfeito — refund após um travamento, ou cancelado.",
+    evReorg: "Avisos de reorg",
+    evReorgHint: "Uma reorganização da chain afetou um swap seu — sendo verificado novamente.",
+    test: "Enviar uma notificação de teste",
+    testTitle: "Satchel",
+    testBody: "As notificações estão funcionando.",
+    denied:
+      "O sistema está bloqueando as notificações — permita o Satchel nas configurações de notificação do seu sistema.",
+    testSent:
+      "Entregue ao sistema. Se nenhuma notificação apareceu: builds de desenvolvimento (não empacotadas) costumam ser suprimidas — o Windows só exibe notificações de forma confiável para apps instalados. O Satchel instalado notifica normalmente; verifique também o Não perturbe / as configurações de notificação.",
+    titleStarted: "Swap iniciado",
+    titleLocks: "Atualização do swap",
+    titleCompleted: "Swap concluído",
+    titleFailed: "Swap não concluído",
+    titleReorg: "Aviso de reorg",
+    reorgBody: "{coin}: reorganização da chain detectada — as confirmações estão sendo verificadas novamente.",
+    trayNone: "Satchel — nenhum swap em andamento",
+    trayOne: "Satchel — 1 swap em andamento",
+    trayMany: "Satchel — {count} swaps em andamento",
+    trayOpen: "Abrir o Satchel",
+    trayQuit: "Sair",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -808,6 +849,16 @@ export const ptBR: Bundle = {
       "A seed deste merchant está criptografada. Digite a senha dela para desbloqueá-la nesta sessão — o Satchel a mantém apenas em memória e a esquece ao sair.",
     switchMerchant: "Trocar merchant",
     unlock: "Desbloquear",
+  },
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "Quanto vale 1 {sym} no seu próprio dinheiro — EUR, USD, RMB, o que você usa para pensar. Todo valor em ~Cash deriva das suas cotações, lembradas por moeda. Apenas exibição — o Satchel nunca busca preços.",
+    cashrateNoContext:
+      "Acinzentado aqui — a cotação se vincula ao par que você está vendo. Abra o Corkboard ou um formulário de oferta para definir a cotação da moeda de quote dele.",
+    cashUnit: "~Cash",
+    refTip:
+      "Pela sua própria Cashrate — sua referência, não um preço de mercado. As duas pernas de uma oferta valem o mesmo ao preço dela. Defina as cotações pelo chip no cabeçalho.",
   },
   common: {
     cancel: "Cancelar",

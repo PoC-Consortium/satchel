@@ -505,6 +505,8 @@ export const cs: Bundle = {
     sendIntro: "K utracení: {balance} {sym}.",
     sendAddressLabel: "Adresa příjemce {sym}",
     sendAmountLabel: "Částka",
+    sendMax: "Max",
+    sendAllNote: "Odesíláte vše — síťový poplatek se strhne z této částky.",
     sendNeedAddress: "Zadejte adresu příjemce.",
     sendNeedAmount: "Zadejte částku.",
     sendNeedFee: "Zvolte sazbu poplatku.",
@@ -562,6 +564,9 @@ export const cs: Bundle = {
     boardSettings: "Nakonfigurovat v Nastavení",
     filterAll: "Vše",
     filterMine: "Moje",
+    allPairs: "Všechny páry",
+    allPairsTip:
+      "Procházejte všechny páry na nástěnce, včetně mincí, které nemáte nastavené — jejich nabídky jsou jen k prohlížení, dokud minci nepřipojíte.",
     noOffers: "Žádné nabídky, které byste teď mohli přijmout",
     noOffersBody:
       "Nabídky se zde objeví, jakmile maker vystaví nějakou pro pár, který máte nastavený. Můžete také vystavit vlastní.",
@@ -780,6 +785,42 @@ export const cs: Bundle = {
     feeBumped: "Poplatek navýšen",
     reorg: "Zjištěna reorganizace — kontroluji znovu",
   },
+  notify: {
+    tab: "Oznámení",
+    section: "Oznámení na ploše",
+    intro:
+      "Swapy chvíli trvají a běží samy — nechte si poslat oznámení operačního systému, když swap dosáhne milníku a Satchel je přitom na pozadí. Dokud se na okno díváte, nic se nezobrazuje.",
+    master: "Povolit oznámení",
+    masterHint: "Hlavní přepínač — zapne nebo vypne všechna oznámení níže.",
+    evStarted: "Swap zahájen",
+    evStartedHint: "Někdo přijal vaši nabídku, nebo maker schválil vaše přijetí.",
+    evLocks: "Uzamčení potvrzena",
+    evLocksHint: "Uzamčení jedné strany se potvrdilo on-chain — vaše, jejich, nakonec obě uzamčena.",
+    evCompleted: "Swap dokončen",
+    evCompletedHint: "Swap skončil a mince jsou usazené ve vaší peněžence.",
+    evFailed: "Swap vrácen nebo zrušen",
+    evFailedHint: "Swap se odvinul — prostředky vráceny po uváznutí, nebo byl zrušen.",
+    evReorg: "Varování před reorganizací",
+    evReorgHint: "Reorganizace řetězce zasáhla swap, ve kterém jste — kontroluje se znovu.",
+    test: "Poslat zkušební oznámení",
+    testTitle: "Satchel",
+    testBody: "Oznámení fungují.",
+    denied:
+      "Operační systém oznámení blokuje — povolte Satchel v systémovém nastavení oznámení.",
+    testSent:
+      "Předáno operačnímu systému. Pokud se žádné oznámení neobjevilo: u vývojových (nezabalených) buildů bývají oznámení často potlačena — Windows je spolehlivě zobrazuje jen u nainstalovaných aplikací. Nainstalovaný Satchel oznamuje normálně; zkontrolujte také režim Nerušit / nastavení oznámení.",
+    titleStarted: "Swap zahájen",
+    titleLocks: "Aktualizace swapu",
+    titleCompleted: "Swap dokončen",
+    titleFailed: "Swap nedokončen",
+    titleReorg: "Varování před reorganizací",
+    reorgBody: "{coin}: zjištěna reorganizace řetězce — potvrzení se kontrolují znovu.",
+    trayNone: "Satchel — žádné probíhající swapy",
+    trayOne: "Satchel — 1 probíhající swap",
+    trayMany: "Satchel — probíhajících swapů: {count}",
+    trayOpen: "Otevřít Satchel",
+    trayQuit: "Ukončit",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -811,6 +852,16 @@ export const cs: Bundle = {
       "Seed tohoto merchanta je šifrovaný. Zadejte jeho přístupovou frázi, abyste ho pro tuto relaci odemkli — Satchel ji drží pouze v paměti a při ukončení ji zapomene.",
     switchMerchant: "Přepnout merchanta",
     unlock: "Odemknout",
+  },
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "Kolik pro vás dělá 1 {sym} ve vašich vlastních penězích — EUR, USD, RMB, cokoli, v čem počítáte. Každý údaj ~Cash se odvozuje z vašich sazeb, pamatovaných pro každou minci zvlášť. Pouze pro zobrazení — Satchel nikdy nestahuje ceny.",
+    cashrateNoContext:
+      "Zde zašedlé — sazba se váže na pár, na který se právě díváte. Otevřete Corkboard nebo formulář nabídky a nastavte sazbu pro jeho kotační minci.",
+    cashUnit: "~Cash",
+    refTip:
+      "Podle vašeho vlastního Cashrate — vaše reference, ne tržní cena. Obě strany nabídky mají při její vlastní ceně stejnou hodnotu. Sazby nastavíte přes čip v záhlaví.",
   },
   common: {
     cancel: "Zrušit",

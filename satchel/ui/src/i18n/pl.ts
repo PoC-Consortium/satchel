@@ -505,6 +505,8 @@ export const pl: Bundle = {
     sendIntro: "Do wydania: {balance} {sym}.",
     sendAddressLabel: "Adres {sym} odbiorcy",
     sendAmountLabel: "Kwota",
+    sendMax: "Maks.",
+    sendAllNote: "Wysyłasz wszystko — opłata sieciowa zostanie potrącona z tej kwoty.",
     sendNeedAddress: "Wpisz adres odbiorcy.",
     sendNeedAmount: "Wpisz kwotę.",
     sendNeedFee: "Wybierz stawkę opłaty.",
@@ -559,6 +561,9 @@ export const pl: Bundle = {
     boardSettings: "Skonfiguruj w Ustawieniach",
     filterAll: "Wszystkie",
     filterMine: "Moje",
+    allPairs: "Wszystkie pary",
+    allPairsTip:
+      "Przeglądaj wszystkie pary na tablicy, także z monetami, których nie skonfigurowałeś — te oferty są tylko do podglądu, dopóki nie połączysz monety.",
     noOffers: "Brak ofert, które możesz teraz przyjąć",
     noOffersBody:
       "Oferty pojawiają się tutaj, gdy tylko maker wystawi je dla pary, którą skonfigurowałeś. Możesz też wystawić własną.",
@@ -777,6 +782,44 @@ export const pl: Bundle = {
     feeBumped: "Opłata podniesiona",
     reorg: "Wykryto reorganizację — ponowne sprawdzanie",
   },
+  notify: {
+    tab: "Powiadomienia",
+    section: "Powiadomienia pulpitu",
+    intro:
+      "Swapy trochę trwają i działają samodzielnie — otrzymuj powiadomienie systemowe, gdy któryś osiągnie kamień milowy, a Satchel jest w tle. Nic nie wyskakuje, gdy patrzysz na okno.",
+    master: "Włącz powiadomienia",
+    masterHint: "Główny przełącznik — włącza lub wyłącza wszystkie poniższe powiadomienia.",
+    evStarted: "Swap rozpoczęty",
+    evStartedHint: "Ktoś przyjął Twoją ofertę albo maker zaakceptował Twoje przyjęcie.",
+    evLocks: "Blokady potwierdzone",
+    evLocksHint:
+      "Blokada jednej ze stron potwierdziła się on-chain — Twoja, ich, a potem obie zablokowane.",
+    evCompleted: "Swap zakończony",
+    evCompletedHint: "Swap się sfinalizował, a monety są rozliczone w Twoim portfelu.",
+    evFailed: "Swap zwrócony lub anulowany",
+    evFailedHint: "Swap się cofnął — zwrócony po zastoju albo anulowany.",
+    evReorg: "Ostrzeżenia o reorganizacji",
+    evReorgHint:
+      "Reorganizacja łańcucha dotknęła swapa, w którym uczestniczysz — trwa ponowne sprawdzanie.",
+    test: "Wyślij powiadomienie testowe",
+    testTitle: "Satchel",
+    testBody: "Powiadomienia działają.",
+    denied:
+      "System blokuje powiadomienia — zezwól Satchel na powiadomienia w ustawieniach systemu.",
+    testSent:
+      "Przekazano systemowi. Jeśli dymek się nie pojawił: kompilacje deweloperskie (niezainstalowane) są często wyciszane — Windows niezawodnie pokazuje powiadomienia tylko dla zainstalowanych aplikacji. Zainstalowany Satchel powiadamia normalnie; sprawdź też tryb „Nie przeszkadzać” / ustawienia powiadomień.",
+    titleStarted: "Swap rozpoczęty",
+    titleLocks: "Aktualizacja swapa",
+    titleCompleted: "Swap zakończony",
+    titleFailed: "Swap niezakończony",
+    titleReorg: "Ostrzeżenie o reorganizacji",
+    reorgBody: "{coin}: wykryto reorganizację łańcucha — potwierdzenia są ponownie sprawdzane.",
+    trayNone: "Satchel — brak swapów w toku",
+    trayOne: "Satchel — 1 swap w toku",
+    trayMany: "Satchel — swapów w toku: {count}",
+    trayOpen: "Otwórz Satchel",
+    trayQuit: "Zakończ",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -808,6 +851,16 @@ export const pl: Bundle = {
       "Seed tego sprzedawcy jest zaszyfrowany. Wpisz jego hasło, aby odblokować go na tę sesję — Satchel trzyma je tylko w pamięci i zapomina przy wyjściu.",
     switchMerchant: "Przełącz sprzedawcę",
     unlock: "Odblokuj",
+  },
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "Ile według Ciebie warte jest 1 {sym} w Twoich własnych pieniądzach — EUR, USD, RMB, w czymkolwiek myślisz. Każda wartość ~Cash wynika z Twoich kursów, zapamiętywanych osobno dla każdej monety. Tylko do wyświetlania — Satchel nigdy nie pobiera cen.",
+    cashrateNoContext:
+      "Tutaj wyszarzone — kurs wiąże się z parą, na którą patrzysz. Otwórz Corkboard albo formularz oferty, aby ustawić kurs dla jej monety kwotowanej.",
+    cashUnit: "~Cash",
+    refTip:
+      "Według Twojego własnego Cashrate — Twój punkt odniesienia, nie cena rynkowa. Obie strony oferty są warte tyle samo po jej własnej cenie. Kursy ustawisz przez plakietkę w nagłówku.",
   },
   common: {
     cancel: "Anuluj",

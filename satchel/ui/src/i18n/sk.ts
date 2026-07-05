@@ -505,6 +505,8 @@ export const sk: Bundle = {
     sendIntro: "Na minutie: {balance} {sym}.",
     sendAddressLabel: "Adresa príjemcu {sym}",
     sendAmountLabel: "Suma",
+    sendMax: "Max",
+    sendAllNote: "Odosielate všetko — sieťový poplatok sa odpočíta z tejto sumy.",
     sendNeedAddress: "Zadajte adresu príjemcu.",
     sendNeedAmount: "Zadajte sumu.",
     sendNeedFee: "Vyberte sadzbu poplatku.",
@@ -559,6 +561,9 @@ export const sk: Bundle = {
     boardSettings: "Konfigurovať v Nastaveniach",
     filterAll: "Všetky",
     filterMine: "Moje",
+    allPairs: "Všetky páry",
+    allPairsTip:
+      "Prehliadajte všetky páry na nástenke vrátane mincí, ktoré ste si nenastavili — tie ponuky sú iba na zobrazenie, kým mincu nepripojíte.",
     noOffers: "Žiadne ponuky, ktoré môžete práve teraz prijať",
     noOffersBody:
       "Ponuky sa tu objavia hneď, ako maker zverejní niektorú pre pár, ktorý ste nastavili. Môžete tiež zverejniť svoju vlastnú.",
@@ -777,6 +782,44 @@ export const sk: Bundle = {
     feeBumped: "Poplatok zvýšený",
     reorg: "Zistená reorganizácia — opätovná kontrola",
   },
+  notify: {
+    tab: "Upozornenia",
+    section: "Upozornenia na pracovnej ploche",
+    intro:
+      "Swapy chvíľu trvajú a bežia samy — dostaňte systémové upozornenie, keď niektorý dosiahne míľnik, kým je Satchel na pozadí. Kým sa na okno pozeráte, nič sa nespustí.",
+    master: "Povoliť upozornenia",
+    masterHint: "Hlavný prepínač — zapne alebo vypne všetky upozornenia nižšie.",
+    evStarted: "Swap spustený",
+    evStartedHint: "Niekto prijal vašu ponuku, alebo maker akceptoval vaše prijatie.",
+    evLocks: "Uzamknutia potvrdené",
+    evLocksHint:
+      "Uzamknutie jednej strany sa potvrdilo on-chain — vaše, ich, potom obe uzamknuté.",
+    evCompleted: "Swap dokončený",
+    evCompletedHint: "Swap sa skončil a mince sú vysporiadané vo vašej peňaženke.",
+    evFailed: "Swap vrátený alebo zrušený",
+    evFailedHint: "Swap sa rozplietol — vrátený po zaseknutí, alebo zrušený.",
+    evReorg: "Varovania pri reorganizácii",
+    evReorgHint:
+      "Reorganizácia reťazca sa dotkla swapu, v ktorom ste — prebieha opätovná kontrola.",
+    test: "Poslať testovacie upozornenie",
+    testTitle: "Satchel",
+    testBody: "Upozornenia fungujú.",
+    denied:
+      "OS blokuje upozornenia — povoľte Satchel v systémových nastaveniach upozornení.",
+    testSent:
+      "Odovzdané OS. Ak sa žiadne upozornenie nezobrazilo: vývojové (nezabalené) zostavenia bývajú často potlačené — Windows spoľahlivo zobrazuje upozornenia len pre nainštalované aplikácie. Nainštalovaný Satchel upozorňuje normálne; skontrolujte aj režim Nerušiť / nastavenia upozornení.",
+    titleStarted: "Swap spustený",
+    titleLocks: "Aktualizácia swapu",
+    titleCompleted: "Swap dokončený",
+    titleFailed: "Swap nedokončený",
+    titleReorg: "Varovanie pred reorganizáciou",
+    reorgBody: "{coin}: zistená reorganizácia reťazca — potvrdenia sa opätovne kontrolujú.",
+    trayNone: "Satchel — žiadne prebiehajúce swapy",
+    trayOne: "Satchel — 1 prebiehajúci swap",
+    trayMany: "Satchel — {count} prebiehajúcich swapov",
+    trayOpen: "Otvoriť Satchel",
+    trayQuit: "Ukončiť",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -808,6 +851,16 @@ export const sk: Bundle = {
       "Seed tohto obchodníka je šifrovaný. Zadajte jeho prístupovú frázu na odomknutie pre túto reláciu — Satchel ju drží iba v pamäti a pri ukončení ju zabudne.",
     switchMerchant: "Prepnúť obchodníka",
     unlock: "Odomknúť",
+  },
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "Koľko je pre vás 1 {sym} vo vašich vlastných peniazoch — EUR, USD, RMB, v čomkoľvek, v čom uvažujete. Každý údaj ~Cash sa odvodzuje z vašich kurzov, zapamätaných pre každú mincu. Len na zobrazenie — Satchel nikdy nesťahuje ceny.",
+    cashrateNoContext:
+      "Tu je zošednuté — kurz sa viaže na pár, na ktorý sa práve pozeráte. Otvorte Corkboard alebo formulár ponuky a nastavte kurz pre mincu, v ktorej sa pár kótuje.",
+    cashUnit: "~Cash",
+    refTip:
+      "Podľa vášho vlastného Cashrate — vaša referencia, nie trhová cena. Obe strany ponuky majú pri jej vlastnej cene rovnakú hodnotu. Kurzy nastavíte cez čip v hlavičke.",
   },
   common: {
     cancel: "Zrušiť",
