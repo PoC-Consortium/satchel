@@ -210,9 +210,19 @@ def test_v1_nodeless_both_sides(h, electrs, board):
         bob.rpc("boardtake", offer_id)
         drive_to_completion(h, electrs, alice, bob, label="v1 nodeless-both")
 
+        # Alice's SPEND is visible immediately — her own send is applied to
+        # the wallet cache at broadcast (broadcast-before-persist).
         spent = bal_before - alice.rpc("getbalance", "btcx")["balance_sat"]
         assert GIVE_POCX_SAT <= spent < GIVE_POCX_SAT + 100_000, spent
-        gained = bob.rpc("getbalance", "btcx")["balance_sat"] - bob_btcx_before
+        # Bob's INCOMING redeem needs a network sync to surface, and the
+        # engine throttles wallet syncs to one per 30 s window (the remote-
+        # server responsiveness fix) — poll one full window before judging.
+        gained = 0
+        for _ in range(45):
+            gained = bob.rpc("getbalance", "btcx")["balance_sat"] - bob_btcx_before
+            if gained > 0:
+                break
+            time.sleep(1)
         assert 0 < gained <= GIVE_POCX_SAT, (
             f"bob's bdk wallet should hold the leg-A redeem: {gained}")
         print(f"[nodeless] v1 nodeless-both OK (bob's bdk redeem: {gained} sat)")

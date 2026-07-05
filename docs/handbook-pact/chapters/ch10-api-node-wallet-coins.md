@@ -228,14 +228,18 @@ nodeless coin the handout is capped — see the chapter "Coins, Pairs &
 Capabilities");
 `sendtoaddress` constructs and broadcasts a payment, always BIP125-replaceable
 (sweeps included).
-The fee is priced by `fee_rate` (explicit sat/vB — the send form's Custom
-field) when given, else by a market estimate at `conf_target` blocks (default
-6, the Normal preset; Slow/Fast are 144/1), floored to the coin's
-`min_feerate_sat_vb` with the usual 1 sat/vB fallback; both fee params apply
-to a sweep as usual.
+The fee is priced by `fee_rate` (explicit **decimal** sat/vB, e.g. `1.08` —
+the send form's Custom field) when given, else by a market estimate at
+`conf_target` blocks (default 6, the Normal preset; Slow/Fast are 144/1),
+floored to the coin's `min_feerate_sat_vb` with the usual 1 sat/vB fallback;
+both fee params apply to a sweep as usual. Rates travel internally at the
+estimator's native **sat/kvB** resolution, so the fraction is actually paid —
+at the bottom of the market it is real queue priority (1.08 confirms ahead
+of 1.00), not display sugar.
 
-`estimatesendfee` backs the send form's fee presets: raw estimator answers in
-sat/vB at the 1/6/144-block targets — `null` where the estimator has no data
+`estimatesendfee` backs the send form's fee presets: raw estimator answers as
+decimal sat/vB at full sat/kvB resolution (e.g. `1.08`) at the 1/6/144-block
+targets — `null` where the estimator has no data
 (fresh chain, quiet mempool, regtest), which the form maps to disabled presets
 and a custom-rate fallback at the coin floor (`min_sat_per_vb`), mirroring
 phoenix's send dialog.

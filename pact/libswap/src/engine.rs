@@ -6654,11 +6654,15 @@ impl Engine {
             coin_id: coin_id.to_string(),
             network,
         })?;
+        // Decimal sat/vB at the estimator's full sat/kvB resolution — the
+        // fraction (1080 sat/kvB → 1.08) is real queue priority and the UI
+        // shows it verbatim.
+        let vb = |kvb: Option<u64>| kvb.map(|k| k as f64 / 1000.0);
         Ok(crate::chain::SendFeeEstimates {
-            min_sat_per_vb: backend.params().min_feerate_sat_vb.max(1),
-            fast: backend.fee_estimate(1)?,
-            normal: backend.fee_estimate(6)?,
-            slow: backend.fee_estimate(144)?,
+            min_sat_per_vb: backend.params().min_feerate_sat_vb.max(1) as f64,
+            fast: vb(backend.fee_estimate_kvb(1)?),
+            normal: vb(backend.fee_estimate_kvb(6)?),
+            slow: vb(backend.fee_estimate_kvb(144)?),
         })
     }
 

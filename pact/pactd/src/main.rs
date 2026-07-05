@@ -350,6 +350,11 @@ impl Params {
         v.as_u64()
             .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
     }
+    fn opt_f64(&self, i: usize, name: &str) -> Option<f64> {
+        let v = self.get(i, name).ok()?;
+        v.as_f64()
+            .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+    }
     fn opt_str(&self, i: usize, name: &str) -> Option<String> {
         self.get(i, name)
             .ok()
@@ -1533,13 +1538,16 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             let chain = p.str(0, "chain")?;
             let address = p.str(1, "address")?;
             let amount = p.str(2, "amount")?;
-            // Fee: an explicit sat/vB rate (the form's Custom field) wins over
-            // a block target (a preset); neither = the 6-block Normal baseline.
+            // Fee: an explicit sat/vB rate (the form's Custom field — DECIMAL,
+            // e.g. 1.08, carried internally as sat/kvB) wins over a block
+            // target (a preset); neither = the 6-block Normal baseline.
             // Targets clamp to Core's estimatesmartfee range (1..=1008).
-            let fee = match (p.opt_u64(3, "conf_target"), p.opt_u64(4, "fee_rate")) {
-                (_, Some(rate)) => SendFee::RateSatVb(rate),
-                (Some(target), None) => SendFee::Target(target.clamp(1, 1008) as u16),
-                (None, None) => SendFee::Target(6),
+            let fee = match (p.opt_u64(3, "conf_target"), p.opt_f64(4, "fee_rate")) {
+                (_, Some(rate)) if rate > 0.0 => {
+                    SendFee::RatePerKvb((rate * 1000.0).round() as u64)
+                }
+                (Some(target), _) => SendFee::Target(target.clamp(1, 1008) as u16),
+                _ => SendFee::Target(6),
             };
             let txid = blocking(app, move |e| {
                 let coin = parse_coin(&chain)?;

@@ -399,8 +399,9 @@ impl BdkWalletBackend {
         fee: SendFee,
         sequence: Sequence,
     ) -> Result<Transaction> {
-        let feerate =
-            FeeRate::from_sat_per_vb(self.resolve_send_fee(fee)?).context("feerate overflow")?;
+        // resolve_send_fee is sat/kvB; bdk's FeeRate is sat/kwu = sat/kvB ÷ 4
+        // (1 vB = 4 wu), so the estimator's fraction carries exactly.
+        let feerate = FeeRate::from_sat_per_kwu((self.resolve_send_fee(fee)? + 2) / 4);
         let mut builder = entry.wallet.build_tx();
         builder
             .add_recipient(spk, Amount::from_sat(amount_sat))
@@ -519,8 +520,8 @@ impl ChainBackend for BdkWalletBackend {
     fn wallet_send_all(&self, address: &str, fee: SendFee) -> Result<String> {
         let spk = self.params.parse_address(address)?;
         self.with_wallet(true, |entry| {
-            let feerate = FeeRate::from_sat_per_vb(self.resolve_send_fee(fee)?)
-                .context("feerate overflow")?;
+            // sat/kvB → sat/kwu, same as build_signed.
+            let feerate = FeeRate::from_sat_per_kwu((self.resolve_send_fee(fee)? + 2) / 4);
             // drain_wallet + drain_to: every spendable UTXO in, one output
             // out, the fee off the swept amount (bdk's sweep). Inputs held by
             // built-but-unbroadcast v2 fundings are already out of the
