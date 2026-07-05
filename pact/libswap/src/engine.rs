@@ -15,13 +15,13 @@ use anyhow::{bail, ensure, Context, Result};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::{OutPoint, ScriptBuf};
 use serde_json::Value;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Mutex;
 
 use crate::adaptor_swap::AdaptorState;
-use crate::chain::{ChainBackend, ElectrumBackend, MultiBackend, SendFee};
+use crate::chain::{ChainBackend, MultiBackend, SendFee};
 use crate::htlc::extract_preimage;
 use crate::keys::{hash_preimage, swap_id, PactSeed};
 use crate::messages::{self, AbortBody, AcceptBody, ChainRef, Envelope, FundedBody, InitBody};
@@ -86,6 +86,11 @@ pub struct Engine {
     /// indexes, sqlite store — so it lives here rather than being rebuilt
     /// per backend construction.
     wallet_manager: crate::wallet_bdk::WalletManager,
+    /// Long-lived Electrum connections, one per configured server (issue
+    /// #87) — shared by every engine call and the per-coin sync workers
+    /// instead of a fresh TCP+TLS handshake per call. Lazy + self-healing,
+    /// so pooling never pins a dead socket.
+    electrum_pool: crate::chain::ElectrumPool,
 }
 
 fn chain_params(chain: &ChainRef) -> Result<&'static ChainParams> {
@@ -592,6 +597,7 @@ impl Engine {
             watch_only,
             progress: Mutex::new(HashMap::new()),
             wallet_manager: crate::wallet_bdk::WalletManager::new(data_dir),
+            electrum_pool: crate::chain::ElectrumPool::new(),
         })
     }
 
@@ -629,10 +635,42 @@ impl Engine {
             Some(url) if !url.starts_with("http://") => {
                 self.nodeless_backend(&chain.coin_id, params, urls)?
             }
-            _ => MultiBackend::new(params, urls)?,
+            _ => self.node_backend(&chain.coin_id, params, urls)?,
         };
         backend.verify_chain()?;
         Ok(backend)
+    }
+
+    /// Core-RPC-primary backend list (the node-backed shape): the primary —
+    /// and any further Core URLs — are stateless per-call HTTP clients;
+    /// Electrum secondaries come from the shared pool so their TCP+TLS
+    /// connections persist across calls (issue #87).
+    fn node_backend(
+        &self,
+        coin_id: &str,
+        params: &'static ChainParams,
+        urls: &str,
+    ) -> Result<MultiBackend> {
+        let urls: Vec<&str> = urls
+            .split(',')
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .collect();
+        let mut backends: Vec<Box<dyn ChainBackend>> = Vec::new();
+        for url in &urls {
+            if url.starts_with("http://") {
+                backends.push(Box::new(crate::chain::CoreRpcBackend::new(params, url)?));
+            } else if url.starts_with("tcp://") || url.starts_with("ssl://") {
+                backends.push(Box::new(
+                    self.electrum_pool.get(params, coin_id, url, &urls)?,
+                ));
+            } else {
+                anyhow::bail!(
+                    "unsupported backend URL scheme in {url:?} (http:// | tcp:// | ssl://)"
+                )
+            }
+        }
+        MultiBackend::from_backends(backends)
     }
 
     /// Electrum-only URL list ⇒ nodeless mode: the primary becomes a
@@ -668,15 +706,29 @@ impl Engine {
                  (independent chain views) — add a second URL"
             );
         }
-        let handle = match self.store.seed() {
-            Ok(seed) => Some(self.wallet_manager.open(coin_id, params, &seed)?),
+        // The primary chain view: the coin's pooled long-lived connection.
+        // The sync worker dials the same server on its OWN connection (see
+        // WalletManager::ensure_worker) so each socket has one caller
+        // domain — engine RPCs here (serialized by the registry lock), the
+        // worker there.
+        let primary = self.electrum_pool.get(params, coin_id, urls[0], &urls)?;
+        let wallet = match self.store.seed() {
+            Ok(seed) => {
+                let handle = self.wallet_manager.open(coin_id, params, &seed)?;
+                let worker = self
+                    .wallet_manager
+                    .ensure_worker(coin_id, params, urls[0], &handle)?;
+                Some((handle, worker))
+            }
             Err(_) => None, // locked or absent seed: chain-reads-only backend
         };
         let mut backends: Vec<Box<dyn ChainBackend>> = vec![Box::new(
-            crate::wallet_bdk::BdkWalletBackend::new(params, urls[0], handle)?,
+            crate::wallet_bdk::BdkWalletBackend::new(params, primary, wallet),
         )];
         for url in &urls[1..] {
-            backends.push(Box::new(ElectrumBackend::new(params, url)?));
+            backends.push(Box::new(
+                self.electrum_pool.get(params, coin_id, url, &urls)?,
+            ));
         }
         MultiBackend::from_backends(backends)
     }
@@ -3799,6 +3851,32 @@ impl Engine {
                 detail: format!("pending-take prune: {err:#}"),
             });
         }
+        let adaptor_records = self.store.list_adaptor().unwrap_or_default();
+        // Coins with a swap ACTIVE as of this tick (incl. ones going terminal
+        // during it): swap progress moves the nodeless wallet — fundings
+        // confirm, redeems land, refunds return — so poke those coins' sync
+        // workers after the tick (issue #87: "swap events on the coin").
+        // Long-terminal history swaps are excluded, so idle merchants poke
+        // nothing.
+        let mut active_coins: BTreeSet<String> = BTreeSet::new();
+        for record in &records {
+            if !matches!(
+                record.state,
+                State::Completed | State::Refunded | State::Aborted
+            ) {
+                active_coins.insert(record.chain_a.coin_id.clone());
+                active_coins.insert(record.chain_b.coin_id.clone());
+            }
+        }
+        for rec in &adaptor_records {
+            if !matches!(
+                rec.state,
+                AdaptorState::Completed | AdaptorState::Refunded | AdaptorState::Aborted
+            ) {
+                active_coins.insert(rec.chain_a.coin_id.clone());
+                active_coins.insert(rec.chain_b.coin_id.clone());
+            }
+        }
         for record in records {
             match self.tick_one(&record) {
                 Ok(Some(event)) => events.push(event),
@@ -3811,7 +3889,7 @@ impl Engine {
             }
         }
         // v2 (pact-htlc-v2) adaptor swaps: same auto-redeem/auto-refund policy.
-        for rec in self.store.list_adaptor().unwrap_or_default() {
+        for rec in adaptor_records {
             match self.adaptor_tick_one(&rec) {
                 Ok(Some(event)) => events.push(event),
                 Ok(None) => {}
@@ -3821,6 +3899,9 @@ impl Engine {
                     detail: format!("{err:#}"),
                 }),
             }
+        }
+        for coin_id in &active_coins {
+            self.wallet_manager.poke(coin_id);
         }
         // Observability: refresh the live progress snapshot from the records (and
         // fold in this round's latest event per swap). Never fails the tick.

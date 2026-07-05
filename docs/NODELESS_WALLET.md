@@ -181,6 +181,31 @@ must be persisted (and its inputs locked, bdk's equivalent of
 `lockUnspents`) before the handshake continues — mirroring the Core path's
 persist-before-broadcast discipline and the rc6 commit rule.
 
+### 3.1 Sync model: background worker, cached reads (step 2, issue #87)
+
+The wallet ops above perform **no chain I/O of their own**. Step 1 (#86)
+batched the sync to a few round-trips; step 2 moved it off the RPC path
+entirely:
+
+- One `SyncWorker` thread per nodeless coin (`wallet_worker.rs`), owning
+  the coin's **one long-lived Electrum connection** (an `ElectrumPool`
+  entry shared with every engine call; lazy, reconnects on transport
+  errors, `verify_chain` cached per connection generation).
+- Loop: `wait(poke OR ~15s tick)` → observe (scripthash subscriptions on
+  every revealed spk + one tip poll; unchanged statuses skip the sync) →
+  snapshot revealed spks under a brief entry lock → fetch batched with NO
+  locks → `apply_update` + persist under a brief entry lock.
+- Reads (`wallet_balance`, `wallet_transactions`, …) serve the bdk cache
+  as-is: ~0ms, never network, stale-not-slow when the server is down.
+  Freshness = worker cadence + pokes (own broadcasts, Receive dialog,
+  swap events) + `scripthash.subscribe` push notifications.
+- Writes (`wallet_send`, `wallet_build_funding`, `wallet_bumpfee`, …) gate
+  on the worker's `first_sync_done` latch (bounded wait, honest error) so
+  a spend can never coin-select from a never-synced cache at boot.
+- Race-safety: all wallet mutation stays under the per-coin entry mutex;
+  the snapshot→fetch→apply gap is what bdk's monotonic `Update` merge is
+  designed for (a non-connecting chain update is rejected and retried).
+
 ## 4. New surface beyond the trait
 
 - **pactd RPC:** `listtransactions <coin>` (activity: txid, direction,
