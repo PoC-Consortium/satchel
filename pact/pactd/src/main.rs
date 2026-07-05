@@ -545,8 +545,20 @@ const METHODS: &[(&str, &str, &str, &str)] = &[
     (
         "wallet",
         "sendtoaddress",
-        "<coin> <address> <amount>",
-        "Send from the coin's wallet; amount in coin units (e.g. 0.5).",
+        "<coin> <address> <amount> [conf_target] [fee_rate]",
+        "Send from the coin's wallet; amount in coin units (e.g. 0.5), or 'all' to sweep (fee off the amount).",
+    ),
+    (
+        "wallet",
+        "estimatesendfee",
+        "<coin>",
+        "Fee preview for the send form: slow/normal/fast sat/vB (null = no estimate) + the coin's floor.",
+    ),
+    (
+        "wallet",
+        "bumpfee",
+        "<coin> <txid> <fee_rate>",
+        "RBF-bump an unconfirmed wallet send to fee_rate sat/vB (nodeless coins; live-swap fundings refused).",
     ),
     (
         "wallet",
@@ -1524,8 +1536,15 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             };
             let txid = blocking(app, move |e| {
                 let coin = parse_coin(&chain)?;
-                let (_, sat) = parse_coin_amount(&format!("{coin}:{amount}"))?;
-                e.wallet_send(net, &coin, &address, sat, fee)
+                // "all" sweeps the wallet (send-everything, phoenix parity):
+                // the fee comes out of the swept amount, the wallet ends
+                // empty — no user-computed balance-minus-fee guesswork.
+                if amount == "all" {
+                    e.wallet_send_all(net, &coin, &address, fee)
+                } else {
+                    let (_, sat) = parse_coin_amount(&format!("{coin}:{amount}"))?;
+                    e.wallet_send(net, &coin, &address, sat, fee)
+                }
             })
             .await?;
             Ok(json!({ "txid": txid }))

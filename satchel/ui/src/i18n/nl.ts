@@ -505,6 +505,8 @@ export const nl: Bundle = {
     sendIntro: "Besteedbaar: {balance} {sym}.",
     sendAddressLabel: "{sym}-adres van de ontvanger",
     sendAmountLabel: "Bedrag",
+    sendMax: "Max",
+    sendAllNote: "Je verstuurt alles — de netwerkfee gaat van dit bedrag af.",
     sendNeedAddress: "Voer het adres van de ontvanger in.",
     sendNeedAmount: "Voer een bedrag in.",
     sendNeedFee: "Kies een feetarief.",
@@ -559,6 +561,9 @@ export const nl: Bundle = {
     boardSettings: "Configureer in Instellingen",
     filterAll: "Alle",
     filterMine: "Mijne",
+    allPairs: "Alle paren",
+    allPairsTip:
+      "Blader door elk paar op het bord, ook munten die je niet hebt ingesteld — die aanbiedingen zijn alleen te bekijken tot je de munt verbindt.",
     noOffers: "Geen aanbiedingen die je nu kunt aannemen",
     noOffersBody:
       "Aanbiedingen verschijnen hier zodra een maker er een plaatst voor een paar dat je hebt ingesteld. Je kunt ook je eigen aanbod plaatsen.",
@@ -777,6 +782,45 @@ export const nl: Bundle = {
     feeBumped: "Vergoeding verhoogd",
     reorg: "Reorg gedetecteerd — opnieuw controleren",
   },
+  notify: {
+    tab: "Meldingen",
+    section: "Bureaubladmeldingen",
+    intro:
+      "Swaps duren even en lopen vanzelf — krijg een OS-melding wanneer er een een mijlpaal bereikt terwijl Satchel op de achtergrond staat. Er verschijnt niets zolang je naar het venster kijkt.",
+    master: "Meldingen inschakelen",
+    masterHint: "Hoofdschakelaar — zet elke melding hieronder aan of uit.",
+    evStarted: "Swap gestart",
+    evStartedHint: "Iemand heeft je aanbod aangenomen, of een maker heeft jouw aanname geaccepteerd.",
+    evLocks: "Vergrendelingen bevestigd",
+    evLocksHint:
+      "De vergrendeling van een leg is on-chain bevestigd — die van jou, die van hen, dan beide vergrendeld.",
+    evCompleted: "Swap voltooid",
+    evCompletedHint: "De swap is afgerond en de munten staan veilig in je wallet.",
+    evFailed: "Swap gerefund of afgebroken",
+    evFailedHint: "Een swap is teruggedraaid — gerefund na een vastloper, of geannuleerd.",
+    evReorg: "Reorg-waarschuwingen",
+    evReorgHint:
+      "Een chain-reorganisatie raakte een swap waar je in zit — wordt opnieuw gecontroleerd.",
+    test: "Stuur een testmelding",
+    testTitle: "Satchel",
+    testBody: "Meldingen werken.",
+    denied:
+      "Het OS blokkeert meldingen — sta Satchel toe in de meldingsinstellingen van je systeem.",
+    testSent:
+      "Doorgegeven aan het OS. Als er geen melding verscheen: ontwikkelbuilds (niet-geïnstalleerd) worden vaak onderdrukt — Windows toont meldingen alleen betrouwbaar voor geïnstalleerde apps. De geïnstalleerde Satchel meldt gewoon; controleer ook Niet storen / meldingsinstellingen.",
+    titleStarted: "Swap gestart",
+    titleLocks: "Swap-update",
+    titleCompleted: "Swap voltooid",
+    titleFailed: "Swap niet voltooid",
+    titleReorg: "Reorg-waarschuwing",
+    reorgBody:
+      "{coin}: chain-reorganisatie gedetecteerd — bevestigingen worden opnieuw gecontroleerd.",
+    trayNone: "Satchel — geen swaps onderweg",
+    trayOne: "Satchel — 1 swap onderweg",
+    trayMany: "Satchel — {count} swaps onderweg",
+    trayOpen: "Satchel openen",
+    trayQuit: "Afsluiten",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -808,6 +852,16 @@ export const nl: Bundle = {
       "Het seed van deze merchant is versleuteld. Voer de wachtwoordzin in om het voor deze sessie te ontgrendelen — Satchel houdt het alleen in het geheugen en vergeet het bij afsluiten.",
     switchMerchant: "Merchant wisselen",
     unlock: "Ontgrendelen",
+  },
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "Wat jij 1 {sym} noemt in je eigen geld — EUR, USD, RMB, waar je ook in denkt. Elk ~Cash-bedrag is afgeleid van jouw koersen, per munt onthouden. Alleen weergave — Satchel haalt nooit prijzen op.",
+    cashrateNoContext:
+      "Hier grijs — de koers hoort bij het paar dat je bekijkt. Open de Corkboard of een aanbodformulier om de koers voor zijn quote-munt in te stellen.",
+    cashUnit: "~Cash",
+    refTip:
+      "Tegen je eigen Cashrate — jouw referentie, geen marktprijs. Beide legs van een aanbod zijn tegen de eigen prijs evenveel waard. Stel koersen in via de chip in de koptekst.",
   },
   common: {
     cancel: "Annuleren",

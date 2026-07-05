@@ -53,7 +53,8 @@ outpoint; `nonces`/`sign`/`assemble` complete the MuSig2 adaptor exchange;
 step is required.
 
 > **Note** — The cooperative key-path **redeem is NOT RBF-bumpable**; it commits
-> at the live market rate and is dragged through by a CPFP child. The single-key
+> at the live market rate, is broadcast non-replaceable, and is dragged through
+> by a CPFP child. The single-key
 > **refund IS bumpable**. Budget fees accordingly when settling near a
 > deadline.
 
@@ -114,7 +115,10 @@ never be signed again.
 - `adaptornonces` — produce and exchange the MuSig2 nonces.
 - `adaptorsign` — produce the adaptor and partial signatures.
 - `adaptorassemble` — assemble the partials into the final signature set.
-- `adaptorfund` — broadcast our funding transaction.
+- `adaptorfund` — broadcast our funding transaction. v2 fundings go out
+  **non-replaceable** (no BIP125 signal): the funding txid is committed into
+  the pre-signed redeems, so a fee bump is CPFP-via-change, never RBF (see
+  the chapter "Fees, Fee-Bumping & Auto-Refund").
 - `adaptorredeem` — settle on the cooperative key-path, revealing the adaptor
   secret.
 - `adaptorrefund` — reclaim our funded leg via the single-key timeout path.

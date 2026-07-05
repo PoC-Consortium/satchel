@@ -505,6 +505,8 @@ export const hi: Bundle = {
     sendIntro: "खर्च-योग्य: {balance} {sym}।",
     sendAddressLabel: "प्राप्तकर्ता का {sym} पता",
     sendAmountLabel: "राशि",
+    sendMax: "Max",
+    sendAllNote: "सब कुछ भेजा जा रहा है — नेटवर्क शुल्क इसी राशि में से कटता है।",
     sendNeedAddress: "प्राप्तकर्ता का पता दर्ज करें।",
     sendNeedAmount: "एक राशि दर्ज करें।",
     sendNeedFee: "एक शुल्क दर चुनें।",
@@ -559,6 +561,9 @@ export const hi: Bundle = {
     boardSettings: "Settings में कॉन्फ़िगर करें",
     filterAll: "सभी",
     filterMine: "मेरे",
+    allPairs: "सभी pairs",
+    allPairsTip:
+      "बोर्ड के हर pair को ब्राउज़ करें, उन coins समेत जो आपने सेट अप नहीं किए — वे offers तब तक केवल देखने के लिए हैं जब तक आप उस coin को कनेक्ट नहीं करते।",
     noOffers: "अभी आप कोई offer नहीं ले सकते",
     noOffersBody:
       "जैसे ही कोई maker आपके द्वारा सेट अप किए गए किसी pair के लिए offer पोस्ट करता है, offers यहाँ दिखाई देते हैं। आप अपना खुद का भी पोस्ट कर सकते हैं।",
@@ -777,6 +782,42 @@ export const hi: Bundle = {
     feeBumped: "शुल्क बढ़ाया गया",
     reorg: "रीऑर्ग पाया गया — फिर से जाँच",
   },
+  notify: {
+    tab: "सूचनाएँ",
+    section: "डेस्कटॉप सूचनाएँ",
+    intro:
+      "स्वैप में समय लगता है और वे अपने आप चलते हैं — जब Satchel पृष्ठभूमि में हो और कोई स्वैप किसी पड़ाव पर पहुँचे, तो OS सूचना पाएँ। जब आप विंडो देख रहे हों तो कुछ नहीं आता।",
+    master: "सूचनाएँ चालू करें",
+    masterHint: "मुख्य स्विच — नीचे की हर सूचना को चालू या बंद करता है।",
+    evStarted: "स्वैप शुरू हुआ",
+    evStartedHint: "किसी ने आपका offer लिया, या किसी maker ने आपका take स्वीकार किया।",
+    evLocks: "लॉक कन्फ़र्म हुए",
+    evLocksHint: "किसी leg का लॉक on-chain कन्फ़र्म हुआ — आपका, उनका, फिर दोनों लॉक।",
+    evCompleted: "स्वैप पूरा हुआ",
+    evCompletedHint: "स्वैप पूरा हो गया और coins आपके wallet में सेटल हो गए।",
+    evFailed: "स्वैप refund या रद्द हुआ",
+    evFailedHint: "एक स्वैप वापस खुल गया — अटकने के बाद refund हुआ, या रद्द किया गया।",
+    evReorg: "रीऑर्ग चेतावनियाँ",
+    evReorgHint:
+      "एक chain reorganization ने आपके किसी चालू स्वैप को छुआ — फिर से जाँच हो रही है।",
+    test: "एक परीक्षण सूचना भेजें",
+    testTitle: "Satchel",
+    testBody: "सूचनाएँ काम कर रही हैं।",
+    denied: "OS सूचनाएँ रोक रहा है — अपने सिस्टम की सूचना सेटिंग्स में Satchel को अनुमति दें।",
+    testSent:
+      "OS को सौंप दी गई। यदि कोई टोस्ट नहीं दिखा: विकास (बिना पैकेज वाले) बिल्ड अक्सर दबा दिए जाते हैं — Windows केवल इंस्टॉल किए गए ऐप्स के लिए ही भरोसेमंद ढंग से टोस्ट दिखाता है। इंस्टॉल किया हुआ Satchel सामान्य रूप से सूचित करता है; परेशान न करें / सूचना सेटिंग्स भी जाँचें।",
+    titleStarted: "स्वैप शुरू हुआ",
+    titleLocks: "स्वैप अपडेट",
+    titleCompleted: "स्वैप पूरा हुआ",
+    titleFailed: "स्वैप पूरा नहीं हुआ",
+    titleReorg: "रीऑर्ग चेतावनी",
+    reorgBody: "{coin}: chain reorganization पाया गया — कन्फ़र्मेशन फिर से जाँचे जा रहे हैं।",
+    trayNone: "Satchel — कोई स्वैप चालू नहीं",
+    trayOne: "Satchel — 1 स्वैप चालू",
+    trayMany: "Satchel — {count} स्वैप चालू",
+    trayOpen: "Satchel खोलें",
+    trayQuit: "बंद करें",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -808,6 +849,16 @@ export const hi: Bundle = {
       "इस merchant का seed एन्क्रिप्टेड है। इस सत्र के लिए इसे अनलॉक करने हेतु इसका passphrase दर्ज करें — Satchel इसे केवल मेमोरी में रखता है और बाहर निकलने पर भूल जाता है।",
     switchMerchant: "Merchant स्विच करें",
     unlock: "अनलॉक करें",
+  },
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "आपकी अपनी मुद्रा में 1 {sym} की जो कीमत आप मानते हैं — EUR, USD, RMB, जिसमें भी आप सोचते हैं। हर ~Cash आँकड़ा आपकी दरों से निकलता है, जो हर coin के लिए याद रखी जाती हैं। केवल दिखाने के लिए — Satchel कभी कीमतें नहीं मँगाता।",
+    cashrateNoContext:
+      "यहाँ धूसर है — दर उसी pair से जुड़ती है जिसे आप देख रहे हैं। उसके quote coin की दर सेट करने के लिए Corkboard या कोई offer फ़ॉर्म खोलें।",
+    cashUnit: "~Cash",
+    refTip:
+      "आपके अपने Cashrate पर — यह आपका संदर्भ है, कोई बाज़ार भाव नहीं। एक offer के दोनों legs उसके अपने भाव पर बराबर मूल्य के होते हैं। दरें हेडर चिप से सेट करें।",
   },
   common: {
     cancel: "रद्द करें",

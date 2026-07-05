@@ -56,6 +56,7 @@ const PAIR_KEY = "satchel.corkboard.pair";
 // "Hide blocked offers" is a pure view preference (like the pair + denom), so it
 // rides in localStorage rather than satchel.json.
 const HIDE_BLOCKED_KEY = "satchel.corkboard.hideBlocked";
+const ALL_PAIRS_KEY = "satchel.corkboard.allPairs";
 
 // One row from pactd `listmyoffers` — the maker's own offers from the local
 // store (the `offer` envelope is Offer-shaped: swap_id / from / body).
@@ -97,6 +98,17 @@ export default function CorkboardScreen() {
   const [hideBlocked, setHideBlocked] = useState<boolean>(() => {
     try {
       return localStorage.getItem(HIDE_BLOCKED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  // Browse EVERY pair on the board (rc10 review), not just the configured
+  // ones — the watch-only viewer's view, as an opt-in toggle for a normal
+  // merchant. Offers on unconfigured/down coins stay un-takeable (the
+  // existing legDown gate); this only widens what is SHOWN.
+  const [allPairs, setAllPairs] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(ALL_PAIRS_KEY) === "1";
     } catch {
       return false;
     }
@@ -186,9 +198,18 @@ export default function CorkboardScreen() {
   // are no configured pairs, so derive the selector from the pairs actually
   // present on the board — the whole point of the mode is to browse everything.
   const pairOptions = useMemo(() => {
-    const keys = watchOnly
-      ? [...new Set(offers.map((o) => pairKey(o.body.give_asset, o.body.get_asset)))]
-      : [...available];
+    // Browsing everything (watch-only, or the All-pairs toggle): the union of
+    // the pairs actually on the board and the configured ones, so a quiet
+    // configured pair still shows in the selector.
+    const keys =
+      watchOnly || allPairs
+        ? [
+            ...new Set([
+              ...offers.map((o) => pairKey(o.body.give_asset, o.body.get_asset)),
+              ...available,
+            ]),
+          ]
+        : [...available];
     return keys
       .map((key) => {
         // Label base/quote (order-book convention) so the selector reads the same
@@ -200,7 +221,7 @@ export default function CorkboardScreen() {
         return { key, label: `${symOf(base)}/${symOf(quote)}` };
       })
       .sort((x, y) => x.label.localeCompare(y.label));
-  }, [watchOnly, offers, available, symOf]);
+  }, [watchOnly, allPairs, offers, available, symOf]);
   // Default to the first pair when none is chosen, and fall back to it if a
   // persisted pair is no longer available (capabilities changed).
   useEffect(() => {
@@ -289,9 +310,10 @@ export default function CorkboardScreen() {
   // otherwise only offers for pairs whose coins are connected are takeable.
   // Offers for unconnected pairs are simply not shown — it's understood the
   // board reflects what you've set up.
-  const supported = watchOnly
-    ? offers
-    : offers.filter((o) => available.has(pairKey(o.body.give_asset, o.body.get_asset)));
+  const supported =
+    watchOnly || allPairs
+      ? offers
+      : offers.filter((o) => available.has(pairKey(o.body.give_asset, o.body.get_asset)));
 
   const inFilter = (o: Offer) =>
     !effectivePair || pairKey(o.body.give_asset, o.body.get_asset) === effectivePair;
@@ -410,6 +432,30 @@ export default function CorkboardScreen() {
           <ToggleButton value="all">{t("corkboard.filterAll")}</ToggleButton>
           <ToggleButton value="mine">{t("corkboard.filterMine")}</ToggleButton>
         </ToggleButtonGroup>
+
+        {/* Browse every pair on the board (view-only for unconfigured coins);
+            redundant in the watch-only viewer, which always shows everything. */}
+        {!watchOnly && (
+          <Tooltip title={t("corkboard.allPairsTip")}>
+            <ToggleButton
+              size="small"
+              value="allPairs"
+              selected={allPairs}
+              onChange={() => {
+                const next = !allPairs;
+                setAllPairs(next);
+                try {
+                  localStorage.setItem(ALL_PAIRS_KEY, next ? "1" : "0");
+                } catch {
+                  /* view preference only */
+                }
+              }}
+              sx={{ px: 1, fontSize: 11 }}
+            >
+              {t("corkboard.allPairs")}
+            </ToggleButton>
+          </Tooltip>
+        )}
 
         {hasBlocked && (
           <Tooltip title={t("contacts.hideBlocked")}>

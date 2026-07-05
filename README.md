@@ -45,8 +45,9 @@ Three moving parts, with a hard wall between them:
    **Corkboard** (a self-hostable noticeboard for communities that want their
    own).
 3. **Satchel** (the desktop app) is the face — it renders the engine's RPC,
-   manages seeds, and shows read-only per-coin balances (a full send/receive
-   wallet arrives with the nodeless build).
+   manages seeds, and hosts the per-coin wallets: every coin card can send and
+   receive, and Electrum-connected (nodeless) coins keep the wallet on the
+   Pact seed — no node required.
 
 Naming theme: the village market square. A **pact** is the trustless deal,
 posted on the **corkboard**, settled into your **satchel**. Deliberately no
@@ -61,7 +62,7 @@ posted on the **corkboard**, settled into your **satchel**. Deliberately no
 | [`pact-nostr/`](pact-nostr/) | — | Maps Pact envelopes ↔ Nostr events (public offer adverts kind `31510`, gift-wrapped relay messages kind `1059`). Pure mapping + crypto, no relay I/O. |
 | [`pact/`](pact/) | **Pact** | The swap engine (Rust workspace): `libswap` (HTLC/adaptor logic + state machine), `pactd` (local JSON-RPC daemon, SQLite, auto-refund + RBF fee-bump scheduler), `pact-cli` (thin RPC client). |
 | [`corkboard/`](corkboard/) | **Corkboard** | Self-hostable order board: a single axum + SQLite/Postgres binary that stores signed offers and blind-relays encrypted blobs. The alternative transport to Nostr (Bisq-style, many operators). |
-| [`satchel/`](satchel/) | **Satchel** | Desktop app (Tauri shell + React/Vite/TypeScript/MUI frontend). Bundles and supervises `pactd`; shows read-only per-coin balances. Owns the GUI, never the swap logic. |
+| [`satchel/`](satchel/) | **Satchel** | Desktop app (Tauri shell + React/Vite/TypeScript/MUI frontend). Bundles and supervises `pactd`; per-coin wallet cards with send/receive. Owns the GUI, never the swap logic. |
 | [`tools/`](tools/) | — | Dev tooling (e.g. `relay-prober` for Nostr relay eligibility) and playground scripts. |
 | [`docs/`](docs/) | — | The **Pact** and **Satchel** handbooks (Markdown → PDF), the GitHub **wiki** pages (staged for `satchel.wiki.git`), and the product roadmap. |
 
@@ -129,9 +130,13 @@ cd ..        && cargo tauri build               # full bundle
 ### One-shot regtest playground
 
 ```sh
-./tools/playground-cork.ps1    # regtest nodes + Corkboard + headless
-                               # counterparties, then launches Satchel
-./tools/playground-nostr.ps1   # same, but over a local Nostr relay (no board)
+./tools/playground-cork.ps1            # regtest nodes + Corkboard + headless
+                                       # counterparties, then launches Satchel
+./tools/playground-nostr.ps1           # same, but over a local Nostr relay
+                                       # (no board)
+./tools/playground-nostr-nodeless.ps1  # Nostr + nodeless: wallets on the Pact
+                                       # seed via local electrs (LTC as the
+                                       # one local-node coin)
 ```
 
 Each script builds and brings up the whole stack, then blocks on the Satchel

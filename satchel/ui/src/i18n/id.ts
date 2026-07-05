@@ -505,6 +505,8 @@ export const id: Bundle = {
     sendIntro: "Dapat dibelanjakan: {balance} {sym}.",
     sendAddressLabel: "Alamat {sym} penerima",
     sendAmountLabel: "Jumlah",
+    sendMax: "Maks",
+    sendAllNote: "Mengirim semuanya — biaya jaringan diambil dari jumlah ini.",
     sendNeedAddress: "Masukkan alamat penerima.",
     sendNeedAmount: "Masukkan jumlah.",
     sendNeedFee: "Pilih tarif biaya.",
@@ -559,6 +561,9 @@ export const id: Bundle = {
     boardSettings: "Konfigurasikan di Pengaturan",
     filterAll: "Semua",
     filterMine: "Milik saya",
+    allPairs: "Semua pasangan",
+    allPairsTip:
+      "Jelajahi setiap pasangan di papan, termasuk koin yang belum Anda atur — penawaran itu hanya bisa dilihat sampai Anda menghubungkan koinnya.",
     noOffers: "Tidak ada penawaran yang bisa Anda ambil sekarang",
     noOffersBody:
       "Penawaran muncul di sini begitu seorang maker memasang satu untuk pasangan yang sudah Anda atur. Anda juga bisa memasang milik Anda sendiri.",
@@ -777,6 +782,44 @@ export const id: Bundle = {
     feeBumped: "Biaya dinaikkan",
     reorg: "Reorg terdeteksi — memeriksa ulang",
   },
+  notify: {
+    tab: "Notifikasi",
+    section: "Notifikasi desktop",
+    intro:
+      "Swap butuh waktu dan berjalan sendiri — dapatkan notifikasi OS saat sebuah swap mencapai tonggak penting selagi Satchel di latar belakang. Tidak ada yang muncul selagi Anda melihat jendelanya.",
+    master: "Aktifkan notifikasi",
+    masterHint: "Sakelar utama — menyalakan atau mematikan semua notifikasi di bawah.",
+    evStarted: "Swap dimulai",
+    evStartedHint: "Seseorang mengambil penawaran Anda, atau seorang maker menerima pengambilan Anda.",
+    evLocks: "Penguncian terkonfirmasi",
+    evLocksHint:
+      "Penguncian sebuah leg terkonfirmasi on-chain — milik Anda, milik mereka, lalu keduanya terkunci.",
+    evCompleted: "Swap selesai",
+    evCompletedHint: "Swap rampung dan koinnya sudah masuk ke dompet Anda.",
+    evFailed: "Swap di-refund atau dibatalkan",
+    evFailedHint: "Sebuah swap dibongkar — di-refund setelah macet, atau dibatalkan.",
+    evReorg: "Peringatan reorg",
+    evReorgHint:
+      "Reorganisasi rantai menyentuh swap yang Anda ikuti — sedang diperiksa ulang.",
+    test: "Kirim notifikasi uji",
+    testTitle: "Satchel",
+    testBody: "Notifikasi berfungsi.",
+    denied:
+      "OS memblokir notifikasi — izinkan Satchel di pengaturan notifikasi sistem Anda.",
+    testSent:
+      "Diserahkan ke OS. Jika tidak ada toast yang muncul: build pengembangan (belum dipaket) sering ditekan — Windows hanya menampilkan toast secara andal untuk aplikasi terpasang. Satchel yang terpasang memberi notifikasi secara normal; periksa juga mode Jangan Ganggu / pengaturan notifikasi.",
+    titleStarted: "Swap dimulai",
+    titleLocks: "Pembaruan swap",
+    titleCompleted: "Swap selesai",
+    titleFailed: "Swap tidak selesai",
+    titleReorg: "Peringatan reorg",
+    reorgBody: "{coin}: reorganisasi rantai terdeteksi — konfirmasi sedang diperiksa ulang.",
+    trayNone: "Satchel — tidak ada swap yang berjalan",
+    trayOne: "Satchel — 1 swap sedang berjalan",
+    trayMany: "Satchel — {count} swap sedang berjalan",
+    trayOpen: "Buka Satchel",
+    trayQuit: "Keluar",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -808,6 +851,16 @@ export const id: Bundle = {
       "Seed merchant ini terenkripsi. Masukkan frasa sandinya untuk membukanya pada sesi ini — Satchel menyimpannya hanya di memori dan melupakannya saat keluar.",
     switchMerchant: "Beralih merchant",
     unlock: "Buka kunci",
+  },
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "Berapa nilai 1 {sym} menurut Anda dalam uang Anda sendiri — EUR, USD, RMB, apa pun yang biasa Anda pakai. Setiap angka ~Cash diturunkan dari kurs Anda, diingat per koin. Hanya untuk tampilan — Satchel tidak pernah mengambil harga.",
+    cashrateNoContext:
+      "Di sini diredupkan — kurs terikat pada pasangan yang sedang Anda lihat. Buka Corkboard atau formulir penawaran untuk menetapkan kurs koin kuotasinya.",
+    cashUnit: "~Cash",
+    refTip:
+      "Menurut Cashrate Anda sendiri — acuan Anda, bukan harga pasar. Kedua leg sebuah penawaran bernilai sama pada harganya sendiri. Tetapkan kurs lewat chip di header.",
   },
   common: {
     cancel: "Batal",

@@ -218,6 +218,7 @@ differently, and the asymmetry mirrors the redeem/refund split:
 | | v1 funding | v2 funding |
 |---|---|---|
 | **Mechanism** | RBF (`bumpfee`) | CPFP-via-change |
+| **Broadcast** | explicitly BIP125-replaceable (the nurse's RBF is accepted) | **non-replaceable** — no BIP125 signal (Core `{"replaceable": false}`, bdk `ENABLE_LOCKTIME_NO_RBF`), so an external wallet won't even offer a bump |
 | **Why** | the only outpoint-dependent downstream tx is the **single-key** refund — re-sign it locally against the new outpoint | the outpoint feeds the **2-of-2 MuSig2** adaptor sigs already exchanged; RBF would invalidate them, so spend the change output instead and keep the outpoint fixed |
 
 - **v1 (`maybe_bump_funding_v1`).** RBF via the wallet, then re-locate the HTLC
@@ -231,12 +232,24 @@ differently, and the asymmetry mirrors the redeem/refund split:
   the live outpoint on restart.
 - **v2 (`maybe_bump_funding_v2`).** A CPFP child spends the funding's
   wallet-owned **change** output, leaving the funding outpoint — and therefore
-  the exchanged adaptor sigs and the refund — untouched. A funding with no change
+  the exchanged adaptor sigs and the refund — untouched. The v2 funding is
+  broadcast **without** the BIP125 signal: nothing may ever RBF it (its txid
+  is committed into the pre-signed MuSig2 redeems), and the non-signal keeps
+  external wallets from even offering a replacement. A funding with no change
   output (exact-UTXO) cannot be CPFP'd → it stalls → refund (acceptable).
 
 A recoverable `bumpfee`/sign failure (e.g. insufficient funds — the funds gate
 is a soft pre-flight, not a lock — or a not-replaceable tx) is a graceful
 skip event for that tick, never a crash: the funding stalls and refunds.
+
+> **Note** — The nurse is the **only** legitimate bumper of a live swap's
+> funding. The wallet-level `bumpfee` RPC (chapter "API: Node, Seed,
+> Merchants, Coins") refuses a txid that funds a live swap — v1 HTLC and v2
+> funding txids alike — with `<txid> funds live swap <id> — the swap engine
+> manages its fee (see get/setfeepolicy), bumpfee must not replace it`. A
+> hand-RBF of a v2 funding would change its txid and invalidate the
+> pre-signed MuSig2 redeems; v1 fundings are re-bumped under the swap's own
+> `FeeBumpPolicy`. Satchel likewise hides its Bump action on those rows.
 
 ## Auto-refund
 

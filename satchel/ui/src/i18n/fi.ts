@@ -505,6 +505,8 @@ export const fi: Bundle = {
     sendIntro: "Käytettävissä: {balance} {sym}.",
     sendAddressLabel: "Vastaanottajan {sym}-osoite",
     sendAmountLabel: "Määrä",
+    sendMax: "Max",
+    sendAllNote: "Lähetät kaiken — verkkomaksu vähennetään tästä määrästä.",
     sendNeedAddress: "Syötä vastaanottajan osoite.",
     sendNeedAmount: "Syötä määrä.",
     sendNeedFee: "Valitse maksutaso.",
@@ -562,6 +564,9 @@ export const fi: Bundle = {
     boardSettings: "Määritä Asetuksissa",
     filterAll: "Kaikki",
     filterMine: "Omat",
+    allPairs: "Kaikki parit",
+    allPairsTip:
+      "Selaa taulun kaikkia pareja, myös kolikoita joita et ole määrittänyt — ne tarjoukset ovat vain katseltavissa, kunnes yhdistät kolikon.",
     noOffers: "Ei tarjouksia, jotka voisit ottaa juuri nyt",
     noOffersBody:
       "Tarjoukset ilmestyvät tähän heti, kun tekijä julkaisee sellaisen parille, jonka olet määrittänyt. Voit myös julkaista omasi.",
@@ -780,6 +785,42 @@ export const fi: Bundle = {
     feeBumped: "Maksua korotettu",
     reorg: "Reorg havaittu — tarkistetaan uudelleen",
   },
+  notify: {
+    tab: "Ilmoitukset",
+    section: "Työpöytäilmoitukset",
+    intro:
+      "Swapit kestävät tovin ja etenevät itsekseen — saat käyttöjärjestelmän ilmoituksen, kun jokin niistä saavuttaa virstanpylvään Satchelin ollessa taustalla. Mitään ei laukea, kun katsot ikkunaa.",
+    master: "Ota ilmoitukset käyttöön",
+    masterHint: "Pääkytkin — kytkee kaikki alla olevat ilmoitukset päälle tai pois.",
+    evStarted: "Swap alkoi",
+    evStartedHint: "Joku otti tarjouksesi, tai tekijä hyväksyi ottosi.",
+    evLocks: "Lukitukset vahvistettu",
+    evLocksHint: "Osan lukitus vahvistui ketjussa — sinun, heidän, ja sitten molemmat lukittu.",
+    evCompleted: "Swap valmis",
+    evCompletedHint: "Swap valmistui ja kolikot ovat perillä lompakossasi.",
+    evFailed: "Swap palautettu tai peruttu",
+    evFailedHint: "Swap purkautui — palautettu jumiutumisen jälkeen tai peruttu.",
+    evReorg: "Reorg-varoitukset",
+    evReorgHint:
+      "Ketjun uudelleenjärjestely osui swapiin, jossa olet mukana — tarkistetaan uudelleen.",
+    test: "Lähetä testi-ilmoitus",
+    testTitle: "Satchel",
+    testBody: "Ilmoitukset toimivat.",
+    denied: "Käyttöjärjestelmä estää ilmoitukset — salli Satchel järjestelmän ilmoitusasetuksissa.",
+    testSent:
+      "Luovutettu käyttöjärjestelmälle. Jos ilmoitusta ei näkynyt: kehitysversiot (paketoimattomat) vaimennetaan usein — Windows näyttää ilmoitukset luotettavasti vain asennetuille sovelluksille. Asennettu Satchel ilmoittaa normaalisti; tarkista myös Älä häiritse -tila / ilmoitusasetukset.",
+    titleStarted: "Swap alkoi",
+    titleLocks: "Swap-päivitys",
+    titleCompleted: "Swap valmis",
+    titleFailed: "Swap ei valmistunut",
+    titleReorg: "Reorg-varoitus",
+    reorgBody: "{coin}: ketjun uudelleenjärjestely havaittu — vahvistuksia tarkistetaan uudelleen.",
+    trayNone: "Satchel — ei swapeja käynnissä",
+    trayOne: "Satchel — 1 swap käynnissä",
+    trayMany: "Satchel — {count} swapia käynnissä",
+    trayOpen: "Avaa Satchel",
+    trayQuit: "Lopeta",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -811,6 +852,16 @@ export const fi: Bundle = {
       "Tämän kauppiaan seed on salattu. Syötä sen salasana avataksesi sen tälle istunnolle — Satchel pitää sen vain muistissa ja unohtaa sen poistuttaessa.",
     switchMerchant: "Vaihda kauppias",
     unlock: "Avaa",
+  },
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "Mitä 1 {sym} on omassa rahassasi — EUR, USD, RMB, missä ikinä ajatteletkin. Jokainen ~Cash-luku johdetaan kursseistasi, jotka muistetaan kolikkokohtaisesti. Vain näyttöä varten — Satchel ei koskaan hae hintoja.",
+    cashrateNoContext:
+      "Harmaana tässä — kurssi sitoutuu pariin, jota katsot. Avaa Corkboard tai tarjouslomake asettaaksesi kurssin sen noteerauskolikolle.",
+    cashUnit: "~Cash",
+    refTip:
+      "Omalla Cashratellasi — oma viitteesi, ei markkinahinta. Tarjouksen molemmat osat ovat samanarvoisia sen omalla hinnalla. Aseta kurssit yläpalkin chipistä.",
   },
   common: {
     cancel: "Peruuta",

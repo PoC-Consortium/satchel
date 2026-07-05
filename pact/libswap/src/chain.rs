@@ -260,6 +260,15 @@ pub trait ChainBackend {
     /// target); the user send passes the form's preset target or custom rate.
     fn wallet_send(&self, address: &str, amount_sat: u64, fee: SendFee) -> Result<String>;
 
+    /// Sweep the whole wallet to `address` ("send everything", phoenix
+    /// parity): every spendable UTXO in one tx with the fee taken out of the
+    /// swept amount — the recipient receives balance − fee and the wallet is
+    /// left empty. UTXOs reserved by built-but-unbroadcast v2 fundings are
+    /// not spendable, so a sweep can never claw back a reservation.
+    fn wallet_send_all(&self, _address: &str, _fee: SendFee) -> Result<String> {
+        bail!("this backend cannot sweep the wallet")
+    }
+
     /// Build + sign (but DO NOT broadcast) a funding tx paying `amount_sat` to
     /// `address`, returning `(txid, vout, signed_tx_hex)`. The selected inputs
     /// are locked so nothing else spends them before we broadcast. Used by the v2
@@ -697,6 +706,39 @@ impl ChainBackend for CoreRpcBackend {
             .to_string())
     }
 
+    fn wallet_send_all(&self, address: &str, fee: SendFee) -> Result<String> {
+        let balance_sat = self.wallet_balance()?;
+        anyhow::ensure!(balance_sat > 0, "wallet is empty — nothing to sweep");
+        let amount = format!(
+            "{}.{:08}",
+            balance_sat / 100_000_000,
+            balance_sat % 100_000_000
+        );
+        let fee_rate = self.resolve_send_fee(fee)?;
+        // Same positional args + explicit-feerate/RBF policy as wallet_send,
+        // except subtractfeefromamount=true: amount is the FULL confirmed
+        // balance and Core takes the fee out of it — the sweep semantics.
+        let txid = self.rpc.call(
+            "sendtoaddress",
+            &[
+                json!(address),
+                json!(amount),
+                json!(""),
+                json!(""),
+                json!(true),
+                json!(true),
+                json!(null),
+                json!("unset"),
+                json!(false),
+                json!(fee_rate),
+            ],
+        )?;
+        Ok(txid
+            .as_str()
+            .context("sendtoaddress: non-string")?
+            .to_string())
+    }
+
     fn wallet_build_funding(
         &self,
         address: &str,
@@ -719,12 +761,16 @@ impl ChainBackend for CoreRpcBackend {
             .call("createrawtransaction", &[json!([]), Value::Object(outputs)])?;
         let raw_hex = raw.as_str().context("createrawtransaction: non-string")?;
         // 2. select inputs + change; lock the inputs so nothing else spends them
-        //    before we broadcast; RBF-signal; our explicit funding feerate.
+        //    before we broadcast; our explicit funding feerate. NON-replaceable
+        //    (no BIP125 signal): the v2 funding txid is committed into the
+        //    pre-signed MuSig2 redeems, so it must never be RBF'd — the nurse
+        //    CPFPs it instead, and the non-signal keeps external wallets from
+        //    even offering a bump.
         let funded = self.rpc.call(
             "fundrawtransaction",
             &[
                 json!(raw_hex),
-                json!({ "lockUnspents": true, "fee_rate": fee_rate, "replaceable": true }),
+                json!({ "lockUnspents": true, "fee_rate": fee_rate, "replaceable": false }),
             ],
         )?;
         let funded_hex = funded["hex"]
@@ -1520,6 +1566,10 @@ impl ChainBackend for MultiBackend {
 
     fn wallet_send(&self, address: &str, amount_sat: u64, fee: SendFee) -> Result<String> {
         self.primary().wallet_send(address, amount_sat, fee)
+    }
+
+    fn wallet_send_all(&self, address: &str, fee: SendFee) -> Result<String> {
+        self.primary().wallet_send_all(address, fee)
     }
 
     fn wallet_build_funding(

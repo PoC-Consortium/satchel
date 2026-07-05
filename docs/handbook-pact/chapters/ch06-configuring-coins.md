@@ -73,6 +73,12 @@ two-phase build, CPFP, RBF bump — are served by that wallet, and the
   seed's history scan would be silently incomplete), and a deep check that
   fetches header 0 and hashes it locally (which also validates PoCX's 286-byte
   headers against that server).
+- **Address handout is capped** (`MAX_UNUSED_AHEAD = 20`, `wallet_bdk.rs`):
+  `getnewaddress` reveals fresh external addresses only while fewer than 20
+  revealed-but-unused ones are outstanding; past the cap it recycles the
+  oldest unused address instead. The restore scan's `STOP_GAP = 25` therefore
+  always covers the real address gap by construction — a wallet restored from
+  the seed alone finds every coin, with no deep-rescan affordance needed.
 - A locked or absent seed degrades to **chain-reads-only** and surfaces as
   `wallet_locked` — exactly like an encrypted, locked Core wallet.
 - Default server lists ship per coin in `coins.toml`
@@ -131,6 +137,8 @@ A coin in the registry is *configured* by attaching a chain backend with
   `--coin btcx=http://user:pass@127.0.0.1:9332/wallet/swap`.
 - Any **additional URLs may be Electrum** backends (`tcp://` or `ssl://`), used
   for light chain queries.
+- A list with **no** `http://` URL at all runs the coin **nodeless** — see
+  "Nodeless (Electrum-only) coins" above.
 
 The coin id must already be in the registry (built-in or `coins.toml`-added);
 the flag is repeatable, once per coin, and the last `--coin` for a given id

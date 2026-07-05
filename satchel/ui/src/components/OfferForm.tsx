@@ -35,6 +35,7 @@ import {
   DENOMS,
   fmtBare,
   fmtCash,
+  priceCash,
   fmtPrice,
   hours,
   offerCash,
@@ -211,6 +212,11 @@ export default function OfferForm({
   // #56); both legs are equal-valued at the entered price, so one figure
   // annotates both summary lines. No rate set reads "—".
   const { enabled: fxOn, rateOf } = useFx();
+  // Unit-price cash equivalent for the price hint line (rc10 review): cash per
+  // 1 base coin through the quote coin's rate — same derivation as the ladder's
+  // ~Cash price columns. Omitted (not "—") when no rate is set: the hint line
+  // is prose, not a table cell.
+  const unitCash = fxOn && rawPriceCoin > 0 ? priceCash(rawPriceCoin, rateOf(quote)) : null;
   const cashLeg = fxOn
     ? fmtCash(
         offerCash(
@@ -388,7 +394,8 @@ export default function OfferForm({
         <Typography sx={{ fontSize: 11.5, color: "text.secondary", mt: 0.5 }}>
           {base && quote
             ? t("makeOffer.priceUnit", { unit: unitLabel, base: symOf(base) }) +
-              (rawPriceCoin > 0 ? `  ·  ${fmtPrice(rawPriceCoin)} ${symOf(quote)} / ${symOf(base)}` : "")
+              (rawPriceCoin > 0 ? `  ·  ${fmtPrice(rawPriceCoin)} ${symOf(quote)} / ${symOf(base)}` : "") +
+              (unitCash != null ? `  ·  ${fmtCash(unitCash)} / ${symOf(base)}` : "")
             : " "}
         </Typography>
       </Box>

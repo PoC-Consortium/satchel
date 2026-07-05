@@ -10,7 +10,9 @@ On the Corkboard, open the price level you want, find the offer, and click
 **Take offer**. Satchel shows a **confirmation dialog** before committing
 anything. It lays out:
 
-- **You give** and **You receive** — the exact amounts, from your side.
+- **You give** and **You receive** — the exact amounts, from your side. If
+  you've set a **Cashrate** (the header chip — see the Corkboard chapter), both
+  rows also show their muted **~Cash** equivalents in your own money.
 - **Counterparty** — who you'd be trading with.
 - **The protocol** — **Standard (HTLC)** or **Private (Taproot)**.
 - **Safety refund** — the auto-refund deadlines (`t2h / t1h`).

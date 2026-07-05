@@ -505,6 +505,8 @@ export const zhCn: Bundle = {
     sendIntro: "可用：{balance} {sym}。",
     sendAddressLabel: "收款方 {sym} 地址",
     sendAmountLabel: "金额",
+    sendMax: "全部",
+    sendAllNote: "正在发送全部余额 — 网络手续费将从这笔金额中扣除。",
     sendNeedAddress: "请输入收款地址。",
     sendNeedAmount: "请输入金额。",
     sendNeedFee: "请选择手续费费率。",
@@ -559,6 +561,9 @@ export const zhCn: Bundle = {
     boardSettings: "在设置中配置",
     filterAll: "全部",
     filterMine: "我的",
+    allPairs: "全部交易对",
+    allPairsTip:
+      "浏览牌板上的每个交易对，包括你尚未设置的币种 — 那些报价在你连接该币之前仅供查看。",
     noOffers: "目前没有你可以接受的报价",
     noOffersBody:
       "一旦有做市方为你已设置的交易对发布报价，它就会显示在这里。你也可以发布自己的报价。",
@@ -777,6 +782,41 @@ export const zhCn: Bundle = {
     feeBumped: "已提高手续费",
     reorg: "检测到重组 — 重新检查",
   },
+  notify: {
+    tab: "通知",
+    section: "桌面通知",
+    intro:
+      "交换需要一段时间，并且会自行推进 — 当 Satchel 在后台、某笔交换达到一个里程碑时，你会收到系统通知。当你正看着窗口时，不会有任何通知。",
+    master: "启用通知",
+    masterHint: "总开关 — 一键打开或关闭下方的全部通知。",
+    evStarted: "交换已开始",
+    evStartedHint: "有人接受了你的报价，或某位做市方接受了你的接受请求。",
+    evLocks: "锁定已确认",
+    evLocksHint: "某条腿的锁定已在链上确认 — 你的、对方的，然后双方都已锁定。",
+    evCompleted: "交换已完成",
+    evCompletedHint: "交换已结束，币已落入你的钱包。",
+    evFailed: "交换已退款或已中止",
+    evFailedHint: "一笔交换已回退 — 停滞后退款，或被取消。",
+    evReorg: "重组警告",
+    evReorgHint: "一次链重组波及了你参与的交换 — 正在重新检查。",
+    test: "发送测试通知",
+    testTitle: "Satchel",
+    testBody: "通知功能正常。",
+    denied: "操作系统正在拦截通知 — 请在系统通知设置中允许 Satchel。",
+    testSent:
+      "已交给操作系统。若没有弹出通知：开发（未打包）版本经常被抑制 — Windows 只对已安装的应用可靠地显示弹出通知。安装版 Satchel 可正常通知；也请检查勿扰模式 / 通知设置。",
+    titleStarted: "交换已开始",
+    titleLocks: "交换进展",
+    titleCompleted: "交换已完成",
+    titleFailed: "交换未完成",
+    titleReorg: "重组警告",
+    reorgBody: "{coin}：检测到链重组 — 正在重新核对确认数。",
+    trayNone: "Satchel — 没有进行中的交换",
+    trayOne: "Satchel — 1 笔交换进行中",
+    trayMany: "Satchel — {count} 笔交换进行中",
+    trayOpen: "打开 Satchel",
+    trayQuit: "退出",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -808,6 +848,16 @@ export const zhCn: Bundle = {
       "此商户的种子已加密。请输入其口令以在本次会话中解锁 — Satchel 仅将其保存在内存中，并在退出时遗忘。",
     switchMerchant: "切换商户",
     unlock: "解锁",
+  },
+  fx: {
+    cashrate: "Cashrate（{sym}）",
+    cashrateTip:
+      "你用自己的货币给 1 {sym} 定的价 — EUR、USD、RMB，随你习惯用哪种。所有 ~Cash 数字都由你的汇率推算而来，并按币种记住。仅用于显示 — Satchel 绝不联网获取价格。",
+    cashrateNoContext:
+      "此处呈灰色 — 汇率绑定到你正在查看的交易对。请打开 Corkboard 或某个报价表单，为其计价币设置汇率。",
+    cashUnit: "~Cash",
+    refTip:
+      "按你自己的 Cashrate 计 — 这是你的参考，不是市场价。按报价自身的价格计算，其两条腿价值相同。通过页眉处的汇率标签设置汇率。",
   },
   common: {
     cancel: "取消",

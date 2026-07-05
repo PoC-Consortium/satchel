@@ -22,13 +22,15 @@ Each argument is parsed as JSON when possible, else passed as a plain string (bi
 Explicit `--rpcuser`/`--rpcpassword` win; an explicit `--data-dir` is read strictly. With neither, these dirs are searched for a `.cookie` (or `rpcuser`/`rpcpassword` in `pact.conf`), in order:
 
 1. the `pactd` platform default — `%APPDATA%\Pact` (Windows), `~/Library/Application Support/Pact` (macOS), `~/.pact` (elsewhere); mainnet at the root, `testnet`/`regtest` nested per `--network`;
-2. Satchel's managed pactd dir (`<app-local-data>/org.pocx.satchel/[net]/pactd`). Note Satchel offsets its listen port per network (`9737`/`9738`/`9739`) — pass `--rpc` off-mainnet.
+2. Satchel's managed pactd dir (`<app-local-data>/org.pocx.satchel/[net]/pactd`).
+
+With `--rpc` omitted, the default URL follows **where the auth was found**: the platform-default dir means a hand-run pactd, which always listens on `9737` whatever the network; Satchel's managed dir means the per-network port — `9737` (mainnet) / `9738` (testnet) / `9739` (regtest). So `pact-cli --network regtest getbalance btcx` reaches Satchel's regtest daemon with no `--rpc` at all.
 
 ## Global flags
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--rpc <url>` | `http://127.0.0.1:9737` | pactd JSON-RPC endpoint. |
+| `--rpc <url>` | derived from where the auth was found (`9737`, or Satchel's `9737`/`9738`/`9739` per `--network`) | pactd JSON-RPC endpoint. |
 | `--data-dir <DIR>` | autodiscovered | Where to read the `.cookie` / `pact.conf` for auth. |
 | `--network <net>` | `regtest` | Network subdir the auth discovery looks under (mirrors pactd's default). |
 | `--rpcuser` / `--rpcpassword` | none | Explicit credentials (skip discovery entirely). |
@@ -52,8 +54,9 @@ Beyond direct method dispatch, a handful of subcommands wrap an RPC **plus file 
 | `walletstatus` | — | `walletstatus` |
 | `coins` | — | `listcoins` |
 | `pairs` | — | `listpairs` |
+| `transactions` | `<coin>` | `listtransactions` |
 | `validatecoin` | `--coin --backend` | `validatecoin` |
-| `createseed` | `--passphrase` (opt) | `createseed` |
+| `createseed` | `--passphrase` (opt) `--words` (12 default \| 24) | `createseed` |
 | `importseed` | `--mnemonic --passphrase` (opt) | `importseed` |
 | `unlock` | `--passphrase` | `unlock` |
 | `board post` | `--give --get --t1_secs` (d=12h) `--t2_secs` (d=6h) | `boardpostoffer` |

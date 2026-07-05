@@ -31,7 +31,7 @@ These apply to every invocation:
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--rpc` | `http://127.0.0.1:9737` | The `pactd` JSON-RPC endpoint. |
+| `--rpc` | derived from where the auth was found (see below) | The `pactd` JSON-RPC endpoint. |
 | `--data-dir` | autodiscovered | Data directory to read the `.cookie` (or `pact.conf`) from. |
 | `--network` | `regtest` | Network subdir the auth discovery looks under (mirrors `pactd`). |
 | `--rpcuser` | — | Explicit RPC username (overrides cookie auth). |
@@ -46,11 +46,20 @@ searches, in order:
    `~/Library/Application Support/Pact` (macOS), `~/.pact` (elsewhere) —
    mainnet at the root, `testnet`/`regtest` nested per `--network`;
 2. Satchel's managed pactd dir
-   (`<app-local-data>/org.pocx.satchel/[net]/pactd`). Satchel offsets its
-   listen port per network (`9737`/`9738`/`9739`), so pass `--rpc` off-mainnet.
+   (`<app-local-data>/org.pocx.satchel/[net]/pactd`).
 
-So against a default local `pactd`, `pact-cli getbalance btc` works with no
-flags at all.
+When `--rpc` is omitted, the default URL follows **where the auth was found**:
+a cookie in the platform-default dir means a hand-run `pactd`, which binds
+`http://127.0.0.1:9737` whatever the network; a cookie in Satchel's managed
+dir means Satchel's daemon, which offsets its listen port per network —
+`9737` (mainnet) / `9738` (testnet) / `9739` (regtest). So
+`pact-cli --network regtest getbalance btcx` reaches Satchel's regtest daemon
+with no `--rpc` at all, and can never dial the mainnet port by accident. With
+an explicit `--data-dir` or `--rpcuser`/`--rpcpassword`, the default stays
+`http://127.0.0.1:9737`.
+
+So against a default local `pactd` — or Satchel's — `pact-cli getbalance btc`
+works with no flags at all.
 
 ## Structured subcommands
 
@@ -71,10 +80,11 @@ RPC plus the file I/O of the manual v1 handshake, or add flag-style arguments:
 | `restore` | — | `restorefromrelay` |
 | `rescue-status` | — | `rescuestatus` |
 | `walletstatus` | — | `walletstatus` |
+| `transactions <coin>` | positional coin id — nodeless (Electrum-backed) coins only | `listtransactions` |
 | `coins` | — | `listcoins` |
 | `pairs` | — | `listpairs` |
 | `validatecoin` | `--coin --backend` | `validatecoin` |
-| `createseed` | `--passphrase` (optional) | `createseed` |
+| `createseed` | `--passphrase` (optional), `--words` (12 default \| 24) | `createseed` |
 | `importseed` | `--mnemonic --passphrase` (optional) | `importseed` |
 | `unlock` | `--passphrase` | `unlock` |
 | `board post` | `--give --get --t1_secs` (default 12h) `--t2_secs` (default 6h) | `boardpostoffer` |

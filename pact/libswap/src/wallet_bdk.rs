@@ -373,6 +373,7 @@ impl BdkWalletBackend {
         spk: ScriptBuf,
         amount_sat: u64,
         fee: SendFee,
+        sequence: Sequence,
     ) -> Result<Transaction> {
         let feerate =
             FeeRate::from_sat_per_vb(self.resolve_send_fee(fee)?).context("feerate overflow")?;
@@ -380,7 +381,7 @@ impl BdkWalletBackend {
         builder
             .add_recipient(spk, Amount::from_sat(amount_sat))
             .fee_rate(feerate)
-            .set_exact_sequence(Sequence::ENABLE_RBF_NO_LOCKTIME);
+            .set_exact_sequence(sequence);
         let mut psbt = builder.finish().map_err(|e| anyhow!("building tx: {e}"))?;
         self.finalize(entry, &mut psbt)?;
         psbt.extract_tx().map_err(|e| anyhow!("extracting tx: {e}"))
@@ -473,10 +474,49 @@ impl ChainBackend for BdkWalletBackend {
     fn wallet_send(&self, address: &str, amount_sat: u64, fee: SendFee) -> Result<String> {
         let spk = self.params.parse_address(address)?;
         self.with_wallet(true, |entry| {
-            let tx = self.build_signed(entry, spk, amount_sat, fee)?;
+            // User sends (and v1 HTLC fundings, which ride this path) signal
+            // BIP125: the owner bumps sends, the nurse RBFs v1 fundings.
+            let tx = self.build_signed(
+                entry,
+                spk,
+                amount_sat,
+                fee,
+                Sequence::ENABLE_RBF_NO_LOCKTIME,
+            )?;
             // Broadcast-before-persist (the rc6 commit rule): a crash after
             // broadcast re-learns the tx from our own spk history on the
             // next sync, never double-spends.
+            let txid = self.chain.broadcast(&tx)?;
+            entry.wallet.apply_unconfirmed_txs([(tx, now_ts())]);
+            Ok(txid.to_string())
+        })
+    }
+
+    fn wallet_send_all(&self, address: &str, fee: SendFee) -> Result<String> {
+        let spk = self.params.parse_address(address)?;
+        self.with_wallet(true, |entry| {
+            let feerate = FeeRate::from_sat_per_vb(self.resolve_send_fee(fee)?)
+                .context("feerate overflow")?;
+            // drain_wallet + drain_to: every spendable UTXO in, one output
+            // out, the fee off the swept amount (bdk's sweep). Inputs held by
+            // built-but-unbroadcast v2 fundings are already out of the
+            // canonical UTXO set (apply_unconfirmed_txs locked them), so the
+            // drain cannot claw back a reservation.
+            let mut builder = entry.wallet.build_tx();
+            builder
+                .drain_wallet()
+                .drain_to(spk)
+                .fee_rate(feerate)
+                .set_exact_sequence(Sequence::ENABLE_RBF_NO_LOCKTIME);
+            let mut psbt = builder
+                .finish()
+                .map_err(|e| anyhow!("building sweep: {e}"))?;
+            self.finalize(entry, &mut psbt)?;
+            let tx = psbt
+                .extract_tx()
+                .map_err(|e| anyhow!("extracting sweep: {e}"))?;
+            // Broadcast-before-persist (the rc6 commit rule), same as
+            // wallet_send.
             let txid = self.chain.broadcast(&tx)?;
             entry.wallet.apply_unconfirmed_txs([(tx, now_ts())]);
             Ok(txid.to_string())
@@ -491,12 +531,17 @@ impl ChainBackend for BdkWalletBackend {
         let spk = self.params.parse_address(address)?;
         self.with_wallet(true, |entry| {
             // Funding prices at the per-coin ~30-min target (see
-            // funding_conf_target), mirroring the Core-RPC backend.
+            // funding_conf_target), mirroring the Core-RPC backend. It is
+            // broadcast NON-replaceable (no BIP125 signal): the v2 funding
+            // txid is committed into the pre-signed MuSig2 redeems, so it
+            // must never be RBF'd — the nurse CPFPs it instead, and the
+            // non-signal keeps external wallets from even offering a bump.
             let tx = self.build_signed(
                 entry,
                 spk.clone(),
                 amount_sat,
                 SendFee::Target(self.funding_conf_target()),
+                Sequence::ENABLE_LOCKTIME_NO_RBF,
             )?;
             let txid = tx.compute_txid();
             let vout = tx

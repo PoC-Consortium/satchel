@@ -1,10 +1,11 @@
 <#
 .SYNOPSIS
-  One-shot Satchel NOSTR + FULLY NODELESS playground (epic #58):
-  cleanup -> setup -> run. Alice runs NO nodes at all -- BTCX over the
+  One-shot Satchel NOSTR + NODELESS playground (epic #58):
+  cleanup -> setup -> run. Alice runs no btcx/btc nodes -- BTCX over the
   PoCX electrs, BTC over the vanilla upstream electrs, both wallets on her
-  Pact seed, offers over one local Nostr relay. No LTC. Bob/Carol stay
-  node-backed market makers.
+  Pact seed, offers over one local Nostr relay. LTC rides along as her one
+  LOCAL-NODE (core-rpc) coin, so the mixed Electrum+RPC config is exercised
+  too. Bob/Carol stay node-backed market makers.
 
 .DESCRIPTION
   Like playground-cork.ps1, but with NO corkboard -- Bob, Carol and the managed
@@ -140,7 +141,7 @@ $pactdPath = (Join-Path $Repo "pact\target\debug\pactd.exe") -replace '\\', '/'
 # playground's bot parties, so the multi-confirmation flow + Satchel's progress
 # display are exercised against the faster-but-realistic block cadence.
 $coinsJson = if ($FirstRun) { '[]' } else {
-  '[{ "coin_id": "btcx", "chain_data": "tcp://127.0.0.1:19750", "funding_wallet": "pact-seed", "extra_backends": ["tcp://127.0.0.1:19750"], "confirmations": 10 }, { "coin_id": "btc", "chain_data": "tcp://127.0.0.1:19760", "funding_wallet": "pact-seed", "extra_backends": ["tcp://127.0.0.1:19760"], "confirmations": 6 }]'
+  '[{ "coin_id": "btcx", "chain_data": "tcp://127.0.0.1:19750", "funding_wallet": "pact-seed", "extra_backends": ["tcp://127.0.0.1:19750"], "confirmations": 10 }, { "coin_id": "btc", "chain_data": "tcp://127.0.0.1:19760", "funding_wallet": "pact-seed", "extra_backends": ["tcp://127.0.0.1:19760"], "confirmations": 6 }, { "coin_id": "ltc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19643/wallet/alice_ltc", "funding_wallet": "core-rpc", "confirmations": 6 }]'
 }
 $satchelJson = @"
 {
@@ -226,16 +227,18 @@ Write-Host "  Default offer TTL; the relay is wiped on teardown (ephemeral)."
 Write-Host ""
 if ($FirstRun) {
     Write-Host "  FIRST-RUN: no coins pre-wired -> step through onboarding + coin"
-    Write-Host "  setup. Both coins go NODELESS (pick Electrum in the setup form):"
+    Write-Host "  setup. BTCX/BTC go NODELESS (pick Electrum), LTC via RPC:"
     Write-Host "    BTCX : Electrum -> tcp://127.0.0.1:19750   (confirmations 10)"
     Write-Host "    BTC  : Electrum -> tcp://127.0.0.1:19760   (confirmations 6)"
+    Write-Host "    LTC  : RPC -> 127.0.0.1:19643  user/pass  pactharness /"
+    Write-Host "           pactharness  wallet alice_ltc      (confirmations 6)"
 } else {
     Write-Host "  In the window: wizard -> create merchant. Coins tab: BTCX and"
-    Write-Host "  BTC both show 'Electrum (local)' - Alice runs NO nodes. Wallets"
-    Write-Host "  tab: both cards have Receive/Send/Activity; the faucet drops"
-    Write-Host "  100 BTCX + 0.05 BTC after the wizard. Corkboard -> offers come"
-    Write-Host "  from Nostr; take either side - every leg funds from your"
-    Write-Host "  pact-seed wallets."
+    Write-Host "  BTC show 'Electrum (local)', LTC the local node (core-rpc)."
+    Write-Host "  Wallets tab: BTCX/BTC cards have Receive/Send/Activity; the"
+    Write-Host "  faucet drops 100 BTCX + 0.05 BTC after the wizard; LTC uses"
+    Write-Host "  the pre-funded node wallet. Corkboard -> offers come from"
+    Write-Host "  Nostr incl. LTC pairs; take any side."
 }
 Write-Host ""
 Write-Host "  CLOSE THE SATCHEL WINDOW to tear the whole stack down."

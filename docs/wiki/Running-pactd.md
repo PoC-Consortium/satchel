@@ -18,7 +18,7 @@ pactd [--data-dir <DIR>] [--coins-file <coins.toml>] [--coin <id>=<url[,url]> ..
 | Flag | Default | Meaning |
 |---|---|---|
 | `--data-dir <DIR>` | platform default | Data directory: seed, SQLite, `.cookie`, optional `pact.conf`. In `--merchants` mode this is the *parent* of `merchants/<id>/`. Default (bitcoind-style): `%APPDATA%\Pact` on Windows, `~/Library/Application Support/Pact` on macOS, `~/.pact` elsewhere — mainnet at the root, `testnet`/`regtest` nested beneath. `pact-cli` autodiscovers the same location. |
-| `--coin <id>=<url[,url]>` | none | Per-coin chain backend, repeatable. First URL = wallet-qualified Core-RPC primary (this is what funds swaps); extra URLs may be Electrum (`tcp://`/`ssl://`). The coin `id` must exist in the registry. |
+| `--coin <id>=<url[,url]>` | none | Per-coin chain backend, repeatable. An `http://` first URL = wallet-qualified Core-RPC primary (the node wallet funds swaps); extra URLs may be Electrum (`tcp://`/`ssl://`) chain views. An **Electrum-only list** (no `http://`) makes the coin **nodeless** — the wallet lives on the Pact seed; mainnet requires ≥ 2 servers. See [Configuring Coins](Configuring-Coins). The coin `id` must exist in the registry. |
 | `--coin-confs <id>=<N>` | network default | Per-coin confirmation depth (reorg finality, N≥1); gates auto-redeem and completion. See the default heuristic in [Configuring Coins](Configuring-Coins). |
 | `--listen <addr:port>` | `127.0.0.1:9737` | JSON-RPC listen address. **Loopback only** — a non-loopback address aborts boot. |
 | `--network <net>` | `regtest` | `regtest` \| `testnet` \| `mainnet`. |

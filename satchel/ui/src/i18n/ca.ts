@@ -503,6 +503,8 @@ export const ca: Bundle = {
     sendIntro: "Disponible per gastar: {balance} {sym}.",
     sendAddressLabel: "Adreça {sym} del destinatari",
     sendAmountLabel: "Import",
+    sendMax: "Màx",
+    sendAllNote: "Ho envies tot — la comissió de xarxa surt d'aquest import.",
     sendNeedAddress: "Introdueix l'adreça del destinatari.",
     sendNeedAmount: "Introdueix un import.",
     sendNeedFee: "Tria una tarifa de comissió.",
@@ -561,6 +563,9 @@ export const ca: Bundle = {
     boardSettings: "Configura a Configuració",
     filterAll: "Totes",
     filterMine: "Meves",
+    allPairs: "Tots els parells",
+    allPairsTip:
+      "Navega per tots els parells del tauler, incloses les monedes que no has configurat — aquestes ofertes són només de visualització fins que connectis la moneda.",
     noOffers: "No hi ha cap oferta que puguis acceptar ara mateix",
     noOffersBody:
       "Les ofertes apareixen aquí tan bon punt un maker en publica una per a un parell que hagis configurat. També pots publicar les teves.",
@@ -779,6 +784,45 @@ export const ca: Bundle = {
     feeBumped: "Comissió apujada",
     reorg: "Reorganització detectada — recomprovant",
   },
+  notify: {
+    tab: "Notificacions",
+    section: "Notificacions d'escriptori",
+    intro:
+      "Els intercanvis triguen una estona i funcionen sols — rep una notificació del sistema quan un arriba a una fita mentre Satchel és en segon pla. No es dispara res mentre estàs mirant la finestra.",
+    master: "Activa les notificacions",
+    masterHint: "Interruptor general — activa o desactiva totes les notificacions de sota.",
+    evStarted: "Intercanvi iniciat",
+    evStartedHint: "Algú ha acceptat la teva oferta, o un maker ha acceptat la teva acceptació.",
+    evLocks: "Bloquejos confirmats",
+    evLocksHint:
+      "El bloqueig d'una pota s'ha confirmat on-chain — el teu, el seu, i després tots dos bloquejats.",
+    evCompleted: "Intercanvi completat",
+    evCompletedHint: "L'intercanvi ha acabat i les monedes són a la teva cartera.",
+    evFailed: "Intercanvi reemborsat o cancel·lat",
+    evFailedHint: "Un intercanvi s'ha desfet — reemborsat després d'encallar-se, o cancel·lat.",
+    evReorg: "Avisos de reorganització",
+    evReorgHint:
+      "Una reorganització de la cadena ha afectat un intercanvi teu — s'està recomprovant.",
+    test: "Envia una notificació de prova",
+    testTitle: "Satchel",
+    testBody: "Les notificacions funcionen.",
+    denied:
+      "El sistema operatiu bloqueja les notificacions — permet Satchel a la configuració de notificacions del sistema.",
+    testSent:
+      "Lliurada al sistema operatiu. Si no ha aparegut cap notificació: les versions de desenvolupament (sense empaquetar) sovint se suprimeixen — el Windows només mostra notificacions de manera fiable per a aplicacions instal·lades. El Satchel instal·lat notifica amb normalitat; comprova també el mode «No molestar» / la configuració de notificacions.",
+    titleStarted: "Intercanvi iniciat",
+    titleLocks: "Novetat de l'intercanvi",
+    titleCompleted: "Intercanvi completat",
+    titleFailed: "Intercanvi no completat",
+    titleReorg: "Avís de reorganització",
+    reorgBody:
+      "{coin}: reorganització de la cadena detectada — s'estan recomprovant les confirmacions.",
+    trayNone: "Satchel — cap intercanvi en curs",
+    trayOne: "Satchel — 1 intercanvi en curs",
+    trayMany: "Satchel — {count} intercanvis en curs",
+    trayOpen: "Obre Satchel",
+    trayQuit: "Surt",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -810,6 +854,16 @@ export const ca: Bundle = {
       "La llavor d'aquest comerciant està xifrada. Introdueix la seva contrasenya per desbloquejar-la durant aquesta sessió — Satchel la manté només en memòria i l'oblida en sortir.",
     switchMerchant: "Canvia de comerciant",
     unlock: "Desbloqueja",
+  },
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "El que per a tu val 1 {sym} en els teus propis diners — EUR, USD, RMB, la moneda en què pensis. Cada xifra en ~Cash deriva de les teves tarifes, recordades per moneda. Només visualització — Satchel mai consulta preus.",
+    cashrateNoContext:
+      "Aquí està en gris — la tarifa es vincula al parell que estàs mirant. Obre el Corkboard o un formulari d'oferta per establir la tarifa de la seva moneda de cotització.",
+    cashUnit: "~Cash",
+    refTip:
+      "Al teu propi Cashrate — la teva referència, no un preu de mercat. Les dues potes d'una oferta valen el mateix al seu propi preu. Estableix les tarifes amb el xip de la capçalera.",
   },
   common: {
     cancel: "Cancel·la",

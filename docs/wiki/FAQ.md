@@ -9,7 +9,7 @@ No platform fees — `platform_fee_sat` is hard-wired to 0. You pay only the on-
 You do. The engine holds your seed and keys locally, signs everything itself, and auto-refunds via a timelock if the counterparty walks. No board, relay, or counterparty ever custodies your funds. See [Security Model](Security-Model).
 
 **Can I just look at the board without setting up coins?**
-Yes — pick **Browse in watch-only mode** on first run (or **Settings → Mode** later). You can read the whole board and withdraw offers you already own, but posting, taking, and funding stay blocked until you connect **two live coins**. See [Configuring Coins](Configuring-Coins).
+Yes — pick **Browse in watch-only mode** on first run (or **Settings → Mode** later). You can read the whole board and withdraw offers you already own, but posting, taking, and funding stay blocked until you connect **two live coins**. See [Configuring Coins](Configuring-Coins). In normal mode there's a lighter option too: the Corkboard's **All pairs** toggle shows every pair on the board, including coins you haven't set up — view-only until you connect them.
 
 **What languages does Satchel support?**
 26 — switch any time from the globe-icon picker in the header, including during first-run onboarding.
@@ -19,6 +19,9 @@ Fee-bumping is now automatic market-tracking: the engine bumps stuck swap transa
 
 **Do I need to run my own nodes?**
 No — per coin you choose **your own node** (RPC; the node's wallet funds swaps) or **Electrum servers** (no node: chain data from the servers, the wallet on your Pact seed; mainnet requires ≥ 2 independent servers as cross-checking views). You still need **at least two coins live** before Satchel lets you trade. See [Configuring Coins](Configuring-Coins).
+
+**Can different release candidates swap with each other?**
+v1 (HTLC) — yes. v2 (Taproot) — not across rc9/rc10: rc10 changes how the co-signed redeem is built, so a mixed-version v2 handshake aborts cleanly before any funding. Settle or abort live v2 swaps before upgrading; swaps already past the handshake finish on the version that made them.
 
 **Does this run on mainnet?**
 Yes. Both v1 (HTLC) and v2 (Taproot/MuSig2 adaptor) run on mainnet, reviewed. You alone hold your keys — safeguard your recovery phrase.

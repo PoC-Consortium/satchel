@@ -21,6 +21,8 @@
 >
 > *These docs were verified against commit `103bd57`.*
 
+> **Upgrading to rc10** — rc10 changes how the v2 (Taproot) cooperative redeem is built, and both parties must build it byte-identically: **an rc9 and an rc10 peer cannot open v2 swaps with each other**. A mixed-version v2 handshake aborts cleanly before any funding — no funds at risk, the swap simply doesn't start. **Settle or abort any live v2 swaps before upgrading**; swaps already past the handshake finish on the version that made them, and v1 (HTLC) swaps are unaffected. Also in rc10: v2 fundings and redeems are broadcast **non-replaceable** (the engine bumps a stuck one via CPFP); the timelock refund keeps RBF.
+
 ## Start here
 
 | You want to… | Go to |

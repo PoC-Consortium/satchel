@@ -505,6 +505,8 @@ export const de: Bundle = {
     sendIntro: "Verfügbar: {balance} {sym}.",
     sendAddressLabel: "{sym}-Adresse des Empfängers",
     sendAmountLabel: "Betrag",
+    sendMax: "Max",
+    sendAllNote: "Es wird alles gesendet — die Netzwerkgebühr geht von diesem Betrag ab.",
     sendNeedAddress: "Gib die Empfängeradresse ein.",
     sendNeedAmount: "Gib einen Betrag ein.",
     sendNeedFee: "Wähle eine Gebührenrate.",
@@ -562,6 +564,9 @@ export const de: Bundle = {
     boardSettings: "In den Einstellungen konfigurieren",
     filterAll: "Alle",
     filterMine: "Meine",
+    allPairs: "Alle Paare",
+    allPairsTip:
+      "Durchstöbere jedes Paar auf dem Board, auch mit Coins, die du nicht eingerichtet hast — diese Angebote kannst du nur ansehen, bis du den Coin verbindest.",
     noOffers: "Derzeit keine Angebote, die du annehmen kannst",
     noOffersBody:
       "Angebote erscheinen hier, sobald ein Maker eins für ein von dir eingerichtetes Paar einstellt. Du kannst auch eigene einstellen.",
@@ -780,6 +785,45 @@ export const de: Bundle = {
     feeBumped: "Gebühr erhöht",
     reorg: "Reorg erkannt — wird erneut geprüft",
   },
+  // Desktop notifications + tray (issue #55). Notification bodies reuse the
+  // narrate.* story lines; these are the titles, the Settings toggles, and the
+  // tray tooltip/menu labels (pushed to Rust, which owns no copy of its own).
+  notify: {
+    tab: "Benachrichtigungen",
+    section: "Desktop-Benachrichtigungen",
+    intro:
+      "Swaps dauern eine Weile und laufen von allein — erhalte eine Betriebssystem-Benachrichtigung, wenn einer einen Meilenstein erreicht, während Satchel im Hintergrund ist. Solange du auf das Fenster schaust, wird nichts ausgelöst.",
+    master: "Benachrichtigungen aktivieren",
+    masterHint: "Hauptschalter — schaltet jede Benachrichtigung unten ein oder aus.",
+    evStarted: "Swap gestartet",
+    evStartedHint: "Jemand hat dein Angebot angenommen, oder ein Maker hat deine Annahme akzeptiert.",
+    evLocks: "Sperren bestätigt",
+    evLocksHint: "Die Sperre eines Legs wurde on-chain bestätigt — deine, deren, dann beide gesperrt.",
+    evCompleted: "Swap abgeschlossen",
+    evCompletedHint: "Der Swap ist fertig und die Coins sind in deiner Wallet angekommen.",
+    evFailed: "Swap erstattet oder abgebrochen",
+    evFailedHint: "Ein Swap wurde rückabgewickelt — nach einem Stillstand erstattet oder abgebrochen.",
+    evReorg: "Reorg-Warnungen",
+    evReorgHint: "Eine Chain-Reorganisation hat einen deiner laufenden Swaps berührt — wird erneut geprüft.",
+    test: "Testbenachrichtigung senden",
+    testTitle: "Satchel",
+    testBody: "Benachrichtigungen funktionieren.",
+    denied:
+      "Das Betriebssystem blockiert Benachrichtigungen — erlaube Satchel in den Benachrichtigungseinstellungen deines Systems.",
+    testSent:
+      "Ans Betriebssystem übergeben. Falls keine Benachrichtigung erschien: Bei Entwicklungs-Builds (nicht paketiert) wird sie oft unterdrückt — Windows zeigt Benachrichtigungen zuverlässig nur für installierte Apps. Das installierte Satchel benachrichtigt normal; prüfe auch „Bitte nicht stören“ und die Benachrichtigungseinstellungen.",
+    titleStarted: "Swap gestartet",
+    titleLocks: "Swap-Update",
+    titleCompleted: "Swap abgeschlossen",
+    titleFailed: "Swap nicht abgeschlossen",
+    titleReorg: "Reorg-Warnung",
+    reorgBody: "{coin}: Chain-Reorganisation erkannt — Bestätigungen werden erneut geprüft.",
+    trayNone: "Satchel — keine laufenden Swaps",
+    trayOne: "Satchel — 1 laufender Swap",
+    trayMany: "Satchel — {count} laufende Swaps",
+    trayOpen: "Satchel öffnen",
+    trayQuit: "Beenden",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -811,6 +855,21 @@ export const de: Bundle = {
       "Das Seed dieses Merchants ist verschlüsselt. Gib seine Passphrase ein, um ihn für diese Sitzung zu entsperren — Satchel hält sie nur im Speicher und vergisst sie beim Beenden.",
     switchMerchant: "Merchant wechseln",
     unlock: "Entsperren",
+  },
+  // Manual Cashrate (issue #56) — display-only "~Cash" equivalents derived from
+  // user-entered per-coin anchors. Currency-NEUTRAL on purpose: the user thinks
+  // in whatever money they think in (EUR, USD, RMB, …) and Satchel never names
+  // it. Deliberately manual: BTCX is unlisted so no feed could price it, and
+  // Satchel makes no external calls. The rate entry lives in the sidebar.
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "Was 1 {sym} in deinem eigenen Geld für dich wert ist — EUR, USD, RMB, worin auch immer du denkst. Jede ~Cash-Angabe leitet sich aus deinen Kursen ab, pro Coin gemerkt. Nur zur Anzeige — Satchel ruft nie Preise ab.",
+    cashrateNoContext:
+      "Hier ausgegraut — der Kurs bindet sich an das Paar, das du gerade ansiehst. Öffne das Corkboard oder ein Angebotsformular, um den Kurs für dessen Quote-Coin zu setzen.",
+    cashUnit: "~Cash",
+    refTip:
+      "Zu deiner eigenen Cashrate — deine Referenz, kein Marktpreis. Beide Legs eines Angebots sind zu seinem eigenen Preis gleich viel wert. Setze Kurse über den Chip im Header.",
   },
   common: {
     cancel: "Abbrechen",

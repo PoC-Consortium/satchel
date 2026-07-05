@@ -83,14 +83,18 @@ The leg assignments mirror v1 (`adaptor_swap.rs:85-90`, and leg B symmetric):
 
 ## Cooperative redeem (key path)
 
-The happy-path redeem spends via the key path (`taproot.rs:154-179`). It is a
+The happy-path redeem spends via the key path (`taproot.rs:158-185`). It is a
 version-2, 1-in / 1-out transaction with `nLockTime = 0` (no timelock on the
-happy path) and an RBF-signalling sequence. It sweeps `value − fee` to the
+happy path) and a **non-replaceable sequence** — `0xFFFFFFFE`
+(`Sequence::ENABLE_LOCKTIME_NO_RBF`). That is honest signalling: the redeem's
+fee is sealed into the adaptor signature, so nothing can ever RBF it (a stuck
+redeem is CPFP'd), and the non-signal keeps external wallets from even
+offering a bump. It sweeps `value − fee` to the
 claimer's **fresh core-wallet sweep address** — `alice_sweep_b` /
 `bob_sweep_a`, exchanged in `init`/`accept` (empty falls back to a key-derived
 address). The witness is a **single 64-byte aggregate Schnorr signature**
 (`SIGHASH_DEFAULT`), attached by `attach_keypath_signature`
-(`taproot.rs:173-179`):
+(`taproot.rs:190-196`):
 
 ```text
 witness = [ 64-byte aggregate Schnorr sig ]
@@ -100,16 +104,32 @@ Worst-case vsize: `KEYPATH_REDEEM_VSIZE = 111` (`taproot.rs:40`).
 
 > **Warning** — The cooperative key-path redeem is **NOT RBF-bumpable**: its
 > fee is sealed into the pre-signed adaptor sighash and cannot be re-signed
-> unilaterally. It commits at the live market rate at init (`committed_mult`,
+> unilaterally — which is why it is also broadcast without the BIP125 signal.
+> It commits at the live market rate at init (`committed_mult`,
 > default 1) and is dragged through by a CPFP child that spends the redeem's own
 > sweep output if the market rises. See the chapter "Fees, Fee-Bumping &
 > Auto-Refund".
 
+> **Warning** — The redeem's sequence value is **protocol, not policy**: it
+> sits inside the shared MuSig2 sighash, so both parties must build the
+> byte-identical transaction (a unit test pins it as a protocol constant,
+> `taproot.rs:387`). rc10 changed it from the RBF-signalling `0xFFFFFFFD` to
+> the non-replaceable `0xFFFFFFFE`, which makes rc10 a **v2 flag-day**: an
+> rc9 peer and an rc10 peer cannot open v2 swaps with each other —
+> partial-signature verification fails at the handshake, a clean pre-funding
+> abort with no funds at risk (and deliberately no compat shim). In-flight v2
+> swaps that already exchanged partial signatures keep working on the version
+> that made them; **settle or abort live v2 swaps before upgrading**. v1 HTLC
+> swaps are unaffected.
+
 ## Refund (script path)
 
-The refund spends via the script path (`taproot.rs:184-234`): a single-key
+The refund spends via the script path (`taproot.rs:201-256`): a single-key
 Schnorr signature over the CLTV tapleaf, with `nLockTime = T` (valid only once
-MTP ≥ T). The witness reveals the leaf and its control block:
+MTP ≥ T). Unlike the redeem, the refund **keeps the RBF-signalling sequence**
+(`0xFFFFFFFD`, `HTLC_SPEND_SEQUENCE`): it is single-signer, so the funder can
+always rebuild it locally at a higher fee — and CLTV needs a non-final
+sequence anyway. The witness reveals the leaf and its control block:
 
 ```text
 witness = [ sig, refund_script, control_block ]
@@ -117,7 +137,7 @@ witness = [ sig, refund_script, control_block ]
 
 This path uses **no MuSig2 and no interactive nonce** — it is a plain BIP340
 single-signature spend, signed deterministically from the refund key
-(`taproot.rs:219-226`). That is what makes the refund **unattended-safe**: a
+(`taproot.rs:241-244`). That is what makes the refund **unattended-safe**: a
 daemon recovering from a crash, with no live nonce state at all, can still
 refund from the seed alone.
 
@@ -145,6 +165,13 @@ The binding between the two legs is built before either party funds
 The symmetry to v1 is exact: instead of a preimage `s` published in a witness,
 the secret `t` is published *inside* the aggregate signature. Bob's daemon
 recovers it from chain B the same way it would scan for a v1 preimage.
+
+> **Note** — The funding transactions themselves are broadcast **without**
+> the BIP125 signal (non-replaceable): each funding txid is committed into
+> the pre-signed redeems, so nothing may ever RBF a v2 funding — replacing it
+> would invalidate the exchanged adaptor signatures. A stuck funding is
+> CPFP'd via its change output instead (v1 fundings and ordinary wallet sends
+> keep signalling). See the chapter "Fees, Fee-Bumping & Auto-Refund".
 
 ## Nonce safety
 
@@ -204,7 +231,7 @@ The MuSig2 key aggregation applies the BIP341 taproot tweak via
 signature that verifies under the **tweaked output key**, with the parity
 handling that BIP340 x-only keys require. The engine's tests confirm a
 key-path signature attached this way verifies under the output key
-(`taproot.rs:341-378`), proving the tweak plumbing the aggregate signature
+(`taproot.rs:363-404`), proving the tweak plumbing the aggregate signature
 plugs into is correct.
 
 ## vsize reference

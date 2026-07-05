@@ -505,6 +505,8 @@ export const ro: Bundle = {
     sendIntro: "Disponibil de cheltuit: {balance} {sym}.",
     sendAddressLabel: "Adresa {sym} a destinatarului",
     sendAmountLabel: "Sumă",
+    sendMax: "Max",
+    sendAllNote: "Trimiți tot — taxa de rețea se scade din această sumă.",
     sendNeedAddress: "Introdu adresa destinatarului.",
     sendNeedAmount: "Introdu o sumă.",
     sendNeedFee: "Alege o rată a taxei.",
@@ -559,6 +561,9 @@ export const ro: Bundle = {
     boardSettings: "Configurează în Setări",
     filterAll: "Toate",
     filterMine: "Ale mele",
+    allPairs: "Toate perechile",
+    allPairsTip:
+      "Răsfoiește fiecare pereche de pe board, inclusiv monedele pe care nu le-ai configurat — acele oferte sunt doar de vizualizat până conectezi moneda.",
     noOffers: "Nicio ofertă pe care o poți accepta acum",
     noOffersBody:
       "Ofertele apar aici imediat ce un maker postează una pentru o pereche pe care ai configurat-o. Poți de asemenea să postezi propria ofertă.",
@@ -777,6 +782,44 @@ export const ro: Bundle = {
     feeBumped: "Comision majorat",
     reorg: "Reorganizare detectată — se reverifică",
   },
+  notify: {
+    tab: "Notificări",
+    section: "Notificări desktop",
+    intro:
+      "Swap-urile durează o vreme și rulează de la sine — primește o notificare de la sistemul de operare când unul atinge o etapă importantă cât timp Satchel este în fundal. Nimic nu se declanșează cât timp te uiți la fereastră.",
+    master: "Activează notificările",
+    masterHint: "Întrerupător principal — pornește sau oprește fiecare notificare de mai jos.",
+    evStarted: "Swap pornit",
+    evStartedHint: "Cineva ți-a acceptat oferta, sau un maker a acceptat cererea ta.",
+    evLocks: "Blocări confirmate",
+    evLocksHint:
+      "Blocarea unui picior s-a confirmat on-chain — a ta, a lor, apoi ambele blocate.",
+    evCompleted: "Swap finalizat",
+    evCompletedHint: "Swap-ul s-a încheiat și monedele sunt așezate în portofelul tău.",
+    evFailed: "Swap rambursat sau anulat",
+    evFailedHint: "Un swap s-a desfăcut — rambursat după o blocare, sau anulat.",
+    evReorg: "Avertismente de reorganizare",
+    evReorgHint:
+      "O reorganizare a lanțului a atins un swap în care ești implicat — se reverifică.",
+    test: "Trimite o notificare de test",
+    testTitle: "Satchel",
+    testBody: "Notificările funcționează.",
+    denied:
+      "Sistemul de operare blochează notificările — permite Satchel în setările de notificări ale sistemului.",
+    testSent:
+      "Predată sistemului de operare. Dacă nu a apărut nicio notificare: build-urile de dezvoltare (neîmpachetate) sunt adesea suprimate — Windows afișează fiabil notificări doar pentru aplicațiile instalate. Satchel instalat notifică normal; verifică și modul Nu deranjați / setările de notificări.",
+    titleStarted: "Swap pornit",
+    titleLocks: "Actualizare swap",
+    titleCompleted: "Swap finalizat",
+    titleFailed: "Swap nefinalizat",
+    titleReorg: "Avertisment de reorganizare",
+    reorgBody: "{coin}: reorganizare a lanțului detectată — confirmările se reverifică.",
+    trayNone: "Satchel — niciun swap în desfășurare",
+    trayOne: "Satchel — 1 swap în desfășurare",
+    trayMany: "Satchel — {count} swap-uri în desfășurare",
+    trayOpen: "Deschide Satchel",
+    trayQuit: "Ieși",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -808,6 +851,16 @@ export const ro: Bundle = {
       "Seed-ul acestui merchant este criptat. Introdu parola lui pentru a-l debloca pentru această sesiune — Satchel îl ține doar în memorie și îl uită la ieșire.",
     switchMerchant: "Schimbă merchant-ul",
     unlock: "Deblochează",
+  },
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "Cât valorează pentru tine 1 {sym} în banii tăi — EUR, USD, RMB, orice monedă în care gândești. Fiecare valoare ~Cash derivă din ratele tale, memorate per monedă. Doar pentru afișare — Satchel nu preia niciodată prețuri.",
+    cashrateNoContext:
+      "Gri aici — rata se leagă de perechea la care te uiți. Deschide Corkboard-ul sau un formular de ofertă pentru a seta rata monedei sale de cotare.",
+    cashUnit: "~Cash",
+    refTip:
+      "La propriul tău Cashrate — reperul tău, nu un preț de piață. Ambele picioare ale unei oferte valorează la fel la prețul ei propriu. Setează ratele prin chip-ul din antet.",
   },
   common: {
     cancel: "Anulează",

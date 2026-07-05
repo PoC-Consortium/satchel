@@ -521,6 +521,8 @@ export const en = {
     sendIntro: "Spendable: {balance} {sym}.",
     sendAddressLabel: "Recipient {sym} address",
     sendAmountLabel: "Amount",
+    sendMax: "Max",
+    sendAllNote: "Sending everything — the network fee comes out of this amount.",
     sendNeedAddress: "Enter the recipient address.",
     sendNeedAmount: "Enter an amount.",
     sendNeedFee: "Pick a fee rate.",
@@ -578,6 +580,9 @@ export const en = {
     boardSettings: "Configure in Settings",
     filterAll: "All",
     filterMine: "Mine",
+    allPairs: "All pairs",
+    allPairsTip:
+      "Browse every pair on the board, including coins you haven't set up — those offers are view-only until you connect the coin.",
     noOffers: "No offers you can take right now",
     noOffersBody:
       "Offers show up here as soon as a maker posts one for a pair you've set up. You can also post your own.",
@@ -827,6 +832,8 @@ export const en = {
     testBody: "Notifications are working.",
     denied:
       "The OS is blocking notifications — allow Satchel in your system notification settings.",
+    testSent:
+      "Handed to the OS. If no toast appeared: development (unpackaged) builds are often suppressed — Windows only reliably shows toasts for installed apps. The installed Satchel notifies normally; also check Do Not Disturb / notification settings.",
     titleStarted: "Swap started",
     titleLocks: "Swap update",
     titleCompleted: "Swap completed",
@@ -884,7 +891,7 @@ export const en = {
       "Greyed here — the rate binds to the pair you're looking at. Open the Corkboard or an offer form to set the rate for its quote coin.",
     cashUnit: "~Cash",
     refTip:
-      "At your own Cashrate — your reference, not a market price. Both legs of an offer are worth the same at its own price. Set rates in the sidebar.",
+      "At your own Cashrate — your reference, not a market price. Both legs of an offer are worth the same at its own price. Set rates via the header chip.",
   },
   common: {
     cancel: "Cancel",
@@ -896,109 +903,10 @@ export const en = {
   },
 };
 
-// `progress.funding` (#3) and the nodeless-wallet keys (epic #58) are OPTIONAL
-// in Bundle so new copy can ship in en.ts without re-translating all 26 bundles
-// at once — a locale missing a key falls back to English at runtime (see the
-// i18n index `t`). Translators fill them in later.
-type EnBundle = typeof en;
-
-/** Namespace with the given keys made optional (English-fallback at runtime). */
-type WithOptional<NS, K extends keyof NS> = Omit<NS, K> & Partial<Pick<NS, K>>;
-
-/** Nodeless-wallet copy shipped 2026-07 (epic #58) — optional until the next
- *  full translation pass. */
-type NewWalletKeys =
-  | "pactSeed"
-  | "pactSeedHint"
-  | "receive"
-  | "send"
-  | "activity"
-  | "copy"
-  | "copied"
-  | "close"
-  | "refresh"
-  | "receiveTitle"
-  | "receiveIntro"
-  | "receiveIntroRpc"
-  | "receiveFreshNote"
-  | "sendTitle"
-  | "sendIntro"
-  | "sendAddressLabel"
-  | "sendAmountLabel"
-  | "sendNeedAddress"
-  | "sendNeedAmount"
-  | "sendNeedFee"
-  | "sendOverBalance"
-  | "feeLabel"
-  | "fee_slow"
-  | "fee_normal"
-  | "fee_fast"
-  | "fee_custom"
-  | "feeRate"
-  | "feeNoEstimate"
-  | "feeNoEstimatesNote"
-  | "feeCustomLabel"
-  | "feeCustomMin"
-  | "sendFeePreview"
-  | "sendReview"
-  | "sendBack"
-  | "sendConfirmTitle"
-  | "sendConfirmRecipient"
-  | "sendConfirmAmount"
-  | "sendConfirmFee"
-  | "sendConfirmFeeValue"
-  | "sendConfirmTotal"
-  | "sendIrreversible"
-  | "sendBroadcast"
-  | "sendConfirm"
-  | "activityTitle"
-  | "activityEmpty"
-  | "activityWhen"
-  | "activityDirection"
-  | "activityAmount"
-  | "activityFee"
-  | "activityConfs"
-  | "activityTxid"
-  | "activityPending"
-  | "activitySent"
-  | "activityReceived"
-  | "bump"
-  | "bumpHint"
-  | "bumpTitle"
-  | "bumpIntro"
-  | "bumpNeedHigher"
-  | "bumpBroadcast"
-  | "bumpConfirm";
-type NewCoinKeys =
-  | "modeLabel"
-  | "modeNode"
-  | "modeNodeDesc"
-  | "modeNodeless"
-  | "modeNodelessDesc"
-  | "electrumUrlsLabel"
-  | "electrumUrlsHelp"
-  | "electrumNeedUrl"
-  | "electrumBadUrl"
-  | "validateServers"
-  | "connRpcLocal"
-  | "connRpcRemote"
-  | "connElectrumLocal"
-  | "connElectrumRemote"
-  | "connRpcTip"
-  | "connElectrumTip"
-  | "switchHidesTitle"
-  | "switchHidesBody"
-  | "switchHidesConfirm";
-
-export type Bundle = Omit<EnBundle, "progress" | "wallets" | "coins" | "seed" | "fx" | "notify"> & {
-  progress: WithOptional<EnBundle["progress"], "funding">;
-  wallets: WithOptional<EnBundle["wallets"], NewWalletKeys>;
-  coins: WithOptional<EnBundle["coins"], NewCoinKeys>;
-  seed: WithOptional<EnBundle["seed"], "wordCountHint">;
-  /** USD-reference copy shipped 2026-07 (issue #56) — optional until the next
-   *  full translation pass. */
-  fx?: EnBundle["fx"];
-  /** Desktop notifications + tray (issue #55) — a whole namespace shipped
-   *  2026-07, optional until the next full translation pass. */
-  notify?: EnBundle["notify"];
-};
+// STRICT since the rc10 language sync: every locale carries every key, and
+// tsc enforces it — a missing/extra key in any bundle fails the build. When
+// new copy ships in en.ts, either translate all 26 bundles in the same change
+// (preferred; the rc10 sync pattern) or temporarily re-introduce a
+// `WithOptional` escape hatch for the new keys and remove it at the next
+// language sync (runtime falls back to English for missing keys either way).
+export type Bundle = typeof en;

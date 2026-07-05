@@ -22,6 +22,12 @@ each coin Satchel knows about. The first pair is **BTCX** (Bitcoin-PoCX) and
 - The coin's **icon, name, and symbol**.
 - A **status pill** — *Not set up*, *Connected* (with the node's current block
   height, called the *tip*), or *Connection error*.
+- Once configured, a **connection chip** — **RPC (local)**, **RPC (remote)**,
+  **Electrum (local)**, or **Electrum (remote)** — telling you at a glance how
+  this coin connects and whether that connection stays on this machine (*local*
+  means every host is loopback). Hover it for a plain-language explanation; an
+  Electrum coin's chip is tinted green like its pact-seed wallet label, and its
+  summary line shows the first server plus how many more back it up.
 - **Capability chips** — small tags showing what the coin can do (more on these
   below).
 - A **Set up** button (or **Edit connection** if it's already configured), and a
@@ -67,6 +73,21 @@ chain data and wallet should live:
   handshake (protocol version; pruned servers are refused). This is the
   quick path for a coin whose node you don't want to sync — say, Bitcoin,
   when you already run a BTCX node.
+
+You can change a coin's connection type later — but one direction deserves a
+heads-up. Satchel keeps **one wallet per coin, never mixed**: an Electrum coin's
+funds live on your Pact seed, a node coin's funds live in the node's wallet. So
+if you switch an Electrum coin **back to node mode** while its pact-seed wallet
+still holds coins, Satchel warns you on **Save** — *"This hides your pact-seed
+wallet"* — and asks you to confirm with **Switch anyway**.
+
+> **Warning** — The warning is about *visibility*, not loss: the coins **stay
+> safe on your seed** and reappear the moment you switch back to Electrum. But
+> until then they won't show up in Wallets or fund swaps. The tidy move is to
+> **send them somewhere first** — your node wallet, say — and switch after. (If
+> the Electrum servers are already unreachable — often the very reason you're
+> switching — Satchel can't read the balance and lets the switch through without
+> the prompt.)
 
 Choosing **Your own node** means telling Satchel **where your node is** and
 **how to log in to it**. It's filled in with sensible defaults, so often

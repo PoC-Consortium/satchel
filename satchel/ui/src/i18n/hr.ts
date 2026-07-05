@@ -505,6 +505,8 @@ export const hr: Bundle = {
     sendIntro: "Raspoloživo: {balance} {sym}.",
     sendAddressLabel: "{sym} adresa primatelja",
     sendAmountLabel: "Iznos",
+    sendMax: "Maks.",
+    sendAllNote: "Šaljete sve — mrežna naknada odbija se od ovog iznosa.",
     sendNeedAddress: "Unesite adresu primatelja.",
     sendNeedAmount: "Unesite iznos.",
     sendNeedFee: "Odaberite stopu naknade.",
@@ -559,6 +561,9 @@ export const hr: Bundle = {
     boardSettings: "Konfiguriraj u Postavkama",
     filterAll: "Sve",
     filterMine: "Moje",
+    allPairs: "Svi parovi",
+    allPairsTip:
+      "Pregledajte svaki par na ploči, uključujući kovanice koje niste postavili — te su ponude samo za pregled dok ne povežete kovanicu.",
     noOffers: "Trenutno nema ponuda koje možete preuzeti",
     noOffersBody:
       "Ponude se pojavljuju ovdje čim maker objavi neku za par koji ste postavili. Možete objaviti i vlastitu.",
@@ -777,6 +782,44 @@ export const hr: Bundle = {
     feeBumped: "Naknada povećana",
     reorg: "Otkrivena reorganizacija — ponovna provjera",
   },
+  notify: {
+    tab: "Obavijesti",
+    section: "Obavijesti radne površine",
+    intro:
+      "Swapovi traju neko vrijeme i odvijaju se sami — primite obavijest sustava kad neki dosegne prekretnicu dok je Satchel u pozadini. Ništa se ne oglašava dok gledate prozor.",
+    master: "Omogući obavijesti",
+    masterHint: "Glavni prekidač — uključuje ili isključuje sve obavijesti ispod.",
+    evStarted: "Swap pokrenut",
+    evStartedHint: "Netko je preuzeo vašu ponudu ili je maker prihvatio vaše preuzimanje.",
+    evLocks: "Zaključavanja potvrđena",
+    evLocksHint:
+      "Zaključavanje jedne strane potvrđeno je on-chain — vaše, njihovo, zatim oba zaključana.",
+    evCompleted: "Swap dovršen",
+    evCompletedHint: "Swap je završio i kovanice su sjele u vaš novčanik.",
+    evFailed: "Swap vraćen ili prekinut",
+    evFailedHint: "Swap se odmotao — vraćen nakon zastoja ili otkazan.",
+    evReorg: "Upozorenja o reorganizaciji",
+    evReorgHint:
+      "Reorganizacija lanca dotaknula je swap u kojem sudjelujete — ponovno se provjerava.",
+    test: "Pošalji probnu obavijest",
+    testTitle: "Satchel",
+    testBody: "Obavijesti rade.",
+    denied:
+      "OS blokira obavijesti — dopustite Satchel u postavkama obavijesti vašeg sustava.",
+    testSent:
+      "Predano OS-u. Ako se skočna obavijest nije pojavila: razvojne (nezapakirane) verzije često su potisnute — Windows pouzdano prikazuje skočne obavijesti samo za instalirane aplikacije. Instalirani Satchel obavještava normalno; provjerite i način Ne uznemiravaj / postavke obavijesti.",
+    titleStarted: "Swap pokrenut",
+    titleLocks: "Ažuriranje swapa",
+    titleCompleted: "Swap dovršen",
+    titleFailed: "Swap nije dovršen",
+    titleReorg: "Upozorenje o reorganizaciji",
+    reorgBody: "{coin}: otkrivena reorganizacija lanca — potvrde se ponovno provjeravaju.",
+    trayNone: "Satchel — nema swapova u tijeku",
+    trayOne: "Satchel — 1 swap u tijeku",
+    trayMany: "Satchel — {count} swapova u tijeku",
+    trayOpen: "Otvori Satchel",
+    trayQuit: "Izađi",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -808,6 +851,16 @@ export const hr: Bundle = {
       "Seed ovog trgovca je šifriran. Unesite njegovu zaporku da ga otključate za ovu sesiju — Satchel ga drži samo u memoriji i zaboravlja pri izlasku.",
     switchMerchant: "Zamijeni trgovca",
     unlock: "Otključaj",
+  },
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "Koliko za vas vrijedi 1 {sym} u vašem vlastitom novcu — EUR, USD, RMB, u čemu god razmišljate. Svaka ~Cash brojka izvodi se iz vaših tečajeva, zapamćenih po kovanici. Samo za prikaz — Satchel nikad ne dohvaća cijene.",
+    cashrateNoContext:
+      "Ovdje je zasivljeno — tečaj se veže uz par koji gledate. Otvorite Corkboard ili obrazac ponude da postavite tečaj za njegovu kotiranu kovanicu.",
+    cashUnit: "~Cash",
+    refTip:
+      "Po vašem vlastitom Cashrateu — vaša referenca, ne tržišna cijena. Obje strane ponude vrijede isto po njezinoj vlastitoj cijeni. Tečajeve postavljate putem čipa u zaglavlju.",
   },
   common: {
     cancel: "Odustani",

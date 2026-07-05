@@ -89,8 +89,10 @@ business failures:
   "error": { "code": -1, "message": "no active merchant — create or load one first" } }
 ```
 
-`code` is always `-1`; the human-readable cause is in `message`. Common ones to
-handle: `unknown method '<m>'`, `missing param '<name>'`, and
+`code` is `-32601` for an unknown method (with a *did-you-mean* suggestion)
+and `-1` for everything else; the human-readable cause is in `message`. Common
+ones to handle: `unknown method '<m>' — did you mean '<nearest>'? (see 'help')`,
+`missing param '<name>'`, and
 `no active merchant — create or load one first` (prompt the user to create or
 load a merchant). Treat the presence of an `error` key — not the HTTP status — as
 the failure signal.

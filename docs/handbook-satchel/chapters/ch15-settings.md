@@ -2,8 +2,9 @@
 
 Everything you can configure in Satchel lives behind the **Settings** gear, which
 you'll find in the top-right header and again at the foot of the left-hand
-navigation. Settings is organised into five tabs — **General**, **Coins**,
-**Network**, **Fees**, and **About** — and this chapter takes them in turn.
+navigation. Settings is organised into six tabs — **General**, **Coins**,
+**Network**, **Fees**, **Notifications**, and **About** — and this chapter takes
+them in turn.
 
 ![The Settings screen with its tabs.](images/processed/ch14-settings-tabs.png){width=85%}
 
@@ -140,6 +141,44 @@ or **Reset to defaults** to put all three back the way they came.
 > tab alone. Satchel handles fees for you out of the box; these knobs exist only
 > for people who want fine control over the cost of a stalled swap.
 
+## Notifications
+
+Swaps take a while and run on their own — so the **Notifications** tab lets your
+operating system tap you on the shoulder when one hits a milestone while Satchel
+is in the background. **Nothing fires while you're looking at the window**: the
+in-app activity log and swap cards already narrate everything, so notifications
+only speak up when you're elsewhere.
+
+![The Notifications tab: the master switch, the five event toggles, and the test button.](images/processed/ch14-notifications-tab.png){width=80%}
+
+At the top sits **Enable notifications** — the master switch that turns every
+notification below on or off. Under it, five per-event toggles, all **on** by
+default:
+
+- **Swap started** — someone took your offer, or a maker accepted your take.
+- **Locks confirmed** — a leg's lock confirmed on-chain: yours, theirs, then
+  both locked.
+- **Swap completed** — the swap finished and the coins are settled in your
+  wallet. (This fires only at the true end — the finalizing phase stays silent.)
+- **Swap refunded or aborted** — a swap unwound: refunded after a stall, or
+  cancelled.
+- **Reorg warnings** — a chain reorganization touched a swap you're in and its
+  confirmations are being re-checked.
+
+The notification text is the same plain-language narration you see in the
+activity log, so the story reads identically wherever you catch it.
+
+A **Send a test notification** button lets you check the plumbing. If nothing
+appears, the most common cause is the operating system itself blocking
+notifications — allow Satchel in your system notification settings (and check Do
+Not Disturb).
+
+> **Tip** — Notifications pair naturally with the **tray icon** and the exit
+> gate's **Keep running** option: close the window mid-swap, let the engine work
+> in the background, and the milestones come to you. The tray icon (see the
+> *Tour of the Interface* chapter) shows how many swaps are in flight, and its
+> **Quit** goes through the same fund-safety gate as closing the window.
+
 ## About
 
 The **About** tab is your reference corner.
@@ -158,8 +197,9 @@ The **About** tab is your reference corner.
 ## Where your settings are stored
 
 All of these preferences — your theme, language, coin connections, relay list,
-and Corkboard list — are saved in a small file named `satchel.json` on your own
-computer. Nothing is stored in the cloud or on any server.
+Corkboard list, and notification choices — are saved in a small file named
+`satchel.json` on your own computer. Nothing is stored in the cloud or on any
+server.
 
 > **Note** — `satchel.json` holds *settings only* — never your recovery phrase or
 > any private key. Those are handled separately and far more carefully; the

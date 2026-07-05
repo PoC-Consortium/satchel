@@ -505,6 +505,8 @@ export const tr: Bundle = {
     sendIntro: "Harcanabilir: {balance} {sym}.",
     sendAddressLabel: "Alıcının {sym} adresi",
     sendAmountLabel: "Miktar",
+    sendMax: "Maks",
+    sendAllNote: "Her şeyi gönderiyorsunuz — ağ ücreti bu miktarın içinden düşülür.",
     sendNeedAddress: "Alıcı adresini girin.",
     sendNeedAmount: "Bir miktar girin.",
     sendNeedFee: "Bir ücret oranı seçin.",
@@ -559,6 +561,9 @@ export const tr: Bundle = {
     boardSettings: "Ayarlar'dan yapılandır",
     filterAll: "Tümü",
     filterMine: "Benimkiler",
+    allPairs: "Tüm pariteler",
+    allPairsTip:
+      "Kurmadığınız coin'ler dahil panodaki her pariteye göz atın — o teklifler, coin'i bağlayana kadar yalnızca görüntülenebilir.",
     noOffers: "Şu anda alabileceğiniz teklif yok",
     noOffersBody:
       "Kurduğunuz bir parite için bir maker teklif yayınlar yayınlamaz teklifler burada görünür. Kendi teklifinizi de yayınlayabilirsiniz.",
@@ -777,6 +782,44 @@ export const tr: Bundle = {
     feeBumped: "Ücret artırıldı",
     reorg: "Reorg algılandı — yeniden denetleniyor",
   },
+  notify: {
+    tab: "Bildirimler",
+    section: "Masaüstü bildirimleri",
+    intro:
+      "Takaslar zaman alır ve kendi kendine yürür — Satchel arka plandayken bir takas bir dönüm noktasına ulaştığında işletim sistemi bildirimi alın. Pencereye bakarken hiçbir şey tetiklenmez.",
+    master: "Bildirimleri etkinleştir",
+    masterHint: "Ana anahtar — aşağıdaki her bildirimi açar veya kapatır.",
+    evStarted: "Takas başladı",
+    evStartedHint: "Biri teklifinizi aldı veya bir maker almanızı kabul etti.",
+    evLocks: "Kilitler onaylandı",
+    evLocksHint:
+      "Bir bacağın kilidi zincir üzerinde onaylandı — sizinki, onlarınki, ardından ikisi de kilitli.",
+    evCompleted: "Takas tamamlandı",
+    evCompletedHint: "Takas bitti ve coin'ler cüzdanınıza yerleşti.",
+    evFailed: "Takas geri ödendi veya iptal edildi",
+    evFailedHint: "Bir takas geri sarıldı — takılmanın ardından geri ödendi veya iptal edildi.",
+    evReorg: "Reorg uyarıları",
+    evReorgHint:
+      "Bir zincir yeniden düzenlenmesi, içinde olduğunuz bir takasa dokundu — yeniden denetleniyor.",
+    test: "Test bildirimi gönder",
+    testTitle: "Satchel",
+    testBody: "Bildirimler çalışıyor.",
+    denied:
+      "İşletim sistemi bildirimleri engelliyor — sistem bildirim ayarlarından Satchel'a izin verin.",
+    testSent:
+      "İşletim sistemine iletildi. Bildirim görünmediyse: geliştirme (paketlenmemiş) derlemeleri çoğu zaman bastırılır — Windows, toast bildirimlerini yalnızca yüklü uygulamalar için güvenilir şekilde gösterir. Yüklü Satchel normal şekilde bildirir; ayrıca Rahatsız Etmeyin / bildirim ayarlarını kontrol edin.",
+    titleStarted: "Takas başladı",
+    titleLocks: "Takas güncellemesi",
+    titleCompleted: "Takas tamamlandı",
+    titleFailed: "Takas tamamlanmadı",
+    titleReorg: "Reorg uyarısı",
+    reorgBody: "{coin}: zincir yeniden düzenlenmesi algılandı — onaylar yeniden denetleniyor.",
+    trayNone: "Satchel — yürürlükte takas yok",
+    trayOne: "Satchel — 1 takas yürürlükte",
+    trayMany: "Satchel — {count} takas yürürlükte",
+    trayOpen: "Satchel'ı aç",
+    trayQuit: "Çık",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -808,6 +851,16 @@ export const tr: Bundle = {
       "Bu satıcının seed'i şifrelenmiş. Bu oturum için kilidini açmak üzere parolasını girin — Satchel onu yalnızca bellekte tutar ve çıkışta unutur.",
     switchMerchant: "Satıcı değiştir",
     unlock: "Kilidini aç",
+  },
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "1 {sym} için kendi paranızla biçtiğiniz değer — EUR, USD, RMB, hangi parayla düşünüyorsanız. Her ~Cash rakamı, coin başına hatırlanan kurlarınızdan türetilir. Yalnızca görüntüleme amaçlı — Satchel asla fiyat çekmez.",
+    cashrateNoContext:
+      "Burada soluk — kur, baktığınız pariteye bağlanır. Paritenin kotasyon coin'i için kuru ayarlamak üzere Corkboard'ı veya bir teklif formunu açın.",
+    cashUnit: "~Cash",
+    refTip:
+      "Kendi Cashrate'inize göre — bu sizin referansınız, piyasa fiyatı değil. Bir teklifin iki bacağı da teklifin kendi fiyatında aynı değerdedir. Kurları başlıktaki çipten ayarlayın.",
   },
   common: {
     cancel: "İptal",

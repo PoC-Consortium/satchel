@@ -503,6 +503,8 @@ export const it: Bundle = {
     sendIntro: "Spendibile: {balance} {sym}.",
     sendAddressLabel: "Indirizzo {sym} del destinatario",
     sendAmountLabel: "Importo",
+    sendMax: "Max",
+    sendAllNote: "Stai inviando tutto — la commissione di rete viene detratta da questo importo.",
     sendNeedAddress: "Inserisci l'indirizzo del destinatario.",
     sendNeedAmount: "Inserisci un importo.",
     sendNeedFee: "Scegli una tariffa di commissione.",
@@ -557,6 +559,9 @@ export const it: Bundle = {
     boardSettings: "Configura nelle Impostazioni",
     filterAll: "Tutte",
     filterMine: "Mie",
+    allPairs: "Tutte le coppie",
+    allPairsTip:
+      "Sfoglia ogni coppia sulla bacheca, incluse le coin che non hai configurato — quelle offerte sono di sola visualizzazione finché non connetti la coin.",
     noOffers: "Nessuna offerta che puoi accettare in questo momento",
     noOffersBody:
       "Le offerte compaiono qui non appena un maker ne pubblica una per una coppia che hai configurato. Puoi anche pubblicare le tue.",
@@ -775,6 +780,44 @@ export const it: Bundle = {
     feeBumped: "Commissione aumentata",
     reorg: "Reorg rilevato — nuovo controllo",
   },
+  notify: {
+    tab: "Notifiche",
+    section: "Notifiche desktop",
+    intro:
+      "Gli swap richiedono tempo e procedono da soli — ricevi una notifica del sistema quando uno raggiunge una tappa mentre Satchel è in background. Nulla scatta mentre stai guardando la finestra.",
+    master: "Abilita le notifiche",
+    masterHint: "Interruttore generale — attiva o disattiva tutte le notifiche qui sotto.",
+    evStarted: "Swap avviato",
+    evStartedHint: "Qualcuno ha accettato la tua offerta, o un maker ha accettato la tua accettazione.",
+    evLocks: "Blocchi confermati",
+    evLocksHint:
+      "Il blocco di una leg è stato confermato on-chain — il tuo, il loro, poi entrambi bloccati.",
+    evCompleted: "Swap completato",
+    evCompletedHint: "Lo swap è terminato e le coin sono regolate nel tuo wallet.",
+    evFailed: "Swap rimborsato o annullato",
+    evFailedHint: "Uno swap si è disfatto — rimborsato dopo uno stallo, o annullato.",
+    evReorg: "Avvisi di reorg",
+    evReorgHint:
+      "Una riorganizzazione della chain ha toccato uno swap in cui sei coinvolto — è in corso un nuovo controllo.",
+    test: "Invia una notifica di prova",
+    testTitle: "Satchel",
+    testBody: "Le notifiche funzionano.",
+    denied:
+      "Il sistema operativo sta bloccando le notifiche — consenti Satchel nelle impostazioni di notifica di sistema.",
+    testSent:
+      "Consegnata al sistema operativo. Se non è comparso alcun toast: le build di sviluppo (non pacchettizzate) vengono spesso soppresse — Windows mostra i toast in modo affidabile solo per le app installate. Il Satchel installato notifica normalmente; controlla anche Non disturbare / le impostazioni di notifica.",
+    titleStarted: "Swap avviato",
+    titleLocks: "Aggiornamento swap",
+    titleCompleted: "Swap completato",
+    titleFailed: "Swap non completato",
+    titleReorg: "Avviso di reorg",
+    reorgBody: "{coin}: rilevata una riorganizzazione della chain — le conferme vengono ricontrollate.",
+    trayNone: "Satchel — nessuno swap in corso",
+    trayOne: "Satchel — 1 swap in corso",
+    trayMany: "Satchel — {count} swap in corso",
+    trayOpen: "Apri Satchel",
+    trayQuit: "Esci",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -806,6 +849,16 @@ export const it: Bundle = {
       "Il seed di questo merchant è cifrato. Inserisci la sua passphrase per sbloccarlo per questa sessione — Satchel lo tiene solo in memoria e lo dimentica all'uscita.",
     switchMerchant: "Cambia merchant",
     unlock: "Sblocca",
+  },
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "Quanto vale per te 1 {sym} nella tua moneta — EUR, USD, RMB, quella in cui ragioni. Ogni cifra ~Cash deriva dai tuoi tassi, memorizzati per coin. Solo visualizzazione — Satchel non recupera mai i prezzi.",
+    cashrateNoContext:
+      "Qui è in grigio — il tasso si lega alla coppia che stai guardando. Apri il Corkboard o un modulo d'offerta per impostare il tasso della sua coin di quotazione.",
+    cashUnit: "~Cash",
+    refTip:
+      "Al tuo Cashrate personale — il tuo riferimento, non un prezzo di mercato. Entrambe le leg di un'offerta valgono lo stesso al suo prezzo. Imposta i tassi tramite il chip nell'intestazione.",
   },
   common: {
     cancel: "Annulla",

@@ -503,6 +503,8 @@ export const gl: Bundle = {
     sendIntro: "Dispoñible para gastar: {balance} {sym}.",
     sendAddressLabel: "Enderezo {sym} do destinatario",
     sendAmountLabel: "Importe",
+    sendMax: "Máx",
+    sendAllNote: "Envíase todo — a comisión de rede descóntase deste importe.",
     sendNeedAddress: "Introduce o enderezo do destinatario.",
     sendNeedAmount: "Introduce un importe.",
     sendNeedFee: "Escolle unha taxa de comisión.",
@@ -557,6 +559,9 @@ export const gl: Bundle = {
     boardSettings: "Configurar en Axustes",
     filterAll: "Todas",
     filterMine: "Miñas",
+    allPairs: "Todos os pares",
+    allPairsTip:
+      "Navega por todos os pares do taboleiro, incluídas moedas que non configuraches — esas ofertas son só de consulta ata que conectes a moeda.",
     noOffers: "Non hai ofertas que poidas tomar agora mesmo",
     noOffersBody:
       "As ofertas aparecen aquí en canto un maker publica unha para un par que configuraches. Tamén podes publicar a túa propia.",
@@ -775,6 +780,45 @@ export const gl: Bundle = {
     feeBumped: "Comisión aumentada",
     reorg: "Reorganización detectada — comprobando de novo",
   },
+  notify: {
+    tab: "Notificacións",
+    section: "Notificacións de escritorio",
+    intro:
+      "Os intercambios levan un tempo e avanzan por si sós — recibe unha notificación do sistema cando un acada un fito mentres Satchel está en segundo plano. Nada salta mentres estás mirando a xanela.",
+    master: "Activar notificacións",
+    masterHint: "Interruptor xeral — acende ou apaga todas as notificacións de embaixo.",
+    evStarted: "Intercambio iniciado",
+    evStartedHint: "Alguén tomou a túa oferta, ou un maker aceptou a túa toma.",
+    evLocks: "Bloqueos confirmados",
+    evLocksHint:
+      "O bloqueo dunha pata confirmouse en cadea — o teu, o seu e despois ambos bloqueados.",
+    evCompleted: "Intercambio completo",
+    evCompletedHint: "O intercambio rematou e as moedas están asentadas na túa carteira.",
+    evFailed: "Intercambio reembolsado ou abortado",
+    evFailedHint: "Un intercambio desfíxose — reembolsado tras un atasco, ou cancelado.",
+    evReorg: "Avisos de reorganización",
+    evReorgHint:
+      "Unha reorganización da cadea afectou a un intercambio no que participas — estase comprobando de novo.",
+    test: "Enviar unha notificación de proba",
+    testTitle: "Satchel",
+    testBody: "As notificacións funcionan.",
+    denied:
+      "O sistema operativo está bloqueando as notificacións — permite Satchel nos axustes de notificacións do teu sistema.",
+    testSent:
+      "Entregada ao sistema operativo. Se non apareceu ningún aviso: as builds de desenvolvemento (sen empaquetar) adoitan suprimirse — Windows só mostra avisos de forma fiable para as aplicacións instaladas. O Satchel instalado notifica con normalidade; revisa tamén Non molestar / os axustes de notificacións.",
+    titleStarted: "Intercambio iniciado",
+    titleLocks: "Novidades do intercambio",
+    titleCompleted: "Intercambio completo",
+    titleFailed: "Intercambio non completado",
+    titleReorg: "Aviso de reorganización",
+    reorgBody:
+      "{coin}: reorganización da cadea detectada — estanse comprobando de novo as confirmacións.",
+    trayNone: "Satchel — ningún intercambio en curso",
+    trayOne: "Satchel — 1 intercambio en curso",
+    trayMany: "Satchel — {count} intercambios en curso",
+    trayOpen: "Abrir Satchel",
+    trayQuit: "Saír",
+  },
   exit: {
     // Exit-gate dialog (fund safety, C6). The engine manages alone, so "keep
     // running" detaches it (it keeps watching timelocks + servicing offers).
@@ -806,6 +850,16 @@ export const gl: Bundle = {
       "A semente deste comerciante está cifrada. Introduce a súa frase de paso para desbloquealo nesta sesión — Satchel gárdaa só na memoria e esquéceaa ao saír.",
     switchMerchant: "Cambiar comerciante",
     unlock: "Desbloquear",
+  },
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "O que para ti vale 1 {sym} no teu propio diñeiro — EUR, USD, RMB, o que uses para pensar. Cada cifra ~Cash derívase das túas taxas, lembradas por moeda. Só informativo — Satchel nunca consulta prezos.",
+    cashrateNoContext:
+      "Atenuado aquí — a taxa vincúlase ao par que estás mirando. Abre o Corkboard ou un formulario de oferta para fixar a taxa da súa moeda de cotización.",
+    cashUnit: "~Cash",
+    refTip:
+      "Ao teu propio Cashrate — a túa referencia, non un prezo de mercado. Ambas as patas dunha oferta valen o mesmo ao seu propio prezo. Fixa as taxas desde o chip da cabeceira.",
   },
   common: {
     cancel: "Cancelar",

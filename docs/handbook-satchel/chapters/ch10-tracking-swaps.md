@@ -5,6 +5,12 @@ places to look: the **Swaps** page, which is your read-only ledger, and the
 **active-swaps dock**, which appears beneath every page and is where the
 occasional action buttons live.
 
+> **Tip** — You don't have to keep the window in front, either. When Satchel is
+> in the background, swap milestones also arrive as **desktop notifications**
+> (configurable under **Settings → Notifications**), and the **tray icon**'s
+> tooltip always shows how many swaps are in flight. While the window has focus,
+> notifications stay silent — the dock is already telling you the story.
+
 ## The Swaps page
 
 Click **Swaps** in the left navigation. This page is a **read-only ledger** — it
@@ -189,7 +195,9 @@ to a developer when something has gone wrong.
 
 If you try to close Satchel while a swap is in flight, an **exit gate** dialog
 stops you and explains the situation: the swap is governed by on-chain timelocks,
-and the engine must keep running to redeem or refund before the deadline.
+and the engine must keep running to redeem or refund before the deadline. The
+gate guards every way out — choosing **Quit** from the tray icon's menu runs
+through exactly the same dialog, so the tray can never sidestep it.
 
 Your choices:
 
