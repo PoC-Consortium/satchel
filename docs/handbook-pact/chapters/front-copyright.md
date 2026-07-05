@@ -3,7 +3,7 @@
 # Copyright and disclaimer {-}
 
 *Pact — Developer & Integrator Handbook*
-Verified against commit `103bd57` · July 2026
+Verified against commit `ad2d0ea` · July 2026
 
 This handbook tracks the code by commit hash rather than a release version: the
 hash above is the `pact` source revision its contents were verified against.
