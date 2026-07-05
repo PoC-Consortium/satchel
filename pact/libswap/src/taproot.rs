@@ -120,12 +120,16 @@ impl TaprootLeg {
 }
 
 /// 1-in/1-out tx skeleton spending `funding`, sweeping value−fee to `dest`.
+///
+/// `sequence` is part of the sighash, so for the CO-SIGNED redeem both
+/// parties must pass the same value — see the two callers for the choice.
 fn spend_skeleton(
     funding: OutPoint,
     value_sat: u64,
     fee_sat: u64,
     dest: ScriptBuf,
     lock_time: LockTime,
+    sequence: Sequence,
 ) -> Result<Transaction> {
     ensure!(
         value_sat > fee_sat + DUST_LIMIT_SAT,
@@ -137,7 +141,7 @@ fn spend_skeleton(
         input: vec![TxIn {
             previous_output: funding,
             script_sig: ScriptBuf::new(),
-            sequence: Sequence::from_consensus(HTLC_SPEND_SEQUENCE),
+            sequence,
             witness: Witness::default(),
         }],
         output: vec![TxOut {
@@ -159,7 +163,20 @@ pub fn build_keypath_redeem<C: Verification>(
     dest: ScriptBuf,
     fee_sat: u64,
 ) -> Result<(Transaction, [u8; 32])> {
-    let tx = spend_skeleton(funding, value_sat, fee_sat, dest, LockTime::ZERO)?;
+    // NON-replaceable (no BIP125 signal, rc10): the redeem's fee is committed
+    // into the adaptor signature — nothing can ever RBF it (a stuck redeem is
+    // CPFP'd), so signal that honestly. The sequence is in the MuSig2 sighash,
+    // so both parties must build it identically: rc9 peers built 0xFFFFFFFD →
+    // rc9↔rc10 v2 swaps fail partial-sig verification at the handshake (a
+    // clean pre-funding abort; alpha, no compat shim on purpose).
+    let tx = spend_skeleton(
+        funding,
+        value_sat,
+        fee_sat,
+        dest,
+        LockTime::ZERO,
+        Sequence::ENABLE_LOCKTIME_NO_RBF,
+    )?;
     let prevout = leg.funding_txout(secp, value_sat)?;
     let sighash = SighashCache::new(&tx)
         .taproot_key_spend_signature_hash(0, &Prevouts::All(&[prevout]), TapSighashType::Default)
@@ -194,12 +211,17 @@ pub fn build_refund_tx<C: Signing + Verification>(
         refund_keypair.x_only_public_key().0 == leg.refund_key,
         "refund keypair does not match the leg's refund key"
     );
+    // The refund is SINGLE-signer (the funder's CLTV leaf), so its sequence
+    // is a local choice — keep the RBF signal: the funder can always rebuild
+    // a stuck refund at a higher fee. (CLTV needs a non-final sequence, which
+    // 0xFFFFFFFD satisfies.)
     let mut tx = spend_skeleton(
         funding,
         value_sat,
         fee_sat,
         dest,
         LockTime::from_consensus(leg.locktime),
+        Sequence::from_consensus(HTLC_SPEND_SEQUENCE),
     )?;
     let script = leg.refund_script();
     let spend_info = leg.spend_info(secp)?;
@@ -359,6 +381,10 @@ mod tests {
             build_keypath_redeem(&secp, &leg, dummy_outpoint(), value, dummy_dest(), 1_000)
                 .unwrap();
         assert_eq!(tx.lock_time, LockTime::ZERO);
+        // Co-signed redeem is NON-replaceable (rc10 flag-day) — the sequence
+        // is in the shared MuSig2 sighash, so this value is protocol, not
+        // policy: changing it breaks cross-version v2 swaps.
+        assert_eq!(tx.input[0].sequence, Sequence::ENABLE_LOCKTIME_NO_RBF);
 
         let info = leg.spend_info(&secp).unwrap();
         let tweaked = internal_kp
