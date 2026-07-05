@@ -28,6 +28,12 @@ export const fmtFee = (n: number): string =>
     useGrouping: false,
   }).format(n / 1e8);
 
+/** A decimal sat/vB feerate at the estimator's full sat/kvB resolution:
+ *  locale separator, up to 3 fraction digits, trailing zeros trimmed —
+ *  1080 sat/kvB reads "1.08", a flat market reads "1". */
+export const fmtFeeRate = (rate: number): string =>
+  new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 }).format(rate);
+
 /** sats → "1.5 POCX" style with the asset symbol appended. */
 export const fmtAmt = (n: number, asset: string): string =>
   `${fmtBare(n)} ${String(asset).toUpperCase()}`;

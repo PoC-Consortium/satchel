@@ -87,8 +87,14 @@ pub(crate) const SANITY_MAX_SAT_PER_VB: u64 = 10_000;
 /// rebuild, user-send bump), and callers floor the result at 1 /
 /// `min_feerate_sat_vb`. The one conversion that must NEVER round down —
 /// the BIP125 incremental-relay increment — keeps its own `ceil`.
-fn btc_kvb_to_sat_vb(btc_kvb: f64) -> u64 {
-    ((btc_kvb * 1e8) / 1000.0).round() as u64
+fn btc_kvb_to_sat_kvb(btc_kvb: f64) -> u64 {
+    // sat/kvB IS the estimator's native integer resolution — keep it exact.
+    (btc_kvb * 1e8).round() as u64
+}
+
+/// sat/kvB → integer sat/vB, rounded to nearest (display / integer callers).
+fn kvb_to_vb_round(sat_kvb: u64) -> u64 {
+    (sat_kvb + 500) / 1000
 }
 
 /// Electrum socket bounds: TCP connect and per-request read/write. Generous —
@@ -106,22 +112,27 @@ const ELECTRUM_IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
 pub enum SendFee {
     /// Market estimate at this conf target, with the 1 sat/vB fallback.
     Target(u16),
-    /// Explicit rate in sat/vB, clamped to the coin floor / sanity max.
-    RateSatVb(u64),
+    /// Explicit rate in sat/kvB (milli-sat/vB — the RPC boundary speaks
+    /// decimal sat/vB and multiplies by 1000), clamped to the coin floor /
+    /// sanity max.
+    RatePerKvb(u64),
 }
 
 /// The send form's fee preview (`estimatesendfee` RPC): raw estimator answers
 /// for the three phoenix-parity presets, `None` where the estimator has no
 /// data, plus the coin's feerate floor (the custom field's minimum/default).
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct SendFeeEstimates {
-    pub min_sat_per_vb: u64,
-    /// 1-block target.
-    pub fast: Option<u64>,
+    /// Coin floor, decimal sat/vB.
+    pub min_sat_per_vb: f64,
+    /// 1-block target, decimal sat/vB at the estimator's full sat/kvB
+    /// resolution (e.g. 1080 sat/kvB → 1.08) — rc10 field report: integer
+    /// rounding threw away the queue-priority fraction.
+    pub fast: Option<f64>,
     /// 6-block target — the preselected preset.
-    pub normal: Option<u64>,
+    pub normal: Option<f64>,
     /// 144-block target.
-    pub slow: Option<u64>,
+    pub slow: Option<f64>,
 }
 
 /// What `gettxout` tells us about an unspent output.
@@ -229,15 +240,30 @@ pub trait ChainBackend {
         Ok(None)
     }
 
-    /// Resolve a [`SendFee`] to the sat/vB rate a send prices itself at:
+    /// Precise market estimate in sat/kvB (the estimator's native
+    /// resolution). Default derives from the integer sat/vB path so backends
+    /// without an estimator stay correct; Core/Electrum override with the
+    /// exact value.
+    fn fee_estimate_kvb(&self, conf_target: u16) -> Result<Option<u64>> {
+        Ok(self.fee_estimate(conf_target)?.map(|vb| vb * 1000))
+    }
+
+    /// [`ChainBackend::fee_rate_for`] at sat/kvB resolution (same fallback
+    /// semantics). Sends and swap funding price off THIS — the fraction is
+    /// real queue priority at the bottom of the market (rc10 field report).
+    fn fee_rate_for_kvb(&self, conf_target: u16) -> Result<u64> {
+        Ok(self.fee_rate_for(conf_target, false)? * 1000)
+    }
+
+    /// Resolve a [`SendFee`] to the sat/kvB rate a send prices itself at:
     /// market estimate (with fallback) for a target, or the explicit rate
     /// clamped to the coin floor and the sanity max.
     fn resolve_send_fee(&self, fee: SendFee) -> Result<u64> {
         match fee {
-            SendFee::Target(conf_target) => self.fee_rate_for(conf_target, false),
-            SendFee::RateSatVb(rate) => Ok(rate
-                .clamp(1, SANITY_MAX_SAT_PER_VB)
-                .max(self.params().min_feerate_sat_vb)),
+            SendFee::Target(conf_target) => self.fee_rate_for_kvb(conf_target),
+            SendFee::RatePerKvb(rate) => Ok(rate
+                .clamp(1, SANITY_MAX_SAT_PER_VB * 1000)
+                .max(self.params().min_feerate_sat_vb * 1000)),
         }
     }
 
@@ -397,7 +423,7 @@ impl CoreRpcBackend {
     /// Raw `estimatesmartfee` answer in sat/vB, or `None` when the node has no
     /// estimate (fresh/quiet chain). Shared by `fee_rate_for` (which adds the
     /// 1 sat/vB fallback) and `fee_estimate` (which surfaces the `None`).
-    fn smart_fee_estimate(&self, conf_target: u16, conservative: bool) -> Option<u64> {
+    fn smart_fee_estimate_kvb(&self, conf_target: u16, conservative: bool) -> Option<u64> {
         // Regtest-only test override: the harness injects a market feerate to
         // create a market-vs-broadcast gap the bump nurse reacts to (see
         // `set_test_feerate`). Never honored off regtest.
@@ -405,8 +431,9 @@ impl CoreRpcBackend {
             let ov = TEST_FEERATE_OVERRIDE_SAT_VB.load(Ordering::Relaxed);
             if ov > 0 {
                 return Some(
-                    ov.clamp(1, SANITY_MAX_SAT_PER_VB)
-                        .max(self.params.min_feerate_sat_vb),
+                    (ov * 1000)
+                        .clamp(1000, SANITY_MAX_SAT_PER_VB * 1000)
+                        .max(self.params.min_feerate_sat_vb * 1000),
                 );
             }
         }
@@ -429,10 +456,10 @@ impl CoreRpcBackend {
             .call("estimatesmartfee", &args)
             .ok()
             .and_then(|r| r["feerate"].as_f64()) // BTC per kvB
-            .map(btc_kvb_to_sat_vb)
+            .map(btc_kvb_to_sat_kvb)
             .map(|est| {
-                est.clamp(1, SANITY_MAX_SAT_PER_VB)
-                    .max(self.params.min_feerate_sat_vb)
+                est.clamp(1, SANITY_MAX_SAT_PER_VB * 1000)
+                    .max(self.params.min_feerate_sat_vb * 1000)
             })
     }
 
@@ -651,12 +678,25 @@ impl ChainBackend for CoreRpcBackend {
         // clamp inside smart_fee_estimate is an overflow guard only — NOT the
         // fee ceiling; the real caps live downstream in `FeeBumpPolicy`.
         Ok(self
-            .smart_fee_estimate(conf_target, conservative)
+            .smart_fee_estimate_kvb(conf_target, conservative)
+            .map(|kvb| kvb_to_vb_round(kvb).max(1))
             .unwrap_or(self.params.min_feerate_sat_vb.max(1)))
     }
 
     fn fee_estimate(&self, conf_target: u16) -> Result<Option<u64>> {
-        Ok(self.smart_fee_estimate(conf_target, false))
+        Ok(self
+            .smart_fee_estimate_kvb(conf_target, false)
+            .map(|kvb| kvb_to_vb_round(kvb).max(1)))
+    }
+
+    fn fee_estimate_kvb(&self, conf_target: u16) -> Result<Option<u64>> {
+        Ok(self.smart_fee_estimate_kvb(conf_target, false))
+    }
+
+    fn fee_rate_for_kvb(&self, conf_target: u16) -> Result<u64> {
+        Ok(self
+            .smart_fee_estimate_kvb(conf_target, false)
+            .unwrap_or(self.params.min_feerate_sat_vb.max(1) * 1000))
     }
 
     fn is_in_mempool(&self, txid: &str) -> Result<bool> {
@@ -700,7 +740,8 @@ impl ChainBackend for CoreRpcBackend {
         // This mirrors how redeem/refund pick their rate (and phoenix-pocx's
         // 1 sat/vB fallback), so the fee tracks the same policy as everything
         // else instead of the node's config.
-        let fee_rate = self.resolve_send_fee(fee)?;
+        // sat/kvB → the node's decimal sat/vB (Core accepts 3 decimals).
+        let fee_rate = self.resolve_send_fee(fee)? as f64 / 1000.0;
         // Funding sends are RBF-bumped by the funding nurse and user sends by
         // the owner, so broadcast explicitly BIP125-replaceable rather than
         // relying on the node's -walletrbf default. Positional sendtoaddress args (Core 0.21+):
@@ -736,7 +777,8 @@ impl ChainBackend for CoreRpcBackend {
             balance_sat / 100_000_000,
             balance_sat % 100_000_000
         );
-        let fee_rate = self.resolve_send_fee(fee)?;
+        // sat/kvB → the node's decimal sat/vB (Core accepts 3 decimals).
+        let fee_rate = self.resolve_send_fee(fee)? as f64 / 1000.0;
         // Same positional args + explicit-feerate/RBF policy as wallet_send,
         // except subtractfeefromamount=true: amount is the FULL confirmed
         // balance and Core takes the fee out of it — the sweep semantics.
@@ -772,8 +814,9 @@ impl ChainBackend for CoreRpcBackend {
             amount_sat % 100_000_000
         );
         // Funding prices at the per-coin ~30-min target (see funding_conf_target),
-        // not a blind 6-block target.
-        let fee_rate = self.fee_rate_for(self.funding_conf_target(), false)?;
+        // not a blind 6-block target — at full sat/kvB resolution, passed to the
+        // node as decimal sat/vB (the fraction is real queue priority).
+        let fee_rate = self.fee_rate_for_kvb(self.funding_conf_target())? as f64 / 1000.0;
         // 1. raw tx carrying only the funding output (no inputs yet). The output
         //    key is the funding address, so build the object with a dynamic key.
         let mut outputs = serde_json::Map::new();
@@ -1435,11 +1478,18 @@ impl ChainBackend for ElectrumBackend {
         // conservative distinction), so `_conservative` is honored via the
         // tighter `conf_target` alone.
         Ok(self
-            .fee_estimate(conf_target)?
+            .fee_estimate_kvb(conf_target)?
+            .map(|kvb| kvb_to_vb_round(kvb).max(1))
             .unwrap_or(self.params.min_feerate_sat_vb.max(1)))
     }
 
     fn fee_estimate(&self, conf_target: u16) -> Result<Option<u64>> {
+        Ok(self
+            .fee_estimate_kvb(conf_target)?
+            .map(|kvb| kvb_to_vb_round(kvb).max(1)))
+    }
+
+    fn fee_estimate_kvb(&self, conf_target: u16) -> Result<Option<u64>> {
         Ok(self
             .raw(
                 "blockchain.estimatefee",
@@ -1448,11 +1498,17 @@ impl ChainBackend for ElectrumBackend {
             .ok()
             .and_then(|v| v.as_f64())
             .filter(|btc_kb| *btc_kb > 0.0) // -1 = no estimate available
-            .map(btc_kvb_to_sat_vb)
+            .map(btc_kvb_to_sat_kvb)
             .map(|est| {
-                est.clamp(1, SANITY_MAX_SAT_PER_VB)
-                    .max(self.params.min_feerate_sat_vb)
+                est.clamp(1, SANITY_MAX_SAT_PER_VB * 1000)
+                    .max(self.params.min_feerate_sat_vb * 1000)
             }))
+    }
+
+    fn fee_rate_for_kvb(&self, conf_target: u16) -> Result<u64> {
+        Ok(self
+            .fee_estimate_kvb(conf_target)?
+            .unwrap_or(self.params.min_feerate_sat_vb.max(1) * 1000))
     }
 
     fn wallet_new_address(&self) -> Result<String> {
@@ -1775,7 +1831,7 @@ impl ChainBackend for MultiBackend {
 
 #[cfg(test)]
 mod funding_conf_target_tests {
-    use super::{btc_kvb_to_sat_vb, funding_conf_target_for};
+    use super::{btc_kvb_to_sat_kvb, funding_conf_target_for, kvb_to_vb_round};
 
     #[test]
     fn derives_per_coin_target_from_30min_cap() {
@@ -1796,15 +1852,20 @@ mod funding_conf_target_tests {
     }
 
     #[test]
-    fn estimator_conversion_rounds_like_phoenix() {
-        // 0.00001012 BTC/kvB = 1.012 sat/vB — the real bottom-of-market shape
-        // that `ceil` used to double to 2 (rc10 field report).
-        assert_eq!(btc_kvb_to_sat_vb(0.00001012), 1);
-        assert_eq!(btc_kvb_to_sat_vb(0.00001000), 1);
-        // ≥ .5 rounds up, matching phoenix's Math.round.
-        assert_eq!(btc_kvb_to_sat_vb(0.00001500), 2);
-        assert_eq!(btc_kvb_to_sat_vb(0.00009873), 10);
+    fn estimator_conversion_keeps_full_kvb_resolution() {
+        // 0.00001080 BTC/kvB = 1080 sat/kvB = 1.08 sat/vB — the rc10 field
+        // case. The estimator's answer survives EXACTLY: display shows 1.08,
+        // Core is paid fee_rate = 1.08, bdk is paid 270 sat/kwu.
+        assert_eq!(btc_kvb_to_sat_kvb(0.00001080), 1080);
+        assert_eq!((1080u64 + 2) / 4, 270); // sat/kvB → sat/kwu (bdk)
+        assert_eq!(btc_kvb_to_sat_kvb(0.00001012), 1012);
+        assert_eq!(btc_kvb_to_sat_kvb(0.00001000), 1000);
+        assert_eq!(btc_kvb_to_sat_kvb(0.00000040), 40);
+        // Integer-vB derivations (swap escalation paths) round to nearest.
+        assert_eq!(kvb_to_vb_round(1012), 1);
+        assert_eq!(kvb_to_vb_round(1500), 2);
+        assert_eq!(kvb_to_vb_round(9873), 10);
         // Sub-relay dust rounds to 0 — callers clamp to ≥ 1 / the coin floor.
-        assert_eq!(btc_kvb_to_sat_vb(0.00000040), 0);
+        assert_eq!(kvb_to_vb_round(40), 0);
     }
 }

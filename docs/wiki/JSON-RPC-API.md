@@ -120,10 +120,10 @@ v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed). T
 | Method | Purpose |
 |---|---|
 | `estimateswapfees` | Per-leg fee estimate (`platform_fee_sat:0`). Params: `give_coin`, `get_coin` only. |
-| `estimatesendfee` | Fee preview for the wallet send form. Params: `chain`. Returns `{ min_sat_per_vb, fast, normal, slow }` — raw estimator answers (sat/vB) at 1/6/144-block targets, `null` where the estimator has no data. |
+| `estimatesendfee` | Fee preview for the wallet send form. Params: `chain`. Returns `{ min_sat_per_vb, fast, normal, slow }` — raw estimator answers as **decimal sat/vB at full sat/kvB resolution** (e.g. `1.08`) at 1/6/144-block targets, `null` where the estimator has no data. |
 | `getbalance` | Balance for one chain. |
 | `getnewaddress` | Fresh HD address for one chain. |
-| `sendtoaddress` | Send from one chain (broadcasts BIP125-replaceable). Params: `chain`, `address`, `amount`, optional `conf_target` (block target, default 6), optional `fee_rate` (explicit sat/vB — wins over `conf_target`). `amount` may be the literal `"all"` to sweep the wallet — the fee then comes out of the swept amount. |
+| `sendtoaddress` | Send from one chain (broadcasts BIP125-replaceable). Params: `chain`, `address`, `amount`, optional `conf_target` (block target, default 6), optional `fee_rate` (explicit **decimal** sat/vB, e.g. `1.08` — wins over `conf_target`; carried internally at sat/kvB resolution, so the fraction is paid, not rounded away). `amount` may be the literal `"all"` to sweep the wallet — the fee then comes out of the swept amount. |
 | `bumpfee` | RBF-bump an unconfirmed wallet send. Params: `chain`, `txid`, `fee_rate` (sat/vB — must beat what the tx pays now). Returns the replacement `txid`. Refuses a txid that funds a live swap — the engine manages those fees itself (see `get`/`setfeepolicy`). Satchel surfaces it for nodeless coins; a node-backed wallet is bumped with the node's own tooling. |
 | `listtransactions` | Wallet activity of an Electrum-connected (nodeless) coin, newest first: `{ txid, direction, amount_sat, fee_sat?, vsize, confirmations, timestamp? }`. Node-backed coins refuse. |
 

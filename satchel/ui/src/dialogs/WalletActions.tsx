@@ -30,6 +30,7 @@ import {
   canonicalAmount,
   fmtBare,
   fmtFee,
+  fmtFeeRate,
   isActive,
   parseAmount,
   sanitizeAmountInput,
@@ -173,8 +174,14 @@ function useFeeChoice(coinId: string): FeeChoice {
     })();
   }, [coinId]);
 
-  const customSat = Math.floor(Number(customRate));
-  const rate = sel === "custom" ? (customSat > 0 ? customSat : null) : (est?.[sel] ?? null);
+  // Decimal sat/vB (up to 3 places = the estimator's sat/kvB resolution).
+  const customVb = Number(customRate);
+  const rate =
+    sel === "custom"
+      ? Number.isFinite(customVb) && customVb > 0
+        ? customVb
+        : null
+      : (est?.[sel] ?? null);
   const rpcFeeArgs: [number | null, number | null] =
     sel === "custom" ? [null, rate] : [FEE_PRESET_BLOCKS[sel], null];
   return { est, sel, setSel, customRate, setCustomRate, rate, rpcFeeArgs };
@@ -206,7 +213,7 @@ function FeeSelector({ t, fee, busy }: { t: Translate; fee: FeeChoice; busy: boo
                 {est == null
                   ? "…"
                   : est[k] != null
-                    ? t("wallets.feeRate", { rate: est[k] })
+                    ? t("wallets.feeRate", { rate: fmtFeeRate(est[k]) })
                     : t("wallets.feeNoEstimate")}
               </Typography>
             </Box>
@@ -219,7 +226,7 @@ function FeeSelector({ t, fee, busy }: { t: Translate; fee: FeeChoice; busy: boo
             </Typography>
             <Typography sx={{ fontSize: 11, color: "text.secondary", fontFamily: C.mono }}>
               {sel === "custom" && fee.rate != null
-                ? t("wallets.feeRate", { rate: fee.rate })
+                ? t("wallets.feeRate", { rate: fmtFeeRate(fee.rate) })
                 : "—"}
             </Typography>
           </Box>
@@ -234,13 +241,17 @@ function FeeSelector({ t, fee, busy }: { t: Translate; fee: FeeChoice; busy: boo
         <TextField
           label={t("wallets.feeCustomLabel")}
           value={customRate}
-          onChange={(e) => setCustomRate(e.target.value.replace(/[^0-9]/g, ""))}
+          onChange={(e) => {
+            const raw = e.target.value.replace(/[^0-9.]/g, "");
+            const [int, ...frac] = raw.split(".");
+            setCustomRate(frac.length ? `${int}.${frac.join("").slice(0, 3)}` : int);
+          }}
           helperText={t("wallets.feeCustomMin", { min: est?.min_sat_per_vb ?? 1 })}
           fullWidth
           size="small"
           sx={{ mt: 1.5 }}
           disabled={busy}
-          slotProps={{ htmlInput: { inputMode: "numeric", style: { fontFamily: C.mono } } }}
+          slotProps={{ htmlInput: { inputMode: "decimal", style: { fontFamily: C.mono } } }}
         />
       )}
     </Box>
@@ -275,7 +286,7 @@ export function SendDialog({
   const amountSat = sendAll ? (balanceSat ?? 0) : Math.round(parseAmount(amount) * 1e8);
   // The preview fee, at the assumed typical size — display + overspend guard
   // only; the wallet computes the real fee when it builds the tx.
-  const feeSat = fee.rate != null ? fee.rate * ASSUMED_SEND_VSIZE : null;
+  const feeSat = fee.rate != null ? Math.round(fee.rate * ASSUMED_SEND_VSIZE) : null;
   const overspend =
     !sendAll && balanceSat != null && amountSat + (feeSat ?? 0) > balanceSat;
 
@@ -341,7 +352,7 @@ export function SendDialog({
                 ? t("wallets.sendConfirmFeeValue", {
                     fee: fmtBare(feeSat),
                     sym: coin.symbol,
-                    rate: fee.rate ?? 0,
+                    rate: fmtFeeRate(fee.rate ?? 0),
                   })
                 : "…"
             }
@@ -498,9 +509,12 @@ function BumpFeeDialog({
   const fee = useFeeChoice(coin.id);
 
   const oldRate = paidRate(tx) ?? 0;
+  // The bumpfee RPC is integer sat/vB (the escalation ladder) — ceil a
+  // fractional preset so the replacement always clears the old rate.
+  const bumpRate = fee.rate != null ? Math.max(1, Math.ceil(fee.rate)) : null;
   // BIP125 rule 4: the replacement must beat the old rate; strictly-higher is
   // the useful UI floor (bdk enforces the real incremental-relay margin).
-  const tooLow = fee.rate != null && fee.rate <= oldRate;
+  const tooLow = bumpRate != null && bumpRate <= oldRate;
 
   async function bump() {
     if (fee.rate == null) {
@@ -510,7 +524,7 @@ function BumpFeeDialog({
     setErr("");
     setBusy(true);
     try {
-      const r = await rpc<{ txid: string }>("bumpfee", [coin.id, tx.txid, fee.rate]);
+      const r = await rpc<{ txid: string }>("bumpfee", [coin.id, tx.txid, bumpRate]);
       log(t("wallets.bumpBroadcast", { txid: r.txid.slice(0, 16), sym: coin.symbol }));
       onClose();
       await onBumped();
