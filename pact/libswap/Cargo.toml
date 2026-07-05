@@ -12,6 +12,7 @@ miniscript = { workspace = true }
 musig2 = { workspace = true }
 bdk_wallet = { workspace = true }
 electrum-client = { workspace = true }
+rustls = { workspace = true }
 bech32 = { workspace = true }
 bip39 = { workspace = true }
 scrypt = { workspace = true }

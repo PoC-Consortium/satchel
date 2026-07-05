@@ -1123,6 +1123,7 @@ dependencies = [
  "musig2",
  "pact-proto",
  "rusqlite",
+ "rustls",
  "scrypt",
  "serde",
  "serde_json",

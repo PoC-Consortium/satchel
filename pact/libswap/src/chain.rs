@@ -962,21 +962,136 @@ impl ChainBackend for CoreRpcBackend {
 /// block hash, so all header handling goes through
 /// [`ChainParams::header_hash`]/[`ChainParams::header_time`] on raw bytes
 /// — never through `electrum-client`'s Bitcoin-typed header API.
+/// One live Electrum connection. `tcp://` is the crate's plaintext client;
+/// `ssl://` is OUR rustls setup (see [`connect_electrum_ssl`]) — the crate's
+/// own no-validation mode sends an EMPTY `signature_algorithms` extension
+/// (its verifier returns no schemes), which strict servers answer with a
+/// fatal `DecodeError` alert or a hangup. Backends are rebuilt per engine
+/// call, so the plain `RawClient` (no auto-reconnect) is the right shape.
+enum ElectrumConn {
+    Tcp(
+        electrum_client::raw_client::RawClient<
+            electrum_client::raw_client::ElectrumPlaintextStream,
+        >,
+    ),
+    Ssl(electrum_client::raw_client::RawClient<electrum_client::raw_client::ElectrumSslStream>),
+}
+
+impl ElectrumConn {
+    fn raw_call(
+        &self,
+        method: &str,
+        params: Vec<electrum_client::Param>,
+    ) -> std::result::Result<Value, electrum_client::Error> {
+        use electrum_client::ElectrumApi;
+        match self {
+            Self::Tcp(c) => c.raw_call(method, params),
+            Self::Ssl(c) => c.raw_call(method, params),
+        }
+    }
+}
+
+/// Accept-any-certificate verifier that still advertises the provider's REAL
+/// signature schemes (a correct ClientHello). Electrum-ecosystem convention:
+/// most public servers are self-signed — often X.509 v1, which strict rustls
+/// verification rejects outright ("UnsupportedCertVersion"). TLS is transport
+/// privacy here, NOT server authentication — that job belongs to the genesis
+/// check, the server.version capability handshake, and the ≥2-server rule on
+/// mainnet, which cross-check the chain data itself.
+#[derive(Debug)]
+struct AcceptAnyServerCert {
+    schemes: Vec<rustls::SignatureScheme>,
+}
+
+impl rustls::client::danger::ServerCertVerifier for AcceptAnyServerCert {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::pki_types::CertificateDer,
+        _intermediates: &[rustls::pki_types::CertificateDer],
+        _server_name: &rustls::pki_types::ServerName,
+        _ocsp_response: &[u8],
+        _now: rustls::pki_types::UnixTime,
+    ) -> std::result::Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::danger::ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> std::result::Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> std::result::Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        self.schemes.clone()
+    }
+}
+
+/// Connect `host:port` over TLS with SNI, a full signature-scheme list, and
+/// the accept-any verifier above, and hand the stream to the crate's
+/// `RawClient` (its `From<StreamOwned<…>>` impl).
+fn connect_electrum_ssl(
+    addr: &str,
+) -> Result<electrum_client::raw_client::RawClient<electrum_client::raw_client::ElectrumSslStream>>
+{
+    let (host, _port) = addr
+        .rsplit_once(':')
+        .with_context(|| format!("Electrum ssl URL needs host:port, got {addr:?}"))?;
+    let tcp = std::net::TcpStream::connect(addr)
+        .with_context(|| format!("connecting to Electrum server {addr}"))?;
+    // pactd installs aws-lc-rs as the process default in main() (the wss
+    // fix); standalone users of libswap (tests, examples) fall back here.
+    let provider = rustls::crypto::CryptoProvider::get_default()
+        .cloned()
+        .unwrap_or_else(|| std::sync::Arc::new(rustls::crypto::aws_lc_rs::default_provider()));
+    let schemes = provider
+        .signature_verification_algorithms
+        .supported_schemes();
+    let config = rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .context("rustls protocol versions")?
+        .dangerous()
+        .with_custom_certificate_verifier(std::sync::Arc::new(AcceptAnyServerCert { schemes }))
+        .with_no_client_auth();
+    let name = rustls::pki_types::ServerName::try_from(host.to_string())
+        .with_context(|| format!("invalid Electrum server name {host:?}"))?;
+    let conn = rustls::ClientConnection::new(std::sync::Arc::new(config), name)
+        .context("rustls client connection")?;
+    Ok(rustls::StreamOwned::new(conn, tcp).into())
+}
+
 pub struct ElectrumBackend {
     params: &'static ChainParams,
-    client: electrum_client::Client,
+    client: ElectrumConn,
 }
 
 impl ElectrumBackend {
     /// `url`: `tcp://host:port` or `ssl://host:port`.
     pub fn new(params: &'static ChainParams, url: &str) -> Result<Self> {
-        let client = electrum_client::Client::new(url)
-            .with_context(|| format!("connecting to Electrum server {url}"))?;
+        let client = if let Some(addr) = url.strip_prefix("ssl://") {
+            ElectrumConn::Ssl(connect_electrum_ssl(addr)?)
+        } else {
+            let addr = url.strip_prefix("tcp://").unwrap_or(url);
+            ElectrumConn::Tcp(
+                electrum_client::raw_client::RawClient::new(addr, None)
+                    .with_context(|| format!("connecting to Electrum server {url}"))?,
+            )
+        };
         Ok(Self { params, client })
     }
 
     fn raw(&self, method: &str, params: Vec<electrum_client::Param>) -> Result<Value> {
-        use electrum_client::ElectrumApi;
         self.client
             .raw_call(method, params)
             .with_context(|| format!("electrum {method}"))
