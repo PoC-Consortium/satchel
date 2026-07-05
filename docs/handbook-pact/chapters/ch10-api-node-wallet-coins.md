@@ -198,17 +198,35 @@ active network. Each entry:
 |---|---|---|---|
 | `getbalance` | `chain` | `{ balance_sat }` | no |
 | `getnewaddress` | `chain` | `{ address }` | yes (advances HD index) |
-| `sendtoaddress` | `chain`, `address`, `amount` | `{ txid }` | yes (broadcasts) |
+| `estimatesendfee` | `chain` | `{ min_sat_per_vb, fast, normal, slow }` | no |
+| `sendtoaddress` | `chain`, `address`, `amount`, `conf_target?`, `fee_rate?` | `{ txid }` | yes (broadcasts) |
+| `bumpfee` | `chain`, `txid`, `fee_rate` | `{ txid }` | yes (broadcasts replacement) |
 | `listtransactions` | `chain` | `{ transactions: [...] }` | no |
 
 `chain` is a coin id (e.g. `btc`). `amount` for `sendtoaddress` is a decimal
 string in whole coin units. `getnewaddress` advances the HD derivation index;
-`sendtoaddress` constructs and broadcasts a payment.
+`sendtoaddress` constructs and broadcasts a payment, always BIP125-replaceable.
+The fee is priced by `fee_rate` (explicit sat/vB — the send form's Custom
+field) when given, else by a market estimate at `conf_target` blocks (default
+6, the Normal preset; Slow/Fast are 144/1), floored to the coin's
+`min_feerate_sat_vb` with the usual 1 sat/vB fallback.
+
+`estimatesendfee` backs the send form's fee presets: raw estimator answers in
+sat/vB at the 1/6/144-block targets — `null` where the estimator has no data
+(fresh chain, quiet mempool, regtest), which the form maps to disabled presets
+and a custom-rate fallback at the coin floor (`min_sat_per_vb`), mirroring
+phoenix's send dialog.
+
+`bumpfee` RBF-replaces an unconfirmed wallet send at the given `fee_rate`
+(sat/vB — must beat what the tx pays now plus the incremental-relay margin the
+wallet enforces). Satchel offers it on pending sent rows of the Activity
+dialog for nodeless coins; a node-backed wallet is bumped with the node's own
+tooling instead.
 
 `listtransactions` serves the activity feed of an **Electrum-connected
 (nodeless) coin** — each entry carries `txid`, `direction` (`"sent"` /
 `"received"`), the net `amount_sat` (fee excluded on sends), `fee_sat` (absent
-when the wallet doesn't own every input), `confirmations`, and `timestamp`
-(block time; first-seen for mempool entries; absent for a built-but-unreleased
-v2 funding). Newest first. Node-backed coins refuse — the node wallet keeps
-its own history.
+when the wallet doesn't own every input), `vsize` (with `fee_sat` this yields
+the feerate a bump has to beat), `confirmations`, and `timestamp` (block time;
+first-seen for mempool entries; absent for a built-but-unreleased v2 funding).
+Newest first. Node-backed coins refuse — the node wallet keeps its own history.

@@ -21,7 +21,7 @@ use std::str::FromStr;
 use std::sync::Mutex;
 
 use crate::adaptor_swap::AdaptorState;
-use crate::chain::{ChainBackend, ElectrumBackend, MultiBackend};
+use crate::chain::{ChainBackend, ElectrumBackend, MultiBackend, SendFee};
 use crate::htlc::extract_preimage;
 use crate::keys::{hash_preimage, swap_id, PactSeed};
 use crate::messages::{self, AbortBody, AcceptBody, ChainRef, Envelope, FundedBody, InitBody};
@@ -1955,7 +1955,11 @@ impl Engine {
         // Initiator: broadcast leg A now. Safe — leg A is only claimable after the
         // initiator reveals `t` (which only it can do) and its refund is intact.
         let address = leg.address(&secp, backend.params())?;
-        let txid = backend.wallet_send(&address, rec.amount_a, backend.funding_conf_target())?;
+        let txid = backend.wallet_send(
+            &address,
+            rec.amount_a,
+            SendFee::Target(backend.funding_conf_target()),
+        )?;
         let vout = backend.find_vout(&txid, &hex::encode(leg_spk.as_bytes()))?;
         self.adaptor_funding_ready(swap, &txid, vout)
     }
@@ -3323,7 +3327,11 @@ impl Engine {
             Some((op, _)) => (op.txid.to_string(), op.vout),
             None => {
                 let address = htlc.address(backend.params())?;
-                let txid = backend.wallet_send(&address, amount, backend.funding_conf_target())?;
+                let txid = backend.wallet_send(
+                    &address,
+                    amount,
+                    SendFee::Target(backend.funding_conf_target()),
+                )?;
                 let vout =
                     backend.find_vout(&txid, &hex::encode(htlc.script_pubkey().as_bytes()))?;
                 (txid, vout)
@@ -6532,6 +6540,7 @@ impl Engine {
         coin_id: &str,
         address: &str,
         amount_sat: u64,
+        fee: SendFee,
     ) -> Result<String> {
         let backend = self.backend(&ChainRef {
             coin_id: coin_id.to_string(),
@@ -6540,9 +6549,48 @@ impl Engine {
         // The address must belong to this chain — catches pasting a BTC
         // address into the POCX send form before money moves.
         backend.params().parse_address(address)?;
-        // Generic user send keeps the historical 6-block baseline; only swap
-        // funding uses the per-coin ~30-min target (funding_conf_target).
-        backend.wallet_send(address, amount_sat, 6)
+        backend.wallet_send(address, amount_sat, fee)
+    }
+
+    /// Fee estimates for the send form's Slow/Normal/Fast presets (144/6/1
+    /// blocks, phoenix parity), plus the coin's feerate floor. A preset is
+    /// `None` when the estimator has no data for that target — the form
+    /// disables it and, when ALL are `None`, falls back to a custom rate at
+    /// the floor.
+    pub fn wallet_fee_estimates(
+        &self,
+        network: Network,
+        coin_id: &str,
+    ) -> Result<crate::chain::SendFeeEstimates> {
+        let backend = self.backend(&ChainRef {
+            coin_id: coin_id.to_string(),
+            network,
+        })?;
+        Ok(crate::chain::SendFeeEstimates {
+            min_sat_per_vb: backend.params().min_feerate_sat_vb.max(1),
+            fast: backend.fee_estimate(1)?,
+            normal: backend.fee_estimate(6)?,
+            slow: backend.fee_estimate(144)?,
+        })
+    }
+
+    /// RBF-bump a wallet-owned unconfirmed send to `sat_per_vb`, returning the
+    /// replacement txid. Every wallet send is broadcast BIP125-replaceable, so
+    /// this is the "stuck tx" lever behind the Activity dialog's Bump fee
+    /// action (nodeless coins; a node-backed coin bumps in the node's own
+    /// wallet, which owns the tx).
+    pub fn wallet_bumpfee(
+        &self,
+        network: Network,
+        coin_id: &str,
+        txid: &str,
+        sat_per_vb: u64,
+    ) -> Result<String> {
+        self.backend(&ChainRef {
+            coin_id: coin_id.to_string(),
+            network,
+        })?
+        .wallet_bumpfee(txid, sat_per_vb)
     }
 
     /// The wallet activity feed for a nodeless coin (`listtransactions`, design

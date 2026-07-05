@@ -523,8 +523,30 @@ export const en = {
     sendAmountLabel: "Amount",
     sendNeedAddress: "Enter the recipient address.",
     sendNeedAmount: "Enter an amount.",
-    sendOverBalance: "More than the spendable balance.",
-    sendFeeNote: "The network fee is added on top, picked automatically from the live fee market.",
+    sendNeedFee: "Pick a fee rate.",
+    sendOverBalance: "More than the spendable balance (including the estimated fee).",
+    feeLabel: "Network fee — added on top of the amount",
+    fee_slow: "Slow",
+    fee_normal: "Normal",
+    fee_fast: "Fast",
+    fee_custom: "Custom",
+    feeRate: "{rate} sat/vB",
+    feeNoEstimate: "no data",
+    feeNoEstimatesNote:
+      "No live fee estimates right now — the fee market may be empty. Set a custom rate.",
+    feeCustomLabel: "Custom rate (sat/vB)",
+    feeCustomMin: "Minimum {min} sat/vB.",
+    sendFeePreview: "Estimated network fee: ~{fee} {sym} for a typical transaction.",
+    sendReview: "Review",
+    sendBack: "Back",
+    sendConfirmTitle: "Confirm send ({sym})",
+    sendConfirmRecipient: "Recipient",
+    sendConfirmAmount: "Amount",
+    sendConfirmFee: "Network fee (estimated)",
+    sendConfirmFeeValue: "~{fee} {sym} ({rate} sat/vB)",
+    sendConfirmTotal: "Total (approx.)",
+    sendIrreversible:
+      "Transactions are irreversible. Double-check the address — coins sent to a wrong one are gone.",
     sendBroadcast: "Sent — {txid}… is on its way ({sym}).",
     sendConfirm: "Send",
     activityTitle: "{sym} activity",
@@ -538,6 +560,14 @@ export const en = {
     activityPending: "pending",
     activitySent: "Sent",
     activityReceived: "Received",
+    bump: "Bump",
+    bumpHint: "Pay a higher fee so this pending transaction confirms sooner (RBF).",
+    bumpTitle: "Bump fee ({sym})",
+    bumpIntro:
+      "Replace this pending transaction with one paying a higher fee (RBF). It pays ~{rate} sat/vB now.",
+    bumpNeedHigher: "Pick a rate above the current ~{rate} sat/vB.",
+    bumpBroadcast: "Fee bumped — replacement {txid}… is on its way ({sym}).",
+    bumpConfirm: "Bump fee",
   },
   corkboard: {
     noBoardTitle: "No Corkboard connected",
@@ -897,8 +927,28 @@ type NewWalletKeys =
   | "sendAmountLabel"
   | "sendNeedAddress"
   | "sendNeedAmount"
+  | "sendNeedFee"
   | "sendOverBalance"
-  | "sendFeeNote"
+  | "feeLabel"
+  | "fee_slow"
+  | "fee_normal"
+  | "fee_fast"
+  | "fee_custom"
+  | "feeRate"
+  | "feeNoEstimate"
+  | "feeNoEstimatesNote"
+  | "feeCustomLabel"
+  | "feeCustomMin"
+  | "sendFeePreview"
+  | "sendReview"
+  | "sendBack"
+  | "sendConfirmTitle"
+  | "sendConfirmRecipient"
+  | "sendConfirmAmount"
+  | "sendConfirmFee"
+  | "sendConfirmFeeValue"
+  | "sendConfirmTotal"
+  | "sendIrreversible"
   | "sendBroadcast"
   | "sendConfirm"
   | "activityTitle"
@@ -911,7 +961,14 @@ type NewWalletKeys =
   | "activityTxid"
   | "activityPending"
   | "activitySent"
-  | "activityReceived";
+  | "activityReceived"
+  | "bump"
+  | "bumpHint"
+  | "bumpTitle"
+  | "bumpIntro"
+  | "bumpNeedHigher"
+  | "bumpBroadcast"
+  | "bumpConfirm";
 type NewCoinKeys =
   | "modeLabel"
   | "modeNode"

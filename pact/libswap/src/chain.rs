@@ -71,6 +71,37 @@ fn is_already_broadcast(err: &anyhow::Error) -> bool {
     msg.contains("already in") || msg.contains("already known")
 }
 
+/// Overflow/glitch guard on user-supplied and estimator feerates — NOT the
+/// fee ceiling (the real caps live in `FeeBumpPolicy`). Shared by the send
+/// fee resolution and the per-backend estimators.
+pub(crate) const SANITY_MAX_SAT_PER_VB: u64 = 10_000;
+
+/// How a wallet send prices itself: a market estimate at a block target
+/// (funding and the Slow/Normal/Fast presets) or an explicit user-chosen
+/// rate (the send form's Custom field, and the phoenix-style fallback when
+/// the estimator has no data).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SendFee {
+    /// Market estimate at this conf target, with the 1 sat/vB fallback.
+    Target(u16),
+    /// Explicit rate in sat/vB, clamped to the coin floor / sanity max.
+    RateSatVb(u64),
+}
+
+/// The send form's fee preview (`estimatesendfee` RPC): raw estimator answers
+/// for the three phoenix-parity presets, `None` where the estimator has no
+/// data, plus the coin's feerate floor (the custom field's minimum/default).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct SendFeeEstimates {
+    pub min_sat_per_vb: u64,
+    /// 1-block target.
+    pub fast: Option<u64>,
+    /// 6-block target — the preselected preset.
+    pub normal: Option<u64>,
+    /// 144-block target.
+    pub slow: Option<u64>,
+}
+
 /// What `gettxout` tells us about an unspent output.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TxOutInfo {
@@ -93,6 +124,9 @@ pub struct WalletTxInfo {
     /// `None` when the wallet doesn't own every input (a receive — the fee was
     /// paid by the sender and isn't ours to report).
     pub fee_sat: Option<u64>,
+    /// Virtual size in vB — with `fee_sat` this yields the effective feerate
+    /// an RBF bump has to beat.
+    pub vsize: u64,
     pub confirmations: u64,
     /// Block time for confirmed txs, first-seen time for mempool ones. `None`
     /// only for a built-but-unbroadcast funding awaiting its two-phase release.
@@ -162,6 +196,29 @@ pub trait ChainBackend {
         self.fee_rate_for(6, false)
     }
 
+    /// The estimator's RAW answer for `conf_target` in sat/vB — `None` when it
+    /// has no data (fresh chain, quiet mempool, regtest), where
+    /// [`Self::fee_rate_for`] would silently substitute the 1 sat/vB fallback.
+    /// The send form needs the distinction to mirror phoenix's preset logic:
+    /// estimate-less presets are disabled and the form falls back to a custom
+    /// rate at the coin floor. Estimates are floored to `min_feerate_sat_vb`.
+    /// Chain-data-less backends report no estimate.
+    fn fee_estimate(&self, _conf_target: u16) -> Result<Option<u64>> {
+        Ok(None)
+    }
+
+    /// Resolve a [`SendFee`] to the sat/vB rate a send prices itself at:
+    /// market estimate (with fallback) for a target, or the explicit rate
+    /// clamped to the coin floor and the sanity max.
+    fn resolve_send_fee(&self, fee: SendFee) -> Result<u64> {
+        match fee {
+            SendFee::Target(conf_target) => self.fee_rate_for(conf_target, false),
+            SendFee::RateSatVb(rate) => Ok(rate
+                .clamp(1, SANITY_MAX_SAT_PER_VB)
+                .max(self.params().min_feerate_sat_vb)),
+        }
+    }
+
     /// Funding-specific `estimatesmartfee` target (blocks), derived per coin from a
     /// fixed wall-clock cap: `clamp(FUNDING_TARGET_SECS / target_spacing_secs, 1,
     /// FUNDING_CONF_TARGET_MAX)`. Bitcoin's 10-min blocks → 3 (a 30-min budget);
@@ -197,11 +254,11 @@ pub trait ChainBackend {
     fn wallet_balance(&self) -> Result<u64>;
 
     /// Fund `address` with exactly `amount_sat` via the core wallet
-    /// (HTLC funding is a normal send, spec §6.1). `conf_target` is the
-    /// `estimatesmartfee` block target the send prices itself at — funding callers
-    /// pass [`Self::funding_conf_target`] (the per-coin ~30-min target); the generic
-    /// user send passes `6` (the historical baseline).
-    fn wallet_send(&self, address: &str, amount_sat: u64, conf_target: u16) -> Result<String>;
+    /// (HTLC funding is a normal send, spec §6.1). `fee` is how the send
+    /// prices itself — funding callers pass
+    /// `SendFee::Target(funding_conf_target())` (the per-coin ~30-min
+    /// target); the user send passes the form's preset target or custom rate.
+    fn wallet_send(&self, address: &str, amount_sat: u64, fee: SendFee) -> Result<String>;
 
     /// Build + sign (but DO NOT broadcast) a funding tx paying `amount_sat` to
     /// `address`, returning `(txid, vout, signed_tx_hex)`. The selected inputs
@@ -304,6 +361,48 @@ impl CoreRpcBackend {
             params,
             rpc: RpcClient::from_url(url)?,
         })
+    }
+
+    /// Raw `estimatesmartfee` answer in sat/vB, or `None` when the node has no
+    /// estimate (fresh/quiet chain). Shared by `fee_rate_for` (which adds the
+    /// 1 sat/vB fallback) and `fee_estimate` (which surfaces the `None`).
+    fn smart_fee_estimate(&self, conf_target: u16, conservative: bool) -> Option<u64> {
+        // Regtest-only test override: the harness injects a market feerate to
+        // create a market-vs-broadcast gap the bump nurse reacts to (see
+        // `set_test_feerate`). Never honored off regtest.
+        if self.params.network == Network::Regtest {
+            let ov = TEST_FEERATE_OVERRIDE_SAT_VB.load(Ordering::Relaxed);
+            if ov > 0 {
+                return Some(
+                    ov.clamp(1, SANITY_MAX_SAT_PER_VB)
+                        .max(self.params.min_feerate_sat_vb),
+                );
+            }
+        }
+        // Preserve the original baseline EXACTLY: `estimatesmartfee(conf_target)`
+        // with no mode arg → Core's default estimate. Only the deadline-escalated
+        // bands pass an explicit CONSERVATIVE mode for a robuster (higher) estimate.
+        let args = if conservative {
+            vec![json!(conf_target), json!("CONSERVATIVE")]
+        } else {
+            vec![json!(conf_target)]
+        };
+        // estimatesmartfee already honors the node's mempool/relay floor WHEN it
+        // returns an estimate (Core src/rpc/fees.cpp), but some wallets reject
+        // anything below a higher baked-in `-mintxfee` that no RPC exposes
+        // (Litecoin's is ~10 sat/vB), giving -6 "lower than the minimum fee rate
+        // setting". `min_feerate_sat_vb` carries that per-coin floor (coins.toml
+        // for file coins, 1 for the built-ins); applied AFTER the sanity clamp so
+        // the coin's floor always wins.
+        self.rpc
+            .call("estimatesmartfee", &args)
+            .ok()
+            .and_then(|r| r["feerate"].as_f64()) // BTC per kvB
+            .map(|btc_kvb| ((btc_kvb * 1e8) / 1000.0).ceil() as u64)
+            .map(|est| {
+                est.clamp(1, SANITY_MAX_SAT_PER_VB)
+                    .max(self.params.min_feerate_sat_vb)
+            })
     }
 
     fn vin_matches(vin: &Value, outpoint: &OutPoint) -> bool {
@@ -515,53 +614,18 @@ impl ChainBackend for CoreRpcBackend {
 
     fn fee_rate_for(&self, conf_target: u16, conservative: bool) -> Result<u64> {
         // No estimate (empty/low-traffic mempool, or the node can't estimate) →
-        // the fee market is effectively empty, so the relay minimum suffices.
-        // The bump nurse covers the rare case where this later under-prices.
-        const FALLBACK_SAT_PER_VB: u64 = 1;
-        // Overflow/glitch guard only — NOT the fee ceiling. The real caps live
-        // downstream: funding is bounded by the policy ceiling
-        // (`FeeBumpPolicy::target_feerate`), while redeem/refund are bounded by
-        // the value at risk (`FeeBumpPolicy::claim_feerate`) so a genuine mainnet
-        // spike above 500 sat/vB can still confirm a leg near its deadline.
-        const SANITY_MAX_SAT_PER_VB: u64 = 10_000;
+        // the fee market is effectively empty, so the relay minimum suffices
+        // (floored to the coin's own minimum, see smart_fee_estimate). The bump
+        // nurse covers the rare case where this later under-prices. The sanity
+        // clamp inside smart_fee_estimate is an overflow guard only — NOT the
+        // fee ceiling; the real caps live downstream in `FeeBumpPolicy`.
+        Ok(self
+            .smart_fee_estimate(conf_target, conservative)
+            .unwrap_or(self.params.min_feerate_sat_vb.max(1)))
+    }
 
-        // Regtest-only test override: the harness injects a market feerate to
-        // create a market-vs-broadcast gap the bump nurse reacts to (see
-        // `set_test_feerate`). Never honored off regtest.
-        if self.params.network == Network::Regtest {
-            let ov = TEST_FEERATE_OVERRIDE_SAT_VB.load(Ordering::Relaxed);
-            if ov > 0 {
-                return Ok(ov
-                    .clamp(1, SANITY_MAX_SAT_PER_VB)
-                    .max(self.params.min_feerate_sat_vb));
-            }
-        }
-        // Preserve the original baseline EXACTLY: `estimatesmartfee(conf_target)`
-        // with no mode arg → Core's default estimate. Only the deadline-escalated
-        // bands pass an explicit CONSERVATIVE mode for a robuster (higher) estimate.
-        let args = if conservative {
-            vec![json!(conf_target), json!("CONSERVATIVE")]
-        } else {
-            vec![json!(conf_target)]
-        };
-        let estimate = self
-            .rpc
-            .call("estimatesmartfee", &args)
-            .ok()
-            .and_then(|r| r["feerate"].as_f64()) // BTC per kvB
-            .map(|btc_kvb| ((btc_kvb * 1e8) / 1000.0).ceil() as u64)
-            .unwrap_or(FALLBACK_SAT_PER_VB);
-        // Never price below the coin's minimum. estimatesmartfee already honors the
-        // node's mempool/relay floor WHEN it returns an estimate (Core src/rpc/
-        // fees.cpp), but on a quiet/fresh chain it returns nothing and we fall back
-        // to 1 — and some wallets reject anything below a higher baked-in
-        // `-mintxfee` that no RPC exposes (Litecoin's is ~10 sat/vB), giving -6
-        // "lower than the minimum fee rate setting". `min_feerate_sat_vb` carries
-        // that per-coin floor (coins.toml for file coins, 1 for the built-ins).
-        // Applied AFTER the sanity clamp so the coin's floor always wins.
-        Ok(estimate
-            .clamp(1, SANITY_MAX_SAT_PER_VB)
-            .max(self.params.min_feerate_sat_vb))
+    fn fee_estimate(&self, conf_target: u16) -> Result<Option<u64>> {
+        Ok(self.smart_fee_estimate(conf_target, false))
     }
 
     fn is_in_mempool(&self, txid: &str) -> Result<bool> {
@@ -589,25 +653,26 @@ impl ChainBackend for CoreRpcBackend {
             .to_string())
     }
 
-    fn wallet_send(&self, address: &str, amount_sat: u64, conf_target: u16) -> Result<String> {
+    fn wallet_send(&self, address: &str, amount_sat: u64, fee: SendFee) -> Result<String> {
         // Amount as a decimal string: exact, no float in our code path.
         let amount = format!(
             "{}.{:08}",
             amount_sat / 100_000_000,
             amount_sat % 100_000_000
         );
-        // Choose the funding feerate OURSELVES — market estimate at the caller's
-        // `conf_target`, or the 1 sat/vB fallback when the node can't estimate (a
-        // brand-new chain like BTCX with no fee history) — and pass it explicitly.
-        // Otherwise funding leans on the node's wallet estimator + `-fallbackfee`,
-        // which is disabled (0) by default on mainnet, so `sendtoaddress` would
-        // *error* on a fee-history-less chain. This mirrors how redeem/refund pick
-        // their rate (and phoenix-pocx's 1 sat/vB fallback), so the lock fee tracks
-        // the same policy as everything else instead of the node's config.
-        let fee_rate = self.fee_rate_for(conf_target, false)?;
-        // Funding is the ONLY use of wallet_send, and the funding nurse RBF-bumps
-        // it, so broadcast it explicitly BIP125-replaceable rather than relying on
-        // the node's -walletrbf default. Positional sendtoaddress args (Core 0.21+):
+        // Choose the feerate OURSELVES — the caller's explicit rate, or a market
+        // estimate at the caller's target with the 1 sat/vB fallback when the
+        // node can't estimate (a brand-new chain like BTCX with no fee history)
+        // — and pass it explicitly. Otherwise the send leans on the node's
+        // wallet estimator + `-fallbackfee`, which is disabled (0) by default on
+        // mainnet, so `sendtoaddress` would *error* on a fee-history-less chain.
+        // This mirrors how redeem/refund pick their rate (and phoenix-pocx's
+        // 1 sat/vB fallback), so the fee tracks the same policy as everything
+        // else instead of the node's config.
+        let fee_rate = self.resolve_send_fee(fee)?;
+        // Funding sends are RBF-bumped by the funding nurse and user sends by
+        // the owner, so broadcast explicitly BIP125-replaceable rather than
+        // relying on the node's -walletrbf default. Positional sendtoaddress args (Core 0.21+):
         // address, amount, comment, comment_to, subtractfeefromamount, replaceable,
         // conf_target, estimate_mode, avoid_reuse, fee_rate (sat/vB). conf_target is
         // left null (estimate_mode "unset") so the explicit fee_rate is what's used.
@@ -1175,9 +1240,13 @@ impl ChainBackend for ElectrumBackend {
         // Electrum's estimatefee takes only a block target (no economical/
         // conservative distinction), so `_conservative` is honored via the
         // tighter `conf_target` alone.
-        const FALLBACK_SAT_PER_VB: u64 = 1;
-        const SANITY_MAX_SAT_PER_VB: u64 = 10_000; // overflow guard, not the fee ceiling
-        let rate = self
+        Ok(self
+            .fee_estimate(conf_target)?
+            .unwrap_or(self.params.min_feerate_sat_vb.max(1)))
+    }
+
+    fn fee_estimate(&self, conf_target: u16) -> Result<Option<u64>> {
+        Ok(self
             .raw(
                 "blockchain.estimatefee",
                 vec![electrum_client::Param::Usize(conf_target as usize)],
@@ -1186,8 +1255,10 @@ impl ChainBackend for ElectrumBackend {
             .and_then(|v| v.as_f64())
             .filter(|btc_kb| *btc_kb > 0.0) // -1 = no estimate available
             .map(|btc_kb| ((btc_kb * 1e8) / 1000.0).ceil() as u64)
-            .unwrap_or(FALLBACK_SAT_PER_VB);
-        Ok(rate.clamp(1, SANITY_MAX_SAT_PER_VB))
+            .map(|est| {
+                est.clamp(1, SANITY_MAX_SAT_PER_VB)
+                    .max(self.params.min_feerate_sat_vb)
+            }))
     }
 
     fn wallet_new_address(&self) -> Result<String> {
@@ -1197,7 +1268,7 @@ impl ChainBackend for ElectrumBackend {
         )
     }
 
-    fn wallet_send(&self, _address: &str, _amount_sat: u64, _conf_target: u16) -> Result<String> {
+    fn wallet_send(&self, _address: &str, _amount_sat: u64, _fee: SendFee) -> Result<String> {
         anyhow::bail!(
             "the Electrum backend is chain-data only — the primary backend must be a \
              Core-RPC wallet URL (http://...)"
@@ -1420,6 +1491,16 @@ impl ChainBackend for MultiBackend {
         Ok(best)
     }
 
+    fn fee_estimate(&self, conf_target: u16) -> Result<Option<u64>> {
+        // Most conservative live view wins, like fee_rate_for; "no estimate"
+        // only when NO backend has one (so the send form's fallback kicks in).
+        let mut best = None;
+        for backend in &self.backends {
+            best = best.max(backend.fee_estimate(conf_target)?);
+        }
+        Ok(best)
+    }
+
     fn is_in_mempool(&self, txid: &str) -> Result<bool> {
         // Authoritative on the primary — the wallet node we broadcast through
         // and must keep the tx anchored in. Chain-only watchers don't hold our
@@ -1437,8 +1518,8 @@ impl ChainBackend for MultiBackend {
         self.primary().wallet_new_address()
     }
 
-    fn wallet_send(&self, address: &str, amount_sat: u64, conf_target: u16) -> Result<String> {
-        self.primary().wallet_send(address, amount_sat, conf_target)
+    fn wallet_send(&self, address: &str, amount_sat: u64, fee: SendFee) -> Result<String> {
+        self.primary().wallet_send(address, amount_sat, fee)
     }
 
     fn wallet_build_funding(
