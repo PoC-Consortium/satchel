@@ -90,6 +90,13 @@ fn spk_to_address(params: &ChainParams, spk: &ScriptBuf) -> Result<String> {
 pub struct WalletEntry {
     pub(crate) wallet: PersistedWallet<Connection>,
     pub(crate) conn: Connection,
+    /// Last SUCCESSFUL Electrum sync of this wallet. Read paths (balance,
+    /// activity — the UI polls them) reuse the cached bdk state inside
+    /// [`WALLET_SYNC_INTERVAL`] instead of re-walking every revealed spk
+    /// over the network: against a REMOTE server one sync takes tens of
+    /// seconds, and pactd serializes all RPCs on one lock, so an unthrottled
+    /// sync-per-poll starved the whole app (rc10 field report).
+    pub(crate) last_sync: Option<std::time::Instant>,
 }
 
 /// Shared handle to one coin's wallet.
@@ -156,7 +163,11 @@ impl WalletManager {
                 .map_err(|e| anyhow!("creating wallet db {}: {e}", db_path.display()))?,
         };
 
-        let handle: WalletHandle = Arc::new(Mutex::new(WalletEntry { wallet, conn }));
+        let handle: WalletHandle = Arc::new(Mutex::new(WalletEntry {
+            wallet,
+            conn,
+            last_sync: None,
+        }));
         wallets.insert(coin_id.to_string(), handle.clone());
         Ok(handle)
     }
@@ -169,7 +180,19 @@ impl WalletManager {
 /// PoCX-safe anchors from raw headers, and a checkpoint update that always
 /// connects to the wallet's local chain (genesis at worst). This is the
 /// unforked-bdk chain source of design doc D3.
+/// Reuse cached wallet state inside this window; sync again after it. Blocks
+/// are minutes apart on every shipped coin, so 30 s staleness is invisible —
+/// and sends apply their own tx to the cache immediately (broadcast-before-
+/// persist), so a send after a send never double-spends.
+const WALLET_SYNC_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
+
 fn sync_entry(entry: &mut WalletEntry, chain: &ElectrumBackend) -> Result<()> {
+    if entry
+        .last_sync
+        .is_some_and(|t| t.elapsed() < WALLET_SYNC_INTERVAL)
+    {
+        return Ok(());
+    }
     let params = chain.params();
     // Fresh store (nothing ever revealed) → gap-limit scan for a restored
     // seed's history. Steady state → revealed spks only.
@@ -262,6 +285,7 @@ fn sync_entry(entry: &mut WalletEntry, chain: &ElectrumBackend) -> Result<()> {
             chain: Some(chain_cp),
         })
         .map_err(|e| anyhow!("bdk chain update does not connect: {e}"))?;
+    entry.last_sync = Some(std::time::Instant::now());
     Ok(())
 }
 

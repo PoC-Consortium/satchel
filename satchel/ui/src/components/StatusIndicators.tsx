@@ -101,10 +101,14 @@ function CoinHealth({ c }: { c: CoinInfo }) {
   const ok = c.status === "ok";
   const err = !!c.status && c.status !== "ok" && c.status !== "unconfigured";
   const color = ok ? "success.main" : err ? "error.main" : "text.disabled";
+  // Show HOW the coin connects (rc10): Electrum for a nodeless coin, node RPC
+  // otherwise — the header is the one place the connection kind is always in
+  // view. Only meaningful once configured (ok/err), not for "not set up".
+  const via = c.nodeless ? t("header.viaElectrum") : t("header.viaNode");
   const title = ok
-    ? t("header.coinOk", { name: c.display_name, tip: commas(c.tip_height) })
+    ? t("header.coinOk", { name: c.display_name, via, tip: commas(c.tip_height) })
     : err
-      ? t("header.coinError", { name: c.display_name, status: c.status ?? "error" })
+      ? t("header.coinError", { name: c.display_name, via, status: c.status ?? "error" })
       : t("header.coinUnconfigured", { name: c.display_name });
   // Same logo the Coins/Wallet cards use (CoinGlyph), so the header matches;
   // health is carried by the border colour + dimming. Built-ins use the bundled
