@@ -42,7 +42,9 @@ work with.
 The **Price** is always quoted **quote-coin per base-coin**, and — this is the
 nice part — it **doesn't change when you flip Sell to Buy.** The price of the pair
 is the price of the pair; only the direction of the trade changes. A small label
-spells out the unit ("{unit} per {base}") and shows the raw rate as a hint.
+spells out the unit ("{unit} per {base}") and shows the raw rate as a hint — and
+if you've set a **Cashrate** (the header chip — see the Corkboard chapter), the
+hint also appends the unit price in your own money, like `· ~91,400.00 / BTC`.
 
 Next to the price is a **denomination dropdown** — **BTC / mBTC / µBTC / sat** —
 so you can quote in whatever unit you think in. This is the **same** denomination
@@ -52,7 +54,9 @@ setting the Corkboard uses, so the two always agree and never drift apart.
 
 From your amount and price, Satchel shows a plain **"You give …" / "You get …"**
 summary so there's no ambiguity about what you're actually offering before you go
-any further.
+any further. With a Cashrate set, each line also carries its muted **~Cash**
+equivalent — a quick sanity check that the trade is worth what you think it is,
+in your own money.
 
 ### Swap type
 

@@ -95,16 +95,19 @@ An error returns an `error` object instead of `result`:
 
 ```json
 { "jsonrpc": "2.0", "id": 1,
-  "error": { "code": -1, "message": "unknown method 'frobnicate'" } }
+  "error": { "code": -32601,
+             "message": "unknown method 'getblance' — did you mean 'getbalance'? (see 'help')" } }
 ```
 
-| Error | Message text |
-|---|---|
-| Unknown method | `unknown method '<method>'` |
-| Missing param | `missing param '<name>'` |
-| No merchant loaded | `no active merchant — create or load one first` |
+| Error | Code | Message text |
+|---|---|---|
+| Unknown method | `-32601` | `unknown method '<method>' — did you mean '<nearest>'? (see 'help')` (the *did-you-mean* hint appears only when the name is plausibly a typo) |
+| Missing param | `-1` | `missing param '<name>'` |
+| No merchant loaded | `-1` | `no active merchant — create or load one first` |
 
-The error `code` is always `-1`; the human-readable detail is in `message`.
+An unknown method returns JSON-RPC's standard *method not found* code
+`-32601`; every other error is code `-1`, with the human-readable detail in
+`message`.
 
 > **Note** — All swap, board, offer, and seed RPCs operate on the **active
 > merchant's** engine. If no merchant is loaded (fresh nested-mode datadir
@@ -133,9 +136,10 @@ pact-cli getinfo
 
 Any method is callable this way — `pact-cli <method> [params...]` — with each
 argument parsed as JSON if possible, otherwise treated as a string. `pact-cli
-help` lists the daemon's full catalog, and an unknown method is refused with
-JSON-RPC code `-32601` and a *did-you-mean* suggestion (all other errors are
-code `-1` today).
+help` lists the daemon's full catalog — all **64 public methods**, the same
+list `listmethods` returns as a name array — and an unknown method is refused
+with JSON-RPC code `-32601` and a *did-you-mean* suggestion (all other errors
+are code `-1` today).
 
 > **Note** — `platform_fee_sat` is always `0`. There are no platform fees
 > anywhere in the engine; the field exists only so fee previews have a

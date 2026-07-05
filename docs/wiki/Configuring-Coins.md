@@ -29,6 +29,10 @@ With an `http://` first URL, that wallet-qualified Core-RPC primary funds swaps 
 
 In Satchel, **Settings → Coins** starts with a **connection type** choice — *Your own node* or *Electrum*. Electrum mode is a URL-per-line server list (pre-filled from the coin's shipped defaults); node mode is the structured RPC form: **RPC host/port**, **Cookie file** (auto-reads `.cookie`) or **User/password** auth, an optional **wallet name**, and a **Confirmations before final** field. The flow is **validate-genesis-then-save**: clicking **Validate node** runs `validatecoin` (a genesis-hash check) and **Save** stays disabled until it passes — nothing is persisted until the genesis matches. Editing a validated form invalidates it again.
 
+Each configured coin's card wears a **connection-kind chip** — *RPC (local)*, *RPC (remote)*, *Electrum (local)*, or *Electrum (remote)* — so you can see at a glance how a coin is backed.
+
+> **Switching a funded Electrum coin to node mode** — one wallet serves each coin, never both (the node's wallet on RPC, the pact-seed wallet on Electrum). If the coin's pact-seed wallet still holds funds when you save a switch to *Your own node*, Satchel warns first: the coins stay safe on your seed and reappear the moment you switch back to Electrum, but until then they won't show up or fund swaps — consider sending them somewhere first. (If the Electrum servers are already unreachable, the balance can't be read and the save proceeds without the warning.)
+
 The data-dir / cookie path field understands `~`, `%LOCALAPPDATA%`, `%APPDATA%`, and the **`%NODEDIR%/<Name>`** token. `%NODEDIR%/<Name>` resolves to the node's real per-OS default data dir — Windows `%LOCALAPPDATA%\<Name>`, macOS `~/Library/Application Support/<Name>`, Linux `~/.<name>` — so cookie auth works out-of-the-box on every OS. The bundled templates use it (`%NODEDIR%/Bitcoin-PoCX`, `%NODEDIR%/Bitcoin`, `%NODEDIR%/Litecoin`), so the form is prefilled with the correct path and Windows users no longer have to hand-fix it.
 
 ## Confirmation depth

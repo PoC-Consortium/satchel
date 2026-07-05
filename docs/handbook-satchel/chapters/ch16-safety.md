@@ -97,7 +97,10 @@ A swap isn't instant: each side locks funds on a blockchain, waits for
 confirmations, and then claims. The engine babysits all of this for you, but it
 can only do so while it's running. This is why, when you try to quit during a live
 swap, Satchel stops you with a clear warning and offers to **Keep running** in the
-background instead. Take that option.
+background instead. Take that option. (Quitting from the tray icon's menu goes
+through the same warning — no exit path skips it.) While the engine works in the
+background, the tray icon keeps watch and swap milestones arrive as desktop
+notifications, so backgrounding a swap never means losing sight of it.
 
 > **Tip** — If you genuinely must shut the machine down, the **Keep running**
 > choice on quit lets the engine continue in the background. And even in the worst

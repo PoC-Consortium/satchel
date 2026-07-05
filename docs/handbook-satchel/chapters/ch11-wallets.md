@@ -35,6 +35,20 @@ are irreversible, so check the address there. For a node-backed coin these
 drive the node's own wallet; for an Electrum coin they drive your pact-seed
 wallet directly.
 
+![The Send dialog: recipient, amount with the Max button, and the network-fee presets.](images/processed/ch11-send-dialog.png){width=70%}
+
+To empty a wallet, click the **Max** button inside the amount field. It fills
+in your full spendable balance and flips the send into a *sweep*: instead of
+being added on top, **the network fee comes out of the amount**, so the wallet
+ends the send genuinely empty. The confirm step is honest about the
+arithmetic — the recipient gets roughly your balance minus the fee, and the
+total equals your balance exactly. Typing in the amount field switches back to
+a normal send.
+
+> **Tip** — **Max** is the natural way to follow the hot-seed advice below:
+> after a trade, sweep the proceeds to your own cold or main wallet in one go,
+> with no dust left behind from fee guesswork.
+
 Electrum coins add a third button, **Activity** — the wallet's transaction
 history (direction, amount, fee, confirmations), including anything still
 pending. A pending send you made carries a **Bump** action: every send is
@@ -44,6 +58,20 @@ Activity dialog: your node's own software already keeps that history (and its
 own fee-bump tooling), and the transactions that matter for trading — funding
 and settlement — appear on the **Swaps** page with full on-chain detail either
 way.
+
+> **Note** — One pending row deliberately never offers **Bump**: a transaction
+> that is **funding a live swap**. The engine manages swap fees itself —
+> re-pricing a stuck funding safely on its own (see **Settings → Fees**) — and
+> a hand bump there could break the swap's pre-signed settlement. Once the swap
+> finishes, its transactions are ordinary history like any other.
+
+> **Note** — A fine point on **Receive**: a pact-seed wallet hands out fresh
+> addresses until **20** of them are sitting revealed-but-unused, then quietly
+> re-offers the oldest unused one instead of minting more. That cap is what
+> guarantees a wallet restored from your recovery phrase always finds *all* your
+> funds — the restore scan never has a gap too wide to cross. In everyday use
+> you'll never notice it; addresses you've actually received on don't count
+> against it.
 
 ## The hot-seed warning
 

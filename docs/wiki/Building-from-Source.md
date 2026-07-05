@@ -59,9 +59,13 @@ cd ..        && cargo tauri build               # full bundle
 ## One-shot regtest playground
 
 ```sh
-./tools/playground-cork.ps1    # regtest nodes + Corkboard + headless
-                               # counterparties, then launches Satchel
-./tools/playground-nostr.ps1   # same, but over a local Nostr relay (no board)
+./tools/playground-cork.ps1            # regtest nodes + Corkboard + headless
+                                       # counterparties, then launches Satchel
+./tools/playground-nostr.ps1           # same, but over a local Nostr relay
+                                       # (no board)
+./tools/playground-nostr-nodeless.ps1  # Nostr + nodeless: Alice's wallets on
+                                       # the Pact seed via local electrs (LTC
+                                       # as her one local-node coin)
 ```
 
 Each script brings up the whole stack and blocks on the Satchel window — close it and everything is torn down automatically (`-Down` force-tears a stale run; teardown is PID/port-only).

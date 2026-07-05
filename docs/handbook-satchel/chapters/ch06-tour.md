@@ -45,8 +45,9 @@ Below the groups:
 And at the foot of the rail:
 
 - **Settings** — appearance, language, your coin connections, the noticeboards
-  Satchel talks to, and fee-bumping preferences. Its tabs are **General**,
-  **Coins**, **Network**, **Fees**, and **About**.
+  Satchel talks to, fee-bumping preferences, and desktop notifications. Its tabs
+  are **General**, **Coins**, **Network**, **Fees**, **Notifications**, and
+  **About**.
 
 > **Tip** — If you ever feel lost, click **Corkboard**. It's the home base and it's
 > where your live swaps and activity log are docked (more on that below).
@@ -81,6 +82,23 @@ one from a recovery phrase, or load a different one.
 > **Note** — Satchel won't let you switch away from a merchant that has a swap in
 > flight. That's a safety rule: a running swap needs its own seed available to
 > finish or refund. Wait for it to complete, then switch.
+
+## The Cashrate chip
+
+Just to the **left of the merchant chip** sits the **Cashrate chip** — your own
+price reference. When it's on and you've set a rate it reads something like
+`~ 91,400.00 · BTC`; otherwise it just says **Cashrate (SYM)**. Click it and a
+small popover opens with an on/off toggle and a rate field: enter what *you*
+call one unit of the coin in your own money — EUR, USD, RMB, whatever you think
+in. Satchel never names a currency and never fetches a price; the rate is yours
+alone, remembered per coin.
+
+The chip always binds to the **quote coin of the pair on the current screen** —
+the Corkboard pair, or the pair in an offer form. On screens with no coin
+context (Swaps, Wallets, Settings…) it greys out but keeps showing the last
+coin's rate. With a rate set, muted **~Cash** figures appear beside prices and
+amounts across the app; the Corkboard chapter covers exactly where and how to
+read them.
 
 ## The header status indicators
 
@@ -158,6 +176,20 @@ page:
 - **Activity log** — a running, collapsible feed of what the engine is doing,
   narrated in plain language. You don't need to watch it, but it's reassuring to
   glance at when a swap is mid-flight.
+
+## The tray icon
+
+Satchel also keeps a small icon in your **system tray**. Hover it and the
+tooltip mirrors the header's live-swaps counter — *"Satchel — no swaps in
+flight"*, *"Satchel — 1 swap in flight"*, and so on — so you can check on things
+without opening the window. A **left-click** brings the window back, and the
+icon's menu offers **Open Satchel** and **Quit**.
+
+> **Note** — Quitting from the tray menu goes through exactly the same
+> fund-safety exit gate as closing the window: if a swap is in flight, Satchel
+> warns you and offers **Keep running** first. The tray can never bypass that
+> protection. (If your desktop has no tray area, Satchel simply runs without the
+> icon — nothing else changes.)
 
 That's the whole map. The next chapters take each screen in turn, starting with
 the Corkboard.

@@ -78,6 +78,25 @@ Corkboard first, then run every scenario against a single shared `Harness`.
 | `test_adaptor_depth_gate` | The reveal/redeem gate fires at the configured `--coin-confs` confirmation depth. |
 | `test_adaptor_corkboard_swap` | A board-driven v2 swap (a PoCX↔BTC pair off-mainnet defaults to `pact-htlc-v2`, so a plain `boardpostoffer` posts a v2 offer). |
 
+### Nodeless wallet scenarios — `test_nodeless_e2e.py`
+
+The nodeless (bdk + Electrum) wallet path has its own parity suite: real swaps
+where one side's btcx wallet is the **nodeless bdk wallet over a live
+electrs** — no Core-RPC URL at all. The stack adds one electrs instance
+indexing the PoCX node (binary at `pact/harness/bin/electrs.exe`, gitignored;
+`$PACT_ELECTRS_BIN` overrides).
+
+| Scenario | What it proves |
+|---|---|
+| v1 HTLC swap, nodeless maker | Alice gives btcx from the bdk wallet: `wallet_send` funds leg A over Electrum broadcast; completion on both sides. |
+| v2 adaptor swap, nodeless taker | Alice gives btcx as participant: the bdk two-phase leg-B funding (build at accept, broadcast only after leg A is deep); completion on both sides. |
+| v2 cancel pre-broadcast | Leg B is BUILT in the bdk wallet but the maker's leg A never confirms; abort takes the commitment-semantics path and `wallet_cancel_funding` RELEASES the reserved inputs — balance restored. |
+| v1 nodeless ↔ nodeless | Both parties' btcx wallets are bdk over the SAME electrs, different seeds. |
+
+`spike_electrs.py` is the companion smoke: the minimal wallet flow (fresh-seed
+scan, receive, send, activity, restart persistence) against a real electrs,
+kept for quick iteration on the chain source.
+
 ## Running the suites
 
 ```sh
@@ -91,6 +110,9 @@ python test_swap_e2e.py
 
 # v2 (Taproot/MuSig2 adaptor) end-to-end suite
 python test_adaptor_swap.py
+
+# nodeless (bdk + Electrum) wallet parity suite
+python test_nodeless_e2e.py
 ```
 
 The harness resolves node binaries from `$POCX_BITCOIND` / `$BTC_BITCOIND` (or
@@ -107,8 +129,9 @@ the PowerShell playground scripts in `tools/`:
 |---|---|
 | `tools/playground-cork.ps1` | Regtest PoCX + BTC nodes, a **Corkboard**, two headless counterparties posting a two-sided book, and Satchel launched as a funded "Alice". Offers on PoCX↔BTC default to v2. |
 | `tools/playground-nostr.ps1` | The same, but **relays-only**: no Corkboard, a single local ephemeral Nostr relay, Satchel with a relays-only `satchel.json`. Proves offers flow over Nostr alone. |
+| `tools/playground-nostr-nodeless.ps1` | The relays-only stack with Alice **nodeless**: she runs no btcx/btc nodes — BTCX syncs over a PoCX-patched electrs and BTC over a vanilla electrs, both wallets on her Pact seed, while **LTC rides along as her one local-node (core-rpc) coin**, so the mixed Electrum+RPC configuration is exercised too. Bob and Carol stay node-backed market makers, with LTC legs so the LTC sub-book is live. |
 
-Both block on the Satchel window and tear the whole stack down (PID/port-only)
+All three block on the Satchel window and tear the whole stack down (PID/port-only)
 when you close it; `tools/knockdown.ps1` force-tears a stale run. Logs land in
 `<repo>\.playground\`.
 

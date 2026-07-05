@@ -1,6 +1,6 @@
 # JSON-RPC API
 
-[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 62 methods, grouped below by area with a one-line purpose each. This is an index; the daemon itself serves the authoritative catalog via the `help` method (`pact-cli help`). For full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
+[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 64 methods, grouped below by area with a one-line purpose each. This is an index; the daemon itself serves the authoritative catalog via the `help` method (`pact-cli help`). For full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
 
 ## Conventions
 
@@ -57,7 +57,7 @@ A machine restored from the seed alone can rediscover in-flight swaps from encry
 
 | Method | Purpose |
 |---|---|
-| `listcoins` | All registry coins with capabilities, live status/tip, and confirmation depths. |
+| `listcoins` | All registry coins with capabilities, live status/tip, confirmation depths, the backing `wallet` name, and a `nodeless` boolean (`true` = Electrum-connected, wallet on the Pact seed). |
 | `listpairs` | Derived (never curated) tradeable pairs with supported protocols. |
 | `validatecoin` | Genesis-hash check of a proposed backend; engine config untouched. |
 
@@ -123,8 +123,8 @@ v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed). T
 | `estimatesendfee` | Fee preview for the wallet send form. Params: `chain`. Returns `{ min_sat_per_vb, fast, normal, slow }` — raw estimator answers (sat/vB) at 1/6/144-block targets, `null` where the estimator has no data. |
 | `getbalance` | Balance for one chain. |
 | `getnewaddress` | Fresh HD address for one chain. |
-| `sendtoaddress` | Send from one chain (broadcasts BIP125-replaceable). Params: `chain`, `address`, `amount`, optional `conf_target` (block target, default 6), optional `fee_rate` (explicit sat/vB — wins over `conf_target`). |
-| `bumpfee` | RBF-bump an unconfirmed wallet send. Params: `chain`, `txid`, `fee_rate` (sat/vB — must beat what the tx pays now). Returns the replacement `txid`. Satchel surfaces it for nodeless coins; a node-backed wallet is bumped with the node's own tooling. |
+| `sendtoaddress` | Send from one chain (broadcasts BIP125-replaceable). Params: `chain`, `address`, `amount`, optional `conf_target` (block target, default 6), optional `fee_rate` (explicit sat/vB — wins over `conf_target`). `amount` may be the literal `"all"` to sweep the wallet — the fee then comes out of the swept amount. |
+| `bumpfee` | RBF-bump an unconfirmed wallet send. Params: `chain`, `txid`, `fee_rate` (sat/vB — must beat what the tx pays now). Returns the replacement `txid`. Refuses a txid that funds a live swap — the engine manages those fees itself (see `get`/`setfeepolicy`). Satchel surfaces it for nodeless coins; a node-backed wallet is bumped with the node's own tooling. |
 | `listtransactions` | Wallet activity of an Electrum-connected (nodeless) coin, newest first: `{ txid, direction, amount_sat, fee_sat?, vsize, confirmations, timestamp? }`. Node-backed coins refuse. |
 
 ## Diagnostics

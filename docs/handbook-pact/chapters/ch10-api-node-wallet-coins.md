@@ -12,6 +12,8 @@ merchant* error) are covered in the chapter "JSON-RPC Conventions".
 | `getinfo` | — | `{ name, version, protocol, network, identity?, seed_exists, encrypted, locked, coins, watch_only }` | no |
 | `walletstatus` | — | `{ seed_exists, encrypted, locked }` | no |
 | `setwatchonly` | `on` | `{ watch_only }` | yes (live + persisted) |
+| `help` | `method?` | plain-text catalog (string) | no |
+| `listmethods` | — | `[name, …]` | no |
 | `stop` | — | `"pactd stopping"` | yes (lifecycle) |
 
 - `getinfo` — `name` is always `"pactd"`; `version` is the crate version;
@@ -29,6 +31,13 @@ merchant* error) are covered in the chapter "JSON-RPC Conventions".
   is persisted per-merchant in pactd's store and applied live (no relaunch);
   `getinfo.watch_only` reports it, letting a UI skip the ≥ 2-coin first-run
   gate. Returns the new value.
+- `help` — with no param, the daemon's full method catalog grouped by
+  category, rendered as plain text (the CLI prints string results raw, so it
+  reads like a man page); with a `method` name, that one method's arguments
+  and summary. This catalog is the authoritative live method list — the same
+  one that drives the CLI's *did-you-mean* suggestion.
+- `listmethods` — the same catalog as a machine-readable JSON array of method
+  names.
 - `stop` — requests a graceful shutdown and returns immediately.
 
 ### Fee policy
@@ -178,6 +187,8 @@ active network. Each entry:
 | `decimals` | Smallest-unit precision. |
 | `capabilities` | `{ cltv, segwit_v0, taproot }` booleans. |
 | `configured` | True if a chain backend is wired for this coin. |
+| `nodeless` | True when the coin runs **nodeless** (Electrum-only backend list; the wallet is the Pact seed's bdk wallet). This is the field a UI keys its send/receive/activity surface off. |
+| `wallet` | The Core wallet name the coin's RPC is scoped to, parsed from the configured URL (`/wallet/<name>`); `null` when none is set (node default wallet, or a nodeless coin). |
 | `status` | Live probe: `"ok"`, `"unconfigured"`, or `"error: …"`. |
 | `tip_height` | Chain tip from the probe (`null` if unconfigured/errored). |
 | `genesis_hash` | Expected genesis hash for this network. |
@@ -204,12 +215,21 @@ active network. Each entry:
 | `listtransactions` | `chain` | `{ transactions: [...] }` | no |
 
 `chain` is a coin id (e.g. `btc`). `amount` for `sendtoaddress` is a decimal
-string in whole coin units. `getnewaddress` advances the HD derivation index;
-`sendtoaddress` constructs and broadcasts a payment, always BIP125-replaceable.
+string in whole coin units — or the literal string `"all"`, which **sweeps
+the wallet**: the fee comes out of the swept amount (Core-RPC via
+`subtractfeefromamount`; bdk via `drain_wallet`), so the recipient receives
+balance − fee and the wallet ends empty. UTXOs reserved by a
+built-but-unbroadcast v2 funding are not spendable, so a sweep can never claw
+back a reservation. `getnewaddress` advances the HD derivation index (on a
+nodeless coin the handout is capped — see the chapter "Coins, Pairs &
+Capabilities");
+`sendtoaddress` constructs and broadcasts a payment, always BIP125-replaceable
+(sweeps included).
 The fee is priced by `fee_rate` (explicit sat/vB — the send form's Custom
 field) when given, else by a market estimate at `conf_target` blocks (default
 6, the Normal preset; Slow/Fast are 144/1), floored to the coin's
-`min_feerate_sat_vb` with the usual 1 sat/vB fallback.
+`min_feerate_sat_vb` with the usual 1 sat/vB fallback; both fee params apply
+to a sweep as usual.
 
 `estimatesendfee` backs the send form's fee presets: raw estimator answers in
 sat/vB at the 1/6/144-block targets — `null` where the estimator has no data
@@ -221,7 +241,14 @@ phoenix's send dialog.
 (sat/vB — must beat what the tx pays now plus the incremental-relay margin the
 wallet enforces). Satchel offers it on pending sent rows of the Activity
 dialog for nodeless coins; a node-backed wallet is bumped with the node's own
-tooling instead.
+tooling instead. A txid that **funds a live swap** is refused — v1 HTLC and
+v2 funding txids alike — with
+`<txid> funds live swap <id> — the swap engine manages its fee (see
+get/setfeepolicy), bumpfee must not replace it`. Those fees belong to the
+funding nurse: v1 fundings are re-RBF'd under the swap's own fee policy, and
+a v2 funding is deliberately CPFP'd, because replacing it would change its
+txid and invalidate the pre-signed MuSig2 redeems (see the chapter "Fees,
+Fee-Bumping & Auto-Refund").
 
 `listtransactions` serves the activity feed of an **Electrum-connected
 (nodeless) coin** — each entry carries `txid`, `direction` (`"sent"` /
@@ -229,4 +256,6 @@ tooling instead.
 when the wallet doesn't own every input), `vsize` (with `fee_sat` this yields
 the feerate a bump has to beat), `confirmations`, and `timestamp` (block time;
 first-seen for mempool entries; absent for a built-but-unreleased v2 funding).
-Newest first. Node-backed coins refuse — the node wallet keeps its own history.
+A self-transfer nets to `"sent"` with `amount_sat` 0. Newest first.
+Node-backed coins refuse (`wallet activity requires a nodeless
+(Electrum-backed) coin`) — the node wallet keeps its own history.

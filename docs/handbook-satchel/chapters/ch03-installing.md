@@ -84,6 +84,13 @@ until it's reopened.
 > from *this* install's folder are ever touched; a developer build or a
 > playground instance running elsewhere on the same machine is untouched.
 
+> **Warning** — **Upgrading from rc9 to rc10? Settle or abort any live Private
+> (Taproot) swap first.** rc10 changes how Private swaps are co-signed, at the
+> protocol level, so an rc9 peer and an rc10 peer **cannot open a Private swap
+> with each other** — the handshake simply fails cleanly, before any funds
+> move, with nothing at risk. Standard (HTLC) swaps are unaffected. Once you
+> and your counterparties are on rc10, Private swaps work as before.
+
 ### What's inside the bundle
 
 The bundle contains two things working together:
@@ -145,6 +152,12 @@ developers and is documented elsewhere:
   and the build commands.
 - The companion *Pact Developer & Integrator Handbook* covers the engine in
   depth.
+
+> **Note** — One quirk of running a development (unpackaged) build: **Windows
+> often suppresses its desktop notifications**, because it only reliably shows
+> toasts for installed apps. The installed Satchel notifies normally; the test
+> button under **Settings → Notifications** says as much if a test toast
+> doesn't appear.
 
 Most people don't need this — the prebuilt bundle above is all it takes to start
 trading. With Satchel installed, the next chapter walks you through your very

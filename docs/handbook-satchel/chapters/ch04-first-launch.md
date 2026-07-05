@@ -69,7 +69,10 @@ seed, the master secret behind every key your merchant uses.
 ### Write it down
 
 Satchel shows you the words on a **"Write down your recovery phrase"** screen,
-numbered in order.
+numbered in order. A toggle above the words lets you choose a **12- or 24-word**
+phrase — the default is **12**, and 12 is plenty: this is a hot transit wallet,
+not cold storage. Pick 24 if you prefer the longer phrase. Switching the toggle
+generates a fresh phrase, so settle on a length *before* you start writing.
 
 1. Get a pen and paper. (Paper, not a photo and not a text file — a backup that
    lives only on a device can be lost or stolen along with it.)

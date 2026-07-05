@@ -36,8 +36,10 @@ Your Coins"*.
 **Not during a swap.** While a swap is in progress, keep Satchel and your nodes
 running — the engine needs to be awake to broadcast each step (including your
 refund) on time. If you try to quit mid-swap, Satchel warns you and offers **Keep
-running** in the background; take that. When no swap is active, you can close it
-freely. See *"Backup, Seeds & Safety"*.
+running** in the background; take that. The same warning guards **Quit** in the
+tray icon's menu, so no exit path skips it — and while Satchel runs in the
+background, swap milestones reach you as desktop notifications. When no swap is
+active, you can close it freely. See *"Backup, Seeds & Safety"*.
 
 ## What if the other side disappears?
 

@@ -31,11 +31,14 @@ board)".
 
 ## RPC method index
 
-All methods are JSON-RPC over `POST /`. Grouped by area; see the named chapter
-for params and return shapes.
+All methods are JSON-RPC over `POST /` — **64 public methods**, grouped by
+area; see the named chapter for params and return shapes. The daemon prints
+the same catalog live: `help` (by category, plain text) and `listmethods`
+(a name array).
 
 **Node / info** (*"API: Node, Seed, Merchants, Coins"*): `getinfo`,
-`walletstatus`, `setwatchonly`, `stop`, `getfeepolicy`, `setfeepolicy`.
+`walletstatus`, `setwatchonly`, `help`, `listmethods`, `stop`, `getfeepolicy`,
+`setfeepolicy`.
 
 **Seed-only rescue** (same chapter; full mechanics in "Seeds, Wallets &
 Merchants"): `restorefromrelay` (adopt rescuable relay snapshots),
@@ -45,12 +48,12 @@ Merchants"): `restorefromrelay` (adopt rescuable relay snapshots),
 `unlock`.
 
 **Merchants** (same chapter): `createmerchant`, `listmerchants`, `loadmerchant`,
-`unloadmerchant`, `getmerchantinfo`.
+`renamemerchant`, `unloadmerchant`, `getmerchantinfo`.
 
 **Coins / pairs** (same chapter): `listcoins`, `listpairs`, `validatecoin`.
 
 **Wallet helpers** (same chapter): `getbalance`, `getnewaddress`,
-`sendtoaddress`.
+`estimatesendfee`, `sendtoaddress`, `bumpfee`, `listtransactions`.
 
 **Swaps — v1 HTLC** (*"API: v1 HTLC Swaps"*): `listswaps`, `getswap`,
 `listpendingtakes`, `listmyoffers`, `offer`, `acceptoffer`, `recv`, `fund`,
@@ -81,9 +84,10 @@ Failures return a JSON-RPC `error` object (not an HTTP error status):
 { "jsonrpc": "2.0", "id": 1, "error": { "code": -1, "message": "<reason>" } }
 ```
 
-`code` is always `-1`. Common messages: `unknown method '<m>'`,
-`missing param '<name>'`, `no active merchant — create or load one first`. See
-"JSON-RPC Conventions".
+`code` is `-32601` for an unknown method (with a *did-you-mean* suggestion)
+and `-1` for everything else. Common messages: `unknown method '<m>' — did
+you mean '<nearest>'? (see 'help')`, `missing param '<name>'`,
+`no active merchant — create or load one first`. See "JSON-RPC Conventions".
 
 ## BIP32 derivation paths
 
