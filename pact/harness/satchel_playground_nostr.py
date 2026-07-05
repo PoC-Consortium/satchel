@@ -66,10 +66,12 @@ REPOST_EVERY_SECS = 30
 # (expire + re-post) mid-session for no benefit.
 NOSTR_RELAY_PORT = 19788
 
-# --nodeless (playground-nostr-nodeless.ps1): ALICE RUNS NO NODES AT ALL --
+# --nodeless (playground-nostr-nodeless.ps1): Alice runs no btcx/btc nodes --
 # btcx over the PoCX-patched electrs AND btc over the vanilla upstream electrs,
-# wallet on the Pact seed for both, Nostr transport, no LTC. Bob/Carol stay
-# node-backed market makers. The end-user vision stack (epic #58).
+# wallet on the Pact seed for both, Nostr transport. LTC stays a LOCAL-NODE
+# (core-rpc) leg for Alice like the other playgrounds, so the mixed
+# Electrum+RPC config is exercised too. Bob/Carol stay node-backed market
+# makers. The end-user vision stack (epic #58).
 NODELESS = "--nodeless" in sys.argv[1:]
 
 PROTOCOLS = ["pact-htlc-v1", "pact-htlc-v2"]
@@ -216,8 +218,9 @@ def chain_time(node):
 def main():
     build_workspace()
     # Nodeless: both nodes move to bindex's hardcoded REST ports (pocx 18443,
-    # btc 18332 = the "testnet" default) and each gets an electrs; no LTC.
-    with Harness(keep=False, with_ltc=not NODELESS,
+    # btc 18332 = the "testnet" default) and each gets an electrs. LTC always
+    # runs (a local node; Alice connects core-rpc even in nodeless mode).
+    with Harness(keep=False, with_ltc=True,
                  pocx_rest=NODELESS, btc_rest=NODELESS) as h:
         relay = NostrRelay(h.workdir)
         relay.start()
@@ -250,25 +253,25 @@ def main():
         h.pocx.generate(110, "bob_pocx")
         h.btc.generate(110, "alice_btc")
 
-        # Litecoin leg (classic mode only; the nodeless stack skips LTC).
-        if not NODELESS:
-            h.ltc.create_wallet("alice_ltc")
-            h.ltc.create_wallet("bob_ltc")
-            h.ltc.create_wallet("carol_ltc")
-            h.ltc.generate(110, "alice_ltc")
-            h.ltc.generate(110, "carol_ltc")
-            print("[nostr-pg] funded carol_pocx + alice_btc + alice_ltc/carol_ltc "
-                  f"(carol_pocx: {h.pocx.rpc('getbalance', wallet='carol_pocx')} POCX, "
-                  f"alice_btc: {h.btc.rpc('getbalance', wallet='alice_btc')} BTC, "
-                  f"alice_ltc: {h.ltc.rpc('getbalance', wallet='alice_ltc')} LTC)")
+        # Litecoin leg (both modes — in nodeless, Alice's LTC is the one
+        # local-node/core-rpc coin next to her two Electrum ones).
+        h.ltc.create_wallet("alice_ltc")
+        h.ltc.create_wallet("bob_ltc")
+        h.ltc.create_wallet("carol_ltc")
+        h.ltc.generate(110, "alice_ltc")
+        h.ltc.generate(110, "carol_ltc")
+        print("[nostr-pg] funded carol_pocx + alice_btc + alice_ltc/carol_ltc "
+              f"(carol_pocx: {h.pocx.rpc('getbalance', wallet='carol_pocx')} POCX, "
+              f"alice_btc: {h.btc.rpc('getbalance', wallet='alice_btc')} BTC, "
+              f"alice_ltc: {h.ltc.rpc('getbalance', wallet='alice_ltc')} LTC)")
 
         # RELAYS-ONLY: nostr_relays set, board_url omitted. Brisk 2s tick — fine
         # against the LOCAL relay (public relays would need a slower tick;
         # tick_secs is per-config, default 30s). Bob/Carol get an LTC leg too
         # (own wallet on the LTC node) so they post/serve LTC offers over the
         # relay; a file coin needs --coins-file (coins_file) + the extra --coin.
-        bob_ltc = [] if NODELESS else [("ltc", h.ltc.rpc_url(wallet="bob_ltc"))]
-        carol_ltc = [] if NODELESS else [("ltc", h.ltc.rpc_url(wallet="carol_ltc"))]
+        bob_ltc = [("ltc", h.ltc.rpc_url(wallet="bob_ltc"))]
+        carol_ltc = [("ltc", h.ltc.rpc_url(wallet="carol_ltc"))]
         bob = Party("bob", h, h.workdir, "bob_pocx", "bob_btc",
                     nostr_relays=relay.ws_url, auto_fund=True, tick_secs=2,
                     coins_file=COINS_TOML, coin_confs=PLAYGROUND_CONFS,
@@ -302,10 +305,9 @@ def main():
         def post_offers():
             topup(bob, "bob", BOB_OFFERS)
             topup(carol, "carol", CAROL_OFFERS)
-            if not NODELESS:
-                # LTC sub-book, pinned to v1 HTLC.
-                topup(bob, "bob_ltc", BOB_LTC_OFFERS, pin_proto="pact-htlc-v1")
-                topup(carol, "carol_ltc", CAROL_LTC_OFFERS, pin_proto="pact-htlc-v1")
+            # LTC sub-book, pinned to v1 HTLC.
+            topup(bob, "bob_ltc", BOB_LTC_OFFERS, pin_proto="pact-htlc-v1")
+            topup(carol, "carol_ltc", CAROL_LTC_OFFERS, pin_proto="pact-htlc-v1")
             ltc_live = len(posted["bob_ltc"]) + len(posted["carol_ltc"])
             print(f"[nostr-pg] {len(posted['bob'])} buy-side (Bob) + "
                   f"{len(posted['carol'])} sell-side (Carol) + "
@@ -322,18 +324,22 @@ def main():
   Nostr relay only:
     Bob   (:{bob.port}) BUY side — {len(BOB_OFFERS)} give-BTC/get-POCX + {len(BOB_LTC_OFFERS)} give-BTC/get-LTC
     Carol (:{carol.port}) SELL side — {len(CAROL_OFFERS)} give-POCX/get-BTC + {len(CAROL_LTC_OFFERS)} LTC offers
-  Relay {relay.ws_url} | POCX :{h.pocx.rpc_port} | BTC :{h.btc.rpc_port}{"" if NODELESS else " | LTC :19643"}{f'''
+  Relay {relay.ws_url} | POCX :{h.pocx.rpc_port} | BTC :{h.btc.rpc_port} | LTC :19643{f'''
   electrs: btcx {pocx_electrs.url} | btc {btc_electrs.url}
-  ALICE IS FULLY NODELESS -- both wallets live on her Pact seed.''' if NODELESS else ""}
+  ALICE IS NODELESS on btcx/btc (Pact-seed wallets); LTC is her one
+  local-node (core-rpc) coin.''' if NODELESS else ""}
   Offers use the default TTL; taken offers refill every {REPOST_EVERY_SECS}s.
 
   In the Satchel window (managed "Alice", relays-only):
     1. Wizard -> Create a merchant.{f'''
-    2. Coins tab -> BTCX and BTC both show "Electrum (local)" -- no nodes.
-    3. Wallets tab -> BOTH cards have Receive / Send / Activity; the faucet
-       drops {FAUCET_BTCX} BTCX + {FAUCET_BTC} BTC right after the wizard.
-    4. Corkboard tab -> board source is the Nostr relay; take either side --
-       every leg funds straight from your pact-seed wallets.
+    2. Coins tab -> BTCX and BTC show "Electrum (local)"; LTC shows the
+       local node (core-rpc) -- the mixed config.
+    3. Wallets tab -> BTCX/BTC cards have Receive / Send / Activity; the
+       faucet drops {FAUCET_BTCX} BTCX + {FAUCET_BTC} BTC right after the wizard. LTC uses
+       the pre-funded node wallet (alice_ltc).
+    4. Corkboard tab -> board source is the Nostr relay; two-sided market
+       incl. LTC pairs; btcx/btc legs fund from your pact-seed wallets,
+       LTC legs from the node wallet.
     5. Swaps tab -> watch it walk to 'completed'.''' if NODELESS else '''
     2. Coins tab -> BTCX + BTC + LTC connected.
     3. Corkboard tab -> board source is the Nostr relay; two-sided market incl.
@@ -343,9 +349,8 @@ def main():
 {bar}
 """)
         start_wall = time.time()
-        legs = [(h.pocx, "alice_pocx", "btcx"), (h.btc, "bob_btc", "btc")]
-        if not NODELESS:
-            legs.append((h.ltc, "alice_ltc", "ltc"))
+        legs = [(h.pocx, "alice_pocx", "btcx"), (h.btc, "bob_btc", "btc"),
+                (h.ltc, "alice_ltc", "ltc")]
         base = max(chain_time(n) for n, _, _ in legs)
         last_post = time.time()
         alice_funded = False

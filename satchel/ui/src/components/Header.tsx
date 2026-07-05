@@ -20,6 +20,7 @@ import { errMsg, selectMerchant } from "../api/tauri";
 import { useApp } from "../AppContext";
 import { useDialogs } from "../ui/dialogs";
 import { useT } from "../i18n";
+import CashrateWidget from "./CashrateWidget";
 import LanguageMenu from "./LanguageMenu";
 import NetworkStamp from "./NetworkStamp";
 import WatchOnlyStamp from "./WatchOnlyStamp";
@@ -117,6 +118,10 @@ export default function Header({
       </Box>
 
       <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1.5 }}>
+        {/* Cashrate chip (issue #56) — context chips grouped left of the
+            merchant chip; action icons keep the far-right corner. */}
+        <CashrateWidget />
+
         <Tooltip title={t("header.activeMerchant")}>
           <Chip
             ref={chipRef}

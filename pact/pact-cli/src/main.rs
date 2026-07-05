@@ -32,9 +32,12 @@ use std::time::Duration;
     disable_help_subcommand = true
 )]
 struct Cli {
-    /// pactd JSON-RPC URL.
-    #[arg(long, default_value = "http://127.0.0.1:9737")]
-    rpc: String,
+    /// pactd JSON-RPC URL. Omitted: derived from where the auth was found —
+    /// a hand-run pactd listens on 9737 whatever the network, but Satchel's
+    /// managed pactd offsets per --network (9737/9738/9739), so a regtest
+    /// command against Satchel's daemon never dials mainnet by accident.
+    #[arg(long)]
+    rpc: Option<String>,
     /// Data dir to read `.cookie` (or pact.conf rpcuser/rpcpassword) for
     /// auth. Omitted: autodiscovered — the pactd platform default
     /// (%APPDATA%\Pact, ~/Library/Application Support/Pact, ~/.pact; nested
@@ -205,9 +208,12 @@ enum BoardCommand {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let auth = resolve_auth(&cli)?;
+    let (auth, default_port) = resolve_auth(&cli)?;
     let client = RpcClient {
-        url: cli.rpc.clone(),
+        url: cli
+            .rpc
+            .clone()
+            .unwrap_or_else(|| format!("http://127.0.0.1:{default_port}")),
         auth,
     };
 
@@ -389,17 +395,17 @@ fn print_result(result: &Value) -> Result<()> {
 /// explicit `--data-dir` is read strictly (fail loudly, no fallback); with
 /// neither, the platform candidates are searched (#57 P0) so a bare
 /// `pact-cli <method>` works against a default local pactd.
-fn resolve_auth(cli: &Cli) -> Result<String> {
+fn resolve_auth(cli: &Cli) -> Result<(String, u16)> {
     if let (Some(u), Some(p)) = (&cli.rpcuser, &cli.rpcpassword) {
-        return Ok(format!("{u}:{p}"));
+        return Ok((format!("{u}:{p}"), PACTD_DEFAULT_PORT));
     }
     if let Some(dir) = &cli.data_dir {
-        return auth_from_dir(dir);
+        return Ok((auth_from_dir(dir)?, PACTD_DEFAULT_PORT));
     }
     let candidates = candidate_data_dirs(&cli.network);
-    for dir in &candidates {
+    for (dir, port) in &candidates {
         if let Ok(auth) = auth_from_dir(dir) {
-            return Ok(auth);
+            return Ok((auth, *port));
         }
     }
     bail!(
@@ -407,7 +413,7 @@ fn resolve_auth(cli: &Cli) -> Result<String> {
          pass --data-dir, --network, or --rpcuser/--rpcpassword",
         candidates
             .iter()
-            .map(|d| format!(" {}", d.display()))
+            .map(|(d, _)| format!(" {}", d.display()))
             .collect::<String>()
     )
 }
@@ -436,11 +442,28 @@ fn auth_from_dir(dir: &Path) -> Result<String> {
     }
 }
 
+/// pactd's fixed default listen port — a hand-run `pactd` binds it whatever
+/// the network (keep in sync with the `listen` default in pactd/src/main.rs).
+const PACTD_DEFAULT_PORT: u16 = 9737;
+
+/// Satchel offsets its managed pactd's listen port per network so the three
+/// networks coexist (keep in sync with Satchel's pactd launch).
+fn satchel_port(network: &str) -> u16 {
+    match network {
+        "testnet" => 9738,
+        "regtest" => 9739,
+        _ => PACTD_DEFAULT_PORT,
+    }
+}
+
 /// Data dirs searched for auth when `--data-dir` is not given, in order:
 /// the pactd platform default (a hand-run `pactd` — keep in sync with
 /// `default_data_dir` in pactd/src/main.rs), then Satchel's managed pactd.
 /// Both nest per network: mainnet at the root, testnet/regtest beneath.
-fn candidate_data_dirs(network: &str) -> Vec<PathBuf> {
+/// Each dir carries the default RPC port of the daemon that owns it, so a
+/// bare `pact-cli --network regtest <method>` dials whichever pactd its
+/// cookie actually belongs to — never the mainnet daemon by accident.
+fn candidate_data_dirs(network: &str) -> Vec<(PathBuf, u16)> {
     let net_sub = |base: PathBuf| match network {
         "mainnet" => base,
         net => base.join(net),
@@ -453,12 +476,11 @@ fn candidate_data_dirs(network: &str) -> Vec<PathBuf> {
     } else {
         std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".pact"))
     } {
-        dirs.push(net_sub(base));
+        dirs.push((net_sub(base), PACTD_DEFAULT_PORT));
     }
     // Satchel's managed pactd: `<app-local-data>/org.pocx.satchel/[net]/pactd`
     // (Tauri's identifier dir). Lets `pact-cli` talk to the daemon Satchel
-    // runs without hunting for its cookie path. NOTE Satchel offsets its
-    // listen port per network (9737/9738/9739) — pass --rpc off-mainnet.
+    // runs without hunting for its cookie path.
     if let Some(base) = if cfg!(target_os = "windows") {
         std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
     } else if cfg!(target_os = "macos") {
@@ -468,7 +490,10 @@ fn candidate_data_dirs(network: &str) -> Vec<PathBuf> {
             .map(PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
     } {
-        dirs.push(net_sub(base.join("org.pocx.satchel")).join("pactd"));
+        dirs.push((
+            net_sub(base.join("org.pocx.satchel")).join("pactd"),
+            satchel_port(network),
+        ));
     }
     dirs
 }
@@ -626,14 +651,17 @@ mod tests {
     #[test]
     fn candidate_dirs_nest_networks() {
         // pactd default first, Satchel's managed dir second; test networks
-        // nested, mainnet at the root.
+        // nested, mainnet at the root. The port rides along: the hand-run
+        // daemon always defaults 9737, Satchel's offsets per network.
         let dirs = candidate_data_dirs("regtest");
         assert_eq!(dirs.len(), 2);
-        assert!(dirs[0].ends_with("regtest"));
-        assert!(dirs[1].ends_with("pactd"));
+        assert!(dirs[0].0.ends_with("regtest"));
+        assert_eq!(dirs[0].1, 9737);
+        assert!(dirs[1].0.ends_with("pactd"));
+        assert_eq!(dirs[1].1, 9739);
         let main = candidate_data_dirs("mainnet");
         assert!(main
             .iter()
-            .all(|d| !d.to_string_lossy().contains("regtest")));
+            .all(|(d, p)| !d.to_string_lossy().contains("regtest") && *p == 9737));
     }
 }

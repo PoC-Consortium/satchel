@@ -34,7 +34,6 @@ import { useApp } from "../AppContext";
 import { errMsg, renameMerchant } from "../api/tauri";
 import { useUpdate } from "../update";
 import { useDialogs } from "../ui/dialogs";
-import CashrateWidget from "./CashrateWidget";
 import Identicon from "./Identicon";
 import { shortId } from "../identity";
 import { C } from "../theme";
@@ -307,10 +306,8 @@ export default function Sidebar({
         ))}
       </List>
 
-      {/* Footer: the Cashrate entry (issue #56 — binds to the coin the current
-          screen is about), then Settings (Coins, theme, version, network). */}
+      {/* Footer: Settings (Coins, theme, version, network). */}
       <Box sx={{ px: 1, pb: 1, borderTop: `1px solid ${C.line}`, pt: 0.5 }}>
-        <CashrateWidget />
         <NavRow
           label={t("nav.settings")}
           icon={<SettingsOutlinedIcon />}

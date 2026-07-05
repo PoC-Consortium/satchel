@@ -1,25 +1,29 @@
-import { useEffect, useState } from "react";
-import { Box, Switch, TextField, Tooltip, Typography } from "@mui/material";
+import { useEffect, useRef, useState } from "react";
+import { Box, Chip, Popover, Switch, TextField, Tooltip, Typography } from "@mui/material";
 import { useApp } from "../AppContext";
 import { useFx } from "../fx";
 import { useT } from "../i18n";
-import { canonicalAmount, decimalSeparator, parseAmount, sanitizeAmountInput } from "../format";
+import { canonicalAmount, decimalSeparator, fmtRate, parseAmount, sanitizeAmountInput } from "../format";
 
-// The Cashrate entry (issue #56), pinned in the sidebar footer above Settings:
-// toggle + context-bound label + locale-aware rate box. The label follows the
-// coin the current screen is about (the quote coin of the Corkboard/offer-form
-// pair, via useFxContext); on screens with no coin context everything greys
-// out but keeps showing the last coin's rate. Rates are remembered per coin
-// (see fx.tsx) — switch the pair and the box recalls that coin's stored rate.
+// The Cashrate entry (issue #56): a header chip left of the merchant chip —
+// always-visible active rate, click for a popover with the toggle + rate box.
+// The chip follows the coin the current screen is about (the quote coin of the
+// Corkboard/offer-form pair, via useFxContext); on screens with no coin
+// context it greys out but keeps showing the last coin's rate. Rates are
+// remembered per coin (see fx.tsx) — switch the pair and the chip recalls
+// that coin's stored rate.
 export default function CashrateWidget() {
   const t = useT();
   const { symOf } = useApp();
   const { enabled, setEnabled, context, lastCoin, rates, setRate } = useFx();
 
-  // Which coin the label/value shows: the live context, else the last one
-  // (visible but disabled, so the widget never goes blank between screens).
+  // Which coin the chip shows: the live context, else the last one (visible
+  // but disabled, so the chip never goes blank between screens).
   const coin = context ?? lastCoin;
   const active = context != null;
+
+  const chipRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
 
   // Locale-entered draft (comma-decimal on comma locales); canonical
   // dot-decimal is what persists. Re-seeded whenever the bound coin changes —
@@ -30,14 +34,47 @@ export default function CashrateWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coin]);
 
+  const rate = rates[coin] || "";
+  const label =
+    enabled && rate
+      ? `~ ${fmtRate(rate)} · ${symOf(coin)}`
+      : t("fx.cashrate", { sym: symOf(coin) });
+
   return (
-    <Tooltip title={active ? t("fx.cashrateTip", { sym: symOf(coin) }) : t("fx.cashrateNoContext")} placement="right">
-      <Box sx={{ px: 1.5, pt: 1, pb: 0.5, opacity: active ? 1 : 0.5 }}>
+    <>
+      <Tooltip title={active ? t("fx.cashrateTip", { sym: symOf(coin) }) : t("fx.cashrateNoContext")}>
+        {/* span wrapper: a disabled Chip can't anchor a Tooltip by itself */}
+        <Box component="span" ref={chipRef}>
+          <Chip
+            onClick={() => setOpen(true)}
+            disabled={!active}
+            variant="outlined"
+            label={
+              <Box component="span" sx={{ fontWeight: 600, color: enabled && rate ? "text.primary" : "text.secondary" }}>
+                {label}
+              </Box>
+            }
+            sx={{
+              bgcolor: "background.default",
+              borderColor: "divider",
+              "&:hover": { borderColor: "primary.main" },
+            }}
+          />
+        </Box>
+      </Tooltip>
+
+      <Popover
+        anchorEl={chipRef.current}
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        slotProps={{ paper: { sx: { mt: 0.5, p: 1.5, width: 240 } } }}
+      >
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
           <Switch
             size="small"
             checked={enabled}
-            disabled={!active}
             onChange={(_, on) => setEnabled(on)}
             inputProps={{ "aria-label": t("fx.cashrate", { sym: symOf(coin) }) }}
           />
@@ -49,18 +86,18 @@ export default function CashrateWidget() {
           size="small"
           fullWidth
           value={draft}
-          disabled={!active || !enabled}
+          disabled={!enabled}
           inputMode="decimal"
           autoComplete="off"
+          autoFocus
           placeholder={`0${decimalSeparator()}0`}
           onChange={(e) => {
             const s = sanitizeAmountInput(e.target.value);
             setDraft(s);
             setRate(coin, parseAmount(s) > 0 ? canonicalAmount(s) : "");
           }}
-          slotProps={{ htmlInput: { style: { fontSize: 13, padding: "5px 8px" } } }}
         />
-      </Box>
-    </Tooltip>
+      </Popover>
+    </>
   );
 }

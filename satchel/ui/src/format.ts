@@ -347,6 +347,20 @@ export function fmtCash(v: number | null): string {
   return `~${s}`;
 }
 
+/** Display of a stored (canonical dot-decimal) FX anchor, e.g. the header
+ *  chip: locale grouping + exactly two fraction digits for rates ≥ 1 (money
+ *  style), full typed precision below 1 — cheap-coin anchors live in the
+ *  fractions and must not round to "0". Display-only; the stored rate and the
+ *  edit field keep exactly what the user typed. */
+export function fmtRate(canonical: string): string {
+  const v = Number(canonical);
+  if (!isFinite(v) || v <= 0 || v < 1) return canonical.replace(".", decimalSeparator());
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(v);
+}
+
 // ---- denomination (display unit) ----------------------------------------
 // A view-only preference: amounts are always stored/handled in sats; this only
 // changes how the quote coin is shown (tiny BTC decimals read better as sat /

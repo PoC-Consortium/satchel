@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -26,7 +26,14 @@ import { errMsg, rpc } from "../api/tauri";
 import { useApp } from "../AppContext";
 import { useT } from "../i18n";
 import type { Translate } from "../i18n";
-import { canonicalAmount, fmtBare, parseAmount, sanitizeAmountInput } from "../format";
+import {
+  canonicalAmount,
+  fmtBare,
+  fmtFee,
+  isActive,
+  parseAmount,
+  sanitizeAmountInput,
+} from "../format";
 import { C } from "../theme";
 import type { CoinInfo, SendFeeEstimates, WalletTx } from "../api/types";
 
@@ -255,16 +262,22 @@ export function SendDialog({
   const t = useT();
   const [address, setAddress] = useState("");
   const [amount, setAmount] = useState("");
+  // Send-everything (phoenix parity): amount becomes the WHOLE balance and
+  // the fee comes out of it (the backend sweeps — no user-computed
+  // balance-minus-fee guesswork). Typing in the amount field switches back
+  // to a normal send.
+  const [sendAll, setSendAll] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const fee = useFeeChoice(coin.id);
 
-  const amountSat = Math.round(parseAmount(amount) * 1e8);
+  const amountSat = sendAll ? (balanceSat ?? 0) : Math.round(parseAmount(amount) * 1e8);
   // The preview fee, at the assumed typical size — display + overspend guard
   // only; the wallet computes the real fee when it builds the tx.
   const feeSat = fee.rate != null ? fee.rate * ASSUMED_SEND_VSIZE : null;
-  const overspend = balanceSat != null && amountSat + (feeSat ?? 0) > balanceSat;
+  const overspend =
+    !sendAll && balanceSat != null && amountSat + (feeSat ?? 0) > balanceSat;
 
   function review() {
     if (!address.trim()) {
@@ -291,7 +304,7 @@ export function SendDialog({
       const r = await rpc<{ txid: string }>("sendtoaddress", [
         coin.id,
         address.trim(),
-        canonicalAmount(amount),
+        sendAll ? "all" : canonicalAmount(amount),
         confTarget,
         feeRate,
       ]);
@@ -314,7 +327,11 @@ export function SendDialog({
           <ConfirmRow label={t("wallets.sendConfirmRecipient")} value={address.trim()} mono />
           <ConfirmRow
             label={t("wallets.sendConfirmAmount")}
-            value={`${fmtBare(amountSat)} ${coin.symbol}`}
+            value={
+              sendAll
+                ? `~${fmtBare(Math.max(0, amountSat - (feeSat ?? 0)))} ${coin.symbol}`
+                : `${fmtBare(amountSat)} ${coin.symbol}`
+            }
             mono
           />
           <ConfirmRow
@@ -332,9 +349,18 @@ export function SendDialog({
           />
           <ConfirmRow
             label={t("wallets.sendConfirmTotal")}
-            value={`~${fmtBare(amountSat + (feeSat ?? 0))} ${coin.symbol}`}
+            value={
+              sendAll
+                ? `${fmtBare(amountSat)} ${coin.symbol}`
+                : `~${fmtBare(amountSat + (feeSat ?? 0))} ${coin.symbol}`
+            }
             mono
           />
+          {sendAll && (
+            <Typography sx={{ color: "text.secondary", fontSize: 12, mt: 1 }}>
+              {t("wallets.sendAllNote")}
+            </Typography>
+          )}
           <Alert icon={false} variant="outlined" severity="warning" sx={{ mt: 2 }}>
             {t("wallets.sendIrreversible")}
           </Alert>
@@ -357,16 +383,34 @@ export function SendDialog({
           />
           <TextField
             label={t("wallets.sendAmountLabel")}
-            value={amount}
-            onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))}
+            value={sendAll && balanceSat != null ? fmtFee(balanceSat) : amount}
+            onChange={(e) => {
+              setSendAll(false);
+              setAmount(sanitizeAmountInput(e.target.value));
+            }}
             error={overspend}
-            helperText={overspend ? t("wallets.sendOverBalance") : " "}
+            helperText={
+              sendAll ? t("wallets.sendAllNote") : overspend ? t("wallets.sendOverBalance") : " "
+            }
             fullWidth
             sx={{ mt: 2 }}
             slotProps={{
               htmlInput: { inputMode: "decimal", style: { fontFamily: C.mono } },
               input: {
-                endAdornment: <InputAdornment position="end">{coin.symbol}</InputAdornment>,
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Button
+                      size="small"
+                      color={sendAll ? "primary" : "inherit"}
+                      disabled={busy || !balanceSat}
+                      onClick={() => setSendAll(true)}
+                      sx={{ minWidth: 0, mr: 0.5 }}
+                    >
+                      {t("wallets.sendMax")}
+                    </Button>
+                    {coin.symbol}
+                  </InputAdornment>
+                ),
               },
             }}
           />
@@ -514,9 +558,23 @@ function BumpFeeDialog({
 
 export function ActivityDialog({ coin, onClose }: { coin: CoinInfo; onClose: () => void }) {
   const t = useT();
+  const { swaps } = useApp();
   const [txs, setTxs] = useState<WalletTx[] | null>(null);
   const [bumping, setBumping] = useState<WalletTx | null>(null);
   const [err, setErr] = useState("");
+
+  // A live swap's funding is the nurse's to bump (v1 RBF / v2 CPFP — a
+  // hand-RBF of a v2 funding would invalidate its pre-signed redeems), so
+  // those rows don't offer Bump. The engine refuses too; this hides the lever.
+  const swapFunding = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of swaps) {
+      if (!isActive(s)) continue;
+      if (s.fund_a_txid) set.add(s.fund_a_txid);
+      if (s.fund_b_txid) set.add(s.fund_b_txid);
+    }
+    return set;
+  }, [swaps]);
 
   const load = useCallback(async () => {
     try {
@@ -595,7 +653,7 @@ export function ActivityDialog({ coin, onClose }: { coin: CoinInfo; onClose: () 
                     </Tooltip>
                   </TableCell>
                   <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
-                    {canBump(tx) && (
+                    {canBump(tx) && !swapFunding.has(tx.txid) && (
                       <Tooltip title={t("wallets.bumpHint")}>
                         <Button size="small" color="inherit" onClick={() => setBumping(tx)}>
                           {t("wallets.bump")}

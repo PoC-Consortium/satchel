@@ -471,7 +471,10 @@ function NotificationsTab() {
   );
 
   async function test() {
-    setStatus((await sendTestNotification()) ? "" : t("notify.denied"));
+    // "Sent" is only "handed to the OS" — Windows may still swallow it for
+    // unpackaged dev builds (no AppUserModelID), so say so instead of
+    // pretending silence is success.
+    setStatus((await sendTestNotification()) ? t("notify.testSent") : t("notify.denied"));
   }
 
   // Built outside the JSX so the pref-key string literals aren't flagged by the

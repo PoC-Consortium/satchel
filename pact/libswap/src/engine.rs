@@ -6552,6 +6552,23 @@ impl Engine {
         backend.wallet_send(address, amount_sat, fee)
     }
 
+    /// Sweep the coin's whole wallet to `address` (the send form's "send
+    /// everything"): fee comes out of the swept amount, wallet ends empty.
+    pub fn wallet_send_all(
+        &self,
+        network: Network,
+        coin_id: &str,
+        address: &str,
+        fee: SendFee,
+    ) -> Result<String> {
+        let backend = self.backend(&ChainRef {
+            coin_id: coin_id.to_string(),
+            network,
+        })?;
+        backend.params().parse_address(address)?;
+        backend.wallet_send_all(address, fee)
+    }
+
     /// Fee estimates for the send form's Slow/Normal/Fast presets (144/6/1
     /// blocks, phoenix parity), plus the coin's feerate floor. A preset is
     /// `None` when the estimator has no data for that target — the form
@@ -6579,6 +6596,12 @@ impl Engine {
     /// this is the "stuck tx" lever behind the Activity dialog's Bump fee
     /// action (nodeless coins; a node-backed coin bumps in the node's own
     /// wallet, which owns the tx).
+    ///
+    /// A LIVE SWAP'S FUNDING is refused: the funding nurse owns its fee — v1
+    /// re-RBFs it under the swap's FeeBumpPolicy, and v2 deliberately CPFPs
+    /// because replacing the funding would change its txid and invalidate the
+    /// pre-signed MuSig2 redeems (the funding outpoint is committed into the
+    /// adaptor signatures). A hand-RBF of a v2 funding could strand the swap.
     pub fn wallet_bumpfee(
         &self,
         network: Network,
@@ -6586,6 +6609,37 @@ impl Engine {
         txid: &str,
         sat_per_vb: u64,
     ) -> Result<String> {
+        let live_v1 = |s: &State| !matches!(s, State::Completed | State::Refunded | State::Aborted);
+        let live_v2 = |s: &AdaptorState| {
+            !matches!(
+                s,
+                AdaptorState::Completed | AdaptorState::Refunded | AdaptorState::Aborted
+            )
+        };
+        for r in self.store.list()? {
+            if live_v1(&r.state)
+                && (r.htlc_a_txid.as_deref() == Some(txid)
+                    || r.htlc_b_txid.as_deref() == Some(txid))
+            {
+                bail!(
+                    "{txid} funds live swap {} — the swap engine manages its fee \
+                     (see get/setfeepolicy), bumpfee must not replace it",
+                    r.swap_id
+                );
+            }
+        }
+        for r in self.store.list_adaptor()? {
+            if live_v2(&r.state)
+                && (r.funding_a_txid.as_deref() == Some(txid)
+                    || r.funding_b_txid.as_deref() == Some(txid))
+            {
+                bail!(
+                    "{txid} funds live swap {} — the swap engine manages its fee \
+                     (see get/setfeepolicy), bumpfee must not replace it",
+                    r.swap_id
+                );
+            }
+        }
         self.backend(&ChainRef {
             coin_id: coin_id.to_string(),
             network,
