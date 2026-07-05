@@ -431,7 +431,8 @@ impl CoreRpcBackend {
             let ov = TEST_FEERATE_OVERRIDE_SAT_VB.load(Ordering::Relaxed);
             if ov > 0 {
                 return Some(
-                    (ov * 1000).clamp(1000, SANITY_MAX_SAT_PER_VB * 1000)
+                    (ov * 1000)
+                        .clamp(1000, SANITY_MAX_SAT_PER_VB * 1000)
                         .max(self.params.min_feerate_sat_vb * 1000),
                 );
             }
