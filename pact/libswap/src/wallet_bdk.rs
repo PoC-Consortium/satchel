@@ -10,6 +10,12 @@
 //! wrapped Electrum backend, and the nine `wallet_*` operations — the ones
 //! only a Core-RPC wallet URL could serve until now — are served by bdk.
 //!
+//! Syncing is a BACKGROUND job (issue #87): the per-coin
+//! [`crate::wallet_worker::SyncWorker`] keeps the bdk cache fresh over the
+//! coin's one long-lived Electrum connection, so the `wallet_*` operations
+//! here never perform chain I/O for the wallet's own state — reads serve
+//! the cache as-is, writes only gate on the worker's first-sync latch.
+//!
 //! bdk is used at the *script* level only (design doc D2/D3):
 //! - Address encode/decode goes through [`ChainParams`] (PoCX/LTC HRPs).
 //!   The `bitcoin::Network` handed to bdk is the constant
@@ -40,6 +46,7 @@ use crate::chain::{ChainBackend, ElectrumBackend, SendFee, TxOutInfo, WalletTxIn
 use crate::keys::PactSeed;
 use crate::params::ChainParams;
 use crate::registry;
+use crate::wallet_worker::{SyncWorker, FIRST_SYNC_WAIT};
 
 /// BIP-44 gap limit for the initial full scan of a restored seed. Every
 /// address this wallet hands out is revealed-then-persisted, so steady-state
@@ -103,6 +110,10 @@ pub type WalletHandle = Arc<Mutex<WalletEntry>>;
 pub struct WalletManager {
     wallet_dir: PathBuf,
     wallets: Mutex<BTreeMap<String, WalletHandle>>,
+    /// One background [`SyncWorker`] per open nodeless coin (issue #87).
+    /// Spawned by [`Self::ensure_worker`], told to exit when the manager —
+    /// i.e. the engine, i.e. the loaded merchant — goes away.
+    workers: Mutex<BTreeMap<String, Arc<SyncWorker>>>,
 }
 
 impl WalletManager {
@@ -112,7 +123,29 @@ impl WalletManager {
         Self {
             wallet_dir: data_dir.join("wallet"),
             wallets: Mutex::new(BTreeMap::new()),
+            workers: Mutex::new(BTreeMap::new()),
         }
+    }
+
+    /// The coin's background sync worker, spawning it on first call. The
+    /// worker holds only a `Weak` wallet handle plus the shared chain
+    /// backend, so it can never keep a dropped engine's wallet alive; a
+    /// reconfigured server URL is handed over via `set_chain` (the worker
+    /// picks it up on its next wakeup).
+    pub fn ensure_worker(
+        &self,
+        coin_id: &str,
+        chain: Arc<ElectrumBackend>,
+        wallet: &WalletHandle,
+    ) -> Arc<SyncWorker> {
+        let mut workers = self.workers.lock().expect("worker map poisoned");
+        if let Some(worker) = workers.get(coin_id) {
+            worker.set_chain(chain);
+            return worker.clone();
+        }
+        let worker = SyncWorker::spawn(coin_id, chain, wallet);
+        workers.insert(coin_id.to_string(), worker.clone());
+        worker
     }
 
     /// Open (or create) the nodeless wallet for `coin_id`, deriving its
@@ -162,36 +195,50 @@ impl WalletManager {
     }
 }
 
-// ---- chain source: raw Electrum → bdk updates ------------------------------
+impl Drop for WalletManager {
+    /// Merchant unload / pactd stop: tell every worker to exit. No join —
+    /// a worker may be mid-fetch (bounded by the socket timeouts) and drop
+    /// must not block; it re-checks the flag before its next wallet write
+    /// and its `Weak` handle dies with this manager's map anyway.
+    fn drop(&mut self) {
+        if let Ok(workers) = self.workers.lock() {
+            for worker in workers.values() {
+                worker.shutdown();
+            }
+        }
+    }
+}
 
-/// Sync `entry`'s wallet from the Electrum backend: scripthash histories of
-/// the revealed spks (or a STOP_GAP full scan when the store is fresh),
-/// PoCX-safe anchors from raw headers, and a checkpoint update that always
-/// connects to the wallet's local chain (genesis at worst). This is the
-/// unforked-bdk chain source of design doc D3.
-fn sync_entry(entry: &mut WalletEntry, chain: &ElectrumBackend) -> Result<()> {
-    let params = chain.params();
-    // Fresh store (nothing ever revealed) → gap-limit scan for a restored
-    // seed's history. Steady state → revealed spks only.
+// ---- chain source: raw Electrum → bdk updates ------------------------------
+//
+// The sync is split snapshot → fetch → apply (issue #87): the wallet-entry
+// lock is held only for the pure-CPU snapshot and the final apply+persist,
+// NEVER across network I/O — the background sync worker
+// ([`crate::wallet_worker::SyncWorker`]) runs the fetch while RPC reads keep
+// serving from the cache. The snapshot→fetch→apply gap is what bdk's
+// monotonic `Update` merge is designed for: a chain update that no longer
+// connects is rejected (and retried next tick), never corrupts.
+
+/// What the fetch phase needs from the wallet, captured under a brief
+/// entry lock.
+struct SpkSnapshot {
+    /// Fresh store (nothing ever revealed) → gap-limit scan for a restored
+    /// seed's history. Steady state → revealed spks only.
+    full_scan: bool,
+    revealed: Vec<(KeychainKind, Vec<ScriptBuf>)>,
+    local_tip: CheckPoint,
+}
+
+fn snapshot_spks(entry: &WalletEntry) -> SpkSnapshot {
     let full_scan = entry
         .wallet
         .derivation_index(KeychainKind::External)
         .is_none();
-
-    // Phase A — scripthash histories, BATCHED (one round-trip per batch;
-    // pre-batching this was one round-trip PER ADDRESS, which took tens of
-    // seconds against a remote server while holding the global engine lock).
-    let mut last_active: BTreeMap<KeychainKind, u32> = BTreeMap::new();
-    let mut all_history: Vec<(String, i64)> = Vec::new();
-    for keychain in [KeychainKind::External, KeychainKind::Internal] {
-        if full_scan {
-            // Windowed gap scan: STOP_GAP spks per batch, stop once a full
-            // STOP_GAP run of consecutive unused spks has been seen —
-            // identical result to the old per-spk walk (a window may peek a
-            // few spks past the stop point; pure reads, harmless).
-            let (mut index, mut gap) = (0u32, 0u32);
-            'windows: loop {
-                let spks: Vec<ScriptBuf> = (index..index + STOP_GAP)
+    let mut revealed = Vec::new();
+    if !full_scan {
+        for keychain in [KeychainKind::External, KeychainKind::Internal] {
+            if let Some(last) = entry.wallet.derivation_index(keychain) {
+                let spks = (0..=last)
                     .map(|i| {
                         entry
                             .wallet
@@ -200,6 +247,65 @@ fn sync_entry(entry: &mut WalletEntry, chain: &ElectrumBackend) -> Result<()> {
                             .script_pubkey()
                     })
                     .collect();
+                revealed.push((keychain, spks));
+            }
+        }
+    }
+    SpkSnapshot {
+        full_scan,
+        revealed,
+        local_tip: entry.wallet.latest_checkpoint(),
+    }
+}
+
+/// Every revealed spk of both keychains — the set the sync worker keeps
+/// scripthash subscriptions on. Brief pure-CPU derivation, no chain I/O.
+pub(crate) fn revealed_spks(entry: &WalletEntry) -> Vec<ScriptBuf> {
+    snapshot_spks(entry)
+        .revealed
+        .into_iter()
+        .flat_map(|(_, spks)| spks)
+        .collect()
+}
+
+/// Fetch phase: scripthash histories of the snapshot's spks (or a STOP_GAP
+/// full scan when the store is fresh), PoCX-safe anchors from raw headers,
+/// and a checkpoint update that always connects to the wallet's local chain
+/// (genesis at worst). This is the unforked-bdk chain source of design doc
+/// D3. Network I/O happens with NO wallet lock held; the full-scan windows
+/// re-take it briefly for pure-CPU address derivation only.
+fn fetch_update(
+    chain: &ElectrumBackend,
+    handle: &WalletHandle,
+    snap: SpkSnapshot,
+) -> Result<Update> {
+    let params = chain.params();
+
+    // Phase A — scripthash histories, BATCHED (one round-trip per batch;
+    // pre-batching this was one round-trip PER ADDRESS, which took tens of
+    // seconds against a remote server while holding the global engine lock).
+    let mut last_active: BTreeMap<KeychainKind, u32> = BTreeMap::new();
+    let mut all_history: Vec<(String, i64)> = Vec::new();
+    if snap.full_scan {
+        for keychain in [KeychainKind::External, KeychainKind::Internal] {
+            // Windowed gap scan: STOP_GAP spks per batch, stop once a full
+            // STOP_GAP run of consecutive unused spks has been seen —
+            // identical result to the old per-spk walk (a window may peek a
+            // few spks past the stop point; pure reads, harmless).
+            let (mut index, mut gap) = (0u32, 0u32);
+            'windows: loop {
+                let spks: Vec<ScriptBuf> = {
+                    let entry = handle.lock().expect("wallet entry poisoned");
+                    (index..index + STOP_GAP)
+                        .map(|i| {
+                            entry
+                                .wallet
+                                .peek_address(keychain, i)
+                                .address
+                                .script_pubkey()
+                        })
+                        .collect()
+                };
                 for (offset, history) in chain.histories(&spks)?.into_iter().enumerate() {
                     if history.is_empty() {
                         gap += 1;
@@ -214,17 +320,10 @@ fn sync_entry(entry: &mut WalletEntry, chain: &ElectrumBackend) -> Result<()> {
                 }
                 index += STOP_GAP;
             }
-        } else if let Some(last) = entry.wallet.derivation_index(keychain) {
-            let spks: Vec<ScriptBuf> = (0..=last)
-                .map(|i| {
-                    entry
-                        .wallet
-                        .peek_address(keychain, i)
-                        .address
-                        .script_pubkey()
-                })
-                .collect();
-            for history in chain.histories(&spks)? {
+        }
+    } else {
+        for (_, spks) in &snap.revealed {
+            for history in chain.histories(spks)? {
                 all_history.extend(history);
             }
         }
@@ -284,15 +383,41 @@ fn sync_entry(entry: &mut WalletEntry, chain: &ElectrumBackend) -> Result<()> {
     }
     tx_update.seen_ats = seen_ats;
 
-    let chain_cp = chain_update(chain, params, entry.wallet.latest_checkpoint(), &headers)?;
+    let chain_cp = chain_update(chain, params, snap.local_tip, &headers)?;
+    Ok(Update {
+        last_active_indices: last_active,
+        tx_update,
+        chain: Some(chain_cp),
+    })
+}
+
+/// One full sync pass: snapshot (brief lock) → fetch (no locks) → apply +
+/// persist (brief lock). `abort` is checked between fetch and apply so a
+/// shutting-down worker never writes into a store its manager already let
+/// go of (merchant unload).
+pub(crate) fn sync_wallet(
+    handle: &WalletHandle,
+    chain: &ElectrumBackend,
+    abort: impl Fn() -> bool,
+) -> Result<()> {
+    let snap = {
+        let entry = handle.lock().expect("wallet entry poisoned");
+        snapshot_spks(&entry)
+    };
+    let update = fetch_update(chain, handle, snap)?;
+    if abort() {
+        return Ok(());
+    }
+    let mut guard = handle.lock().expect("wallet entry poisoned");
+    let entry = &mut *guard;
     entry
         .wallet
-        .apply_update(Update {
-            last_active_indices: last_active,
-            tx_update,
-            chain: Some(chain_cp),
-        })
+        .apply_update(update)
         .map_err(|e| anyhow!("bdk chain update does not connect: {e}"))?;
+    entry
+        .wallet
+        .persist(&mut entry.conn)
+        .map_err(|e| anyhow!("persisting wallet: {e}"))?;
     Ok(())
 }
 
@@ -347,52 +472,78 @@ fn chain_update(
 
 /// The nodeless primary backend: chain data over Electrum, wallet over bdk.
 /// Sits at `backends[0]` of a `MultiBackend` when a coin is configured with
-/// Electrum URLs only (design doc D5). `entry` is `None` while the seed is
+/// Electrum URLs only (design doc D5). `wallet` is `None` while the seed is
 /// locked — chain reads keep working, wallet operations report the lock.
+///
+/// Since issue #87 the wallet operations NEVER touch the network for chain
+/// data themselves: reads serve the bdk cache (~0ms — the background
+/// [`SyncWorker`] keeps it fresh at its cadence plus pokes), and writes only
+/// gate on the worker's first-sync latch so they can't build a spend from a
+/// never-synced cache at boot. `chain` is the coin's pooled long-lived
+/// Electrum connection, shared with the worker and every other engine call.
 pub struct BdkWalletBackend {
     params: &'static ChainParams,
-    chain: ElectrumBackend,
-    entry: Option<WalletHandle>,
+    chain: Arc<ElectrumBackend>,
+    wallet: Option<(WalletHandle, Arc<SyncWorker>)>,
 }
 
 impl BdkWalletBackend {
     pub fn new(
         params: &'static ChainParams,
-        electrum_url: &str,
-        entry: Option<WalletHandle>,
-    ) -> Result<Self> {
-        Ok(Self {
+        chain: Arc<ElectrumBackend>,
+        wallet: Option<(WalletHandle, Arc<SyncWorker>)>,
+    ) -> Self {
+        Self {
             params,
-            chain: ElectrumBackend::new(params, electrum_url)?,
-            entry,
-        })
+            chain,
+            wallet,
+        }
     }
 
-    /// Run a wallet operation under the entry lock, syncing first when
-    /// `sync` is set, and persist any staged change afterwards — also on
-    /// operation error, so chain data learned during the sync survives.
-    fn with_wallet<T>(
-        &self,
-        sync: bool,
-        f: impl FnOnce(&mut WalletEntry) -> Result<T>,
-    ) -> Result<T> {
-        let handle = self.entry.as_ref().context(
+    /// Nudge the sync worker: our own action changed (or is about to
+    /// change) what the chain knows about us — pick it up now, not at the
+    /// next tick.
+    fn poke_worker(&self) {
+        if let Some((_, worker)) = &self.wallet {
+            worker.poke();
+        }
+    }
+
+    /// Run a wallet operation on the CACHED wallet under the entry lock and
+    /// persist any staged change afterwards — also on operation error, so
+    /// anything already staged survives.
+    fn with_wallet<T>(&self, f: impl FnOnce(&mut WalletEntry) -> Result<T>) -> Result<T> {
+        let (handle, _) = self.wallet.as_ref().context(
             "wallet unavailable: the seed is locked — unlock before spending (nodeless wallet)",
         )?;
         let mut guard = handle.lock().expect("wallet entry poisoned");
         let entry = &mut *guard;
-        let out = (|| -> Result<T> {
-            if sync {
-                sync_entry(entry, &self.chain)?;
-            }
-            f(entry)
-        })();
+        let out = f(entry);
         let persisted = entry.wallet.persist(&mut entry.conn);
         match (out, persisted) {
             (Ok(v), Ok(_)) => Ok(v),
             (Err(e), _) => Err(e),
             (Ok(_), Err(e)) => Err(anyhow!("persisting wallet: {e}")),
         }
+    }
+
+    /// [`Self::with_wallet`] for operations that BUILD/SPEND: wait (bounded)
+    /// for the worker's first completed sync of this run, so a spend can
+    /// never coin-select from a cache that has not seen the chain at all
+    /// (fresh restore, boot race). Steady state costs nothing — the latch
+    /// is already set. A dead server surfaces as an honest error here
+    /// instead of a silent double-spend risk.
+    fn with_synced_wallet<T>(&self, f: impl FnOnce(&mut WalletEntry) -> Result<T>) -> Result<T> {
+        let (_, worker) = self.wallet.as_ref().context(
+            "wallet unavailable: the seed is locked — unlock before spending (nodeless wallet)",
+        )?;
+        worker.poke(); // an in-backoff worker should retry NOW
+        anyhow::ensure!(
+            worker.wait_first_sync(FIRST_SYNC_WAIT),
+            "the nodeless wallet has not completed its first chain sync yet — check that \
+             the coin's Electrum server is reachable, then retry"
+        );
+        self.with_wallet(f)
     }
 
     /// Build + sign a spend of `amount_sat` to `spk` priced by `fee` (market
@@ -439,7 +590,11 @@ impl ChainBackend for BdkWalletBackend {
     }
 
     fn broadcast(&self, tx: &Transaction) -> Result<Txid> {
-        self.chain.broadcast(tx)
+        let txid = self.chain.broadcast(tx)?;
+        // Swap txs (fundings, redeems, refunds) routinely touch our own
+        // spks — let the worker fold them in now.
+        self.poke_worker();
+        Ok(txid)
     }
 
     fn get_txout(
@@ -491,21 +646,23 @@ impl ChainBackend for BdkWalletBackend {
     // -- the nine wallet operations (design doc §3) --
 
     fn wallet_new_address(&self) -> Result<String> {
-        self.with_wallet(false, |entry| {
+        let address = self.with_wallet(|entry| {
             let spk = wallet_handout_spk(entry);
             spk_to_address(self.params, &spk)
-        })
+        })?;
+        // The Receive dialog is open: subscribe the (possibly fresh) spk and
+        // refresh now, so the incoming payment is spotted promptly.
+        self.poke_worker();
+        Ok(address)
     }
 
     fn wallet_balance(&self) -> Result<u64> {
-        self.with_wallet(true, |entry| {
-            Ok(entry.wallet.balance().trusted_spendable().to_sat())
-        })
+        self.with_wallet(|entry| Ok(entry.wallet.balance().trusted_spendable().to_sat()))
     }
 
     fn wallet_send(&self, address: &str, amount_sat: u64, fee: SendFee) -> Result<String> {
         let spk = self.params.parse_address(address)?;
-        self.with_wallet(true, |entry| {
+        let txid = self.with_synced_wallet(|entry| {
             // User sends (and v1 HTLC fundings, which ride this path) signal
             // BIP125: the owner bumps sends, the nurse RBFs v1 fundings.
             let tx = self.build_signed(
@@ -521,12 +678,14 @@ impl ChainBackend for BdkWalletBackend {
             let txid = self.chain.broadcast(&tx)?;
             entry.wallet.apply_unconfirmed_txs([(tx, now_ts())]);
             Ok(txid.to_string())
-        })
+        })?;
+        self.poke_worker();
+        Ok(txid)
     }
 
     fn wallet_send_all(&self, address: &str, fee: SendFee) -> Result<String> {
         let spk = self.params.parse_address(address)?;
-        self.with_wallet(true, |entry| {
+        let txid = self.with_synced_wallet(|entry| {
             // sat/kvB → sat/kwu, same as build_signed.
             let feerate = FeeRate::from_sat_per_kwu((self.resolve_send_fee(fee)? + 2) / 4);
             // drain_wallet + drain_to: every spendable UTXO in, one output
@@ -552,7 +711,9 @@ impl ChainBackend for BdkWalletBackend {
             let txid = self.chain.broadcast(&tx)?;
             entry.wallet.apply_unconfirmed_txs([(tx, now_ts())]);
             Ok(txid.to_string())
-        })
+        })?;
+        self.poke_worker();
+        Ok(txid)
     }
 
     fn wallet_build_funding(
@@ -561,7 +722,7 @@ impl ChainBackend for BdkWalletBackend {
         amount_sat: u64,
     ) -> Result<(String, u32, String)> {
         let spk = self.params.parse_address(address)?;
-        self.with_wallet(true, |entry| {
+        let built = self.with_synced_wallet(|entry| {
             // Funding prices at the per-coin ~30-min target (see
             // funding_conf_target), mirroring the Core-RPC backend. It is
             // broadcast NON-replaceable (no BIP125 signal): the v2 funding
@@ -590,7 +751,10 @@ impl ChainBackend for BdkWalletBackend {
             // wallet_cancel_funding on the engine's terminal paths.
             entry.wallet.apply_unconfirmed_txs([(tx, now_ts())]);
             Ok((txid.to_string(), vout, hex_tx))
-        })
+        })?;
+        // A change spk may have just been revealed — get it subscribed.
+        self.poke_worker();
+        Ok(built)
     }
 
     fn wallet_cancel_funding(&self, tx_hex: &str) -> Result<()> {
@@ -602,7 +766,7 @@ impl ChainBackend for BdkWalletBackend {
         // data. (If the tx WAS broadcast after all, the next sync re-learns it
         // from our own spk histories — its inputs spend our spks — and a
         // fresher last_seen out-cancels the eviction, so this self-heals.)
-        self.with_wallet(false, |entry| {
+        self.with_wallet(|entry| {
             // Belt-and-suspenders (the engine gates on this too): never evict
             // a funding the wallet knows is confirmed.
             if let Some(wtx) = entry.wallet.get_tx(txid) {
@@ -620,11 +784,11 @@ impl ChainBackend for BdkWalletBackend {
     }
 
     fn wallet_transactions(&self) -> Result<Vec<WalletTxInfo>> {
-        self.with_wallet(true, |entry| Ok(wallet_activity(entry)))
+        self.with_wallet(|entry| Ok(wallet_activity(entry)))
     }
 
     fn wallet_locked(&self) -> Result<bool> {
-        Ok(self.entry.is_none())
+        Ok(self.wallet.is_none())
     }
 
     fn wallet_sign_send(
@@ -638,7 +802,7 @@ impl ChainBackend for BdkWalletBackend {
             "CPFP child must spend exactly the one wallet-owned prevout"
         );
         let outpoint = tx.input[0].previous_output;
-        self.with_wallet(true, |entry| {
+        let txid = self.with_synced_wallet(|entry| {
             // The parent (our sweep/change output) is normally already in the
             // graph via sync; a floating txout covers the race where it
             // hasn't propagated to the Electrum server yet.
@@ -679,12 +843,14 @@ impl ChainBackend for BdkWalletBackend {
             let txid = self.chain.broadcast(&tx)?;
             entry.wallet.apply_unconfirmed_txs([(tx, now_ts())]);
             Ok(txid)
-        })
+        })?;
+        self.poke_worker();
+        Ok(txid)
     }
 
     fn wallet_tx_fee_vsize(&self, txid: &str) -> Result<(u64, u64)> {
         let txid = Txid::from_str(txid)?;
-        self.with_wallet(false, |entry| {
+        self.with_wallet(|entry| {
             let tx = entry
                 .wallet
                 .get_tx(txid)
@@ -706,7 +872,7 @@ impl ChainBackend for BdkWalletBackend {
         htlc_spk: &ScriptBuf,
     ) -> Result<Option<(u32, u64, ScriptBuf)>> {
         let txid = Txid::from_str(funding_txid)?;
-        self.with_wallet(false, |entry| {
+        self.with_wallet(|entry| {
             let tx = entry
                 .wallet
                 .get_tx(txid)
@@ -733,7 +899,7 @@ impl ChainBackend for BdkWalletBackend {
     fn wallet_bumpfee(&self, txid: &str, feerate_sat_vb: u64) -> Result<String> {
         let txid = Txid::from_str(txid)?;
         let feerate = FeeRate::from_sat_per_vb(feerate_sat_vb).context("feerate overflow")?;
-        self.with_wallet(true, |entry| {
+        let txid = self.with_synced_wallet(|entry| {
             let mut builder = entry
                 .wallet
                 .build_fee_bump(txid)
@@ -749,7 +915,9 @@ impl ChainBackend for BdkWalletBackend {
             let new_txid = self.chain.broadcast(&tx)?;
             entry.wallet.apply_unconfirmed_txs([(tx, now_ts())]);
             Ok(new_txid.to_string())
-        })
+        })?;
+        self.poke_worker();
+        Ok(txid)
     }
 }
 
@@ -1092,6 +1260,60 @@ mod tests {
         );
 
         drop(guard);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn revealed_spks_track_reveals_across_keychains() {
+        let dir = temp_data_dir();
+        let params = btc_mainnet();
+        let seed = PactSeed::from_mnemonic(TEST_MNEMONIC, "").unwrap();
+        let handle = WalletManager::new(&dir).open("btc", params, &seed).unwrap();
+        let mut guard = handle.lock().unwrap();
+        let entry = &mut *guard;
+
+        // Fresh store: nothing revealed — the sync side treats this as the
+        // full-scan case and the worker has nothing to subscribe yet.
+        assert!(revealed_spks(entry).is_empty());
+
+        entry.wallet.reveal_next_address(KeychainKind::External);
+        entry.wallet.reveal_next_address(KeychainKind::External);
+        entry.wallet.reveal_next_address(KeychainKind::Internal);
+        let spks = revealed_spks(entry);
+        assert_eq!(spks.len(), 3, "2 external + 1 internal");
+        assert_eq!(
+            spks.iter().collect::<std::collections::HashSet<_>>().len(),
+            3,
+            "all distinct"
+        );
+
+        drop(guard);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ensure_worker_reuses_per_coin_and_shuts_down_with_manager() {
+        let dir = temp_data_dir();
+        let params = btc_mainnet();
+        let seed = PactSeed::from_mnemonic(TEST_MNEMONIC, "").unwrap();
+        let manager = WalletManager::new(&dir);
+        let handle = manager.open("btc", params, &seed).unwrap();
+        // Lazy backend pointed at a dead port: the worker just backs off.
+        let chain = Arc::new(ElectrumBackend::new(params, "tcp://127.0.0.1:1").unwrap());
+
+        let w1 = manager.ensure_worker("btc", chain.clone(), &handle);
+        let w2 = manager.ensure_worker("btc", chain, &handle);
+        assert!(Arc::ptr_eq(&w1, &w2), "one worker per coin");
+
+        // No sync ever completed against the dead server: the write gate
+        // reports honestly instead of hanging.
+        assert!(!w1.wait_first_sync(std::time::Duration::from_millis(10)));
+
+        // Manager drop = merchant unload: the latch releases as NOT synced,
+        // so a racing write errors instead of blocking its full timeout.
+        drop(manager);
+        assert!(!w1.wait_first_sync(std::time::Duration::from_secs(30)));
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 

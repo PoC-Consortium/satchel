@@ -21,7 +21,7 @@ use std::str::FromStr;
 use std::sync::Mutex;
 
 use crate::adaptor_swap::AdaptorState;
-use crate::chain::{ChainBackend, ElectrumBackend, MultiBackend, SendFee};
+use crate::chain::{ChainBackend, MultiBackend, SendFee};
 use crate::htlc::extract_preimage;
 use crate::keys::{hash_preimage, swap_id, PactSeed};
 use crate::messages::{self, AbortBody, AcceptBody, ChainRef, Envelope, FundedBody, InitBody};
@@ -86,6 +86,11 @@ pub struct Engine {
     /// indexes, sqlite store — so it lives here rather than being rebuilt
     /// per backend construction.
     wallet_manager: crate::wallet_bdk::WalletManager,
+    /// Long-lived Electrum connections, one per configured server (issue
+    /// #87) — shared by every engine call and the per-coin sync workers
+    /// instead of a fresh TCP+TLS handshake per call. Lazy + self-healing,
+    /// so pooling never pins a dead socket.
+    electrum_pool: crate::chain::ElectrumPool,
 }
 
 fn chain_params(chain: &ChainRef) -> Result<&'static ChainParams> {
@@ -592,6 +597,7 @@ impl Engine {
             watch_only,
             progress: Mutex::new(HashMap::new()),
             wallet_manager: crate::wallet_bdk::WalletManager::new(data_dir),
+            electrum_pool: crate::chain::ElectrumPool::new(),
         })
     }
 
@@ -629,10 +635,42 @@ impl Engine {
             Some(url) if !url.starts_with("http://") => {
                 self.nodeless_backend(&chain.coin_id, params, urls)?
             }
-            _ => MultiBackend::new(params, urls)?,
+            _ => self.node_backend(&chain.coin_id, params, urls)?,
         };
         backend.verify_chain()?;
         Ok(backend)
+    }
+
+    /// Core-RPC-primary backend list (the node-backed shape): the primary —
+    /// and any further Core URLs — are stateless per-call HTTP clients;
+    /// Electrum secondaries come from the shared pool so their TCP+TLS
+    /// connections persist across calls (issue #87).
+    fn node_backend(
+        &self,
+        coin_id: &str,
+        params: &'static ChainParams,
+        urls: &str,
+    ) -> Result<MultiBackend> {
+        let urls: Vec<&str> = urls
+            .split(',')
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .collect();
+        let mut backends: Vec<Box<dyn ChainBackend>> = Vec::new();
+        for url in &urls {
+            if url.starts_with("http://") {
+                backends.push(Box::new(crate::chain::CoreRpcBackend::new(params, url)?));
+            } else if url.starts_with("tcp://") || url.starts_with("ssl://") {
+                backends.push(Box::new(
+                    self.electrum_pool.get(params, coin_id, url, &urls)?,
+                ));
+            } else {
+                anyhow::bail!(
+                    "unsupported backend URL scheme in {url:?} (http:// | tcp:// | ssl://)"
+                )
+            }
+        }
+        MultiBackend::from_backends(backends)
     }
 
     /// Electrum-only URL list ⇒ nodeless mode: the primary becomes a
@@ -668,15 +706,26 @@ impl Engine {
                  (independent chain views) — add a second URL"
             );
         }
-        let handle = match self.store.seed() {
-            Ok(seed) => Some(self.wallet_manager.open(coin_id, params, &seed)?),
+        // The primary chain view: the coin's pooled long-lived connection,
+        // shared with the background sync worker (issue #87).
+        let primary = self.electrum_pool.get(params, coin_id, urls[0], &urls)?;
+        let wallet = match self.store.seed() {
+            Ok(seed) => {
+                let handle = self.wallet_manager.open(coin_id, params, &seed)?;
+                let worker = self
+                    .wallet_manager
+                    .ensure_worker(coin_id, primary.clone(), &handle);
+                Some((handle, worker))
+            }
             Err(_) => None, // locked or absent seed: chain-reads-only backend
         };
         let mut backends: Vec<Box<dyn ChainBackend>> = vec![Box::new(
-            crate::wallet_bdk::BdkWalletBackend::new(params, urls[0], handle)?,
+            crate::wallet_bdk::BdkWalletBackend::new(params, primary, wallet),
         )];
         for url in &urls[1..] {
-            backends.push(Box::new(ElectrumBackend::new(params, url)?));
+            backends.push(Box::new(
+                self.electrum_pool.get(params, coin_id, url, &urls)?,
+            ));
         }
         MultiBackend::from_backends(backends)
     }

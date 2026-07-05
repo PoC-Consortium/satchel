@@ -38,14 +38,25 @@ GET_BTC = "0.001"
 
 def fund_bdk_wallet(h, electrs, party, coins="60.0"):
     """Fund a party's nodeless btcx (bdk) wallet from the harness's funded
-    core wallet, and wait until the party can see it through electrs."""
+    core wallet, and wait until the party can see it through electrs.
+
+    getbalance is a pure CACHE read since the background sync worker
+    (issue #87): an EXTERNALLY-originated payment like this one becomes
+    visible at the worker's cadence (scripthash notification or ~15s tick),
+    so poll bounded instead of asserting immediately. Our OWN broadcasts
+    stay promptly visible (the wallet ops poke the worker)."""
     addr = party.rpc("getnewaddress", "btcx")["address"]
     assert addr.startswith("rpocx1p"), f"expected a regtest P2TR pocx address: {addr}"
     h.pocx.rpc("sendtoaddress", addr, float(coins), wallet="alice_pocx")
     h.pocx.generate(1, "alice_pocx")
     electrs.wait_synced(h.pocx.rpc("getblockcount"))
-    bal = party.rpc("getbalance", "btcx")["balance_sat"]
-    assert bal > 0, f"bdk wallet not funded (balance {bal})"
+    deadline = time.time() + 30
+    while True:
+        bal = party.rpc("getbalance", "btcx")["balance_sat"]
+        if bal > 0:
+            break
+        assert time.time() < deadline, f"bdk wallet not funded (balance {bal})"
+        time.sleep(0.5)
     print(f"[nodeless] {party.name}: bdk wallet funded with {bal} sat")
     return bal
 
@@ -212,9 +223,10 @@ def test_v1_nodeless_both_sides(h, electrs, board):
 
         spent = bal_before - alice.rpc("getbalance", "btcx")["balance_sat"]
         assert GIVE_POCX_SAT <= spent < GIVE_POCX_SAT + 100_000, spent
-        # STRICT on purpose: getbalance syncs fresh (batched, cheap), so
-        # Bob's incoming redeem must be visible immediately — if this ever
-        # needs a poll loop again, wallet freshness has regressed.
+        # STRICT on purpose: Bob's redeem is his OWN broadcast, which pokes
+        # the sync worker (issue #87), and completion requires it confirmed
+        # (many worker passes later) — so the cached balance must already
+        # carry it. If this ever needs a poll loop, the poke path regressed.
         gained = bob.rpc("getbalance", "btcx")["balance_sat"] - bob_btcx_before
         assert 0 < gained <= GIVE_POCX_SAT, (
             f"bob's bdk wallet should hold the leg-A redeem: {gained}")

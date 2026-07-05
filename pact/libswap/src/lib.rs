@@ -38,6 +38,7 @@ pub mod store;
 pub mod swap;
 pub mod taproot;
 pub mod wallet_bdk;
+pub mod wallet_worker;
 
 pub use fee_policy::FeeBumpPolicy;
 pub use pact_proto::PROTOCOL_VERSION;
