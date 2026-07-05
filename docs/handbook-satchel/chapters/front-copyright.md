@@ -3,7 +3,7 @@
 # Copyright and disclaimer {-}
 
 *Satchel — User Handbook*
-Verified against commit `5fed4b7` · July 2026
+Verified against commit `e7ffa94` · July 2026
 
 This handbook tracks the code by commit hash rather than a release version: the
 hash above is the `satchel` source revision its contents were verified against.

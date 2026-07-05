@@ -19,7 +19,7 @@
 
 > **Status** — live. v1 (hash-locked HTLC) and v2 (Taproot/MuSig2 adaptor) are **reviewed and running on mainnet**. As with any self-custody software, you alone hold your keys — keep your recovery phrase safe.
 >
-> *These docs were verified against commit `5fed4b7`.*
+> *These docs were verified against commit `e7ffa94`.*
 
 > **Upgrading to rc10** — rc10 changes how the v2 (Taproot) cooperative redeem is built, and both parties must build it byte-identically: **an rc9 and an rc10 peer cannot open v2 swaps with each other**. rc10 also introduces **protocol wire versioning**: every offer and handshake message now carries its protocol's wire epoch (v1 = 1, v2 = 2), so incompatible offers show up badged un-takeable on the Corkboard and a mixed-version take or handshake is refused up-front with a clear reason — no funds at risk, the swap simply doesn't start. Future protocol amendments bump the epoch and gate the same way. **Settle or abort any live v2 swaps before upgrading**; swaps already past the handshake finish on the version that made them, and v1 (HTLC) swaps are unaffected. Also in rc10: v2 fundings and redeems are broadcast **non-replaceable** (the engine bumps a stuck one via CPFP); the timelock refund keeps RBF.
 
