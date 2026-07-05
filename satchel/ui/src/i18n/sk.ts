@@ -363,6 +363,9 @@ export const sk: Bundle = {
     version: "Verzia {version}",
     updateUpToDate: "Aktuálne",
     updateCheckPlaceholder: "Kontrola aktualizácií príde v neskoršom vydaní.",
+    protocols: "Swapové protokoly",
+    protocolsHint:
+      "Čo táto verzia podporuje — ponuky s inou verziou si možno prezerať, ale nie prijať. Obe strany swapu sa musia zhodovať.",
     trustModel: "Kde žijú vaše kľúče",
     trustModelBody:
       "Tajomstvá žijú v enginu, nikdy v Satchel. Seed obchodníka sedí v dátovom priečinku enginu (šifrovaný alebo v čistom texte — podľa vašej voľby); Satchel neukladá žiadny seed ani prístupovú frázu. Seed je horúci zámerne (iba tranzitné kľúče) — väčší výnos preposielajte do vlastnej studenej peňaženky.",

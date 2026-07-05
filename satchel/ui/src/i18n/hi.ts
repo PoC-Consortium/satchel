@@ -363,6 +363,9 @@ export const hi: Bundle = {
     version: "संस्करण {version}",
     updateUpToDate: "अप-टू-डेट",
     updateCheckPlaceholder: "अपडेट जाँच बाद की रिलीज़ में आएगी।",
+    protocols: "स्वैप प्रोटोकॉल",
+    protocolsHint:
+      "यह बिल्ड क्या बोलता है — अलग संस्करण वाले offer देखे जा सकते हैं पर लिए नहीं जा सकते। स्वैप के दोनों पक्षों का मेल ज़रूरी है।",
     trustModel: "आपकी keys कहाँ रहती हैं",
     trustModelBody:
       "Secrets engine में रहते हैं, कभी Satchel में नहीं। merchant seed engine के डेटा फ़ोल्डर में रहता है (एन्क्रिप्टेड या प्लेनटेक्स्ट — आपकी पसंद); Satchel कोई seed या passphrase संग्रहीत नहीं करता। seed डिज़ाइन के अनुसार hot है (केवल ट्रांज़िट keys) — बड़ी आय को अपने cold wallet में स्वीप करें।",

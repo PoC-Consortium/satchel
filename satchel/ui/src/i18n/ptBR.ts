@@ -363,6 +363,9 @@ export const ptBR: Bundle = {
     version: "Versão {version}",
     updateUpToDate: "Atualizado",
     updateCheckPlaceholder: "A verificação de atualização chega em uma versão futura.",
+    protocols: "Protocolos de swap",
+    protocolsHint:
+      "O que esta versão fala — ofertas com versão diferente podem ser vistas, mas não aceitas. Os dois lados do swap precisam coincidir.",
     trustModel: "Onde suas chaves ficam",
     trustModelBody:
       "Os segredos ficam na engine, nunca no Satchel. A seed do merchant fica na pasta de dados da engine (criptografada ou em texto puro — sua escolha); o Satchel não armazena seed nem senha. A seed é quente por design (apenas chaves de trânsito) — varra ganhos consideráveis para sua própria carteira fria (cold wallet).",

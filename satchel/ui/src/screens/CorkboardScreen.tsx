@@ -1055,24 +1055,37 @@ function OfferRow({
         <CounterpartyTag id={o.from} />
       )}
       <OfferStateChip state={state} />
-      {/* Every offer shows its swap type: v2 adaptor is primary-accented,
-          v1 HTLC is a muted "Standard" chip. */}
+      {/* Every offer shows its swap type + the offer's WIRE EPOCH (rc10):
+          v2 adaptor is primary-accented, v1 HTLC a muted "Standard" chip.
+          A wire mismatch tints the chip warning and swaps in the
+          incompatible-release tooltip — the visible "why" behind the
+          disabled Take. */}
       {b.protocol === "pact-htlc-v2" ? (
-        <Tooltip title={t("coins.protoPrivateTip")}>
+        <Tooltip title={wireOff ? t("corkboard.wireMismatchTip") : t("coins.protoPrivateTip")}>
           <Chip
             size="small"
             variant="outlined"
-            label={t("coins.protoPrivate")}
-            sx={{ height: 22, color: "primary.main", borderColor: "primary.main", cursor: "help" }}
+            label={`${t("coins.protoPrivate")} v${b.wire ?? 1}`}
+            sx={{
+              height: 22,
+              color: wireOff ? "warning.main" : "primary.main",
+              borderColor: wireOff ? "warning.main" : "primary.main",
+              cursor: "help",
+            }}
           />
         </Tooltip>
       ) : (
-        <Tooltip title={t("coins.protoHtlcTip")}>
+        <Tooltip title={wireOff ? t("corkboard.wireMismatchTip") : t("coins.protoHtlcTip")}>
           <Chip
             size="small"
             variant="outlined"
-            label={t("makeOffer.protoStandard")}
-            sx={{ height: 22, color: "text.secondary", borderColor: "divider", cursor: "help" }}
+            label={`${t("makeOffer.protoStandard")} v${b.wire ?? 1}`}
+            sx={{
+              height: 22,
+              color: wireOff ? "warning.main" : "text.secondary",
+              borderColor: wireOff ? "warning.main" : "divider",
+              cursor: "help",
+            }}
           />
         </Tooltip>
       )}

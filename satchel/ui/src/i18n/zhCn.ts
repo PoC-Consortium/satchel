@@ -363,6 +363,9 @@ export const zhCn: Bundle = {
     version: "版本 {version}",
     updateUpToDate: "已是最新",
     updateCheckPlaceholder: "更新检查将在后续版本中提供。",
+    protocols: "交换协议",
+    protocolsHint:
+      "此版本支持的协议——版本不同的报价可以浏览但无法接受。交换双方必须一致。",
     trustModel: "你的密钥存放在哪里",
     trustModelBody:
       "私密信息存放在引擎中，绝不在 Satchel 中。商户种子位于引擎的数据文件夹内（加密或明文 — 由你选择）；Satchel 不存储任何种子或口令。按设计，该种子是热的（仅中转密钥）— 请将可观的收益清扫到你自己的冷钱包。",

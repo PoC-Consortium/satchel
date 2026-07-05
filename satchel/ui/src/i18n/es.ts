@@ -363,6 +363,9 @@ export const es: Bundle = {
     version: "Versión {version}",
     updateUpToDate: "Al día",
     updateCheckPlaceholder: "La comprobación de actualizaciones llegará en una versión posterior.",
+    protocols: "Protocolos de swap",
+    protocolsHint:
+      "Lo que habla esta versión: las ofertas con una versión distinta se pueden ver pero no tomar. Ambas partes del swap deben coincidir.",
     trustModel: "Dónde viven tus claves",
     trustModelBody:
       "Los secretos viven en el motor, nunca en Satchel. La semilla del merchant reside en la carpeta de datos del motor (cifrada o en texto plano — tú decides); Satchel no almacena ninguna semilla ni frase de contraseña. La semilla es caliente por diseño (solo claves de tránsito) — barre los ingresos cuantiosos a tu propia cartera fría.",

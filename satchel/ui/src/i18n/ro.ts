@@ -363,6 +363,9 @@ export const ro: Bundle = {
     version: "Versiunea {version}",
     updateUpToDate: "La zi",
     updateCheckPlaceholder: "Verificarea actualizărilor sosește într-o lansare ulterioară.",
+    protocols: "Protocoale de swap",
+    protocolsHint:
+      "Ce vorbește această versiune — ofertele cu o versiune diferită pot fi văzute, dar nu preluate. Ambele părți ale swapului trebuie să se potrivească.",
     trustModel: "Unde stau cheile tale",
     trustModelBody:
       "Secretele stau în engine, niciodată în Satchel. Seed-ul merchant-ului stă în folderul de date al engine-ului (criptat sau în text simplu — alegerea ta); Satchel nu stochează niciun seed sau parolă. Seed-ul este fierbinte prin design (doar chei de tranzit) — mută câștigurile considerabile în propriul tău portofel rece.",

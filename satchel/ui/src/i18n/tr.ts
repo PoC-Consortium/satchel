@@ -363,6 +363,9 @@ export const tr: Bundle = {
     version: "Sürüm {version}",
     updateUpToDate: "Güncel",
     updateCheckPlaceholder: "Güncelleme kontrolü daha sonraki bir sürümde gelecek.",
+    protocols: "Takas protokolleri",
+    protocolsHint:
+      "Bu sürümün konuştuğu şey — farklı sürümdeki teklifler görüntülenebilir ama alınamaz. Takasın iki tarafı da eşleşmelidir.",
     trustModel: "Anahtarlarınız nerede yaşar",
     trustModelBody:
       "Gizli bilgiler motorda yaşar, asla Satchel'da değil. Satıcı seed'i, motorun veri klasöründe durur (şifreli veya düz metin — seçim sizin); Satchel hiçbir seed veya parola saklamaz. Seed tasarım gereği sıcaktır (yalnızca transit anahtarları) — kayda değer gelirleri kendi soğuk cüzdanınıza süpürün.",

@@ -363,6 +363,9 @@ export const gl: Bundle = {
     version: "Versión {version}",
     updateUpToDate: "Ao día",
     updateCheckPlaceholder: "A comprobación de actualizacións chegará nunha versión posterior.",
+    protocols: "Protocolos de intercambio",
+    protocolsHint:
+      "O que fala esta versión — as ofertas cunha versión distinta pódense ver pero non tomar. As dúas partes do intercambio deben coincidir.",
     trustModel: "Onde viven as túas claves",
     trustModelBody:
       "Os segredos viven no motor, nunca en Satchel. A semente do comerciante reside no cartafol de datos do motor (cifrada ou en texto plano — ti escolles); Satchel non garda ningunha semente nin frase de paso. A semente é en quente por deseño (só claves de tránsito) — barre os beneficios cuantiosos á túa propia carteira fría.",

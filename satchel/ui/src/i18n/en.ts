@@ -378,6 +378,9 @@ export const en = {
     version: "Version {version}",
     updateUpToDate: "Up to date",
     updateCheckPlaceholder: "Update check arrives in a later release.",
+    protocols: "Swap protocols",
+    protocolsHint:
+      "What this build speaks — offers whose version differs can be browsed but not taken. Both sides of a swap must match.",
     trustModel: "Where your keys live",
     trustModelBody:
       "Secrets live in the engine, never in Satchel. The merchant seed sits in the engine's data folder (encrypted or plaintext — your choice); Satchel stores no seed or passphrase. The seed is hot by design (transit keys only) — sweep sizable proceeds to your own cold wallet.",

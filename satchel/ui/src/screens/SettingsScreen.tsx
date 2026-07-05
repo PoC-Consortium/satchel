@@ -27,6 +27,7 @@ import { useI18n, useT, LANGUAGES } from "../i18n";
 import { ensureNotifyPermission, sendTestNotification } from "../notify";
 import type { NotifyPrefs, UiPrefs } from "../api/types";
 import { APP_VERSION, UPDATE_AVAILABLE } from "../version";
+import { C } from "../theme";
 import { errMsg, listCoinConfig, rpc, saveBoard, saveNostrRelays } from "../api/tauri";
 import CoinsScreen from "./CoinsScreen";
 
@@ -511,11 +512,25 @@ function NotificationsTab() {
 
 function AboutTab() {
   const t = useT();
+  const { info } = useApp();
+  // The wire epochs this build speaks (rc10), straight from getinfo — offer
+  // chips on the Corkboard show the same numbers, so a user can see at a
+  // glance whether an offer matches their build.
+  const wires = info?.wire_epochs ?? {};
+  const protoLine = [
+    `${t("makeOffer.protoStandard")} v${wires["pact-htlc-v1"] ?? 1}`,
+    `${t("coins.protoPrivate")} v${wires["pact-htlc-v2"] ?? 1}`,
+  ].join(" · ");
   return (
     <Section title={t("settings.about")}>
       <Row label={t("settings.version", { version: APP_VERSION })} hint={t("settings.updateCheckPlaceholder")}>
         <Typography sx={{ fontSize: 13, color: UPDATE_AVAILABLE ? "primary.main" : "text.secondary" }}>
           {t("settings.updateUpToDate")}
+        </Typography>
+      </Row>
+      <Row label={t("settings.protocols")} hint={t("settings.protocolsHint")}>
+        <Typography sx={{ fontSize: 13, color: "text.secondary", fontFamily: C.mono }}>
+          {protoLine}
         </Typography>
       </Row>
       <Box sx={{ mt: 1 }}>

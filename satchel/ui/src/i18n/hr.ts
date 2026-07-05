@@ -363,6 +363,9 @@ export const hr: Bundle = {
     version: "Verzija {version}",
     updateUpToDate: "Ažurirano",
     updateCheckPlaceholder: "Provjera nadogradnji stiže u kasnijem izdanju.",
+    protocols: "Protokoli zamjene",
+    protocolsHint:
+      "Što ova verzija govori — ponude s drugom verzijom mogu se pregledavati, ali ne i preuzeti. Obje strane zamjene moraju se podudarati.",
     trustModel: "Gdje žive vaši ključevi",
     trustModelBody:
       "Tajne žive u engineu, nikad u Satchelu. Seed trgovca nalazi se u podatkovnoj mapi enginea (šifriran ili u čistom tekstu — vaš izbor); Satchel ne pohranjuje nikakav seed ni zaporku. Seed je vruć po dizajnu (samo tranzitni ključevi) — prebacite veću dobit u vlastiti hladni novčanik.",

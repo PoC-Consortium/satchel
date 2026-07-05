@@ -363,6 +363,9 @@ export const id: Bundle = {
     version: "Versi {version}",
     updateUpToDate: "Versi terbaru",
     updateCheckPlaceholder: "Pemeriksaan pembaruan hadir di rilis berikutnya.",
+    protocols: "Protokol swap",
+    protocolsHint:
+      "Apa yang didukung build ini — penawaran dengan versi berbeda bisa dilihat tetapi tidak bisa diambil. Kedua sisi swap harus cocok.",
     trustModel: "Di mana kunci Anda tersimpan",
     trustModelBody:
       "Rahasia berada di engine, tidak pernah di Satchel. Seed merchant duduk di folder data engine (terenkripsi atau teks biasa — pilihan Anda); Satchel tidak menyimpan seed atau frasa sandi. Seed bersifat panas secara desain (hanya kunci transit) — sapu hasil yang besar ke dompet dingin Anda sendiri.",

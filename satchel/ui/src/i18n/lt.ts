@@ -363,6 +363,9 @@ export const lt: Bundle = {
     version: "Versija {version}",
     updateUpToDate: "Naujausia versija",
     updateCheckPlaceholder: "Atnaujinimų tikrinimas atsiras vėlesniame leidime.",
+    protocols: "Mainų protokolai",
+    protocolsHint:
+      "Ką palaiko ši versija — kitos versijos pasiūlymus galima peržiūrėti, bet ne priimti. Abi mainų pusės turi sutapti.",
     trustModel: "Kur saugomi jūsų raktai",
     trustModelBody:
       "Paslaptys laikomos variklyje, niekada Satchel programoje. Prekiautojo sėkla yra variklio duomenų aplanke (užšifruota arba atviru tekstu — jūsų pasirinkimas); Satchel nesaugo nei sėklos, nei slaptafrazės. Sėkla yra karšta pagal sumanymą (tik tranzito raktai) — didesnes pajamas perveskite į savo pačių šaltą piniginę.",
