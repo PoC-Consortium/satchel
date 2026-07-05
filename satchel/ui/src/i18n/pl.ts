@@ -363,6 +363,9 @@ export const pl: Bundle = {
     version: "Wersja {version}",
     updateUpToDate: "Aktualne",
     updateCheckPlaceholder: "Sprawdzanie aktualizacji pojawi się w późniejszym wydaniu.",
+    protocols: "Protokoły swapów",
+    protocolsHint:
+      "Co obsługuje ta wersja — oferty z inną wersją można przeglądać, ale nie brać. Obie strony swapu muszą się zgadzać.",
     trustModel: "Gdzie są Twoje klucze",
     trustModelBody:
       "Sekrety są w silniku, nigdy w Satchel. Seed sprzedawcy znajduje się w folderze danych silnika (zaszyfrowany lub jawny — Twój wybór); Satchel nie przechowuje żadnego seeda ani hasła. Seed jest gorący z założenia (tylko klucze tranzytowe) — przelej znaczące zyski do własnego zimnego portfela.",
@@ -562,6 +565,8 @@ export const pl: Bundle = {
     filterAll: "Wszystkie",
     filterMine: "Moje",
     allPairs: "Wszystkie pary",
+    wireMismatchTip:
+      "Ta oferta pochodzi z niezgodnej wersji Satchel — jedno z was musi zaktualizować, zanim będziecie mogli handlować.",
     allPairsTip:
       "Przeglądaj wszystkie pary na tablicy, także z monetami, których nie skonfigurowałeś — te oferty są tylko do podglądu, dopóki nie połączysz monety.",
     noOffers: "Brak ofert, które możesz teraz przyjąć",

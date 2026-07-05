@@ -363,6 +363,9 @@ export const sk: Bundle = {
     version: "Verzia {version}",
     updateUpToDate: "Aktuálne",
     updateCheckPlaceholder: "Kontrola aktualizácií príde v neskoršom vydaní.",
+    protocols: "Swapové protokoly",
+    protocolsHint:
+      "Čo táto verzia podporuje — ponuky s inou verziou si možno prezerať, ale nie prijať. Obe strany swapu sa musia zhodovať.",
     trustModel: "Kde žijú vaše kľúče",
     trustModelBody:
       "Tajomstvá žijú v enginu, nikdy v Satchel. Seed obchodníka sedí v dátovom priečinku enginu (šifrovaný alebo v čistom texte — podľa vašej voľby); Satchel neukladá žiadny seed ani prístupovú frázu. Seed je horúci zámerne (iba tranzitné kľúče) — väčší výnos preposielajte do vlastnej studenej peňaženky.",
@@ -562,6 +565,8 @@ export const sk: Bundle = {
     filterAll: "Všetky",
     filterMine: "Moje",
     allPairs: "Všetky páry",
+    wireMismatchTip:
+      "Túto ponuku zverejnila nekompatibilná verzia Satchelu — jeden z vás musí aktualizovať, kým budete môcť obchodovať.",
     allPairsTip:
       "Prehliadajte všetky páry na nástenke vrátane mincí, ktoré ste si nenastavili — tie ponuky sú iba na zobrazenie, kým mincu nepripojíte.",
     noOffers: "Žiadne ponuky, ktoré môžete práve teraz prijať",

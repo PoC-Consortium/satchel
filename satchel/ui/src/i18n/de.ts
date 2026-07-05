@@ -363,6 +363,9 @@ export const de: Bundle = {
     version: "Version {version}",
     updateUpToDate: "Aktuell",
     updateCheckPlaceholder: "Die Update-Prüfung kommt in einer späteren Version.",
+    protocols: "Swap-Protokolle",
+    protocolsHint:
+      "Was diese Version spricht — Angebote mit abweichender Version lassen sich ansehen, aber nicht annehmen. Beide Seiten eines Swaps müssen übereinstimmen.",
     trustModel: "Wo deine Schlüssel liegen",
     trustModelBody:
       "Geheimnisse liegen in der Engine, nie in Satchel. Das Merchant-Seed liegt im Datenordner der Engine (verschlüsselt oder im Klartext — deine Wahl); Satchel speichert weder Seed noch Passphrase. Das Seed ist von Natur aus heiß (nur Transit-Schlüssel) — überweise nennenswerte Erlöse auf deine eigene Cold-Wallet.",
@@ -565,6 +568,8 @@ export const de: Bundle = {
     filterAll: "Alle",
     filterMine: "Meine",
     allPairs: "Alle Paare",
+    wireMismatchTip:
+      "Dieses Angebot stammt von einer inkompatiblen Satchel-Version — einer von euch muss aktualisieren, bevor ihr handeln könnt.",
     allPairsTip:
       "Durchstöbere jedes Paar auf dem Board, auch mit Coins, die du nicht eingerichtet hast — diese Angebote kannst du nur ansehen, bis du den Coin verbindest.",
     noOffers: "Derzeit keine Angebote, die du annehmen kannst",

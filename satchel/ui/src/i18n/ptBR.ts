@@ -363,6 +363,9 @@ export const ptBR: Bundle = {
     version: "Versão {version}",
     updateUpToDate: "Atualizado",
     updateCheckPlaceholder: "A verificação de atualização chega em uma versão futura.",
+    protocols: "Protocolos de swap",
+    protocolsHint:
+      "O que esta versão fala — ofertas com versão diferente podem ser vistas, mas não aceitas. Os dois lados do swap precisam coincidir.",
     trustModel: "Onde suas chaves ficam",
     trustModelBody:
       "Os segredos ficam na engine, nunca no Satchel. A seed do merchant fica na pasta de dados da engine (criptografada ou em texto puro — sua escolha); o Satchel não armazena seed nem senha. A seed é quente por design (apenas chaves de trânsito) — varra ganhos consideráveis para sua própria carteira fria (cold wallet).",
@@ -562,6 +565,8 @@ export const ptBR: Bundle = {
     filterAll: "Todas",
     filterMine: "Minhas",
     allPairs: "Todos os pares",
+    wireMismatchTip:
+      "Esta oferta foi publicada por uma versão incompatível do Satchel — um de vocês precisa atualizar antes de poder negociar.",
     allPairsTip:
       "Navegue por todos os pares do board, incluindo moedas que você ainda não configurou — essas ofertas ficam apenas para visualização até você conectar a moeda.",
     noOffers: "Nenhuma oferta que você possa aceitar agora",

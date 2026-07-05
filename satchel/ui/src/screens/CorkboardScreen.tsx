@@ -67,11 +67,17 @@ interface MyOfferRow {
 }
 
 export default function CorkboardScreen() {
-  const { identity, swaps, symOf, log, refreshSwaps, coins, watchOnly } = useApp();
+  const { identity, swaps, symOf, log, refreshSwaps, coins, watchOnly, info } = useApp();
   // A leg is tradeable only when its coin has a live ("ok") node. Used to gate
   // the Take button so you can't start a swap against a down chain (the engine
   // refuses too — this is the friendly up-front block).
   const coinLive = (id?: string) => !!coins.find((c) => c.id === id && c.status === "ok");
+  // Wire-epoch gate (rc10): an offer whose signed `wire` differs from what
+  // this build speaks for its protocol is view-only — the engine refuses the
+  // take anyway; this is the friendly up-front block. Absent fields = 1
+  // (pre-rc10) on both sides.
+  const wireMismatch = (o: Offer) =>
+    (o.body.wire ?? 1) !== (info?.wire_epochs?.[o.body.protocol ?? ""] ?? 1);
   const { denom, setDenom } = useDenom();
   const { enabled: fxOn, rateOf } = useFx();
   const { get: contactOf, book: contactBook } = useContacts();
@@ -639,6 +645,7 @@ export default function CorkboardScreen() {
                         staged={stagedIds.has(o.swap_id)}
                         state={offerState(o, mySwapIds)}
                         legDown={!coinLive(o.body.give_asset) || !coinLive(o.body.get_asset)}
+                        wireOff={wireMismatch(o)}
                         watchOnly={watchOnly}
                         fmtLeg={fmtLeg}
                         onTake={() => void take(o)}
@@ -979,6 +986,7 @@ function OfferRow({
   staged,
   state,
   legDown,
+  wireOff,
   watchOnly,
   fmtLeg,
   onTake,
@@ -991,6 +999,9 @@ function OfferRow({
   state: OfferState;
   /** One of the offer's legs has a down/unconfigured node — can't take it. */
   legDown?: boolean;
+  /** Wire-epoch mismatch (rc10): the maker runs an incompatible release —
+   *  view-only, the engine would refuse the take. */
+  wireOff?: boolean;
   /** Watch-only viewer: taking is disabled (withdrawing our own still works). */
   watchOnly?: boolean;
   fmtLeg: Leg;
@@ -1004,7 +1015,7 @@ function OfferRow({
   const expiry = b.created ? b.created + (b.ttl_secs || 24 * 3600) : 0;
   const f = freshness(b.created || 0, expiry);
   const freshColor = f.cls === "expiring" ? C.bad : C.dim;
-  const takeable = !mine && state === "open" && !legDown && !watchOnly;
+  const takeable = !mine && state === "open" && !legDown && !watchOnly && !wireOff;
 
   // Copy the full offer id to the clipboard — handy for naming an offer in chat.
   const copyId = async () => {
@@ -1044,24 +1055,37 @@ function OfferRow({
         <CounterpartyTag id={o.from} />
       )}
       <OfferStateChip state={state} />
-      {/* Every offer shows its swap type: v2 adaptor is primary-accented,
-          v1 HTLC is a muted "Standard" chip. */}
+      {/* Every offer shows its swap type + the offer's WIRE EPOCH (rc10):
+          v2 adaptor is primary-accented, v1 HTLC a muted "Standard" chip.
+          A wire mismatch tints the chip warning and swaps in the
+          incompatible-release tooltip — the visible "why" behind the
+          disabled Take. */}
       {b.protocol === "pact-htlc-v2" ? (
-        <Tooltip title={t("coins.protoPrivateTip")}>
+        <Tooltip title={wireOff ? t("corkboard.wireMismatchTip") : t("coins.protoPrivateTip")}>
           <Chip
             size="small"
             variant="outlined"
-            label={t("coins.protoPrivate")}
-            sx={{ height: 22, color: "primary.main", borderColor: "primary.main", cursor: "help" }}
+            label={`${t("coins.protoPrivate")} v${b.wire ?? 1}`}
+            sx={{
+              height: 22,
+              color: wireOff ? "warning.main" : "primary.main",
+              borderColor: wireOff ? "warning.main" : "primary.main",
+              cursor: "help",
+            }}
           />
         </Tooltip>
       ) : (
-        <Tooltip title={t("coins.protoHtlcTip")}>
+        <Tooltip title={wireOff ? t("corkboard.wireMismatchTip") : t("coins.protoHtlcTip")}>
           <Chip
             size="small"
             variant="outlined"
-            label={t("makeOffer.protoStandard")}
-            sx={{ height: 22, color: "text.secondary", borderColor: "divider", cursor: "help" }}
+            label={`${t("makeOffer.protoStandard")} v${b.wire ?? 1}`}
+            sx={{
+              height: 22,
+              color: wireOff ? "warning.main" : "text.secondary",
+              borderColor: wireOff ? "warning.main" : "divider",
+              cursor: "help",
+            }}
           />
         </Tooltip>
       )}
@@ -1132,6 +1156,14 @@ function OfferRow({
         </Tooltip>
       ) : watchOnly && state === "open" ? (
         <Tooltip title={t("watchOnly.takeBlockedTip")}>
+          <span>
+            <Button size="small" variant="contained" startIcon={<AddIcon />} disabled>
+              {t("corkboard.take")}
+            </Button>
+          </span>
+        </Tooltip>
+      ) : wireOff && state === "open" ? (
+        <Tooltip title={t("corkboard.wireMismatchTip")}>
           <span>
             <Button size="small" variant="contained" startIcon={<AddIcon />} disabled>
               {t("corkboard.take")}

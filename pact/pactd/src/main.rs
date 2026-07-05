@@ -920,6 +920,13 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 "name": "pactd",
                 "version": env!("CARGO_PKG_VERSION"),
                 "protocol": libswap::PROTOCOL_VERSION,
+                // Wire-compatibility epochs this build speaks, per protocol
+                // family (rc10). The UI badges offers whose signed `wire`
+                // differs as un-takeable; the engine refuses them anyway.
+                "wire_epochs": {
+                    libswap::PROTOCOL_VERSION: libswap::WIRE_V1,
+                    libswap::adaptor_swap::PROTOCOL_V2: libswap::WIRE_V2,
+                },
                 "network": format!("{net:?}").to_lowercase(),
                 "identity": identity,
                 "seed_exists": status.seed_exists,

@@ -363,6 +363,9 @@ export const nl: Bundle = {
     version: "Versie {version}",
     updateUpToDate: "Up-to-date",
     updateCheckPlaceholder: "Updatecontrole komt in een latere release.",
+    protocols: "Swap-protocollen",
+    protocolsHint:
+      "Wat deze versie spreekt — aanbiedingen met een andere versie zijn zichtbaar maar niet te nemen. Beide kanten van een swap moeten overeenkomen.",
     trustModel: "Waar je sleutels staan",
     trustModelBody:
       "Geheimen staan in de engine, nooit in Satchel. Het merchant-seed staat in de datamap van de engine (versleuteld of platte tekst — jouw keuze); Satchel slaat geen seed of wachtwoordzin op. Het seed is bewust hot (alleen transit-sleutels) — veeg aanzienlijke opbrengsten naar je eigen cold wallet.",
@@ -562,6 +565,8 @@ export const nl: Bundle = {
     filterAll: "Alle",
     filterMine: "Mijne",
     allPairs: "Alle paren",
+    wireMismatchTip:
+      "Deze aanbieding is geplaatst door een incompatibele Satchel-versie — een van jullie moet updaten voordat je kunt handelen.",
     allPairsTip:
       "Blader door elk paar op het bord, ook munten die je niet hebt ingesteld — die aanbiedingen zijn alleen te bekijken tot je de munt verbindt.",
     noOffers: "Geen aanbiedingen die je nu kunt aannemen",

@@ -363,6 +363,9 @@ export const hr: Bundle = {
     version: "Verzija {version}",
     updateUpToDate: "Ažurirano",
     updateCheckPlaceholder: "Provjera nadogradnji stiže u kasnijem izdanju.",
+    protocols: "Protokoli zamjene",
+    protocolsHint:
+      "Što ova verzija govori — ponude s drugom verzijom mogu se pregledavati, ali ne i preuzeti. Obje strane zamjene moraju se podudarati.",
     trustModel: "Gdje žive vaši ključevi",
     trustModelBody:
       "Tajne žive u engineu, nikad u Satchelu. Seed trgovca nalazi se u podatkovnoj mapi enginea (šifriran ili u čistom tekstu — vaš izbor); Satchel ne pohranjuje nikakav seed ni zaporku. Seed je vruć po dizajnu (samo tranzitni ključevi) — prebacite veću dobit u vlastiti hladni novčanik.",
@@ -562,6 +565,8 @@ export const hr: Bundle = {
     filterAll: "Sve",
     filterMine: "Moje",
     allPairs: "Svi parovi",
+    wireMismatchTip:
+      "Ovu je ponudu objavila nekompatibilna verzija Satchela — jedan od vas mora ažurirati prije trgovanja.",
     allPairsTip:
       "Pregledajte svaki par na ploči, uključujući kovanice koje niste postavili — te su ponude samo za pregled dok ne povežete kovanicu.",
     noOffers: "Trenutno nema ponuda koje možete preuzeti",

@@ -363,6 +363,9 @@ export const it: Bundle = {
     version: "Versione {version}",
     updateUpToDate: "Aggiornato",
     updateCheckPlaceholder: "Il controllo degli aggiornamenti arriverà in un rilascio successivo.",
+    protocols: "Protocolli di swap",
+    protocolsHint:
+      "Ciò che parla questa versione — le offerte con una versione diversa si possono sfogliare ma non prendere. Le due parti dello swap devono coincidere.",
     trustModel: "Dove risiedono le tue chiavi",
     trustModelBody:
       "I segreti risiedono nell'engine, mai in Satchel. Il seed del merchant si trova nella cartella dati dell'engine (cifrato o in chiaro — a tua scelta); Satchel non memorizza alcun seed o passphrase. Il seed è caldo per design (solo chiavi di transito) — trasferisci proventi consistenti al tuo cold wallet.",
@@ -560,6 +563,8 @@ export const it: Bundle = {
     filterAll: "Tutte",
     filterMine: "Mie",
     allPairs: "Tutte le coppie",
+    wireMismatchTip:
+      "Questa offerta è stata pubblicata da una versione incompatibile di Satchel — uno di voi deve aggiornare prima di poter fare trading.",
     allPairsTip:
       "Sfoglia ogni coppia sulla bacheca, incluse le coin che non hai configurato — quelle offerte sono di sola visualizzazione finché non connetti la coin.",
     noOffers: "Nessuna offerta che puoi accettare in questo momento",

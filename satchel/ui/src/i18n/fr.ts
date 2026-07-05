@@ -363,6 +363,9 @@ export const fr: Bundle = {
     version: "Version {version}",
     updateUpToDate: "À jour",
     updateCheckPlaceholder: "La vérification des mises à jour arrive dans une version ultérieure.",
+    protocols: "Protocoles de swap",
+    protocolsHint:
+      "Ce que parle cette version — les offres d'une autre version restent visibles mais ne peuvent pas être prises. Les deux côtés d'un swap doivent correspondre.",
     trustModel: "Où résident vos clés",
     trustModelBody:
       "Les secrets résident dans le moteur, jamais dans Satchel. La seed du merchant se trouve dans le dossier de données du moteur (chiffrée ou en clair — à votre choix) ; Satchel ne stocke aucune seed ni phrase secrète. La seed est chaude par conception (clés de transit uniquement) — balayez les gains conséquents vers votre propre portefeuille froid.",
@@ -564,6 +567,8 @@ export const fr: Bundle = {
     filterAll: "Toutes",
     filterMine: "Les miennes",
     allPairs: "Toutes les paires",
+    wireMismatchTip:
+      "Cette offre a été publiée par une version incompatible de Satchel — l'un de vous doit mettre à jour avant de pouvoir échanger.",
     allPairsTip:
       "Parcourez toutes les paires du tableau, y compris les coins que vous n'avez pas configurés — ces offres restent en lecture seule tant que vous n'avez pas connecté le coin.",
     noOffers: "Aucune offre que vous puissiez prendre pour le moment",

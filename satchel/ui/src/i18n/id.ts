@@ -363,6 +363,9 @@ export const id: Bundle = {
     version: "Versi {version}",
     updateUpToDate: "Versi terbaru",
     updateCheckPlaceholder: "Pemeriksaan pembaruan hadir di rilis berikutnya.",
+    protocols: "Protokol swap",
+    protocolsHint:
+      "Apa yang didukung build ini — penawaran dengan versi berbeda bisa dilihat tetapi tidak bisa diambil. Kedua sisi swap harus cocok.",
     trustModel: "Di mana kunci Anda tersimpan",
     trustModelBody:
       "Rahasia berada di engine, tidak pernah di Satchel. Seed merchant duduk di folder data engine (terenkripsi atau teks biasa — pilihan Anda); Satchel tidak menyimpan seed atau frasa sandi. Seed bersifat panas secara desain (hanya kunci transit) — sapu hasil yang besar ke dompet dingin Anda sendiri.",
@@ -562,6 +565,8 @@ export const id: Bundle = {
     filterAll: "Semua",
     filterMine: "Milik saya",
     allPairs: "Semua pasangan",
+    wireMismatchTip:
+      "Penawaran ini diposting oleh rilis Satchel yang tidak kompatibel — salah satu dari kalian harus memperbarui sebelum dapat bertransaksi.",
     allPairsTip:
       "Jelajahi setiap pasangan di papan, termasuk koin yang belum Anda atur — penawaran itu hanya bisa dilihat sampai Anda menghubungkan koinnya.",
     noOffers: "Tidak ada penawaran yang bisa Anda ambil sekarang",

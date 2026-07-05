@@ -363,6 +363,9 @@ export const cs: Bundle = {
     version: "Verze {version}",
     updateUpToDate: "Aktuální",
     updateCheckPlaceholder: "Kontrola aktualizací přijde v pozdějším vydání.",
+    protocols: "Swapové protokoly",
+    protocolsHint:
+      "Co tato verze podporuje — nabídky s jinou verzí lze procházet, ale ne přijmout. Obě strany swapu se musí shodovat.",
     trustModel: "Kde žijí vaše klíče",
     trustModelBody:
       "Tajemství žijí v enginu, nikdy v Satchelu. Seed merchanta sídlí v datové složce enginu (šifrovaný, nebo v prostém textu — vaše volba); Satchel neukládá žádný seed ani přístupovou frázi. Seed je z principu horký (jen tranzitní klíče) — přesuňte výrazné výnosy do své vlastní studené peněženky.",
@@ -565,6 +568,8 @@ export const cs: Bundle = {
     filterAll: "Vše",
     filterMine: "Moje",
     allPairs: "Všechny páry",
+    wireMismatchTip:
+      "Tuto nabídku zveřejnila nekompatibilní verze Satchelu — jeden z vás musí aktualizovat, než budete moci obchodovat.",
     allPairsTip:
       "Procházejte všechny páry na nástěnce, včetně mincí, které nemáte nastavené — jejich nabídky jsou jen k prohlížení, dokud minci nepřipojíte.",
     noOffers: "Žádné nabídky, které byste teď mohli přijmout",

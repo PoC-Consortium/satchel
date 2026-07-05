@@ -363,6 +363,9 @@ export const fi: Bundle = {
     version: "Versio {version}",
     updateUpToDate: "Ajan tasalla",
     updateCheckPlaceholder: "Päivitystarkistus saapuu myöhemmässä julkaisussa.",
+    protocols: "Swap-protokollat",
+    protocolsHint:
+      "Mitä tämä versio puhuu — eri versiota käyttäviä tarjouksia voi selata mutta ei ottaa. Swapin molempien osapuolten on täsmättävä.",
     trustModel: "Missä avaimesi sijaitsevat",
     trustModelBody:
       "Salaisuudet sijaitsevat moottorissa, ei koskaan Satchelissa. Kauppiaan seed sijaitsee moottorin datakansiossa (salattuna tai selkokielisenä — sinun valintasi); Satchel ei tallenna seediä tai salasanaa. Seed on suunnittelultaan kuuma (vain siirtoavaimet) — pyyhkäise huomattavat tuotot omaan kylmälompakkoosi.",
@@ -565,6 +568,8 @@ export const fi: Bundle = {
     filterAll: "Kaikki",
     filterMine: "Omat",
     allPairs: "Kaikki parit",
+    wireMismatchTip:
+      "Tämän tarjouksen julkaisi yhteensopimaton Satchel-versio — toisen teistä on päivitettävä ennen kuin voitte käydä kauppaa.",
     allPairsTip:
       "Selaa taulun kaikkia pareja, myös kolikoita joita et ole määrittänyt — ne tarjoukset ovat vain katseltavissa, kunnes yhdistät kolikon.",
     noOffers: "Ei tarjouksia, jotka voisit ottaa juuri nyt",

@@ -363,6 +363,9 @@ export const ca: Bundle = {
     version: "Versió {version}",
     updateUpToDate: "Al dia",
     updateCheckPlaceholder: "La comprovació d'actualitzacions arribarà en una versió posterior.",
+    protocols: "Protocols d'intercanvi",
+    protocolsHint:
+      "El que parla aquesta versió — les ofertes amb una versió diferent es poden consultar però no acceptar. Les dues parts de l'intercanvi han de coincidir.",
     trustModel: "On viuen les teves claus",
     trustModelBody:
       "Els secrets viuen al motor, mai a Satchel. La llavor del comerciant es troba a la carpeta de dades del motor (xifrada o en text pla — tu tries); Satchel no emmagatzema cap llavor ni contrasenya. La llavor és calenta per disseny (només claus de trànsit) — escombra els guanys considerables a la teva pròpia cartera freda.",
@@ -564,6 +567,8 @@ export const ca: Bundle = {
     filterAll: "Totes",
     filterMine: "Meves",
     allPairs: "Tots els parells",
+    wireMismatchTip:
+      "Aquesta oferta l'ha publicada una versió incompatible de Satchel — un de vosaltres ha d'actualitzar abans de poder operar.",
     allPairsTip:
       "Navega per tots els parells del tauler, incloses les monedes que no has configurat — aquestes ofertes són només de visualització fins que connectis la moneda.",
     noOffers: "No hi ha cap oferta que puguis acceptar ara mateix",

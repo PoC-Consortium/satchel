@@ -115,9 +115,16 @@ Worst-case vsize: `KEYPATH_REDEEM_VSIZE = 111` (`taproot.rs:40`).
 > byte-identical transaction (a unit test pins it as a protocol constant,
 > `taproot.rs:387`). rc10 changed it from the RBF-signalling `0xFFFFFFFD` to
 > the non-replaceable `0xFFFFFFFE`, which makes rc10 a **v2 flag-day**: an
-> rc9 peer and an rc10 peer cannot open v2 swaps with each other —
-> partial-signature verification fails at the handshake, a clean pre-funding
-> abort with no funds at risk (and deliberately no compat shim). In-flight v2
+> rc9 peer and an rc10 peer cannot open v2 swaps with each other. Since
+> rc10 this is gated **up-front by wire epochs**: every offer, take, init and
+> accept carries its protocol's wire-compatibility epoch (`wire`, v1 = 1,
+> v2 = 2; absent = 1, the pre-rc10 era), and a mismatch is refused with a
+> clear reason before any key material is exchanged — offers from an
+> incompatible release are already badged un-takeable on the Corkboard. A
+> pre-rc10 peer that never sends `wire` still fails partial-signature
+> verification at the handshake, a clean pre-funding abort with no funds at
+> risk (deliberately no compat shim). Future amendments bump the epoch
+> (`libswap::wire_epoch`) and gate the same way. In-flight v2
 > swaps that already exchanged partial signatures keep working on the version
 > that made them; **settle or abort live v2 swaps before upgrading**. v1 HTLC
 > swaps are unaffected.

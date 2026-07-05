@@ -363,6 +363,9 @@ export const ro: Bundle = {
     version: "Versiunea {version}",
     updateUpToDate: "La zi",
     updateCheckPlaceholder: "Verificarea actualizărilor sosește într-o lansare ulterioară.",
+    protocols: "Protocoale de swap",
+    protocolsHint:
+      "Ce vorbește această versiune — ofertele cu o versiune diferită pot fi văzute, dar nu preluate. Ambele părți ale swapului trebuie să se potrivească.",
     trustModel: "Unde stau cheile tale",
     trustModelBody:
       "Secretele stau în engine, niciodată în Satchel. Seed-ul merchant-ului stă în folderul de date al engine-ului (criptat sau în text simplu — alegerea ta); Satchel nu stochează niciun seed sau parolă. Seed-ul este fierbinte prin design (doar chei de tranzit) — mută câștigurile considerabile în propriul tău portofel rece.",
@@ -562,6 +565,8 @@ export const ro: Bundle = {
     filterAll: "Toate",
     filterMine: "Ale mele",
     allPairs: "Toate perechile",
+    wireMismatchTip:
+      "Această ofertă a fost publicată de o versiune incompatibilă de Satchel — unul dintre voi trebuie să actualizeze înainte de a putea tranzacționa.",
     allPairsTip:
       "Răsfoiește fiecare pereche de pe board, inclusiv monedele pe care nu le-ai configurat — acele oferte sunt doar de vizualizat până conectezi moneda.",
     noOffers: "Nicio ofertă pe care o poți accepta acum",

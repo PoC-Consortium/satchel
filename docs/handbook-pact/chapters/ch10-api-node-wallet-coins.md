@@ -9,7 +9,7 @@ merchant* error) are covered in the chapter "JSON-RPC Conventions".
 
 | Method | Params | Returns | Mutates |
 |---|---|---|---|
-| `getinfo` | — | `{ name, version, protocol, network, identity?, seed_exists, encrypted, locked, coins, watch_only }` | no |
+| `getinfo` | — | `{ name, version, protocol, wire_epochs, network, identity?, seed_exists, encrypted, locked, coins, watch_only }` | no |
 | `walletstatus` | — | `{ seed_exists, encrypted, locked }` | no |
 | `setwatchonly` | `on` | `{ watch_only }` | yes (live + persisted) |
 | `help` | `method?` | plain-text catalog (string) | no |
@@ -17,7 +17,10 @@ merchant* error) are covered in the chapter "JSON-RPC Conventions".
 | `stop` | — | `"pactd stopping"` | yes (lifecycle) |
 
 - `getinfo` — `name` is always `"pactd"`; `version` is the crate version;
-  `protocol` is the swap protocol version; `network` is the lowercased network
+  `protocol` is the swap protocol version; `wire_epochs` maps each protocol
+  family to the wire-compatibility epoch this build speaks (rc10:
+  `{ "pact-htlc-v1": 1, "pact-htlc-v2": 2 }`) — a UI badges offers whose
+  signed `wire` differs as un-takeable; `network` is the lowercased network
   name (`regtest`/`testnet`/`mainnet`); `coins` is the list of configured coin
   ids; `watch_only` is the active merchant's watch-only flag (see below).
   Tolerates a missing or locked seed — `identity` is `null` until a seed is
