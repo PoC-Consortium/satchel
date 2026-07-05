@@ -266,10 +266,7 @@ fn sync_entry(entry: &mut WalletEntry, chain: &ElectrumBackend) -> Result<()> {
         .into_iter()
         .collect();
     let mut headers: BTreeMap<u32, (BlockHash, u64)> = BTreeMap::new();
-    for (height, (hash_hex, time)) in need_heights
-        .iter()
-        .zip(chain.headers_at(&need_heights)?.into_iter())
-    {
+    for (height, (hash_hex, time)) in need_heights.iter().zip(chain.headers_at(&need_heights)?) {
         headers.insert(
             u32::try_from(*height).context("header height")?,
             (BlockHash::from_str(&hash_hex)?, u64::from(time)),
