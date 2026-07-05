@@ -804,6 +804,21 @@ export const en = {
     switchMerchant: "Switch merchant",
     unlock: "Unlock",
   },
+  // Manual Cashrate (issue #56) — display-only "~Cash" equivalents derived from
+  // user-entered per-coin anchors. Currency-NEUTRAL on purpose: the user thinks
+  // in whatever money they think in (EUR, USD, RMB, …) and Satchel never names
+  // it. Deliberately manual: BTCX is unlisted so no feed could price it, and
+  // Satchel makes no external calls. The rate entry lives in the sidebar.
+  fx: {
+    cashrate: "Cashrate ({sym})",
+    cashrateTip:
+      "What you call 1 {sym} in your own money — EUR, USD, RMB, whatever you think in. Every ~Cash figure derives from your rates, remembered per coin. Display-only — Satchel never fetches prices.",
+    cashrateNoContext:
+      "Greyed here — the rate binds to the pair you're looking at. Open the Corkboard or an offer form to set the rate for its quote coin.",
+    cashUnit: "~Cash",
+    refTip:
+      "At your own Cashrate — your reference, not a market price. Both legs of an offer are worth the same at its own price. Set rates in the sidebar.",
+  },
   common: {
     cancel: "Cancel",
     confirm: "Confirm",
@@ -881,9 +896,12 @@ type NewCoinKeys =
   | "switchHidesBody"
   | "switchHidesConfirm";
 
-export type Bundle = Omit<EnBundle, "progress" | "wallets" | "coins" | "seed"> & {
+export type Bundle = Omit<EnBundle, "progress" | "wallets" | "coins" | "seed" | "fx"> & {
   progress: WithOptional<EnBundle["progress"], "funding">;
   wallets: WithOptional<EnBundle["wallets"], NewWalletKeys>;
   coins: WithOptional<EnBundle["coins"], NewCoinKeys>;
   seed: WithOptional<EnBundle["seed"], "wordCountHint">;
+  /** USD-reference copy shipped 2026-07 (issue #56) — optional until the next
+   *  full translation pass. */
+  fx?: EnBundle["fx"];
 };

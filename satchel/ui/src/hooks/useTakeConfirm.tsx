@@ -14,11 +14,12 @@ import { useApp } from "../AppContext";
 import { useContacts } from "../contacts";
 import { useT } from "../i18n";
 import { useDenom } from "../denom";
+import { useFx } from "../fx";
 import CounterpartyTag from "../components/CounterpartyTag";
 import FeePreview from "../components/FeePreview";
 import InsufficientFunds from "../components/InsufficientFunds";
 import { assessLockFunds } from "../api/tauri";
-import { ago, baseQuote, denomLabel, fmtBare, fmtDenom, hours } from "../format";
+import { ago, baseQuote, denomLabel, fmtBare, fmtCash, fmtDenom, hours, offerCash } from "../format";
 import { C } from "../theme";
 import type { OfferBody } from "../api/types";
 
@@ -36,6 +37,7 @@ export function useTakeConfirm(): ConfirmTake {
   const { symOf } = useApp();
   const { get } = useContacts();
   const { denom } = useDenom();
+  const { enabled: fxOn, rateOf } = useFx();
   const confirm = useConfirm();
   const t = useT();
 
@@ -53,6 +55,18 @@ export function useTakeConfirm(): ConfirmTake {
       // and you receive what the maker OFFERS (give_*).
       const youGive = leg(b.get_amount, b.get_asset);
       const youGet = leg(b.give_amount, b.give_asset);
+      // Muted cash-equivalent on both legs from the user's own Cashrate (issue
+      // #56) — one figure, since the legs are equal at the offer's own price.
+      const cash = fxOn ? fmtCash(offerCash(b, rateOf)) : null;
+      const withCash = (v: string) =>
+        cash != null ? (
+          <>
+            {v}
+            <Box component="span" sx={{ color: "text.secondary" }}> · {cash}</Box>
+          </>
+        ) : (
+          v
+        );
       const posted = b.created ? t("format.posted", { age: ago(b.created) }) : null;
 
       // The taker locks the coin they GIVE (the maker's get leg). Pre-flight the
@@ -123,8 +137,8 @@ export function useTakeConfirm(): ConfirmTake {
                 alignItems: "center",
               }}
             >
-              {row(t("takeConfirm.youGive"), youGive)}
-              {row(t("takeConfirm.youReceive"), youGet, "primary.main")}
+              {row(t("takeConfirm.youGive"), withCash(youGive))}
+              {row(t("takeConfirm.youReceive"), withCash(youGet), "primary.main")}
               <Box sx={{ gridColumn: "1 / -1", my: 0.25 }}>
                 <Divider />
               </Box>
@@ -149,6 +163,6 @@ export function useTakeConfirm(): ConfirmTake {
         ),
       });
     },
-    [confirm, symOf, denom, t, get],
+    [confirm, symOf, denom, fxOn, rateOf, t, get],
   );
 }

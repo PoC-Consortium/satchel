@@ -294,6 +294,59 @@ export function fmtPrice(p: number): string {
   return new Intl.NumberFormat(undefined, opts).format(p);
 }
 
+// ---- Cashrate (manual FX anchors, issue #56) -------------------------------
+// User-entered rates, one per coin ("what I call 1 BTC / 1 LTC in my money"),
+// price everything shown — currency-NEUTRAL on purpose (the user may think in
+// EUR, USD, RMB, …; Satchel never names the unit, only "~Cash"). An offer's two
+// legs are equal-valued at its own implied rate, so the rated leg × its anchor
+// values the whole trade. Display-only and opt-in (see fx.tsx); an offer with
+// no rated leg simply isn't derivable and shows "—".
+
+/** Cash value of one offer (both legs — they are equal at the offer's implied
+ *  rate). The quote leg's rate is preferred (it's what the sidebar entry binds
+ *  to); the base leg's is the fallback. Null when neither coin has a rate. */
+export function offerCash(
+  b: { give_asset: string; give_amount: number; get_asset: string; get_amount: number },
+  rateOf: (coin: string) => number | null,
+): number | null {
+  const { quote } = baseQuote(b.give_asset, b.get_asset);
+  const legs =
+    b.give_asset === quote
+      ? [
+          { sat: b.give_amount, coin: b.give_asset },
+          { sat: b.get_amount, coin: b.get_asset },
+        ]
+      : [
+          { sat: b.get_amount, coin: b.get_asset },
+          { sat: b.give_amount, coin: b.give_asset },
+        ];
+  for (const l of legs) {
+    const r = rateOf(l.coin);
+    if (r != null) return (l.sat / 1e8) * r;
+  }
+  return null;
+}
+
+/** Cash per 1 base coin for a quote-per-base price (in whole quote coin) —
+ *  the ladder's unit price through the quote coin's own rate. */
+export function priceCash(price: number, rate: number | null): number | null {
+  if (rate == null || !isFinite(price) || price <= 0) return null;
+  return price * rate;
+}
+
+/** "~1,234.00" — a cash value as a locale-formatted number behind the ~ marker
+ *  (approximate, unit deliberately unnamed); "—" for null (no rate set / not
+ *  derivable). ALWAYS exactly two fraction digits, the way money is written —
+ *  a sub-cent value honestly reads "~0.00". */
+export function fmtCash(v: number | null): string {
+  if (v == null || !isFinite(v)) return "—";
+  const s = new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(v);
+  return `~${s}`;
+}
+
 // ---- denomination (display unit) ----------------------------------------
 // A view-only preference: amounts are always stored/handled in sats; this only
 // changes how the quote coin is shown (tiny BTC decimals read better as sat /
