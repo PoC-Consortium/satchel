@@ -110,10 +110,11 @@ pub type WalletHandle = Arc<Mutex<WalletEntry>>;
 pub struct WalletManager {
     wallet_dir: PathBuf,
     wallets: Mutex<BTreeMap<String, WalletHandle>>,
-    /// One background [`SyncWorker`] per open nodeless coin (issue #87).
+    /// One background [`SyncWorker`] per open nodeless coin (issue #87),
+    /// keyed with the server URL its private connection points at.
     /// Spawned by [`Self::ensure_worker`], told to exit when the manager —
     /// i.e. the engine, i.e. the loaded merchant — goes away.
-    workers: Mutex<BTreeMap<String, Arc<SyncWorker>>>,
+    workers: Mutex<BTreeMap<String, (Arc<SyncWorker>, String)>>,
 }
 
 impl WalletManager {
@@ -128,24 +129,49 @@ impl WalletManager {
     }
 
     /// The coin's background sync worker, spawning it on first call. The
-    /// worker holds only a `Weak` wallet handle plus the shared chain
-    /// backend, so it can never keep a dropped engine's wallet alive; a
-    /// reconfigured server URL is handed over via `set_chain` (the worker
-    /// picks it up on its next wakeup).
+    /// worker holds only a `Weak` wallet handle, so it can never keep a
+    /// dropped engine's wallet alive; a reconfigured server URL is handed
+    /// over via `set_chain` (the worker picks it up on its next wakeup).
+    ///
+    /// The worker gets its OWN connection to the server, deliberately NOT
+    /// the pooled one the engine calls share: engine RPCs are serialized by
+    /// the global registry lock, so each connection then has at most ONE
+    /// caller at a time — the caller is always the electrum-client socket
+    /// reader and every blocking call is bounded by the socket timeouts. A
+    /// second concurrent caller domain would exercise the crate's reader
+    /// hand-off, where a waiter parks on an unbounded channel.
     pub fn ensure_worker(
         &self,
         coin_id: &str,
-        chain: Arc<ElectrumBackend>,
+        params: &'static ChainParams,
+        url: &str,
         wallet: &WalletHandle,
-    ) -> Arc<SyncWorker> {
+    ) -> Result<Arc<SyncWorker>> {
         let mut workers = self.workers.lock().expect("worker map poisoned");
-        if let Some(worker) = workers.get(coin_id) {
-            worker.set_chain(chain);
-            return worker.clone();
+        if let Some((worker, worker_url)) = workers.get_mut(coin_id) {
+            if worker_url != url {
+                worker.set_chain(Arc::new(ElectrumBackend::new(params, url)?));
+                *worker_url = url.to_string();
+            }
+            return Ok(worker.clone());
         }
+        let chain = Arc::new(ElectrumBackend::new(params, url)?);
         let worker = SyncWorker::spawn(coin_id, chain, wallet);
-        workers.insert(coin_id.to_string(), worker.clone());
-        worker
+        workers.insert(coin_id.to_string(), (worker.clone(), url.to_string()));
+        Ok(worker)
+    }
+
+    /// Poke the coin's sync worker, if one is running. The engine calls
+    /// this for coins with active swaps each scheduler tick (issue #87):
+    /// swap progress moves the wallet — fundings confirm, redeems land,
+    /// refunds return — and only a sync makes the cached balance and
+    /// activity reflect it.
+    pub fn poke(&self, coin_id: &str) {
+        if let Ok(workers) = self.workers.lock() {
+            if let Some((worker, _)) = workers.get(coin_id) {
+                worker.poke();
+            }
+        }
     }
 
     /// Open (or create) the nodeless wallet for `coin_id`, deriving its
@@ -202,7 +228,7 @@ impl Drop for WalletManager {
     /// and its `Weak` handle dies with this manager's map anyway.
     fn drop(&mut self) {
         if let Ok(workers) = self.workers.lock() {
-            for worker in workers.values() {
+            for (worker, _) in workers.values() {
                 worker.shutdown();
             }
         }
@@ -280,6 +306,20 @@ fn fetch_update(
     snap: SpkSnapshot,
 ) -> Result<Update> {
     let params = chain.params();
+
+    // Pin the server tip BEFORE fetching any history. The worker's
+    // skip-the-sync change detection compares the server tip against the
+    // wallet's checkpoint tip; recording a tip OLDER than every history
+    // response (the server's index only moves forward) guarantees a block
+    // arriving mid-fetch leaves the recorded tip behind it — so the next
+    // tick re-syncs. Tip-fetched-last would record the NEW tip against
+    // pre-block histories and the detection would sleep through the miss
+    // until the periodic forced sync.
+    let (tip_height, tip_raw) = chain.tip()?;
+    let pinned_tip = (
+        u32::try_from(tip_height).context("tip height")?,
+        BlockHash::from_str(&params.header_hash(&tip_raw)?)?,
+    );
 
     // Phase A — scripthash histories, BATCHED (one round-trip per batch;
     // pre-batching this was one round-trip PER ADDRESS, which took tens of
@@ -383,7 +423,7 @@ fn fetch_update(
     }
     tx_update.seen_ats = seen_ats;
 
-    let chain_cp = chain_update(chain, params, snap.local_tip, &headers)?;
+    let chain_cp = chain_update(chain, snap.local_tip, &headers, pinned_tip)?;
     Ok(Update {
         last_active_indices: last_active,
         tx_update,
@@ -421,20 +461,18 @@ pub(crate) fn sync_wallet(
     Ok(())
 }
 
-/// Build the checkpoint update: every anchored block, the server tip, and a
-/// point of agreement with the wallet's existing chain. Walking the local
-/// checkpoints tip-down, a stale (reorged) hash is replaced by the server's
-/// view and the walk continues until agreement — height 0 agrees by
-/// construction (both sides pin the coin's genesis).
+/// Build the checkpoint update: every anchored block, the (pre-fetch
+/// pinned) server tip, and a point of agreement with the wallet's existing
+/// chain. Walking the local checkpoints tip-down, a stale (reorged) hash is
+/// replaced by the server's view and the walk continues until agreement —
+/// height 0 agrees by construction (both sides pin the coin's genesis).
 fn chain_update(
     chain: &ElectrumBackend,
-    params: &ChainParams,
     local_tip: CheckPoint,
     anchored: &BTreeMap<u32, (BlockHash, u64)>,
+    pinned_tip: (u32, BlockHash),
 ) -> Result<CheckPoint> {
-    let (tip_height, tip_raw) = chain.tip()?;
-    let tip_height = u32::try_from(tip_height).context("tip height")?;
-    let tip_hash = BlockHash::from_str(&params.header_hash(&tip_raw)?)?;
+    let (tip_height, tip_hash) = pinned_tip;
 
     let mut blocks: BTreeMap<u32, BlockHash> =
         anchored.iter().map(|(h, (hash, _))| (*h, *hash)).collect();
@@ -480,7 +518,8 @@ fn chain_update(
 /// [`SyncWorker`] keeps it fresh at its cadence plus pokes), and writes only
 /// gate on the worker's first-sync latch so they can't build a spend from a
 /// never-synced cache at boot. `chain` is the coin's pooled long-lived
-/// Electrum connection, shared with the worker and every other engine call.
+/// Electrum connection, shared with every other engine call (all serialized
+/// by the global registry lock); the worker syncs over its own socket.
 pub struct BdkWalletBackend {
     params: &'static ChainParams,
     chain: Arc<ElectrumBackend>,
@@ -1298,11 +1337,14 @@ mod tests {
         let seed = PactSeed::from_mnemonic(TEST_MNEMONIC, "").unwrap();
         let manager = WalletManager::new(&dir);
         let handle = manager.open("btc", params, &seed).unwrap();
-        // Lazy backend pointed at a dead port: the worker just backs off.
-        let chain = Arc::new(ElectrumBackend::new(params, "tcp://127.0.0.1:1").unwrap());
 
-        let w1 = manager.ensure_worker("btc", chain.clone(), &handle);
-        let w2 = manager.ensure_worker("btc", chain, &handle);
+        // Dead port: the lazy private connection just backs off.
+        let w1 = manager
+            .ensure_worker("btc", params, "tcp://127.0.0.1:1", &handle)
+            .unwrap();
+        let w2 = manager
+            .ensure_worker("btc", params, "tcp://127.0.0.1:1", &handle)
+            .unwrap();
         assert!(Arc::ptr_eq(&w1, &w2), "one worker per coin");
 
         // No sync ever completed against the dead server: the write gate

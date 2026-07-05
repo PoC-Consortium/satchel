@@ -223,11 +223,17 @@ def test_v1_nodeless_both_sides(h, electrs, board):
 
         spent = bal_before - alice.rpc("getbalance", "btcx")["balance_sat"]
         assert GIVE_POCX_SAT <= spent < GIVE_POCX_SAT + 100_000, spent
-        # STRICT on purpose: Bob's redeem is his OWN broadcast, which pokes
-        # the sync worker (issue #87), and completion requires it confirmed
-        # (many worker passes later) — so the cached balance must already
-        # carry it. If this ever needs a poll loop, the poke path regressed.
-        gained = bob.rpc("getbalance", "btcx")["balance_sat"] - bob_btcx_before
+        # Bob's redeem pays him from a FOREIGN input (the HTLC), so bdk
+        # counts it as trusted_spendable only once CONFIRMED — which needs a
+        # worker pass AFTER the confirming block. The completing tick pokes
+        # the worker (issue #87 swap-event pokes) but the sync is
+        # asynchronous, so poll briefly instead of asserting instantly.
+        deadline = time.time() + 20
+        while True:
+            gained = bob.rpc("getbalance", "btcx")["balance_sat"] - bob_btcx_before
+            if gained > 0 or time.time() > deadline:
+                break
+            time.sleep(0.5)
         assert 0 < gained <= GIVE_POCX_SAT, (
             f"bob's bdk wallet should hold the leg-A redeem: {gained}")
         print(f"[nodeless] v1 nodeless-both OK (bob's bdk redeem: {gained} sat)")

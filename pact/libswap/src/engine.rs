@@ -15,7 +15,7 @@ use anyhow::{bail, ensure, Context, Result};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::{OutPoint, ScriptBuf};
 use serde_json::Value;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Mutex;
@@ -706,15 +706,18 @@ impl Engine {
                  (independent chain views) — add a second URL"
             );
         }
-        // The primary chain view: the coin's pooled long-lived connection,
-        // shared with the background sync worker (issue #87).
+        // The primary chain view: the coin's pooled long-lived connection.
+        // The sync worker dials the same server on its OWN connection (see
+        // WalletManager::ensure_worker) so each socket has one caller
+        // domain — engine RPCs here (serialized by the registry lock), the
+        // worker there.
         let primary = self.electrum_pool.get(params, coin_id, urls[0], &urls)?;
         let wallet = match self.store.seed() {
             Ok(seed) => {
                 let handle = self.wallet_manager.open(coin_id, params, &seed)?;
                 let worker = self
                     .wallet_manager
-                    .ensure_worker(coin_id, primary.clone(), &handle);
+                    .ensure_worker(coin_id, params, urls[0], &handle)?;
                 Some((handle, worker))
             }
             Err(_) => None, // locked or absent seed: chain-reads-only backend
@@ -3848,6 +3851,32 @@ impl Engine {
                 detail: format!("pending-take prune: {err:#}"),
             });
         }
+        let adaptor_records = self.store.list_adaptor().unwrap_or_default();
+        // Coins with a swap ACTIVE as of this tick (incl. ones going terminal
+        // during it): swap progress moves the nodeless wallet — fundings
+        // confirm, redeems land, refunds return — so poke those coins' sync
+        // workers after the tick (issue #87: "swap events on the coin").
+        // Long-terminal history swaps are excluded, so idle merchants poke
+        // nothing.
+        let mut active_coins: BTreeSet<String> = BTreeSet::new();
+        for record in &records {
+            if !matches!(
+                record.state,
+                State::Completed | State::Refunded | State::Aborted
+            ) {
+                active_coins.insert(record.chain_a.coin_id.clone());
+                active_coins.insert(record.chain_b.coin_id.clone());
+            }
+        }
+        for rec in &adaptor_records {
+            if !matches!(
+                rec.state,
+                AdaptorState::Completed | AdaptorState::Refunded | AdaptorState::Aborted
+            ) {
+                active_coins.insert(rec.chain_a.coin_id.clone());
+                active_coins.insert(rec.chain_b.coin_id.clone());
+            }
+        }
         for record in records {
             match self.tick_one(&record) {
                 Ok(Some(event)) => events.push(event),
@@ -3860,7 +3889,7 @@ impl Engine {
             }
         }
         // v2 (pact-htlc-v2) adaptor swaps: same auto-redeem/auto-refund policy.
-        for rec in self.store.list_adaptor().unwrap_or_default() {
+        for rec in adaptor_records {
             match self.adaptor_tick_one(&rec) {
                 Ok(Some(event)) => events.push(event),
                 Ok(None) => {}
@@ -3870,6 +3899,9 @@ impl Engine {
                     detail: format!("{err:#}"),
                 }),
             }
+        }
+        for coin_id in &active_coins {
+            self.wallet_manager.poke(coin_id);
         }
         // Observability: refresh the live progress snapshot from the records (and
         // fold in this round's latest event per swap). Never fails the tick.

@@ -1,8 +1,11 @@
 //! Background Electrum sync worker for the nodeless wallet (issue #87).
 //!
-//! One plain `std::thread` per nodeless coin, owning the coin's long-lived
-//! Electrum connection view (the pooled [`ElectrumBackend`], shared with
-//! every engine call). Its loop:
+//! One plain `std::thread` per nodeless coin, owning its own long-lived
+//! Electrum connection ([`ElectrumBackend`]) to the coin's primary server —
+//! deliberately separate from the pooled connection the (registry-lock-
+//! serialized) engine calls share, so each socket has exactly one caller at
+//! a time and every blocking call stays bounded by the socket timeouts.
+//! Its loop:
 //!
 //! `wait(poke OR ~15s tick)` → observe (subscriptions, tip poll) →
 //! **snapshot** revealed spks under a brief wallet-entry lock → **fetch**
@@ -71,8 +74,8 @@ pub struct SyncWorker {
 }
 
 struct WorkerState {
-    /// The coin's pooled Electrum view. Replaced (with a poke) when the
-    /// coin is reconfigured to a different server.
+    /// The worker's private Electrum view of the coin's primary server.
+    /// Replaced (with a poke) when the coin is reconfigured.
     chain: Arc<ElectrumBackend>,
     /// Wake-up requested: sync NOW instead of at the next tick.
     poked: bool,
@@ -252,6 +255,13 @@ fn run(worker: Arc<SyncWorker>, wallet: Weak<Mutex<WalletEntry>>) {
             // Cached per connection generation — zero round-trips steady
             // state, the full genesis/pruning checks on every fresh socket.
             chain.verify_chain()?;
+            if std::env::var_os("PACT_WALLET_SYNC_TRACE").is_some() {
+                eprintln!(
+                    "[wallet-sync {}] pass: dirty={dirty} subs={} ticks={ticks_since_sync}",
+                    worker.coin_id,
+                    subs.statuses.len()
+                );
+            }
             if observe(&chain, &handle, &mut subs)? {
                 dirty = true;
             }
@@ -313,8 +323,15 @@ fn observe(
     handle: &WalletHandle,
     subs: &mut Subscriptions,
 ) -> Result<bool> {
+    let trace = std::env::var_os("PACT_WALLET_SYNC_TRACE").is_some();
+    let step = |what: &str| {
+        if trace {
+            eprintln!("[wallet-sync] observe step: {what}");
+        }
+    };
     let mut dirty = false;
 
+    step("pin");
     let conn = chain.pinned_conn()?;
     let same_conn = subs
         .conn
@@ -329,6 +346,7 @@ fn observe(
     }
 
     // Snapshot the revealed spks under a brief entry lock (pure CPU).
+    step("snapshot");
     let revealed = {
         let entry = handle.lock().expect("wallet entry poisoned");
         wallet_bdk::revealed_spks(&entry)
@@ -338,6 +356,7 @@ fn observe(
         .filter(|spk| !subs.statuses.contains_key(spk))
         .collect();
     if !fresh.is_empty() {
+        step("subscribe");
         // One batched round-trip. On ANY failure: drop this connection —
         // the crate pre-registers the hashes before sending, so a half-done
         // batch would poison retries on the same instance with
@@ -377,6 +396,7 @@ fn observe(
     // status changed... a status DOES change on our txs' first
     // confirmation, but `wallet_activity` computes depth from the wallet's
     // own checkpoint tip, which only a sync advances).
+    step("tip");
     let (tip_height, _) = chain.tip()?;
     let local_tip = {
         let entry = handle.lock().expect("wallet entry poisoned");
@@ -384,6 +404,9 @@ fn observe(
     };
     if tip_height != u64::from(local_tip) {
         dirty = true;
+    }
+    if std::env::var_os("PACT_WALLET_SYNC_TRACE").is_some() {
+        eprintln!("[wallet-sync] observe: tip={tip_height} local={local_tip} dirty={dirty}");
     }
 
     Ok(dirty)
