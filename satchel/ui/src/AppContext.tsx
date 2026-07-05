@@ -9,8 +9,9 @@ import {
   type ReactNode,
 } from "react";
 import { errMsg, getCoinIcon, inTauri, listMerchants, rpc } from "./api/tauri";
-import { adaptorToSwap, pendingTakeToSwap, v1ToSwap } from "./format";
-import { tr } from "./i18n";
+import { adaptorToSwap, isActive, pendingTakeToSwap, v1ToSwap } from "./format";
+import { notifySwapEvents, updateTray } from "./notify";
+import { tr, useI18n } from "./i18n";
 import { COIN_ICON } from "./assets/coins";
 import type {
   AdaptorSwapRecord,
@@ -129,6 +130,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [logLines, setLogLines] = useState<LogLine[]>([]);
   const [toast, setToast] = useState<string | null>(null);
 
+  // The active merchant id, reachable from the (stable) refreshSwaps callback —
+  // notifySwapEvents keys its "seed silently, don't replay history" state on it
+  // so a merchant switch never replays the other merchant's swap history as a
+  // burst of OS notifications.
+  const activeIdRef = useRef(activeId);
+  activeIdRef.current = activeId;
+
   const log = useCallback((msg: string) => {
     const time = new Date().toLocaleTimeString();
     setLogLines((prev) => [{ time, msg }, ...prev].slice(0, 200));
@@ -196,7 +204,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       const realIds = new Set(real.map((s) => s.swap_id));
       const pending = pend.filter((p) => !realIds.has(p.offer_id)).map(pendingTakeToSwap);
-      setSwaps([...real, ...pending]);
+      const next = [...real, ...pending];
+      setSwaps(next);
+      // OS notifications on milestone crossings (#55) — contained in its own
+      // try so a bug in the (cosmetic) notification path can never masquerade
+      // as pactd being unreachable.
+      try {
+        notifySwapEvents(next, activeIdRef.current);
+      } catch {
+        /* cosmetic path — never break the poll */
+      }
       setConn(true);
     } catch {
       setConn(false);
@@ -361,6 +378,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const t = setInterval(() => void refreshRelays(), 8000);
     return () => clearInterval(t);
   }, [ready, refreshRelays]);
+
+  // Tray tooltip = the header's live-swap count; menu labels follow the UI
+  // language (#55). Effect on (swaps, lang) so a language switch relabels the
+  // tray immediately, not on the next poll; updateTray itself no-ops when
+  // nothing changed.
+  const { lang } = useI18n();
+  useEffect(() => {
+    updateTray(swaps.filter(isActive).length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swaps, lang]);
 
   const activeMerchant = useMemo(
     () => merchants.find((x) => x.id === activeId) ?? null,

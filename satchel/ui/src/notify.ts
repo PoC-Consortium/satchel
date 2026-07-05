@@ -1,0 +1,177 @@
+// Desktop notifications + tray status for swap events (issue #55).
+//
+// The engine emits no push events — the UI polls (AppContext.refreshSwaps,
+// every 4s). So notifications are derived here by DIFFING successive swap
+// snapshots against a per-swap milestone ladder (milestone() in narrate.ts,
+// kept in lockstep with narrate()'s checkpoints), which means a notification's
+// body can simply BE the narrate line — same honest copy, same language.
+//
+// Noise policy: one notification per milestone crossing, only the LATEST
+// milestone when several are crossed in one poll, nothing while the window has
+// focus (the in-app dock already shows it), and nothing on the first poll for
+// a merchant (don't replay history on launch or merchant switch). Milestones
+// only ratchet up and reorg alerts latch across missing progress snapshots, so
+// an RPC blip never re-fires an event.
+
+import { milestone, narrate, type NotifyEvent } from "./screens/narrate";
+import { asset } from "./format";
+import { tr } from "./i18n";
+import { inTauri, setTrayStatus } from "./api/tauri";
+import type { NotifyPrefs, Swap } from "./api/types";
+
+const TITLE_KEY: Record<NotifyEvent, string> = {
+  swap_started: "notify.titleStarted",
+  locks: "notify.titleLocks",
+  completed: "notify.titleCompleted",
+  failed: "notify.titleFailed",
+  reorg: "notify.titleReorg",
+};
+
+// The active toggles, mirrored from PrefsProvider by <NotifySync> (main.tsx)
+// once the persisted satchel.json prefs have LOADED. null until then: the
+// milestone ladder still tracks, but nothing may fire — the in-memory defaults
+// must never override a user's persisted "off" during the async load window.
+// A module-level mirror (the same pattern as i18n's tr()) so the poller stays
+// a stable callback and AppProvider doesn't subscribe to prefs context (that
+// would defeat the provider's children-identity render bailout).
+let activePrefs: NotifyPrefs | null = null;
+
+/** Push the loaded notification prefs (and every later change) into this
+ *  module. Called from <NotifySync> in main.tsx. */
+export function setNotifyPrefs(p: NotifyPrefs): void {
+  activePrefs = p;
+}
+
+interface SeenSwap {
+  rank: number;
+  reorg: boolean;
+}
+
+// Last-seen milestone per swap id. Entries PERSIST even when a swap is absent
+// from one poll — a transiently empty/partial RPC response must not re-arm
+// history. null until the first poll for `seenOwner` seeds it silently; a
+// merchant switch (different owner) re-arms the silent seeding, so the new
+// merchant's history is never replayed as fresh events.
+let seen: Map<string, SeenSwap> | null = null;
+let seenOwner: string | null = null;
+
+// One dynamic import of the plugin for the module's lifetime, and once the OS
+// grants permission it can't be un-granted mid-process — cache the true result.
+const plugin = () => import("@tauri-apps/plugin-notification");
+let granted = false;
+
+/** Ask the OS for notification permission (cached once granted). Exposed so
+ *  Settings can request proactively when the master switch is turned on. */
+export async function ensureNotifyPermission(): Promise<boolean> {
+  if (!inTauri()) return false;
+  if (granted) return true;
+  try {
+    const p = await plugin();
+    granted = (await p.isPermissionGranted()) || (await p.requestPermission()) === "granted";
+  } catch {
+    granted = false;
+  }
+  return granted;
+}
+
+/** Returns whether the notification was actually handed to the OS. */
+async function send(title: string, body: string): Promise<boolean> {
+  try {
+    if (!(await ensureNotifyPermission())) return false;
+    (await plugin()).sendNotification({ title, body });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The "Send a test notification" button (Settings). Returns false when the OS
+ *  denied permission (or the send failed), so the UI can point at system
+ *  settings. Same code path as a real event — the answer is honest. */
+export async function sendTestNotification(): Promise<boolean> {
+  return send(tr("notify.testTitle"), tr("notify.testBody"));
+}
+
+function bodyFor(s: Swap): string {
+  const pair = `${asset(s.chain_a).toUpperCase()} ⇆ ${asset(s.chain_b).toUpperCase()}`;
+  return `${pair} — ${narrate(s)}`;
+}
+
+/** Diff the fresh swap snapshot against the last-seen milestones and fire OS
+ *  notifications for crossings, honoring the per-event toggles. Called from the
+ *  global swaps poll with the active merchant id as `owner`. Milestone tracking
+ *  ALWAYS runs (even while quiet) so toggling a setting or refocusing the
+ *  window never replays old events. */
+export function notifySwapEvents(swaps: Swap[], owner: string | null): void {
+  if (seen === null || owner !== seenOwner) {
+    // First poll for this merchant: seed silently, no history replay.
+    seen = new Map();
+    seenOwner = owner;
+    for (const s of swaps) seen.set(s.swap_id, entryFor(s, undefined));
+    return;
+  }
+  const prefs = activePrefs;
+  // Low noise: while the window is focused the in-app dock already narrates
+  // every change — OS notifications are for the minimized/background case.
+  const quiet = !prefs || !prefs.enabled || !inTauri() || document.hasFocus();
+
+  for (const s of swaps) {
+    const before = seen.get(s.swap_id);
+    if (before && before.rank >= 5) continue; // terminal — nothing left to fire
+    const now = entryFor(s, before);
+    seen.set(s.swap_id, now);
+    if (quiet) continue;
+
+    const m = milestone(s);
+    let event: NotifyEvent | null = null;
+    if (!before) {
+      // Appeared between polls. Terminal already → its terminal event;
+      // otherwise it just started (whatever milestone it landed on — the
+      // narrate body tells the full story).
+      event = m.rank >= 5 ? m.event : m.rank >= 1 ? "swap_started" : null;
+    } else if (now.rank > before.rank) {
+      event = m.event;
+    }
+    if (event && prefs[event]) void send(tr(TITLE_KEY[event]), bodyFor(s));
+    if (now.reorg && before && !before.reorg && prefs.reorg) {
+      void send(
+        tr(TITLE_KEY.reorg),
+        tr("notify.reorgBody", { coin: s.progress?.coin ?? "?" }),
+      );
+    }
+  }
+}
+
+/** Fold a snapshot into the ratcheted per-swap entry: the rank only moves up,
+ *  and the reorg latch holds while the progress snapshot is missing (the
+ *  swapprogress RPC is deliberately best-effort in refreshSwaps) — it re-arms
+ *  only when progress is back WITHOUT the alert. */
+function entryFor(s: Swap, before: SeenSwap | undefined): SeenSwap {
+  return {
+    rank: Math.max(milestone(s).rank, before?.rank ?? 0),
+    reorg: s.progress ? s.progress.last_action === "reorg-alert" : (before?.reorg ?? false),
+  };
+}
+
+let lastTray = "";
+
+/** Mirror the header's live-swap count onto the tray tooltip and keep the tray
+ *  menu labels in the UI language. Cheap to call on every poll / language
+ *  change — only invokes Rust when something actually changed. */
+export function updateTray(liveCount: number): void {
+  if (!inTauri()) return;
+  const tooltip =
+    liveCount === 0
+      ? tr("notify.trayNone")
+      : liveCount === 1
+        ? tr("notify.trayOne")
+        : tr("notify.trayMany", { count: liveCount });
+  const showLabel = tr("notify.trayOpen");
+  const quitLabel = tr("notify.trayQuit");
+  const key = JSON.stringify([tooltip, showLabel, quitLabel]);
+  if (key === lastTray) return;
+  lastTray = key;
+  void setTrayStatus(tooltip, showLabel, quitLabel).catch(() => {
+    lastTray = ""; // retry on the next poll
+  });
+}

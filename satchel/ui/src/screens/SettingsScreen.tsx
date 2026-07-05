@@ -24,16 +24,17 @@ import type { ReactNode } from "react";
 import { useApp } from "../AppContext";
 import { usePrefs } from "../prefs";
 import { useI18n, useT, LANGUAGES } from "../i18n";
-import type { UiPrefs } from "../api/types";
+import { ensureNotifyPermission, sendTestNotification } from "../notify";
+import type { NotifyPrefs, UiPrefs } from "../api/types";
 import { APP_VERSION, UPDATE_AVAILABLE } from "../version";
 import { errMsg, listCoinConfig, rpc, saveBoard, saveNostrRelays } from "../api/tauri";
 import CoinsScreen from "./CoinsScreen";
 
 // UI-3: Settings is split into MUI Tabs — General/Appearance (theme, language),
-// Coins (node config), Network (relays + boards), About (version + update
-// placeholder + the trust-model note). All prior functionality is preserved;
-// it is only reorganised behind tabs.
-type SettingsTab = "general" | "coins" | "network" | "fees" | "about";
+// Coins (node config), Network (relays + boards), Notifications (issue #55),
+// About (version + update placeholder + the trust-model note). All prior
+// functionality is preserved; it is only reorganised behind tabs.
+type SettingsTab = "general" | "coins" | "network" | "fees" | "notifications" | "about";
 
 export default function SettingsScreen() {
   const t = useT();
@@ -61,6 +62,7 @@ export default function SettingsScreen() {
         <Tab value="coins" label={t("settings.tabCoins")} sx={{ minHeight: 40 }} />
         <Tab value="network" label={t("settings.tabNetwork")} sx={{ minHeight: 40 }} />
         <Tab value="fees" label={t("settings.tabFees")} sx={{ minHeight: 40 }} />
+        <Tab value="notifications" label={t("notify.tab")} sx={{ minHeight: 40 }} />
         <Tab value="about" label={t("settings.tabAbout")} sx={{ minHeight: 40 }} />
       </Tabs>
 
@@ -68,6 +70,7 @@ export default function SettingsScreen() {
       {tab === "coins" && <CoinsTab />}
       {tab === "network" && <NetworkTab />}
       {tab === "fees" && <FeesTab />}
+      {tab === "notifications" && <NotificationsTab />}
       {tab === "about" && <AboutTab />}
     </Box>
   );
@@ -432,6 +435,72 @@ function FeesTab() {
           {t("settings.feeReset")}
         </Button>
         {status && <Typography sx={{ fontSize: 13, color: "text.secondary" }}>{status}</Typography>}
+      </Box>
+    </Section>
+  );
+}
+
+// Desktop notifications (issue #55): one master switch + a per-event sub-toggle
+// each. Persisted in satchel.json via UiPrefs.notify (mechanism a — a pure
+// UI/OS concern, never engine config). The actual firing lives in notify.ts,
+// driven by the global swaps poll.
+function NotificationsTab() {
+  const t = useT();
+  const { prefs, update } = usePrefs();
+  const n = prefs.notify;
+  const [status, setStatus] = useState("");
+
+  function set(patch: Partial<NotifyPrefs>) {
+    update({ notify: { ...n, ...patch } });
+    // Turning the master switch on is the natural moment to ask the OS for
+    // permission (before the first swap event needs it).
+    if (patch.enabled) {
+      void ensureNotifyPermission().then((ok) => setStatus(ok ? "" : t("notify.denied")));
+    }
+  }
+
+  const toggle = (key: keyof NotifyPrefs, label: string, hint: string) => (
+    <Row key={key} label={label} hint={hint}>
+      <Switch
+        checked={n[key]}
+        disabled={key !== "enabled" && !n.enabled}
+        onChange={(_, on) => set({ [key]: on })}
+        inputProps={{ "aria-label": label }}
+      />
+    </Row>
+  );
+
+  async function test() {
+    setStatus((await sendTestNotification()) ? "" : t("notify.denied"));
+  }
+
+  // Built outside the JSX so the pref-key string literals aren't flagged by the
+  // i18n no-literal-string guard (they are property keys, not display copy) —
+  // the same trick FeesTab uses for its field keys.
+  const rows = (
+    [
+      ["enabled", "master", "masterHint"],
+      ["swap_started", "evStarted", "evStartedHint"],
+      ["locks", "evLocks", "evLocksHint"],
+      ["completed", "evCompleted", "evCompletedHint"],
+      ["failed", "evFailed", "evFailedHint"],
+      ["reorg", "evReorg", "evReorgHint"],
+    ] as Array<[keyof NotifyPrefs, string, string]>
+  ).map(([key, label, hint]) => toggle(key, t(`notify.${label}`), t(`notify.${hint}`)));
+
+  return (
+    <Section title={t("notify.section")}>
+      <Typography sx={{ color: "text.secondary", fontSize: 13, mb: 1.5 }}>
+        {t("notify.intro")}
+      </Typography>
+      {rows}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mt: 1.5 }}>
+        <Button variant="outlined" color="inherit" disabled={!n.enabled} onClick={() => void test()}>
+          {t("notify.test")}
+        </Button>
+        {status && (
+          <Typography sx={{ fontSize: 13, color: "warning.main" }}>{status}</Typography>
+        )}
       </Box>
     </Section>
   );

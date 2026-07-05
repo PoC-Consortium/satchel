@@ -30,6 +30,24 @@ export interface UiPrefs {
   theme: "dark" | "light" | "system";
   language: string;
   nav_open: boolean;
+  /** Desktop-notification switches (issue #55). */
+  notify: NotifyPrefs;
+}
+
+/** OS-notification toggles (issue #55): one master switch + one per event kind
+ *  (the sub-toggles in Settings → Notifications). Mirrors Rust `NotifyPrefs`. */
+export interface NotifyPrefs {
+  enabled: boolean;
+  /** A counterparty took your offer / your take was accepted. */
+  swap_started: boolean;
+  /** A leg's lock confirmed on-chain (ours or theirs). */
+  locks: boolean;
+  /** Swap finished — coins settled in the wallet. */
+  completed: boolean;
+  /** Swap unwound — refunded or aborted. */
+  failed: boolean;
+  /** Chain reorg touched a watched swap. */
+  reorg: boolean;
 }
 
 /** A local-only contact's standing. `trusted` = a counterparty you vouch for

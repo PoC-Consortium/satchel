@@ -9,7 +9,10 @@ description = "Satchel - desktop app for PoCX trading: launches and supervises p
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
+# OS notifications for swap events (issue #55) — paired with the
+# @tauri-apps/plugin-notification JS API in the UI.
+tauri-plugin-notification = "2"
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"

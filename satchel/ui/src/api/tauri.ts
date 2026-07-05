@@ -65,7 +65,13 @@ export const setUiPrefs = (patch: Partial<UiPrefs>) =>
     theme: patch.theme ?? null,
     language: patch.language ?? null,
     navOpen: patch.nav_open ?? null,
+    notify: patch.notify ?? null,
   }) as Promise<void>;
+
+/** Push localized tray strings (issue #55): the tooltip mirrors the live-swap
+ *  count; the menu labels follow the UI language. */
+export const setTrayStatus = (tooltip: string, showLabel: string, quitLabel: string) =>
+  invoke("set_tray_status", { tooltip, showLabel, quitLabel }) as Promise<void>;
 
 /** Read the local-only contact book from satchel.json. Returns null until the
  *  UI has written one (an empty book). */

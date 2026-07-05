@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Satchel webview: core defaults plus window-close interception for the fund-safety exit gate (ExitGate.tsx).","local":true,"windows":["main"],"permissions":["core:default","core:window:allow-destroy"]}}
+{"default":{"identifier":"default","description":"Satchel webview: core defaults plus window-close interception for the fund-safety exit gate (ExitGate.tsx), and OS notifications for swap events (issue #55).","local":true,"windows":["main"],"permissions":["core:default","core:window:allow-destroy","notification:default"]}}
