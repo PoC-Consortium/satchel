@@ -696,10 +696,11 @@ impl Engine {
 
     /// Electrum-only URL list ⇒ nodeless mode: the primary becomes a
     /// [`crate::wallet_bdk::BdkWalletBackend`] (bdk wallet from the Pact
-    /// mnemonic's BIP-86 branch over the first Electrum URL); the remaining
-    /// URLs join as independent chain views. A locked — or absent,
-    /// watch-only — seed keeps chain reads working and surfaces through
-    /// `wallet_locked`, exactly like an encrypted, locked Core wallet.
+    /// mnemonic's BIP-86 branch over the ELECTED home server, #99); the
+    /// active view servers join as independent chain views. A locked — or
+    /// absent, watch-only — seed keeps chain reads working and surfaces
+    /// through `wallet_locked`, exactly like an encrypted, locked Core
+    /// wallet.
     fn nodeless_backend(
         &self,
         coin_id: &str,
@@ -727,15 +728,25 @@ impl Engine {
                  (independent chain views) — add a second URL"
             );
         }
-        // Active set (issue #98): the wallet HOME stays pinned to urls[0]
-        // until re-election lands (#99) — the sync worker's socket and the
-        // bdk wallet ride it. The view slots are picked by the ServerSet
-        // (sticky, health-aware); everything else in the list is cold
+        // Active set (issue #98) + home election (#99): the wallet HOME is
+        // ELECTED — sticky on the incumbent, re-homed only when it is
+        // inside a failure backoff window. The sync worker follows via
+        // `ensure_worker`/`set_chain` (its subscriptions are pinned to the
+        // connection instance and rebuild with a full resync on the new
+        // socket); the bdk store itself is server-agnostic (genesis-checked
+        // at load, checkpoint reconciliation in `chain_update`). The view
+        // slots are picked separately; everything else in the list is cold
         // standby with no pooled connection at all.
-        let home = urls[0];
-        let views = self
+        let home = self
             .server_set
-            .select(coin_id, &urls[1..], crate::server_health::ACTIVE_VIEWS);
+            .select_home(coin_id, &urls)
+            .expect("nonempty url list");
+        let view_candidates: Vec<&str> = urls.iter().copied().filter(|u| *u != home).collect();
+        let views = self.server_set.select(
+            coin_id,
+            &view_candidates,
+            crate::server_health::ACTIVE_VIEWS,
+        );
         let live: Vec<&str> = std::iter::once(home).chain(views.iter().copied()).collect();
         // The primary chain view: the coin's pooled long-lived connection.
         // The sync worker dials the same server on its OWN connection (see
@@ -743,6 +754,10 @@ impl Engine {
         // domain — engine RPCs here (serialized by the registry lock), the
         // worker there.
         let primary = self.electrum_pool.get(params, coin_id, home, &live)?;
+        let view_backends: Vec<std::sync::Arc<crate::chain::ElectrumBackend>> = views
+            .iter()
+            .map(|url| self.electrum_pool.get(params, coin_id, url, &live))
+            .collect::<Result<_>>()?;
         let wallet = match self.store.seed() {
             Ok(seed) => {
                 let handle = self.wallet_manager.open(coin_id, params, &seed)?;
@@ -753,15 +768,25 @@ impl Engine {
             }
             Err(_) => None, // locked or absent seed: chain-reads-only backend
         };
-        let mut backends: Vec<Box<dyn ChainBackend>> = vec![Box::new(
-            crate::wallet_bdk::BdkWalletBackend::new(params, primary, wallet),
-        )];
-        for url in &views {
-            backends.push(Box::new(
-                self.electrum_pool.get(params, coin_id, url, &live)?,
-            ));
+        let mut backends: Vec<Box<dyn ChainBackend>> =
+            vec![Box::new(crate::wallet_bdk::BdkWalletBackend::new(
+                params,
+                primary,
+                view_backends.clone(),
+                wallet,
+            ))];
+        for view in view_backends {
+            backends.push(Box::new(view));
         }
         MultiBackend::from_backends(backends)
+    }
+
+    /// Seconds since the coin's nodeless wallet cache was last confirmed
+    /// against its home server — `None` for node-backed coins or before
+    /// the worker's first completed pass. The "balance as of" signal
+    /// (#99): it stops advancing while the home is unreachable.
+    pub fn wallet_sync_age_secs(&self, coin_id: &str) -> Option<u64> {
+        self.wallet_manager.sync_age(coin_id).map(|d| d.as_secs())
     }
 
     /// Passive health snapshots for one coin's configured Electrum servers,
@@ -783,7 +808,25 @@ impl Engine {
             .map(str::trim)
             .filter(|u| u.starts_with("tcp://") || u.starts_with("ssl://"))
             .collect();
-        Ok(crate::server_health::coin_snapshots(coin_id, &urls))
+        let mut snaps = crate::server_health::coin_snapshots(coin_id, &urls);
+        // Roles from the sticky maps — a PEEK, not an election: display
+        // reads must never move routing state. A coin that has not routed
+        // this run shows no roles, which is the honest answer.
+        let home = self.server_set.current_home(coin_id);
+        let views = self.server_set.current_views(coin_id);
+        let routed = home.is_some() || !views.is_empty();
+        for snap in &mut snaps {
+            snap.role = if home.as_deref() == Some(snap.url.as_str()) {
+                Some("wallet".to_string())
+            } else if views.iter().any(|v| v == &snap.url) {
+                Some("view".to_string())
+            } else if routed {
+                Some("standby".to_string())
+            } else {
+                None
+            };
+        }
+        Ok(snaps)
     }
 
     /// Live reachability gate for both legs of a swap: each coin's node must be

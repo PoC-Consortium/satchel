@@ -1047,10 +1047,15 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 };
                 let servers_healthy = servers.iter().filter(|s| s.state == "healthy").count();
                 let servers_down = servers.iter().filter(|s| s.state == "down").count();
-                // The wallet HOME rides the first Electrum URL in nodeless
-                // mode; node-backed coins have no home-server concept here.
+                // The wallet HOME is the ELECTED server (#99), not simply
+                // the first URL; before the first election (fresh boot) the
+                // first URL is the presumptive home.
                 let wallet_server_state = if nodeless {
-                    servers.first().map(|s| s.state.clone())
+                    servers
+                        .iter()
+                        .find(|s| s.role.as_deref() == Some("wallet"))
+                        .or_else(|| servers.first())
+                        .map(|s| s.state.clone())
                 } else {
                     None
                 };
@@ -1073,6 +1078,17 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                     "servers_healthy": servers_healthy,
                     "servers_down": servers_down,
                     "wallet_server_state": wallet_server_state,
+                    // Cache freshness (#99): how long ago the nodeless
+                    // wallet cache was last confirmed against its server —
+                    // the "balance as of" hint while the home is down.
+                    "wallet_synced_secs_ago": if nodeless {
+                        let sid = def.id.to_string();
+                        blocking(app, move |e| Ok(e.wallet_sync_age_secs(&sid)))
+                            .await
+                            .unwrap_or(None)
+                    } else {
+                        None
+                    },
                 }));
             }
             Ok(json!({ "network": format!("{net:?}").to_lowercase(), "coins": coins }))

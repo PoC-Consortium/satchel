@@ -82,6 +82,11 @@ pub struct HealthSnapshot {
     pub url: String,
     /// `"untested" | "healthy" | "down"`.
     pub state: String,
+    /// `"wallet"` (the elected home), `"view"` (active), or `"standby"` —
+    /// set by [`crate::engine::Engine::server_status`] from the sticky
+    /// role maps; `None` when the coin has not routed yet this run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
     /// When `down`: seconds until the backoff window expires (0 = now).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retry_in_secs: Option<u64>,
@@ -198,6 +203,7 @@ impl ServerHealth {
             coin_id: self.coin_id.clone(),
             url: self.url.clone(),
             state: state.to_string(),
+            role: None,
             retry_in_secs,
             latency_ms: inner
                 .latency_ewma_micros
@@ -284,11 +290,76 @@ pub const ACTIVE_VIEWS: usize = 2;
 #[derive(Default)]
 pub struct ServerSet {
     active: Mutex<BTreeMap<String, Vec<String>>>,
+    home: Mutex<BTreeMap<String, String>>,
 }
 
 impl ServerSet {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Sticky election of the wallet HOME server (#99). The home carries
+    /// the bdk sync worker's socket and its scripthash subscriptions, so a
+    /// switch costs a fresh dial + a full resync — the election is
+    /// maximally sticky: the incumbent keeps the role while it is not
+    /// inside a failure backoff window, however preferred a returning
+    /// earlier-in-the-list server is (no flap-back). A down incumbent is
+    /// replaced by the first available candidate in configured order; a
+    /// fully-down list routes to the soonest-to-recover so recovery is
+    /// observed the moment a window lapses.
+    pub fn select_home<'a>(&self, coin_id: &str, candidates: &[&'a str]) -> Option<&'a str> {
+        let (first, rest) = candidates.split_first()?;
+        let _ = rest;
+        let mut map = self.home.lock().expect("server set poisoned");
+        let incumbent = map.get(coin_id).and_then(|prev| {
+            candidates
+                .iter()
+                .copied()
+                .find(|c| *c == prev)
+                .filter(|url| server_health(coin_id, url).available())
+        });
+        let home = incumbent
+            .or_else(|| {
+                candidates
+                    .iter()
+                    .copied()
+                    .find(|url| server_health(coin_id, url).available())
+            })
+            .or_else(|| {
+                candidates
+                    .iter()
+                    .copied()
+                    .filter_map(|url| {
+                        server_health(coin_id, url)
+                            .down_until()
+                            .map(|until| (url, until))
+                    })
+                    .min_by_key(|(_, until)| *until)
+                    .map(|(url, _)| url)
+            })
+            .unwrap_or(first);
+        map.insert(coin_id.to_string(), home.to_string());
+        Some(home)
+    }
+
+    /// Peek the sticky home WITHOUT electing — display only (`None` until
+    /// the coin has routed once this run).
+    pub fn current_home(&self, coin_id: &str) -> Option<String> {
+        self.home
+            .lock()
+            .expect("server set poisoned")
+            .get(coin_id)
+            .cloned()
+    }
+
+    /// Peek the sticky view slots WITHOUT selecting — display only.
+    pub fn current_views(&self, coin_id: &str) -> Vec<String> {
+        self.active
+            .lock()
+            .expect("server set poisoned")
+            .get(coin_id)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Pick (at most) `k` active views for `coin_id` out of `candidates`
@@ -450,6 +521,42 @@ mod tests {
         server_health(coin, "tcp://a:1").record_connect_failure("dead");
         // A fully-down fleet still routes — soonest-to-recover first.
         assert_eq!(set.select(coin, &all, 2), vec!["tcp://a:1", "tcp://b:1"]);
+    }
+
+    #[test]
+    fn home_election_is_sticky_with_no_flap_back() {
+        let coin = "test-home-sticky";
+        let all = ["tcp://a:1", "tcp://b:1", "tcp://c:1"];
+        let set = ServerSet::new();
+
+        assert_eq!(set.select_home(coin, &all), Some("tcp://a:1"));
+
+        // Incumbent dies → first available candidate takes over.
+        server_health(coin, "tcp://a:1").record_connect_failure("dead");
+        assert_eq!(set.select_home(coin, &all), Some("tcp://b:1"));
+
+        // a returns: b KEEPS the role — a switch costs a full resync and
+        // must never happen while the incumbent works.
+        server_health(coin, "tcp://a:1").record_success(Duration::from_millis(5));
+        assert_eq!(set.select_home(coin, &all), Some("tcp://b:1"));
+
+        // Everything down: soonest-to-recover wins. b is on its second
+        // incident (10s window); a and c are on their first (5s) — a's was
+        // recorded first, so its window expires first.
+        server_health(coin, "tcp://b:1").record_connect_failure("dead");
+        server_health(coin, "tcp://b:1").record_connect_failure("dead");
+        server_health(coin, "tcp://a:1").record_connect_failure("dead");
+        server_health(coin, "tcp://c:1").record_connect_failure("dead");
+        let elected = set.select_home(coin, &all).unwrap();
+        assert_eq!(elected, "tcp://a:1", "soonest-to-recover of a down fleet");
+
+        // Reconfiguration that drops the incumbent falls back cleanly.
+        assert_eq!(
+            set.select_home(coin, &["tcp://x:1"]),
+            Some("tcp://x:1"),
+            "unknown-but-configured beats a stale sticky entry"
+        );
+        assert_eq!(set.select_home(coin, &[]), None);
     }
 
     #[test]
