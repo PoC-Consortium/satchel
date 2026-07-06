@@ -2954,7 +2954,10 @@ impl Engine {
             bitcoin::consensus::encode::deserialize(&hex::decode(tx_hex)?)
                 .context("corrupt final_tx_hex")?;
         let spk = tx.output[0].script_pubkey.clone();
-        let confs = backend.tx_confirmations(txid, Some(&spk))?;
+        // Finality gate (#101): MIN over a responder quorum, never the
+        // display max — a single lying view must not stop this nurse or
+        // fake a Completed.
+        let confs = backend.tx_confirmations_min(txid, Some(&spk))?;
         if confs >= u64::from(target_confs.max(1)) {
             // Confirmed deep enough — the spend is final.
             if complete_on_depth && rec.state != AdaptorState::Completed {

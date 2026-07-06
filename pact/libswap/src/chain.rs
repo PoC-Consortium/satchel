@@ -2229,28 +2229,51 @@ impl MultiBackend {
         (hits, errors, skipped)
     }
 
-    /// The Phase 1 liveness quorum: at least ONE responder (display and
-    /// clock reads are aggregates over whoever answered; §10's ≥2-view
-    /// guarantee is enforced on the money-agreement path, `get_txout`).
-    /// Below quorum, a clear N-of-M error instead of a fabricated answer.
+    /// Responder-quorum gate: at least `need` responders or a clear N-of-M
+    /// error instead of a fabricated answer. Display aggregates need 1
+    /// (one honest sample beats none); money-adjacent reads need
+    /// [`Self::integrity_quorum`].
     fn require_responders<T>(
         &self,
         what: &str,
+        need: usize,
         (hits, errors, skipped): (Vec<T>, Vec<anyhow::Error>, usize),
     ) -> Result<Vec<T>> {
-        if hits.is_empty() {
+        if hits.len() < need {
             let total = self.backends.len();
             let detail = errors
                 .first()
                 .map(|e| format!("; first error: {e:#}"))
                 .unwrap_or_default();
             bail!(
-                "{what}: none of the {total} chain view(s) answered \
+                "{what}: {} of {total} chain view(s) answered, {need} needed \
                  ({skipped} in failure backoff, {} errored{detail})",
+                hits.len(),
                 errors.len()
             );
         }
         Ok(hits)
+    }
+
+    /// How many independent responders a MONEY-ADJACENT read needs (spec
+    /// §10, #101): TWO on mainnet when the primary rides an untrusted
+    /// public Electrum server (nodeless — it exposes a `view_health` cell)
+    /// and a second view is even configured; ONE when the primary is the
+    /// user's own Core node (a trusted sole view by definition) or on test
+    /// networks / single-server setups. Governs the deadline clocks
+    /// (`tip_median_time`, `tip_median_time_min`), the finality depth
+    /// (`tx_confirmations_min`), and the positive side of `get_txout` —
+    /// never plain display reads, which stay at 1.
+    fn integrity_quorum(&self) -> usize {
+        let untrusted_primary = self.backends[0].view_health().is_some();
+        if untrusted_primary
+            && self.backends.len() >= 2
+            && self.primary().params().network == Network::Mainnet
+        {
+            2
+        } else {
+            1
+        }
     }
 
     /// The wallet backend's OWN chain view must answer. The quorum reads
@@ -2261,6 +2284,22 @@ impl MultiBackend {
     /// [`crate::engine::Engine::ensure_chains_live`].
     pub fn wallet_view_live(&self) -> Result<u64> {
         self.primary().tip_height()
+    }
+
+    /// FINALITY depth of our own spend: the MINIMUM confirmations over
+    /// `integrity_quorum` responding views (#101). The trait method takes
+    /// the max — right for display and for widening scan bounds, but a
+    /// single lying view inflating the max would stop the fee-bump nurse
+    /// and mark a swap Completed while the spend is still unconfirmed.
+    /// Min over a quorum is the safe direction: a laggy view only keeps
+    /// the nurse working a little longer.
+    pub fn tx_confirmations_min(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64> {
+        let hits = self.require_responders(
+            "tx finality",
+            self.integrity_quorum(),
+            self.fan_out(|b| b.tx_confirmations(txid, spk_hint)),
+        )?;
+        Ok(hits.into_iter().min().expect("nonempty by quorum"))
     }
 
     /// The *least*-advanced MTP across responding views — the conservative
@@ -2275,7 +2314,11 @@ impl MultiBackend {
     ///
     /// [`tip_median_time`]: ChainBackend::tip_median_time
     pub fn tip_median_time_min(&self) -> Result<u64> {
-        let hits = self.require_responders("tip mtp", self.fan_out(|b| b.tip_median_time()))?;
+        let hits = self.require_responders(
+            "tip mtp",
+            self.integrity_quorum(),
+            self.fan_out(|b| b.tip_median_time()),
+        )?;
         Ok(hits.into_iter().min().expect("nonempty by quorum"))
     }
 }
@@ -2297,7 +2340,7 @@ impl ChainBackend for MultiBackend {
                 bail!("{err:#}");
             }
         }
-        self.require_responders("verify chain", (hits, errors, skipped))?;
+        self.require_responders("verify chain", 1, (hits, errors, skipped))?;
         Ok(())
     }
 
@@ -2323,27 +2366,47 @@ impl ChainBackend for MultiBackend {
         outpoint: &OutPoint,
         expected_spk: &ScriptBuf,
     ) -> Result<Option<TxOutInfo>> {
-        // Verification read: all responding backends must agree on the
-        // output's script and value; confirmations take the minimum.
+        // THE money-agreement read (#101): responders must agree on the
+        // output's script and value — any disagreement halts, never
+        // majority-rules (an attacker running 3 of 6 servers must not win
+        // a Sybil vote). Absence is skippable like everywhere else, BUT a
+        // POSITIVE (the funding exists) is only trusted with
+        // `integrity_quorum` agreeing responders: one public server alone
+        // must never talk us into treating an output as real. Any
+        // responding view of "spent/missing" stays a conservative veto,
+        // and confirmations take the minimum over the agreeing views.
+        let hits = self.require_responders(
+            "verify txout",
+            1,
+            self.fan_out(|b| b.get_txout(outpoint, expected_spk)),
+        )?;
+        if hits.iter().any(|h| h.is_none()) {
+            return Ok(None); // any view of "spent/missing" wins (conservative)
+        }
         let mut agreed: Option<TxOutInfo> = None;
-        for backend in &self.backends {
-            match backend.get_txout(outpoint, expected_spk)? {
-                None => return Ok(None), // any view of "spent/missing" wins (conservative)
-                Some(info) => match &mut agreed {
-                    None => agreed = Some(info),
-                    Some(existing) => {
-                        if existing.script_pubkey_hex != info.script_pubkey_hex
-                            || existing.value_sat != info.value_sat
-                        {
-                            bail!(
-                                "chain backends disagree about {outpoint} — refusing to proceed (spec §10)"
-                            );
-                        }
-                        existing.confirmations = existing.confirmations.min(info.confirmations);
+        let mut positives = 0usize;
+        for info in hits.into_iter().flatten() {
+            positives += 1;
+            match &mut agreed {
+                None => agreed = Some(info),
+                Some(existing) => {
+                    if existing.script_pubkey_hex != info.script_pubkey_hex
+                        || existing.value_sat != info.value_sat
+                    {
+                        bail!(
+                            "chain backends disagree about {outpoint} — refusing to proceed (spec §10)"
+                        );
                     }
-                },
+                    existing.confirmations = existing.confirmations.min(info.confirmations);
+                }
             }
         }
+        let need = self.integrity_quorum();
+        anyhow::ensure!(
+            positives >= need,
+            "only {positives} chain view(s) confirm {outpoint} — need {need} independent \
+             views before trusting a funding (spec §10); check the coin's Electrum servers"
+        );
         Ok(agreed)
     }
 
@@ -2354,7 +2417,7 @@ impl ChainBackend for MultiBackend {
         // a funding. Zero responders is an ERROR, not a "not funded yet" —
         // an outage must not read as an answer (issue #98).
         let hits =
-            self.require_responders("find funding", self.fan_out(|b| b.find_funding(spk)))?;
+            self.require_responders("find funding", 1, self.fan_out(|b| b.find_funding(spk)))?;
         Ok(hits.into_iter().flatten().next())
     }
 
@@ -2373,26 +2436,32 @@ impl ChainBackend for MultiBackend {
         // cannot fabricate one. Zero responders errors (see find_funding).
         let hits = self.require_responders(
             "find spend witness",
+            1,
             self.fan_out(|b| b.find_spend_witness(outpoint, watch_spk, from_height)),
         )?;
         Ok(hits.into_iter().flatten().next())
     }
 
     fn tip_height(&self) -> Result<u64> {
-        let hits = self.require_responders("tip height", self.fan_out(|b| b.tip_height()))?;
+        let hits = self.require_responders("tip height", 1, self.fan_out(|b| b.tip_height()))?;
         Ok(hits.into_iter().max().expect("nonempty by quorum"))
     }
 
     fn tip_median_time(&self) -> Result<u64> {
         // Most advanced responding clock: refuses deadline-sensitive
         // actions earliest.
-        let hits = self.require_responders("tip mtp", self.fan_out(|b| b.tip_median_time()))?;
+        let hits = self.require_responders(
+            "tip mtp",
+            self.integrity_quorum(),
+            self.fan_out(|b| b.tip_median_time()),
+        )?;
         Ok(hits.into_iter().max().expect("nonempty by quorum"))
     }
 
     fn tx_confirmations(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64> {
         let hits = self.require_responders(
             "tx confirmations",
+            1,
             self.fan_out(|b| b.tx_confirmations(txid, spk_hint)),
         )?;
         Ok(hits.into_iter().max().expect("nonempty by quorum"))
@@ -2401,6 +2470,7 @@ impl ChainBackend for MultiBackend {
     fn fee_rate_for(&self, conf_target: u16, conservative: bool) -> Result<u64> {
         let hits = self.require_responders(
             "fee rate",
+            1,
             self.fan_out(|b| b.fee_rate_for(conf_target, conservative)),
         )?;
         Ok(hits.into_iter().max().expect("nonempty by quorum").max(1))
@@ -2412,6 +2482,7 @@ impl ChainBackend for MultiBackend {
         // fallback) — an unreachable fleet is an error, not "no estimate".
         let hits = self.require_responders(
             "fee estimate",
+            1,
             self.fan_out(|b| b.fee_estimate(conf_target)),
         )?;
         Ok(hits.into_iter().flatten().max())
@@ -2519,6 +2590,7 @@ mod multi_backend_tests {
         mismatch: bool,
         calls: TestCounter,
         health: Option<Arc<crate::server_health::ServerHealth>>,
+        txout: Option<TxOutInfo>,
     }
 
     impl TestView {
@@ -2529,7 +2601,24 @@ mod multi_backend_tests {
                 mismatch: false,
                 calls: TestCounter::new(0),
                 health: None,
+                txout: None,
             }
+        }
+        /// This view answers `get_txout` positively with `value_sat` at
+        /// `confirmations` (script "aa").
+        fn sees_txout(mut self, value_sat: u64, confirmations: u64) -> Self {
+            self.txout = Some(TxOutInfo {
+                value_sat,
+                script_pubkey_hex: "aa".into(),
+                confirmations,
+            });
+            self
+        }
+        /// Mark this view as riding an untrusted public Electrum server
+        /// (a health cell exists) — flips the primary-slot trust rule.
+        fn untrusted(mut self, key: &str) -> Self {
+            self.health = Some(server_health(key, "tcp://test:1"));
+            self
         }
         fn absent() -> Self {
             Self {
@@ -2573,7 +2662,7 @@ mod multi_backend_tests {
         }
         fn get_txout(&self, _o: &OutPoint, _s: &ScriptBuf) -> Result<Option<TxOutInfo>> {
             self.touch()?;
-            Ok(None)
+            Ok(self.txout.clone())
         }
         fn find_funding(&self, _spk: &ScriptBuf) -> Result<Option<(OutPoint, TxOutInfo)>> {
             self.touch()?;
@@ -2658,7 +2747,7 @@ mod multi_backend_tests {
         let mb = multi(vec![TestView::absent(), TestView::absent()]);
         let err = format!("{:#}", mb.tip_height().unwrap_err());
         assert!(
-            err.contains("none of the 2 chain view"),
+            err.contains("0 of 2 chain view(s) answered"),
             "want the N-of-M message, got: {err}"
         );
         // Discovery reads error too — an outage must not read as "not
@@ -2700,6 +2789,108 @@ mod multi_backend_tests {
             "the Down view's tip 99 leaking in means it was consulted"
         );
         assert!(mb.verify_chain().is_ok());
+    }
+
+    #[test]
+    fn txout_positive_needs_two_agreeing_views_when_primary_is_untrusted() {
+        // Nodeless mainnet shape: the primary rides a public Electrum
+        // server. TWO agreeing positives → trusted, min confirmations.
+        let op = OutPoint::null();
+        let spk = ScriptBuf::new();
+        let mb = multi(vec![
+            TestView::ok(10).sees_txout(5000, 7).untrusted("test-q2-a"),
+            TestView::ok(10).sees_txout(5000, 3),
+        ]);
+        let info = mb.get_txout(&op, &spk).unwrap().expect("agreed positive");
+        assert_eq!(info.value_sat, 5000);
+        assert_eq!(info.confirmations, 3, "min over agreeing views");
+
+        // The second view drops out: ONE public server alone must not
+        // talk us into treating the funding as real.
+        let mb = multi(vec![
+            TestView::ok(10).sees_txout(5000, 7).untrusted("test-q2-b"),
+            TestView::absent(),
+        ]);
+        let err = format!("{:#}", mb.get_txout(&op, &spk).unwrap_err());
+        assert!(err.contains("need 2 independent views"), "got: {err}");
+    }
+
+    #[test]
+    fn txout_trusted_core_primary_stands_alone() {
+        // Node-backed shape: the primary is the user's own Core node (no
+        // health cell) — a trusted sole view; a dead public sibling must
+        // not block verification.
+        let mb = multi(vec![
+            TestView::ok(10).sees_txout(5000, 7),
+            TestView::absent(),
+        ]);
+        let info = mb
+            .get_txout(&OutPoint::null(), &ScriptBuf::new())
+            .unwrap()
+            .expect("own node suffices");
+        assert_eq!(info.confirmations, 7);
+    }
+
+    #[test]
+    fn txout_disagreement_halts_and_none_vetoes() {
+        let op = OutPoint::null();
+        let spk = ScriptBuf::new();
+        // Value disagreement between responders: halt, never majority.
+        let mb = multi(vec![
+            TestView::ok(10).sees_txout(5000, 7),
+            TestView::ok(10).sees_txout(4999, 7),
+            TestView::ok(10).sees_txout(4999, 7),
+        ]);
+        let err = format!("{:#}", mb.get_txout(&op, &spk).unwrap_err());
+        assert!(err.contains("disagree"), "got: {err}");
+        // Any responding "spent/missing" stays a conservative veto.
+        let mb = multi(vec![
+            TestView::ok(10).sees_txout(5000, 7),
+            TestView::ok(10), // sees nothing
+        ]);
+        assert!(mb.get_txout(&op, &spk).unwrap().is_none());
+        // All views absent: an outage is an error, not an answer.
+        let mb = multi(vec![TestView::absent(), TestView::absent()]);
+        assert!(mb.get_txout(&op, &spk).is_err());
+    }
+
+    #[test]
+    fn finality_takes_min_over_quorum_not_display_max() {
+        // One view inflates confirmations (lying or glitching): the
+        // display read (max) shows it, the FINALITY read (min) does not —
+        // the fee-bump nurse keeps working.
+        let mb = multi(vec![TestView::ok(1), TestView::ok(99)]);
+        assert_eq!(
+            mb.tx_confirmations("txid", None).unwrap(),
+            99,
+            "display max"
+        );
+        assert_eq!(
+            mb.tx_confirmations_min("txid", None).unwrap(),
+            1,
+            "finality min"
+        );
+    }
+
+    #[test]
+    fn deadline_clocks_need_quorum_when_primary_is_untrusted() {
+        // Nodeless mainnet with the sibling view dead: a SOLE public clock
+        // must not gate deadline decisions (spec §10) — while plain
+        // display reads (tip height) still work off one responder.
+        let mb = multi(vec![
+            TestView::ok(10).untrusted("test-clock-q"),
+            TestView::absent(),
+        ]);
+        assert_eq!(mb.tip_height().unwrap(), 10, "display read: quorum 1");
+        assert!(mb.tip_median_time().is_err(), "clock read: quorum 2");
+        assert!(mb.tip_median_time_min().is_err(), "refund clock: quorum 2");
+        // Both views live: clocks work again.
+        let mb = multi(vec![
+            TestView::ok(10).untrusted("test-clock-q"),
+            TestView::ok(12),
+        ]);
+        assert_eq!(mb.tip_median_time().unwrap(), 1200);
+        assert_eq!(mb.tip_median_time_min().unwrap(), 1000);
     }
 
     #[test]
