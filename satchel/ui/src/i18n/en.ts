@@ -40,7 +40,7 @@ export const en = {
     privateReceive: "Take a slip",
     privateSlips: "My slips",
     swaps: "Swaps",
-    relays: "Relays",
+    relays: "Network",
     wallets: "Wallets",
     contacts: "Contacts",
     settings: "Settings",
@@ -486,6 +486,13 @@ export const en = {
     nodeDown: "Node down",
   },
   wallets: {
+    // Degraded, not dead (issues #98/#100): a minority of the coin's
+    // Electrum fleet — possibly the wallet-home server — is down while
+    // healthy servers cover.
+    degraded: "degraded",
+    degradedWalletTip:
+      "The wallet server is unreachable — the balance may be stale, and sends fall over to backup servers.",
+    degradedViewsTip: "{down} of {total} Electrum servers are down — backup servers are covering.",
     intro:
       "These are the wallets of your own nodes (the ones the engine uses to fund swaps and receive proceeds) — your keys, your machine. Satchel never holds your coins.",
     hotSeedNudge:
@@ -637,8 +644,23 @@ export const en = {
     },
   },
   relays: {
-    title: "Relays",
+    title: "Network",
+    // The Nostr tab's blurb (the screen now also hosts per-coin Electrum
+    // server tabs, issue #100).
     subtitle: "Live connectivity to your Nostr relays — the network your offers and takes travel over. Add or remove relays in Settings → Network.",
+    tabNostr: "Nostr",
+    serversSubtitle: "Electrum servers for {coin} — the wallet home, the active views, and cold backups. Health is observed from live traffic only; standby servers are never contacted until promoted.",
+    healthyCount: "{healthy} / {total} healthy",
+    roleWallet: "wallet",
+    roleView: "view",
+    roleStandby: "standby",
+    stateHealthy: "healthy",
+    stateDown: "down",
+    stateUntested: "untested",
+    retryIn: "retry in {secs}s",
+    serverTip: "{requests} requests · {failures} failures",
+    serverErr: "last error: {error}",
+    noServers: "This coin has no Electrum servers configured.",
     connectedCount: "{up} / {total} connected",
     refresh: "Refresh",
     ms: "{ms} ms",

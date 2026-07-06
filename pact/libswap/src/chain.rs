@@ -106,6 +106,13 @@ fn kvb_to_vb_round(sat_kvb: u64) -> u64 {
 const ELECTRUM_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 const ELECTRUM_IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
+/// Short first-round connect timeout: every dial first sweeps all resolved
+/// addresses at this budget (absorbing one-off blips and a dead first
+/// A-record cheaply), then re-sweeps at the full
+/// [`ELECTRUM_CONNECT_TIMEOUT`]. Also the budget Phase 1's promotion dials
+/// run on — waking a standby must never stall a user request for long.
+const ELECTRUM_CONNECT_RETRY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// How a wallet send prices itself: a market estimate at a block target
 /// (funding and the Slow/Normal/Fast presets) or an explicit user-chosen
 /// rate (the send form's Custom field, and the phoenix-style fallback when
@@ -168,12 +175,31 @@ pub struct WalletTxInfo {
     pub timestamp: Option<u64>,
 }
 
-pub trait ChainBackend {
+/// A backend ANSWERED and the answer proves it is the wrong server for
+/// this coin — wrong genesis, pruned history, too-old protocol. That is
+/// **disagreement, never absence** (issue #98): quorum reads skip a server
+/// that does not answer, but must fail hard on one that answers wrong.
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+pub struct ChainMismatch(pub String);
+
+pub trait ChainBackend: Send + Sync {
     fn params(&self) -> &ChainParams;
 
     /// Verify the backend serves the expected chain (genesis hash check,
-    /// spec §3.3). MUST be called before any funding decision.
+    /// spec §3.3). MUST be called before any funding decision. Wrong-chain
+    /// answers are reported as [`ChainMismatch`] so multi-view quorums can
+    /// tell disagreement (fatal) from absence (skippable).
     fn verify_chain(&self) -> Result<()>;
+
+    /// The health cell of the SERVER this backend's chain reads ride on —
+    /// `None` for backends without one (Core RPC has no breaker; its
+    /// failures are handled per call). `MultiBackend` skips a view whose
+    /// cell is inside a failure-backoff window instead of paying its
+    /// connect timeout on every request (issue #98).
+    fn view_health(&self) -> Option<Arc<crate::server_health::ServerHealth>> {
+        None
+    }
 
     fn broadcast(&self, tx: &Transaction) -> Result<Txid>;
 
@@ -421,6 +447,9 @@ impl<T: ChainBackend + ?Sized> ChainBackend for std::sync::Arc<T> {
     fn verify_chain(&self) -> Result<()> {
         (**self).verify_chain()
     }
+    fn view_health(&self) -> Option<Arc<crate::server_health::ServerHealth>> {
+        (**self).view_health()
+    }
     fn broadcast(&self, tx: &Transaction) -> Result<Txid> {
         (**self).broadcast(tx)
     }
@@ -612,12 +641,10 @@ impl ChainBackend for CoreRpcBackend {
         let genesis = self.rpc.call("getblockhash", &[json!(0)])?;
         let genesis = genesis.as_str().context("getblockhash: non-string")?;
         if genesis != self.params.genesis_hash {
-            bail!(
+            return Err(anyhow::Error::new(ChainMismatch(format!(
                 "backend serves the wrong chain: genesis {genesis}, expected {} ({} {:?})",
-                self.params.genesis_hash,
-                self.params.coin_id,
-                self.params.network
-            );
+                self.params.genesis_hash, self.params.coin_id, self.params.network
+            ))));
         }
         Ok(())
     }
@@ -1321,29 +1348,62 @@ impl rustls::client::danger::ServerCertVerifier for AcceptAnyServerCert {
     }
 }
 
+/// Dial `host:port` with retry — the transport half of both Electrum
+/// schemes. Every resolved address (not just the first — a host with a
+/// dead leading A/AAAA record must fall through to its siblings) is swept
+/// once at the short [`ELECTRUM_CONNECT_RETRY_TIMEOUT`], then once more at
+/// the full `connect_timeout`. The LTC field incident behind issue #98 was
+/// a single transient connect timeout that recovered within milliseconds —
+/// the second sweep absorbs exactly that class of blip.
+///
+/// Bounded connect + per-request I/O: a stalled REMOTE server must FAIL,
+/// not hang — pactd serializes all RPCs on one lock, so an unbounded read
+/// here froze the whole app (rc10 field report).
+fn tcp_connect_with_retry(
+    addr: &str,
+    connect_timeout: std::time::Duration,
+) -> Result<std::net::TcpStream> {
+    let addrs: Vec<std::net::SocketAddr> = std::net::ToSocketAddrs::to_socket_addrs(addr)
+        .with_context(|| format!("resolving Electrum server {addr}"))?
+        .collect();
+    anyhow::ensure!(
+        !addrs.is_empty(),
+        "Electrum server {addr} resolved to no address"
+    );
+    let mut last: Option<std::io::Error> = None;
+    for timeout in [
+        ELECTRUM_CONNECT_RETRY_TIMEOUT,
+        connect_timeout.max(ELECTRUM_CONNECT_RETRY_TIMEOUT),
+    ] {
+        for sock in &addrs {
+            match std::net::TcpStream::connect_timeout(sock, timeout) {
+                Ok(tcp) => {
+                    tcp.set_read_timeout(Some(ELECTRUM_IO_TIMEOUT))
+                        .context("electrum read timeout")?;
+                    tcp.set_write_timeout(Some(ELECTRUM_IO_TIMEOUT))
+                        .context("electrum write timeout")?;
+                    return Ok(tcp);
+                }
+                Err(e) => last = Some(e),
+            }
+        }
+    }
+    Err(last.expect("at least one address attempted"))
+        .with_context(|| format!("connecting to Electrum server {addr}"))
+}
+
 /// Connect `host:port` over TLS with SNI, a full signature-scheme list, and
 /// the accept-any verifier above, and hand the stream to the crate's
 /// `RawClient` (its `From<StreamOwned<…>>` impl).
 fn connect_electrum_ssl(
     addr: &str,
+    connect_timeout: std::time::Duration,
 ) -> Result<electrum_client::raw_client::RawClient<electrum_client::raw_client::ElectrumSslStream>>
 {
     let (host, _port) = addr
         .rsplit_once(':')
         .with_context(|| format!("Electrum ssl URL needs host:port, got {addr:?}"))?;
-    // Bounded connect + per-request I/O: a stalled REMOTE server must FAIL,
-    // not hang — pactd serializes all RPCs on one lock, so an unbounded read
-    // here froze the whole app (rc10 field report).
-    let sock = std::net::ToSocketAddrs::to_socket_addrs(addr)
-        .with_context(|| format!("resolving Electrum server {addr}"))?
-        .next()
-        .with_context(|| format!("Electrum server {addr} resolved to no address"))?;
-    let tcp = std::net::TcpStream::connect_timeout(&sock, ELECTRUM_CONNECT_TIMEOUT)
-        .with_context(|| format!("connecting to Electrum server {addr}"))?;
-    tcp.set_read_timeout(Some(ELECTRUM_IO_TIMEOUT))
-        .context("electrum read timeout")?;
-    tcp.set_write_timeout(Some(ELECTRUM_IO_TIMEOUT))
-        .context("electrum write timeout")?;
+    let tcp = tcp_connect_with_retry(addr, connect_timeout)?;
     // pactd installs aws-lc-rs as the process default in main() (the wss
     // fix); standalone users of libswap (tests, examples) fall back here.
     let provider = rustls::crypto::CryptoProvider::get_default()
@@ -1381,6 +1441,12 @@ pub struct ElectrumBackend {
     generation: AtomicU64,
     /// Generation that last passed `verify_chain` (0 = none yet).
     verified: AtomicU64,
+    /// This server's shared health cell (issue #98) — the same `Arc` every
+    /// other connection holder to this `(coin, url)` records into (the
+    /// wallet sync worker keeps a private socket but not private health).
+    /// Written passively on every dial/request outcome; never gates
+    /// anything here — routing on it is `ServerSet`'s job (Phase 1).
+    health: Arc<crate::server_health::ServerHealth>,
 }
 
 impl ElectrumBackend {
@@ -1395,21 +1461,37 @@ impl ElectrumBackend {
             conn: std::sync::RwLock::new(None),
             generation: AtomicU64::new(0),
             verified: AtomicU64::new(0),
+            health: crate::server_health::server_health(params.coin_id, url),
         })
+    }
+
+    /// This server's shared health cell — for routing (Phase 1) and tests.
+    pub fn health(&self) -> &Arc<crate::server_health::ServerHealth> {
+        &self.health
     }
 
     /// Dial the server and run the `server.version` handshake immediately:
     /// protocol 1.4 is negotiated once per CONNECTION (public servers may
     /// drop clients that skip it, and everything we call is 1.4 surface).
+    /// Every outcome lands in the health cell: a refused/timed-out dial or
+    /// a failed handshake is a connect incident, a completed handshake is
+    /// the first success sample.
     fn dial(&self) -> Result<ElectrumConn> {
+        let started = std::time::Instant::now();
+        let dialed = self.dial_inner();
+        match &dialed {
+            Ok(_) => self.health.record_success(started.elapsed()),
+            Err(e) => self.health.record_connect_failure(&format!("{e:#}")),
+        }
+        dialed
+    }
+
+    fn dial_inner(&self) -> Result<ElectrumConn> {
         let conn = if let Some(addr) = self.url.strip_prefix("ssl://") {
-            ElectrumConn::Ssl(connect_electrum_ssl(addr)?)
+            ElectrumConn::Ssl(connect_electrum_ssl(addr, ELECTRUM_CONNECT_TIMEOUT)?)
         } else {
             let addr = self.url.strip_prefix("tcp://").unwrap_or(&self.url);
-            ElectrumConn::Tcp(
-                electrum_client::raw_client::RawClient::new(addr, Some(ELECTRUM_IO_TIMEOUT))
-                    .with_context(|| format!("connecting to Electrum server {}", self.url))?,
-            )
+            ElectrumConn::Tcp(tcp_connect_with_retry(addr, ELECTRUM_CONNECT_TIMEOUT)?.into())
         };
         let ver = conn
             .raw_call(
@@ -1455,13 +1537,16 @@ impl ElectrumBackend {
 
     /// Drop `broken` if it is still the current connection (a concurrent
     /// caller may already have replaced it — never evict its successor).
-    pub(crate) fn evict(&self, broken: &Arc<ElectrumConn>) {
+    /// The eviction is what records the incident (`reason`) in the health
+    /// cell — generation-keyed, so the N callers sharing the one broken
+    /// socket count as ONE incident however many of them race here.
+    pub(crate) fn evict(&self, broken: &Arc<ElectrumConn>, reason: &str) {
         let mut slot = self.conn.write().expect("electrum conn poisoned");
-        if slot
-            .as_ref()
-            .is_some_and(|(cur, _)| Arc::ptr_eq(cur, broken))
-        {
-            *slot = None;
+        if let Some((cur, generation)) = slot.as_ref() {
+            if Arc::ptr_eq(cur, broken) {
+                self.health.record_failure(*generation, reason);
+                *slot = None;
+            }
         }
     }
 
@@ -1475,22 +1560,50 @@ impl ElectrumBackend {
     /// reconnect and retry ONCE. Everything we send is idempotent (reads,
     /// and broadcast treats "already known" as success), so the blind retry
     /// is safe; a second failure surfaces.
+    ///
+    /// Health recording (issue #98): a completed round-trip is a success
+    /// sample (with its latency — protocol errors included: the server
+    /// answered, the transport is fine); the first transport failure is
+    /// recorded by the eviction; a retry that fails again on the FRESH
+    /// socket is its own incident.
     fn with_conn<T>(
         &self,
         what: &str,
         f: impl Fn(&ElectrumConn) -> std::result::Result<T, electrum_client::Error>,
     ) -> Result<T> {
         let (conn, _) = self.conn()?;
+        let started = std::time::Instant::now();
         match f(&conn) {
-            Ok(v) => Ok(v),
+            Ok(v) => {
+                self.health.record_success(started.elapsed());
+                Ok(v)
+            }
             Err(e) if electrum_reconnects(&e) => {
-                self.evict(&conn);
-                let (conn, _) = self
+                self.evict(&conn, &format!("electrum {what}: {e}"));
+                let (conn, generation) = self
                     .conn()
                     .with_context(|| format!("electrum {what} (reconnect)"))?;
-                f(&conn).with_context(|| format!("electrum {what} (after reconnect)"))
+                let started = std::time::Instant::now();
+                match f(&conn) {
+                    Ok(v) => {
+                        self.health.record_success(started.elapsed());
+                        Ok(v)
+                    }
+                    Err(e) => {
+                        if electrum_reconnects(&e) {
+                            self.health
+                                .record_failure(generation, &format!("electrum {what}: {e}"));
+                        }
+                        Err(e).with_context(|| format!("electrum {what} (after reconnect)"))
+                    }
+                }
             }
-            Err(e) => Err(e).with_context(|| format!("electrum {what}")),
+            Err(e) => {
+                // The server answered (protocol/data error) — transport-wise
+                // that is liveness, and routing must not punish it.
+                self.health.record_success(started.elapsed());
+                Err(e).with_context(|| format!("electrum {what}"))
+            }
         }
     }
 
@@ -1680,6 +1793,10 @@ impl ChainBackend for ElectrumBackend {
         self.params
     }
 
+    fn view_health(&self) -> Option<Arc<crate::server_health::ServerHealth>> {
+        Some(self.health.clone())
+    }
+
     fn verify_chain(&self) -> Result<()> {
         // Everything we call is MANDATORY protocol-1.4 surface (scripthash
         // history/listunspent, headers, transaction get/broadcast,
@@ -1691,6 +1808,10 @@ impl ChainBackend for ElectrumBackend {
         // The engine re-verifies on every call; with a persistent
         // connection that verdict is cached per connection generation, so
         // the steady state costs zero round-trips.
+        //
+        // Wrong-chain / pruned answers are `ChainMismatch` — DISAGREEMENT,
+        // which a quorum must fail hard on, unlike a server that simply
+        // doesn't answer (issue #98).
         let (_, generation) = self.conn()?;
         if self.verified.load(Ordering::SeqCst) == generation {
             return Ok(());
@@ -1698,22 +1819,21 @@ impl ChainBackend for ElectrumBackend {
         // features: strict where advertised, lenient where absent.
         if let Ok(features) = self.raw("server.features", vec![]) {
             if let Some(genesis) = features["genesis_hash"].as_str() {
-                anyhow::ensure!(
-                    genesis == self.params.genesis_hash,
-                    "Electrum server advertises the wrong chain: genesis \
-                     {genesis}, expected {} ({} {:?})",
-                    self.params.genesis_hash,
-                    self.params.coin_id,
-                    self.params.network
-                );
+                if genesis != self.params.genesis_hash {
+                    return Err(anyhow::Error::new(ChainMismatch(format!(
+                        "Electrum server advertises the wrong chain: genesis \
+                         {genesis}, expected {} ({} {:?})",
+                        self.params.genesis_hash, self.params.coin_id, self.params.network
+                    ))));
+                }
             }
             let pruning = &features["pruning"];
-            anyhow::ensure!(
-                pruning.is_null() || pruning.as_u64() == Some(0),
-                "Electrum server is PRUNED (keeps {} blocks) — a pruned server \
-                 cannot serve full wallet history; use an unpruned one",
-                pruning
-            );
+            if !(pruning.is_null() || pruning.as_u64() == Some(0)) {
+                return Err(anyhow::Error::new(ChainMismatch(format!(
+                    "Electrum server is PRUNED (keeps {pruning} blocks) — a pruned server \
+                     cannot serve full wallet history; use an unpruned one"
+                ))));
+            }
         }
         // Deep genesis check: fetch header 0 and hash it OURSELVES — validates
         // both the chain and our (PoCX-aware) header parsing on this server.
@@ -1723,13 +1843,12 @@ impl ChainBackend for ElectrumBackend {
         )?;
         let raw = hex::decode(raw.as_str().context("block.header: non-string")?)?;
         let genesis = self.params.header_hash(&raw)?;
-        anyhow::ensure!(
-            genesis == self.params.genesis_hash,
-            "Electrum server serves the wrong chain: genesis {genesis}, expected {} ({} {:?})",
-            self.params.genesis_hash,
-            self.params.coin_id,
-            self.params.network
-        );
+        if genesis != self.params.genesis_hash {
+            return Err(anyhow::Error::new(ChainMismatch(format!(
+                "Electrum server serves the wrong chain: genesis {genesis}, expected {} ({} {:?})",
+                self.params.genesis_hash, self.params.coin_id, self.params.network
+            ))));
+        }
         // Cache the verdict for this connection. If the connection was
         // replaced mid-verify the stored generation simply won't match the
         // next one and the checks re-run — never a false "verified".
@@ -2052,23 +2171,155 @@ impl MultiBackend {
         self.backends[0].as_ref()
     }
 
-    /// The *least*-advanced MTP across backends — the conservative clock for
-    /// deciding our own CLTV refund is spendable. The trait [`tip_median_time`]
-    /// takes the max (refuse deadline-sensitive actions earliest, the safe
-    /// direction for "stop acting in time"); for refund *readiness* the safe
-    /// direction is the opposite: only believe a refund is final once even the
-    /// laggiest backend's MTP has reached the locktime, so the broadcast can't
-    /// hit `non-final` on the node that will actually mine it. Single-backend
-    /// setups collapse to the same value.
+    /// Fan `op` over every backend not inside a health backoff window, in
+    /// parallel (scoped threads — every backend owns its own socket, so
+    /// this never puts two callers on one connection), collecting the
+    /// responders' answers and the non-responders' errors. Absence
+    /// semantics live here (issue #98): a skipped or erroring view is one
+    /// fewer sample, never fatal by itself — the caller decides what
+    /// quorum it needs via [`Self::require_responders`].
+    fn fan_out<T: Send>(
+        &self,
+        op: impl Fn(&dyn ChainBackend) -> Result<T> + Sync,
+    ) -> (Vec<T>, Vec<anyhow::Error>, usize) {
+        // Skip views whose breaker is open — no thread, no connect timeout.
+        let slots: Vec<Option<&dyn ChainBackend>> = self
+            .backends
+            .iter()
+            .map(|b| {
+                let skip = b.view_health().is_some_and(|h| !h.available());
+                if skip {
+                    None
+                } else {
+                    Some(b.as_ref())
+                }
+            })
+            .collect();
+        let skipped = slots.iter().filter(|s| s.is_none()).count();
+
+        let results: Vec<Result<T>> = if slots.iter().flatten().count() <= 1 {
+            // 0 or 1 live view: no thread ceremony (regtest single-server).
+            slots.into_iter().flatten().map(&op).collect()
+        } else {
+            let op = &op;
+            std::thread::scope(|s| {
+                let handles: Vec<_> = slots
+                    .into_iter()
+                    .flatten()
+                    .map(|b| s.spawn(move || op(b)))
+                    .collect();
+                handles
+                    .into_iter()
+                    .map(|h| {
+                        h.join()
+                            .unwrap_or_else(|_| Err(anyhow::anyhow!("chain view panicked")))
+                    })
+                    .collect()
+            })
+        };
+
+        let mut hits = Vec::new();
+        let mut errors = Vec::new();
+        for r in results {
+            match r {
+                Ok(v) => hits.push(v),
+                Err(e) => errors.push(e),
+            }
+        }
+        (hits, errors, skipped)
+    }
+
+    /// Responder-quorum gate: at least `need` responders or a clear N-of-M
+    /// error instead of a fabricated answer. Display aggregates need 1
+    /// (one honest sample beats none); money-adjacent reads need
+    /// [`Self::integrity_quorum`].
+    fn require_responders<T>(
+        &self,
+        what: &str,
+        need: usize,
+        (hits, errors, skipped): (Vec<T>, Vec<anyhow::Error>, usize),
+    ) -> Result<Vec<T>> {
+        if hits.len() < need {
+            let total = self.backends.len();
+            let detail = errors
+                .first()
+                .map(|e| format!("; first error: {e:#}"))
+                .unwrap_or_default();
+            bail!(
+                "{what}: {} of {total} chain view(s) answered, {need} needed \
+                 ({skipped} in failure backoff, {} errored{detail})",
+                hits.len(),
+                errors.len()
+            );
+        }
+        Ok(hits)
+    }
+
+    /// How many independent responders a MONEY-ADJACENT read needs (spec
+    /// §10, #101): TWO on mainnet when the primary rides an untrusted
+    /// public Electrum server (nodeless — it exposes a `view_health` cell)
+    /// and a second view is even configured; ONE when the primary is the
+    /// user's own Core node (a trusted sole view by definition) or on test
+    /// networks / single-server setups. Governs the deadline clocks
+    /// (`tip_median_time`, `tip_median_time_min`), the finality depth
+    /// (`tx_confirmations_min`), and the positive side of `get_txout` —
+    /// never plain display reads, which stay at 1.
+    fn integrity_quorum(&self) -> usize {
+        let untrusted_primary = self.backends[0].view_health().is_some();
+        if untrusted_primary
+            && self.backends.len() >= 2
+            && self.primary().params().network == Network::Mainnet
+        {
+            2
+        } else {
+            1
+        }
+    }
+
+    /// The wallet backend's OWN chain view must answer. The quorum reads
+    /// above deliberately mask a dead server behind its healthy siblings —
+    /// correct for display, but the swap-initiation gate must not be
+    /// fooled: the primary funds HTLCs and receives sweeps, and until
+    /// re-election lands (#99) it has exactly one server. Called by
+    /// [`crate::engine::Engine::ensure_chains_live`].
+    pub fn wallet_view_live(&self) -> Result<u64> {
+        self.primary().tip_height()
+    }
+
+    /// FINALITY depth of our own spend: the MINIMUM confirmations over
+    /// `integrity_quorum` responding views (#101). The trait method takes
+    /// the max — right for display and for widening scan bounds, but a
+    /// single lying view inflating the max would stop the fee-bump nurse
+    /// and mark a swap Completed while the spend is still unconfirmed.
+    /// Min over a quorum is the safe direction: a laggy view only keeps
+    /// the nurse working a little longer.
+    pub fn tx_confirmations_min(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64> {
+        let hits = self.require_responders(
+            "tx finality",
+            self.integrity_quorum(),
+            self.fan_out(|b| b.tx_confirmations(txid, spk_hint)),
+        )?;
+        Ok(hits.into_iter().min().expect("nonempty by quorum"))
+    }
+
+    /// The *least*-advanced MTP across responding views — the conservative
+    /// clock for deciding our own CLTV refund is spendable. The trait
+    /// [`tip_median_time`] takes the max (refuse deadline-sensitive actions
+    /// earliest, the safe direction for "stop acting in time"); for refund
+    /// *readiness* the safe direction is the opposite: only believe a
+    /// refund is final once even the laggiest responding view's MTP has
+    /// reached the locktime, so the broadcast can't hit `non-final` on the
+    /// node that will actually mine it. Single-backend setups collapse to
+    /// the same value.
     ///
     /// [`tip_median_time`]: ChainBackend::tip_median_time
     pub fn tip_median_time_min(&self) -> Result<u64> {
-        let mut min: Option<u64> = None;
-        for backend in &self.backends {
-            let mtp = backend.tip_median_time()?;
-            min = Some(min.map_or(mtp, |m: u64| m.min(mtp)));
-        }
-        min.context("no backends")
+        let hits = self.require_responders(
+            "tip mtp",
+            self.integrity_quorum(),
+            self.fan_out(|b| b.tip_median_time()),
+        )?;
+        Ok(hits.into_iter().min().expect("nonempty by quorum"))
     }
 }
 
@@ -2078,23 +2329,36 @@ impl ChainBackend for MultiBackend {
     }
 
     fn verify_chain(&self) -> Result<()> {
-        for backend in &self.backends {
-            backend.verify_chain()?;
+        // Quorum health check (issue #98): the coin is live while ≥1 view
+        // serves the RIGHT chain. A view that answers with the wrong
+        // genesis / pruned history is disagreement — fail hard however
+        // many healthy siblings it has; a view that doesn't answer is
+        // absent — skip it.
+        let (hits, errors, skipped) = self.fan_out(|b| b.verify_chain());
+        for err in errors.iter() {
+            if err.downcast_ref::<ChainMismatch>().is_some() {
+                bail!("{err:#}");
+            }
         }
+        self.require_responders("verify chain", 1, (hits, errors, skipped))?;
         Ok(())
     }
 
     fn broadcast(&self, tx: &Transaction) -> Result<Txid> {
-        // Best-effort to all; success if any accepts.
-        let mut last_err = None;
-        let mut accepted = None;
-        for backend in &self.backends {
-            match backend.broadcast(tx) {
-                Ok(txid) => accepted = Some(txid),
-                Err(err) => last_err = Some(err),
-            }
+        // Best-effort to all live views in parallel; success if any
+        // accepts (self-verifying: more relays = stronger withholding
+        // resistance, and a rejecting minority can't veto).
+        let (hits, errors, skipped) = self.fan_out(|b| b.broadcast(tx));
+        match hits.into_iter().next() {
+            Some(txid) => Ok(txid),
+            None => match errors.into_iter().next() {
+                Some(err) => Err(err),
+                None => bail!(
+                    "broadcast: all {} chain view(s) are in failure backoff ({skipped} skipped)",
+                    self.backends.len()
+                ),
+            },
         }
-        accepted.ok_or_else(|| last_err.expect("at least one backend"))
     }
 
     fn get_txout(
@@ -2102,46 +2366,59 @@ impl ChainBackend for MultiBackend {
         outpoint: &OutPoint,
         expected_spk: &ScriptBuf,
     ) -> Result<Option<TxOutInfo>> {
-        // Verification read: all responding backends must agree on the
-        // output's script and value; confirmations take the minimum.
+        // THE money-agreement read (#101): responders must agree on the
+        // output's script and value — any disagreement halts, never
+        // majority-rules (an attacker running 3 of 6 servers must not win
+        // a Sybil vote). Absence is skippable like everywhere else, BUT a
+        // POSITIVE (the funding exists) is only trusted with
+        // `integrity_quorum` agreeing responders: one public server alone
+        // must never talk us into treating an output as real. Any
+        // responding view of "spent/missing" stays a conservative veto,
+        // and confirmations take the minimum over the agreeing views.
+        let hits = self.require_responders(
+            "verify txout",
+            1,
+            self.fan_out(|b| b.get_txout(outpoint, expected_spk)),
+        )?;
+        if hits.iter().any(|h| h.is_none()) {
+            return Ok(None); // any view of "spent/missing" wins (conservative)
+        }
         let mut agreed: Option<TxOutInfo> = None;
-        for backend in &self.backends {
-            match backend.get_txout(outpoint, expected_spk)? {
-                None => return Ok(None), // any view of "spent/missing" wins (conservative)
-                Some(info) => match &mut agreed {
-                    None => agreed = Some(info),
-                    Some(existing) => {
-                        if existing.script_pubkey_hex != info.script_pubkey_hex
-                            || existing.value_sat != info.value_sat
-                        {
-                            bail!(
-                                "chain backends disagree about {outpoint} — refusing to proceed (spec §10)"
-                            );
-                        }
-                        existing.confirmations = existing.confirmations.min(info.confirmations);
+        let mut positives = 0usize;
+        for info in hits.into_iter().flatten() {
+            positives += 1;
+            match &mut agreed {
+                None => agreed = Some(info),
+                Some(existing) => {
+                    if existing.script_pubkey_hex != info.script_pubkey_hex
+                        || existing.value_sat != info.value_sat
+                    {
+                        bail!(
+                            "chain backends disagree about {outpoint} — refusing to proceed (spec §10)"
+                        );
                     }
-                },
+                    existing.confirmations = existing.confirmations.min(info.confirmations);
+                }
             }
         }
+        let need = self.integrity_quorum();
+        anyhow::ensure!(
+            positives >= need,
+            "only {positives} chain view(s) confirm {outpoint} — need {need} independent \
+             views before trusting a funding (spec §10); check the coin's Electrum servers"
+        );
         Ok(agreed)
     }
 
     fn find_funding(&self, spk: &ScriptBuf) -> Result<Option<(OutPoint, TxOutInfo)>> {
-        // Discovery only — first backend that sees a paying output wins. The
-        // caller re-verifies the located outpoint via `get_txout` (which demands
-        // backend agreement), so one lying server can't substitute a funding.
-        let mut last_err = None;
-        for backend in &self.backends {
-            match backend.find_funding(spk) {
-                Ok(Some(found)) => return Ok(Some(found)),
-                Ok(None) => {}
-                Err(err) => last_err = Some(err),
-            }
-        }
-        match last_err {
-            Some(err) if self.backends.len() == 1 => Err(err),
-            _ => Ok(None),
-        }
+        // Discovery only — any view that sees a paying output wins. The
+        // caller re-verifies the located outpoint via `get_txout` (which
+        // demands backend agreement), so one lying server can't substitute
+        // a funding. Zero responders is an ERROR, not a "not funded yet" —
+        // an outage must not read as an answer (issue #98).
+        let hits =
+            self.require_responders("find funding", 1, self.fan_out(|b| b.find_funding(spk)))?;
+        Ok(hits.into_iter().flatten().next())
     }
 
     fn find_vout(&self, txid: &str, script_pubkey_hex: &str) -> Result<u32> {
@@ -2154,64 +2431,61 @@ impl ChainBackend for MultiBackend {
         watch_spk: &ScriptBuf,
         from_height: u64,
     ) -> Result<Option<Vec<Vec<u8>>>> {
-        // Withholding-resistant: first positive answer wins. The witness
+        // Withholding-resistant: any positive answer wins. The witness
         // is self-verifying (preimage hashes to H), so a lying server
-        // cannot fabricate one.
-        let mut last_err = None;
-        for backend in &self.backends {
-            match backend.find_spend_witness(outpoint, watch_spk, from_height) {
-                Ok(Some(witness)) => return Ok(Some(witness)),
-                Ok(None) => {}
-                Err(err) => last_err = Some(err),
-            }
-        }
-        match last_err {
-            Some(err) if self.backends.len() == 1 => Err(err),
-            _ => Ok(None),
-        }
+        // cannot fabricate one. Zero responders errors (see find_funding).
+        let hits = self.require_responders(
+            "find spend witness",
+            1,
+            self.fan_out(|b| b.find_spend_witness(outpoint, watch_spk, from_height)),
+        )?;
+        Ok(hits.into_iter().flatten().next())
     }
 
     fn tip_height(&self) -> Result<u64> {
-        let mut best = 0;
-        for backend in &self.backends {
-            best = best.max(backend.tip_height()?);
-        }
-        Ok(best)
+        let hits = self.require_responders("tip height", 1, self.fan_out(|b| b.tip_height()))?;
+        Ok(hits.into_iter().max().expect("nonempty by quorum"))
     }
 
     fn tip_median_time(&self) -> Result<u64> {
-        // Most advanced clock: refuses deadline-sensitive actions earliest.
-        let mut best = 0;
-        for backend in &self.backends {
-            best = best.max(backend.tip_median_time()?);
-        }
-        Ok(best)
+        // Most advanced responding clock: refuses deadline-sensitive
+        // actions earliest.
+        let hits = self.require_responders(
+            "tip mtp",
+            self.integrity_quorum(),
+            self.fan_out(|b| b.tip_median_time()),
+        )?;
+        Ok(hits.into_iter().max().expect("nonempty by quorum"))
     }
 
     fn tx_confirmations(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64> {
-        let mut best = 0;
-        for backend in &self.backends {
-            best = best.max(backend.tx_confirmations(txid, spk_hint)?);
-        }
-        Ok(best)
+        let hits = self.require_responders(
+            "tx confirmations",
+            1,
+            self.fan_out(|b| b.tx_confirmations(txid, spk_hint)),
+        )?;
+        Ok(hits.into_iter().max().expect("nonempty by quorum"))
     }
 
     fn fee_rate_for(&self, conf_target: u16, conservative: bool) -> Result<u64> {
-        let mut best = 1;
-        for backend in &self.backends {
-            best = best.max(backend.fee_rate_for(conf_target, conservative)?);
-        }
-        Ok(best)
+        let hits = self.require_responders(
+            "fee rate",
+            1,
+            self.fan_out(|b| b.fee_rate_for(conf_target, conservative)),
+        )?;
+        Ok(hits.into_iter().max().expect("nonempty by quorum").max(1))
     }
 
     fn fee_estimate(&self, conf_target: u16) -> Result<Option<u64>> {
-        // Most conservative live view wins, like fee_rate_for; "no estimate"
-        // only when NO backend has one (so the send form's fallback kicks in).
-        let mut best = None;
-        for backend in &self.backends {
-            best = best.max(backend.fee_estimate(conf_target)?);
-        }
-        Ok(best)
+        // Most conservative responding view wins, like fee_rate_for; "no
+        // estimate" only when no RESPONDER has one (the send form's
+        // fallback) — an unreachable fleet is an error, not "no estimate".
+        let hits = self.require_responders(
+            "fee estimate",
+            1,
+            self.fan_out(|b| b.fee_estimate(conf_target)),
+        )?;
+        Ok(hits.into_iter().flatten().max())
     }
 
     fn is_in_mempool(&self, txid: &str) -> Result<bool> {
@@ -2289,6 +2563,349 @@ impl ChainBackend for MultiBackend {
 
     fn wallet_bumpfee(&self, txid: &str, feerate_sat_vb: u64) -> Result<String> {
         self.primary().wallet_bumpfee(txid, feerate_sat_vb)
+    }
+}
+
+#[cfg(test)]
+mod multi_backend_tests {
+    use super::*;
+    use crate::params::Network;
+    use crate::registry;
+    use crate::server_health::server_health;
+    use std::sync::atomic::AtomicU64 as TestCounter;
+
+    fn btc_params() -> &'static ChainParams {
+        registry::get("btc")
+            .expect("built-in btc")
+            .params(Network::Mainnet)
+            .expect("btc mainnet params")
+    }
+
+    /// A scriptable chain view: answers with `tip`, or errors ("absent"),
+    /// or answers with the WRONG chain (`ChainMismatch` — disagreement).
+    /// Counts calls so tests can prove a Down view was skipped entirely.
+    struct TestView {
+        tip: u64,
+        fail: bool,
+        mismatch: bool,
+        calls: TestCounter,
+        health: Option<Arc<crate::server_health::ServerHealth>>,
+        txout: Option<TxOutInfo>,
+    }
+
+    impl TestView {
+        fn ok(tip: u64) -> Self {
+            Self {
+                tip,
+                fail: false,
+                mismatch: false,
+                calls: TestCounter::new(0),
+                health: None,
+                txout: None,
+            }
+        }
+        /// This view answers `get_txout` positively with `value_sat` at
+        /// `confirmations` (script "aa").
+        fn sees_txout(mut self, value_sat: u64, confirmations: u64) -> Self {
+            self.txout = Some(TxOutInfo {
+                value_sat,
+                script_pubkey_hex: "aa".into(),
+                confirmations,
+            });
+            self
+        }
+        /// Mark this view as riding an untrusted public Electrum server
+        /// (a health cell exists) — flips the primary-slot trust rule.
+        fn untrusted(mut self, key: &str) -> Self {
+            self.health = Some(server_health(key, "tcp://test:1"));
+            self
+        }
+        fn absent() -> Self {
+            Self {
+                fail: true,
+                ..Self::ok(0)
+            }
+        }
+        fn wrong_chain(tip: u64) -> Self {
+            Self {
+                mismatch: true,
+                ..Self::ok(tip)
+            }
+        }
+        fn touch(&self) -> Result<()> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            if self.mismatch {
+                return Err(anyhow::Error::new(ChainMismatch(
+                    "test server serves the wrong chain".into(),
+                )));
+            }
+            if self.fail {
+                bail!("io: connection refused (test)");
+            }
+            Ok(())
+        }
+    }
+
+    impl ChainBackend for TestView {
+        fn params(&self) -> &ChainParams {
+            btc_params()
+        }
+        fn view_health(&self) -> Option<Arc<crate::server_health::ServerHealth>> {
+            self.health.clone()
+        }
+        fn verify_chain(&self) -> Result<()> {
+            self.touch()
+        }
+        fn broadcast(&self, tx: &Transaction) -> Result<Txid> {
+            self.touch()?;
+            Ok(tx.compute_txid())
+        }
+        fn get_txout(&self, _o: &OutPoint, _s: &ScriptBuf) -> Result<Option<TxOutInfo>> {
+            self.touch()?;
+            Ok(self.txout.clone())
+        }
+        fn find_funding(&self, _spk: &ScriptBuf) -> Result<Option<(OutPoint, TxOutInfo)>> {
+            self.touch()?;
+            Ok(None)
+        }
+        fn find_vout(&self, _txid: &str, _spk: &str) -> Result<u32> {
+            bail!("unused in these tests")
+        }
+        fn find_spend_witness(
+            &self,
+            _o: &OutPoint,
+            _w: &ScriptBuf,
+            _h: u64,
+        ) -> Result<Option<Vec<Vec<u8>>>> {
+            self.touch()?;
+            Ok(None)
+        }
+        fn tip_height(&self) -> Result<u64> {
+            self.touch()?;
+            Ok(self.tip)
+        }
+        fn tip_median_time(&self) -> Result<u64> {
+            self.touch()?;
+            Ok(self.tip * 100)
+        }
+        fn tx_confirmations(&self, _txid: &str, _spk: Option<&ScriptBuf>) -> Result<u64> {
+            self.touch()?;
+            Ok(self.tip)
+        }
+        fn fee_rate_for(&self, _t: u16, _c: bool) -> Result<u64> {
+            self.touch()?;
+            Ok(self.tip.max(1))
+        }
+        fn wallet_new_address(&self) -> Result<String> {
+            bail!("no wallet")
+        }
+        fn wallet_balance(&self) -> Result<u64> {
+            bail!("no wallet")
+        }
+        fn wallet_send(&self, _a: &str, _v: u64, _f: SendFee) -> Result<String> {
+            bail!("no wallet")
+        }
+    }
+
+    fn multi(views: Vec<TestView>) -> MultiBackend {
+        MultiBackend::from_backends(
+            views
+                .into_iter()
+                .map(|v| Box::new(v) as Box<dyn ChainBackend>)
+                .collect(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn aggregates_tolerate_absent_views() {
+        // The issue-#98 incident shape: one healthy view, one dead — the
+        // coin must stay fully readable off the healthy one.
+        let mb = multi(vec![TestView::ok(10), TestView::absent()]);
+        assert!(mb.verify_chain().is_ok());
+        assert_eq!(mb.tip_height().unwrap(), 10);
+        assert_eq!(mb.tip_median_time().unwrap(), 1000);
+        assert_eq!(mb.tip_median_time_min().unwrap(), 1000);
+        assert_eq!(mb.tx_confirmations("txid", None).unwrap(), 10);
+        assert_eq!(mb.fee_rate_for(6, false).unwrap(), 10);
+        assert!(mb.find_funding(&ScriptBuf::new()).unwrap().is_none());
+    }
+
+    #[test]
+    fn aggregates_take_the_conservative_value_over_responders() {
+        let mb = multi(vec![TestView::ok(10), TestView::ok(12), TestView::absent()]);
+        assert_eq!(mb.tip_height().unwrap(), 12, "max over responders");
+        assert_eq!(
+            mb.tip_median_time_min().unwrap(),
+            1000,
+            "min over responders"
+        );
+    }
+
+    #[test]
+    fn below_quorum_is_a_clear_error_not_an_answer() {
+        let mb = multi(vec![TestView::absent(), TestView::absent()]);
+        let err = format!("{:#}", mb.tip_height().unwrap_err());
+        assert!(
+            err.contains("0 of 2 chain view(s) answered"),
+            "want the N-of-M message, got: {err}"
+        );
+        // Discovery reads error too — an outage must not read as "not
+        // funded yet" / "no spend visible".
+        assert!(mb.find_funding(&ScriptBuf::new()).is_err());
+        assert!(mb
+            .find_spend_witness(&OutPoint::null(), &ScriptBuf::new(), 0)
+            .is_err());
+    }
+
+    #[test]
+    fn wrong_chain_fails_hard_despite_healthy_siblings() {
+        // Disagreement is never tolerated (§10): a wrong-genesis answer
+        // fails the coin even with a healthy majority — absence and
+        // disagreement must never be conflated.
+        let mb = multi(vec![
+            TestView::ok(10),
+            TestView::ok(11),
+            TestView::wrong_chain(12),
+        ]);
+        let err = format!("{:#}", mb.verify_chain().unwrap_err());
+        assert!(err.contains("wrong chain"), "got: {err}");
+    }
+
+    #[test]
+    fn down_view_is_skipped_without_a_single_call() {
+        // A view inside its backoff window is never even asked — its
+        // WOULD-BE answer (tip 99, higher than the healthy view's) must
+        // not appear in the aggregate, and no connect timeout is paid.
+        // Unique registry key — the health cells are process-global.
+        let health = server_health("test-mb-skip", "tcp://dead:1");
+        health.record_connect_failure("dead");
+        let mut skipped = TestView::ok(99);
+        skipped.health = Some(health);
+        let mb = multi(vec![TestView::ok(10), skipped]);
+        assert_eq!(
+            mb.tip_height().unwrap(),
+            10,
+            "the Down view's tip 99 leaking in means it was consulted"
+        );
+        assert!(mb.verify_chain().is_ok());
+    }
+
+    #[test]
+    fn txout_positive_needs_two_agreeing_views_when_primary_is_untrusted() {
+        // Nodeless mainnet shape: the primary rides a public Electrum
+        // server. TWO agreeing positives → trusted, min confirmations.
+        let op = OutPoint::null();
+        let spk = ScriptBuf::new();
+        let mb = multi(vec![
+            TestView::ok(10).sees_txout(5000, 7).untrusted("test-q2-a"),
+            TestView::ok(10).sees_txout(5000, 3),
+        ]);
+        let info = mb.get_txout(&op, &spk).unwrap().expect("agreed positive");
+        assert_eq!(info.value_sat, 5000);
+        assert_eq!(info.confirmations, 3, "min over agreeing views");
+
+        // The second view drops out: ONE public server alone must not
+        // talk us into treating the funding as real.
+        let mb = multi(vec![
+            TestView::ok(10).sees_txout(5000, 7).untrusted("test-q2-b"),
+            TestView::absent(),
+        ]);
+        let err = format!("{:#}", mb.get_txout(&op, &spk).unwrap_err());
+        assert!(err.contains("need 2 independent views"), "got: {err}");
+    }
+
+    #[test]
+    fn txout_trusted_core_primary_stands_alone() {
+        // Node-backed shape: the primary is the user's own Core node (no
+        // health cell) — a trusted sole view; a dead public sibling must
+        // not block verification.
+        let mb = multi(vec![
+            TestView::ok(10).sees_txout(5000, 7),
+            TestView::absent(),
+        ]);
+        let info = mb
+            .get_txout(&OutPoint::null(), &ScriptBuf::new())
+            .unwrap()
+            .expect("own node suffices");
+        assert_eq!(info.confirmations, 7);
+    }
+
+    #[test]
+    fn txout_disagreement_halts_and_none_vetoes() {
+        let op = OutPoint::null();
+        let spk = ScriptBuf::new();
+        // Value disagreement between responders: halt, never majority.
+        let mb = multi(vec![
+            TestView::ok(10).sees_txout(5000, 7),
+            TestView::ok(10).sees_txout(4999, 7),
+            TestView::ok(10).sees_txout(4999, 7),
+        ]);
+        let err = format!("{:#}", mb.get_txout(&op, &spk).unwrap_err());
+        assert!(err.contains("disagree"), "got: {err}");
+        // Any responding "spent/missing" stays a conservative veto.
+        let mb = multi(vec![
+            TestView::ok(10).sees_txout(5000, 7),
+            TestView::ok(10), // sees nothing
+        ]);
+        assert!(mb.get_txout(&op, &spk).unwrap().is_none());
+        // All views absent: an outage is an error, not an answer.
+        let mb = multi(vec![TestView::absent(), TestView::absent()]);
+        assert!(mb.get_txout(&op, &spk).is_err());
+    }
+
+    #[test]
+    fn finality_takes_min_over_quorum_not_display_max() {
+        // One view inflates confirmations (lying or glitching): the
+        // display read (max) shows it, the FINALITY read (min) does not —
+        // the fee-bump nurse keeps working.
+        let mb = multi(vec![TestView::ok(1), TestView::ok(99)]);
+        assert_eq!(
+            mb.tx_confirmations("txid", None).unwrap(),
+            99,
+            "display max"
+        );
+        assert_eq!(
+            mb.tx_confirmations_min("txid", None).unwrap(),
+            1,
+            "finality min"
+        );
+    }
+
+    #[test]
+    fn deadline_clocks_need_quorum_when_primary_is_untrusted() {
+        // Nodeless mainnet with the sibling view dead: a SOLE public clock
+        // must not gate deadline decisions (spec §10) — while plain
+        // display reads (tip height) still work off one responder.
+        let mb = multi(vec![
+            TestView::ok(10).untrusted("test-clock-q"),
+            TestView::absent(),
+        ]);
+        assert_eq!(mb.tip_height().unwrap(), 10, "display read: quorum 1");
+        assert!(mb.tip_median_time().is_err(), "clock read: quorum 2");
+        assert!(mb.tip_median_time_min().is_err(), "refund clock: quorum 2");
+        // Both views live: clocks work again.
+        let mb = multi(vec![
+            TestView::ok(10).untrusted("test-clock-q"),
+            TestView::ok(12),
+        ]);
+        assert_eq!(mb.tip_median_time().unwrap(), 1200);
+        assert_eq!(mb.tip_median_time_min().unwrap(), 1000);
+    }
+
+    #[test]
+    fn broadcast_succeeds_on_any_accepting_view() {
+        let mb = multi(vec![TestView::absent(), TestView::ok(1)]);
+        let tx = Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: vec![],
+            output: vec![],
+        };
+        assert!(mb.broadcast(&tx).is_ok());
+        // All views absent: the error surfaces instead of a silent drop.
+        let mb = multi(vec![TestView::absent(), TestView::absent()]);
+        assert!(mb.broadcast(&tx).is_err());
     }
 }
 

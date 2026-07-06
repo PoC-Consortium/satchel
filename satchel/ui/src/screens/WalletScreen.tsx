@@ -91,12 +91,45 @@ function WalletCard({
 }) {
   const t = useT();
   const [dialog, setDialog] = useState<null | "receive" | "send" | "activity">(null);
+  // Degraded, not dead (issue #98/#100): the coin still works off healthy
+  // servers, but the wallet-home server is down (balance may be stale,
+  // sends fall over to views) or a minority of the fleet is down.
+  const walletDown = c.wallet_server_state === "down";
+  const degraded = c.status === "ok" && (walletDown || (c.servers_down ?? 0) > 0);
+  const degradedTip = walletDown
+    ? t("wallets.degradedWalletTip")
+    : t("wallets.degradedViewsTip", { down: c.servers_down ?? 0, total: c.servers_total ?? 0 });
   return (
     <Card variant="outlined">
       <CardContent sx={{ display: "flex", alignItems: "center", gap: 1.6 }}>
         <CoinGlyph coin={c} configured />
         <Box sx={{ minWidth: 0 }}>
-          <Typography sx={{ fontSize: 15, fontWeight: 600 }}>{c.display_name}</Typography>
+          <Typography sx={{ fontSize: 15, fontWeight: 600 }}>
+            {c.display_name}
+            {degraded && (
+              <Tooltip title={degradedTip}>
+                <Box
+                  component="span"
+                  sx={{
+                    ml: 0.75,
+                    px: 0.6,
+                    py: 0.1,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    letterSpacing: "0.05em",
+                    textTransform: "uppercase",
+                    color: "warning.main",
+                    border: "1px solid",
+                    borderColor: "warning.main",
+                    borderRadius: 0.75,
+                    verticalAlign: "middle",
+                  }}
+                >
+                  {t("wallets.degraded")}
+                </Box>
+              </Tooltip>
+            )}
+          </Typography>
           <Typography sx={{ color: "text.secondary", fontFamily: C.mono, fontSize: 12 }}>{c.symbol}</Typography>
           {c.nodeless ? (
             <Tooltip title={t("wallets.pactSeedHint")}>

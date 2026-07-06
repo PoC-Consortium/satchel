@@ -161,6 +161,14 @@ impl WalletManager {
         Ok(worker)
     }
 
+    /// Freshness of the coin's cached wallet state: how long ago the sync
+    /// worker last completed a pass against its server. `None` when no
+    /// worker runs or none has completed yet (#99).
+    pub fn sync_age(&self, coin_id: &str) -> Option<std::time::Duration> {
+        let workers = self.workers.lock().ok()?;
+        workers.get(coin_id).and_then(|(w, _)| w.fresh_age())
+    }
+
     /// Poke the coin's sync worker, if one is running. The engine calls
     /// this for coins with active swaps each scheduler tick (issue #87):
     /// swap progress moves the wallet — fundings confirm, redeems land,
@@ -523,6 +531,11 @@ fn chain_update(
 pub struct BdkWalletBackend {
     params: &'static ChainParams,
     chain: Arc<ElectrumBackend>,
+    /// The coin's other ACTIVE view servers (#99): fallback relays for the
+    /// wallet's own broadcasts, so a down home cannot strand a signed
+    /// spend that any healthy view would happily relay. Never used for
+    /// wallet state — that stays home-synced by the worker.
+    views: Vec<Arc<ElectrumBackend>>,
     wallet: Option<(WalletHandle, Arc<SyncWorker>)>,
 }
 
@@ -530,13 +543,40 @@ impl BdkWalletBackend {
     pub fn new(
         params: &'static ChainParams,
         chain: Arc<ElectrumBackend>,
+        views: Vec<Arc<ElectrumBackend>>,
         wallet: Option<(WalletHandle, Arc<SyncWorker>)>,
     ) -> Self {
         Self {
             params,
             chain,
+            views,
             wallet,
         }
+    }
+
+    /// Broadcast through the home server, falling over to the active
+    /// views — any acceptance wins (#99). Serial with health-skip (wallet
+    /// sends are rare; no thread ceremony): servers inside a backoff
+    /// window are skipped, and if EVERYTHING is skipped the home is dialed
+    /// anyway — refusing outright would strand a signed spend that a
+    /// recovering server might take.
+    fn broadcast_fan(&self, tx: &Transaction) -> Result<Txid> {
+        let mut last_err: Option<anyhow::Error> = None;
+        let mut tried = false;
+        for server in std::iter::once(&self.chain).chain(self.views.iter()) {
+            if !server.health().available() {
+                continue;
+            }
+            tried = true;
+            match server.broadcast(tx) {
+                Ok(txid) => return Ok(txid),
+                Err(e) => last_err = Some(e),
+            }
+        }
+        if !tried {
+            return self.chain.broadcast(tx);
+        }
+        Err(last_err.expect("tried at least one server"))
     }
 
     /// Nudge the sync worker: our own action changed (or is about to
@@ -624,6 +664,15 @@ impl ChainBackend for BdkWalletBackend {
         self.params
     }
 
+    fn view_health(&self) -> Option<Arc<crate::server_health::ServerHealth>> {
+        // Chain reads here ride the wallet HOME server's pooled connection
+        // — its health is this backend's view health, so a MultiBackend
+        // quorum skips a down home instead of stalling on it. (Wallet OPS
+        // are cache reads and unaffected; the send path surfaces the home
+        // being down honestly at broadcast.)
+        self.chain.view_health()
+    }
+
     fn verify_chain(&self) -> Result<()> {
         self.chain.verify_chain()
     }
@@ -649,7 +698,24 @@ impl ChainBackend for BdkWalletBackend {
     }
 
     fn find_vout(&self, txid: &str, script_pubkey_hex: &str) -> Result<u32> {
-        self.chain.find_vout(txid, script_pubkey_hex)
+        // Home first; a failing home falls over to any available view —
+        // no Electrum server is "our node", they all see the same txs
+        // (#99). A data-level miss gets the same answer everywhere, so
+        // the fallback is harmless there too.
+        match self.chain.find_vout(txid, script_pubkey_hex) {
+            Ok(vout) => Ok(vout),
+            Err(err) => {
+                for view in &self.views {
+                    if !view.health().available() {
+                        continue;
+                    }
+                    if let Ok(vout) = view.find_vout(txid, script_pubkey_hex) {
+                        return Ok(vout);
+                    }
+                }
+                Err(err)
+            }
+        }
     }
 
     fn find_spend_witness(
@@ -714,7 +780,7 @@ impl ChainBackend for BdkWalletBackend {
             // Broadcast-before-persist (the rc6 commit rule): a crash after
             // broadcast re-learns the tx from our own spk history on the
             // next sync, never double-spends.
-            let txid = self.chain.broadcast(&tx)?;
+            let txid = self.broadcast_fan(&tx)?;
             entry.wallet.apply_unconfirmed_txs([(tx, now_ts())]);
             Ok(txid.to_string())
         })?;
@@ -747,7 +813,7 @@ impl ChainBackend for BdkWalletBackend {
                 .map_err(|e| anyhow!("extracting sweep: {e}"))?;
             // Broadcast-before-persist (the rc6 commit rule), same as
             // wallet_send.
-            let txid = self.chain.broadcast(&tx)?;
+            let txid = self.broadcast_fan(&tx)?;
             entry.wallet.apply_unconfirmed_txs([(tx, now_ts())]);
             Ok(txid.to_string())
         })?;
@@ -879,7 +945,7 @@ impl ChainBackend for BdkWalletBackend {
             let tx = psbt
                 .extract_tx()
                 .map_err(|e| anyhow!("extracting CPFP child: {e}"))?;
-            let txid = self.chain.broadcast(&tx)?;
+            let txid = self.broadcast_fan(&tx)?;
             entry.wallet.apply_unconfirmed_txs([(tx, now_ts())]);
             Ok(txid)
         })?;
@@ -951,7 +1017,7 @@ impl ChainBackend for BdkWalletBackend {
             let tx = psbt
                 .extract_tx()
                 .map_err(|e| anyhow!("extracting bump: {e}"))?;
-            let new_txid = self.chain.broadcast(&tx)?;
+            let new_txid = self.broadcast_fan(&tx)?;
             entry.wallet.apply_unconfirmed_txs([(tx, now_ts())]);
             Ok(new_txid.to_string())
         })?;

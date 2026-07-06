@@ -84,6 +84,13 @@ struct WorkerState {
     /// Set after the first successful sync of this run — the latch wallet
     /// writes gate on.
     first_sync_done: bool,
+    /// Last time a full worker pass completed against the server — an idle
+    /// tick counts (subscriptions checked, tip polled: the cache is
+    /// CONFIRMED current, not merely unchanged). `None` until the first
+    /// pass. The UI's "balance as of" signal (#99): while the home server
+    /// is down this stops advancing and the cached balance is honestly
+    /// stale instead of silently frozen.
+    last_fresh: Option<Instant>,
 }
 
 impl SyncWorker {
@@ -102,6 +109,7 @@ impl SyncWorker {
                 poked: false,
                 shutdown: false,
                 first_sync_done: false,
+                last_fresh: None,
             }),
             cv: Condvar::new(),
         });
@@ -160,6 +168,21 @@ impl SyncWorker {
                 .expect("worker state poisoned");
             state = guard;
         }
+    }
+
+    /// Age of the last completed pass against the server — `None` before
+    /// the first. The cached wallet state is exactly this stale (#99); the
+    /// UI turns it into a "balance as of" hint when the home is down.
+    pub fn fresh_age(&self) -> Option<Duration> {
+        self.state
+            .lock()
+            .expect("worker state poisoned")
+            .last_fresh
+            .map(|t| t.elapsed())
+    }
+
+    fn mark_fresh(&self) {
+        self.state.lock().expect("worker state poisoned").last_fresh = Some(Instant::now());
     }
 
     fn chain(&self) -> Arc<ElectrumBackend> {
@@ -291,6 +314,7 @@ fn run(worker: Arc<SyncWorker>, wallet: Weak<Mutex<WalletEntry>>) {
                     );
                 }
                 failures = 0;
+                worker.mark_fresh();
             }
             Err(err) => {
                 failures += 1;
@@ -364,7 +388,7 @@ fn observe(
         let statuses = match conn.subscribe_spks(&fresh) {
             Ok(statuses) => statuses,
             Err(e) => {
-                chain.evict(&conn);
+                chain.evict(&conn, &format!("electrum batch subscribe: {e}"));
                 return Err(anyhow!("electrum batch subscribe: {e}"));
             }
         };
@@ -426,6 +450,7 @@ mod tests {
                 poked: false,
                 shutdown: false,
                 first_sync_done: false,
+                last_fresh: None,
             }),
             cv: Condvar::new(),
         }

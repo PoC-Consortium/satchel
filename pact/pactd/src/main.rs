@@ -489,6 +489,12 @@ const METHODS: &[(&str, &str, &str, &str)] = &[
     ),
     (
         "coins",
+        "serverstatus",
+        "<coin_id>",
+        "Passive health of the coin's Electrum servers (state, latency, last error) — display data, never probes.",
+    ),
+    (
+        "coins",
         "listpairs",
         "",
         "Derived swap-pair availability for the current coin setup.",
@@ -1026,6 +1032,33 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 let nodeless = blocking(app, move |e| Ok(e.coin_nodeless(&nid)))
                     .await
                     .unwrap_or(false);
+                // Two-dimensional health (issue #98): the quorum-based
+                // `status` above stays green while a MINORITY of servers is
+                // down — these fields let the UI show that degradation, and
+                // a dead wallet-home server, instead of a false green.
+                // Cheap in-memory registry read; never dials.
+                let hid = def.id.to_string();
+                let servers = if is_conf {
+                    blocking(app, move |e| e.server_status(&hid))
+                        .await
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
+                let servers_healthy = servers.iter().filter(|s| s.state == "healthy").count();
+                let servers_down = servers.iter().filter(|s| s.state == "down").count();
+                // The wallet HOME is the ELECTED server (#99), not simply
+                // the first URL; before the first election (fresh boot) the
+                // first URL is the presumptive home.
+                let wallet_server_state = if nodeless {
+                    servers
+                        .iter()
+                        .find(|s| s.role.as_deref() == Some("wallet"))
+                        .or_else(|| servers.first())
+                        .map(|s| s.state.clone())
+                } else {
+                    None
+                };
                 coins.push(json!({
                     "id": def.id,
                     "display_name": def.display_name,
@@ -1041,9 +1074,32 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                     "default_confirmations": default_confirmations,
                     "wallet": wallet,
                     "nodeless": nodeless,
+                    "servers_total": servers.len(),
+                    "servers_healthy": servers_healthy,
+                    "servers_down": servers_down,
+                    "wallet_server_state": wallet_server_state,
+                    // Cache freshness (#99): how long ago the nodeless
+                    // wallet cache was last confirmed against its server —
+                    // the "balance as of" hint while the home is down.
+                    "wallet_synced_secs_ago": if nodeless {
+                        let sid = def.id.to_string();
+                        blocking(app, move |e| Ok(e.wallet_sync_age_secs(&sid)))
+                            .await
+                            .unwrap_or(None)
+                    } else {
+                        None
+                    },
                 }));
             }
             Ok(json!({ "network": format!("{net:?}").to_lowercase(), "coins": coins }))
+        }
+        "serverstatus" => {
+            // Passive Electrum-server health for one coin (issue #98): a
+            // pure in-memory read of the health cells real traffic feeds —
+            // this must NEVER dial or probe (the Network page polls it).
+            let coin = parse_coin(&p.str(0, "coin_id")?)?;
+            let servers = blocking(app, move |e| e.server_status(&coin)).await?;
+            Ok(json!({ "servers": servers }))
         }
         "listpairs" => {
             // Derived availability for the current setup (no curated list).

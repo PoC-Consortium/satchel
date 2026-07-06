@@ -34,6 +34,7 @@ pub mod nostr_board;
 pub mod params;
 pub mod registry;
 pub mod rpc;
+pub mod server_health;
 pub mod store;
 pub mod swap;
 pub mod taproot;
