@@ -246,23 +246,6 @@ export default function CoinSetup({
             <Typography sx={{ color: "text.secondary", fontSize: 12, mt: 1 }}>
               {t("coins.electrumUrlsHelp")}
             </Typography>
-            {(template?.electrum?.length ?? 0) > 0 && (
-              <Button
-                size="small"
-                sx={{ mt: 1, alignSelf: "flex-start" }}
-                onClick={async () => {
-                  const ok = await confirm({
-                    title: t("serverSync.resetDefaults"),
-                    body: t("serverSync.resetConfirm"),
-                    confirmLabel: t("serverSync.resetDefaults"),
-                    danger: true,
-                  });
-                  if (ok) edited(setElectrumUrls)((template?.electrum ?? []).join("\n"));
-                }}
-              >
-                {t("serverSync.resetDefaults")}
-              </Button>
-            )}
           </>
         ) : (
           <>
@@ -371,6 +354,24 @@ export default function CoinSetup({
         <Button color="inherit" onClick={onClose} disabled={busy} sx={{ mr: "auto" }}>
           {t("common.cancel")}
         </Button>
+        {mode === "electrum" && (template?.electrum?.length ?? 0) > 0 && (
+          <Button
+            color="inherit"
+            variant="outlined"
+            disabled={busy}
+            onClick={async () => {
+              const ok = await confirm({
+                title: t("serverSync.resetDefaults"),
+                body: t("serverSync.resetConfirm"),
+                confirmLabel: t("serverSync.resetDefaults"),
+                danger: true,
+              });
+              if (ok) edited(setElectrumUrls)((template?.electrum ?? []).join("\n"));
+            }}
+          >
+            {t("serverSync.resetDefaults")}
+          </Button>
+        )}
         <Button color="inherit" variant="outlined" onClick={() => void validate()} disabled={busy}>
           {mode === "electrum" ? t("coins.validateServers") : t("coins.validateNode")}
         </Button>
