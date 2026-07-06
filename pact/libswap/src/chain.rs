@@ -106,6 +106,13 @@ fn kvb_to_vb_round(sat_kvb: u64) -> u64 {
 const ELECTRUM_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 const ELECTRUM_IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
+/// Short first-round connect timeout: every dial first sweeps all resolved
+/// addresses at this budget (absorbing one-off blips and a dead first
+/// A-record cheaply), then re-sweeps at the full
+/// [`ELECTRUM_CONNECT_TIMEOUT`]. Also the budget Phase 1's promotion dials
+/// run on — waking a standby must never stall a user request for long.
+const ELECTRUM_CONNECT_RETRY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// How a wallet send prices itself: a market estimate at a block target
 /// (funding and the Slow/Normal/Fast presets) or an explicit user-chosen
 /// rate (the send form's Custom field, and the phoenix-style fallback when
@@ -1321,29 +1328,62 @@ impl rustls::client::danger::ServerCertVerifier for AcceptAnyServerCert {
     }
 }
 
+/// Dial `host:port` with retry — the transport half of both Electrum
+/// schemes. Every resolved address (not just the first — a host with a
+/// dead leading A/AAAA record must fall through to its siblings) is swept
+/// once at the short [`ELECTRUM_CONNECT_RETRY_TIMEOUT`], then once more at
+/// the full `connect_timeout`. The LTC field incident behind issue #98 was
+/// a single transient connect timeout that recovered within milliseconds —
+/// the second sweep absorbs exactly that class of blip.
+///
+/// Bounded connect + per-request I/O: a stalled REMOTE server must FAIL,
+/// not hang — pactd serializes all RPCs on one lock, so an unbounded read
+/// here froze the whole app (rc10 field report).
+fn tcp_connect_with_retry(
+    addr: &str,
+    connect_timeout: std::time::Duration,
+) -> Result<std::net::TcpStream> {
+    let addrs: Vec<std::net::SocketAddr> = std::net::ToSocketAddrs::to_socket_addrs(addr)
+        .with_context(|| format!("resolving Electrum server {addr}"))?
+        .collect();
+    anyhow::ensure!(
+        !addrs.is_empty(),
+        "Electrum server {addr} resolved to no address"
+    );
+    let mut last: Option<std::io::Error> = None;
+    for timeout in [
+        ELECTRUM_CONNECT_RETRY_TIMEOUT,
+        connect_timeout.max(ELECTRUM_CONNECT_RETRY_TIMEOUT),
+    ] {
+        for sock in &addrs {
+            match std::net::TcpStream::connect_timeout(sock, timeout) {
+                Ok(tcp) => {
+                    tcp.set_read_timeout(Some(ELECTRUM_IO_TIMEOUT))
+                        .context("electrum read timeout")?;
+                    tcp.set_write_timeout(Some(ELECTRUM_IO_TIMEOUT))
+                        .context("electrum write timeout")?;
+                    return Ok(tcp);
+                }
+                Err(e) => last = Some(e),
+            }
+        }
+    }
+    Err(last.expect("at least one address attempted"))
+        .with_context(|| format!("connecting to Electrum server {addr}"))
+}
+
 /// Connect `host:port` over TLS with SNI, a full signature-scheme list, and
 /// the accept-any verifier above, and hand the stream to the crate's
 /// `RawClient` (its `From<StreamOwned<…>>` impl).
 fn connect_electrum_ssl(
     addr: &str,
+    connect_timeout: std::time::Duration,
 ) -> Result<electrum_client::raw_client::RawClient<electrum_client::raw_client::ElectrumSslStream>>
 {
     let (host, _port) = addr
         .rsplit_once(':')
         .with_context(|| format!("Electrum ssl URL needs host:port, got {addr:?}"))?;
-    // Bounded connect + per-request I/O: a stalled REMOTE server must FAIL,
-    // not hang — pactd serializes all RPCs on one lock, so an unbounded read
-    // here froze the whole app (rc10 field report).
-    let sock = std::net::ToSocketAddrs::to_socket_addrs(addr)
-        .with_context(|| format!("resolving Electrum server {addr}"))?
-        .next()
-        .with_context(|| format!("Electrum server {addr} resolved to no address"))?;
-    let tcp = std::net::TcpStream::connect_timeout(&sock, ELECTRUM_CONNECT_TIMEOUT)
-        .with_context(|| format!("connecting to Electrum server {addr}"))?;
-    tcp.set_read_timeout(Some(ELECTRUM_IO_TIMEOUT))
-        .context("electrum read timeout")?;
-    tcp.set_write_timeout(Some(ELECTRUM_IO_TIMEOUT))
-        .context("electrum write timeout")?;
+    let tcp = tcp_connect_with_retry(addr, connect_timeout)?;
     // pactd installs aws-lc-rs as the process default in main() (the wss
     // fix); standalone users of libswap (tests, examples) fall back here.
     let provider = rustls::crypto::CryptoProvider::get_default()
@@ -1381,6 +1421,12 @@ pub struct ElectrumBackend {
     generation: AtomicU64,
     /// Generation that last passed `verify_chain` (0 = none yet).
     verified: AtomicU64,
+    /// This server's shared health cell (issue #98) — the same `Arc` every
+    /// other connection holder to this `(coin, url)` records into (the
+    /// wallet sync worker keeps a private socket but not private health).
+    /// Written passively on every dial/request outcome; never gates
+    /// anything here — routing on it is `ServerSet`'s job (Phase 1).
+    health: Arc<crate::server_health::ServerHealth>,
 }
 
 impl ElectrumBackend {
@@ -1395,21 +1441,37 @@ impl ElectrumBackend {
             conn: std::sync::RwLock::new(None),
             generation: AtomicU64::new(0),
             verified: AtomicU64::new(0),
+            health: crate::server_health::server_health(params.coin_id, url),
         })
+    }
+
+    /// This server's shared health cell — for routing (Phase 1) and tests.
+    pub fn health(&self) -> &Arc<crate::server_health::ServerHealth> {
+        &self.health
     }
 
     /// Dial the server and run the `server.version` handshake immediately:
     /// protocol 1.4 is negotiated once per CONNECTION (public servers may
     /// drop clients that skip it, and everything we call is 1.4 surface).
+    /// Every outcome lands in the health cell: a refused/timed-out dial or
+    /// a failed handshake is a connect incident, a completed handshake is
+    /// the first success sample.
     fn dial(&self) -> Result<ElectrumConn> {
+        let started = std::time::Instant::now();
+        let dialed = self.dial_inner();
+        match &dialed {
+            Ok(_) => self.health.record_success(started.elapsed()),
+            Err(e) => self.health.record_connect_failure(&format!("{e:#}")),
+        }
+        dialed
+    }
+
+    fn dial_inner(&self) -> Result<ElectrumConn> {
         let conn = if let Some(addr) = self.url.strip_prefix("ssl://") {
-            ElectrumConn::Ssl(connect_electrum_ssl(addr)?)
+            ElectrumConn::Ssl(connect_electrum_ssl(addr, ELECTRUM_CONNECT_TIMEOUT)?)
         } else {
             let addr = self.url.strip_prefix("tcp://").unwrap_or(&self.url);
-            ElectrumConn::Tcp(
-                electrum_client::raw_client::RawClient::new(addr, Some(ELECTRUM_IO_TIMEOUT))
-                    .with_context(|| format!("connecting to Electrum server {}", self.url))?,
-            )
+            ElectrumConn::Tcp(tcp_connect_with_retry(addr, ELECTRUM_CONNECT_TIMEOUT)?.into())
         };
         let ver = conn
             .raw_call(
@@ -1455,13 +1517,16 @@ impl ElectrumBackend {
 
     /// Drop `broken` if it is still the current connection (a concurrent
     /// caller may already have replaced it — never evict its successor).
-    pub(crate) fn evict(&self, broken: &Arc<ElectrumConn>) {
+    /// The eviction is what records the incident (`reason`) in the health
+    /// cell — generation-keyed, so the N callers sharing the one broken
+    /// socket count as ONE incident however many of them race here.
+    pub(crate) fn evict(&self, broken: &Arc<ElectrumConn>, reason: &str) {
         let mut slot = self.conn.write().expect("electrum conn poisoned");
-        if slot
-            .as_ref()
-            .is_some_and(|(cur, _)| Arc::ptr_eq(cur, broken))
-        {
-            *slot = None;
+        if let Some((cur, generation)) = slot.as_ref() {
+            if Arc::ptr_eq(cur, broken) {
+                self.health.record_failure(*generation, reason);
+                *slot = None;
+            }
         }
     }
 
@@ -1475,22 +1540,50 @@ impl ElectrumBackend {
     /// reconnect and retry ONCE. Everything we send is idempotent (reads,
     /// and broadcast treats "already known" as success), so the blind retry
     /// is safe; a second failure surfaces.
+    ///
+    /// Health recording (issue #98): a completed round-trip is a success
+    /// sample (with its latency — protocol errors included: the server
+    /// answered, the transport is fine); the first transport failure is
+    /// recorded by the eviction; a retry that fails again on the FRESH
+    /// socket is its own incident.
     fn with_conn<T>(
         &self,
         what: &str,
         f: impl Fn(&ElectrumConn) -> std::result::Result<T, electrum_client::Error>,
     ) -> Result<T> {
         let (conn, _) = self.conn()?;
+        let started = std::time::Instant::now();
         match f(&conn) {
-            Ok(v) => Ok(v),
+            Ok(v) => {
+                self.health.record_success(started.elapsed());
+                Ok(v)
+            }
             Err(e) if electrum_reconnects(&e) => {
-                self.evict(&conn);
-                let (conn, _) = self
+                self.evict(&conn, &format!("electrum {what}: {e}"));
+                let (conn, generation) = self
                     .conn()
                     .with_context(|| format!("electrum {what} (reconnect)"))?;
-                f(&conn).with_context(|| format!("electrum {what} (after reconnect)"))
+                let started = std::time::Instant::now();
+                match f(&conn) {
+                    Ok(v) => {
+                        self.health.record_success(started.elapsed());
+                        Ok(v)
+                    }
+                    Err(e) => {
+                        if electrum_reconnects(&e) {
+                            self.health
+                                .record_failure(generation, &format!("electrum {what}: {e}"));
+                        }
+                        Err(e).with_context(|| format!("electrum {what} (after reconnect)"))
+                    }
+                }
             }
-            Err(e) => Err(e).with_context(|| format!("electrum {what}")),
+            Err(e) => {
+                // The server answered (protocol/data error) — transport-wise
+                // that is liveness, and routing must not punish it.
+                self.health.record_success(started.elapsed());
+                Err(e).with_context(|| format!("electrum {what}"))
+            }
         }
     }
 

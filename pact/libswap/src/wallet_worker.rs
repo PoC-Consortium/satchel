@@ -364,7 +364,7 @@ fn observe(
         let statuses = match conn.subscribe_spks(&fresh) {
             Ok(statuses) => statuses,
             Err(e) => {
-                chain.evict(&conn);
+                chain.evict(&conn, &format!("electrum batch subscribe: {e}"));
                 return Err(anyhow!("electrum batch subscribe: {e}"));
             }
         };

@@ -489,6 +489,12 @@ const METHODS: &[(&str, &str, &str, &str)] = &[
     ),
     (
         "coins",
+        "serverstatus",
+        "<coin_id>",
+        "Passive health of the coin's Electrum servers (state, latency, last error) — display data, never probes.",
+    ),
+    (
+        "coins",
         "listpairs",
         "",
         "Derived swap-pair availability for the current coin setup.",
@@ -1044,6 +1050,14 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 }));
             }
             Ok(json!({ "network": format!("{net:?}").to_lowercase(), "coins": coins }))
+        }
+        "serverstatus" => {
+            // Passive Electrum-server health for one coin (issue #98): a
+            // pure in-memory read of the health cells real traffic feeds —
+            // this must NEVER dial or probe (the Network page polls it).
+            let coin = parse_coin(&p.str(0, "coin_id")?)?;
+            let servers = blocking(app, move |e| e.server_status(&coin)).await?;
+            Ok(json!({ "servers": servers }))
         }
         "listpairs" => {
             // Derived availability for the current setup (no curated list).

@@ -733,6 +733,28 @@ impl Engine {
         MultiBackend::from_backends(backends)
     }
 
+    /// Passive health snapshots for one coin's configured Electrum servers,
+    /// in configured order (pactd `serverstatus`, the Network page's data).
+    /// A pure in-memory read of the shared health cells — it never dials,
+    /// never probes: servers this run has not touched report `untested`
+    /// (issue #98). Core-RPC (`http://`) entries are skipped — the health
+    /// registry covers Electrum transports only.
+    pub fn server_status(
+        &self,
+        coin_id: &str,
+    ) -> Result<Vec<crate::server_health::HealthSnapshot>> {
+        let urls = self
+            .coins
+            .get(coin_id)
+            .with_context(|| format!("coin {coin_id:?} is not configured"))?;
+        let urls: Vec<&str> = urls
+            .split(',')
+            .map(str::trim)
+            .filter(|u| u.starts_with("tcp://") || u.starts_with("ssl://"))
+            .collect();
+        Ok(crate::server_health::coin_snapshots(coin_id, &urls))
+    }
+
     /// Live reachability gate for both legs of a swap: each coin's node must be
     /// reachable **and** serve the right chain (genesis check, via
     /// [`Self::backend`]) right now. Run at the network-facing swap-initiation
