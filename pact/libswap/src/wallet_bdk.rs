@@ -624,6 +624,15 @@ impl ChainBackend for BdkWalletBackend {
         self.params
     }
 
+    fn view_health(&self) -> Option<Arc<crate::server_health::ServerHealth>> {
+        // Chain reads here ride the wallet HOME server's pooled connection
+        // — its health is this backend's view health, so a MultiBackend
+        // quorum skips a down home instead of stalling on it. (Wallet OPS
+        // are cache reads and unaffected; the send path surfaces the home
+        // being down honestly at broadcast.)
+        self.chain.view_health()
+    }
+
     fn verify_chain(&self) -> Result<()> {
         self.chain.verify_chain()
     }

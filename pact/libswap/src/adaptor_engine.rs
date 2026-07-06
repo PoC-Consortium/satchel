@@ -138,9 +138,9 @@ mod tests {
     use crate::taproot::{attach_keypath_signature, build_keypath_redeem, build_refund_tx};
     use bitcoin::secp256k1::{All, Secp256k1};
     use bitcoin::{Amount, OutPoint, ScriptBuf, Transaction, TxOut, Txid};
-    use std::cell::RefCell;
     use std::collections::HashMap;
     use std::str::FromStr;
+    use std::sync::Mutex;
 
     const ALICE_M: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
     const BOB_M: &str =
@@ -152,20 +152,20 @@ mod tests {
     /// spends, and read back the witness of a spend (for secret reveal).
     struct MockBackend {
         params: &'static ChainParams,
-        utxos: RefCell<HashMap<OutPoint, TxOut>>,
-        txs: RefCell<Vec<Transaction>>,
+        utxos: Mutex<HashMap<OutPoint, TxOut>>,
+        txs: Mutex<Vec<Transaction>>,
     }
     impl MockBackend {
         fn new(params: &'static ChainParams) -> Self {
             Self {
                 params,
-                utxos: RefCell::new(HashMap::new()),
-                txs: RefCell::new(Vec::new()),
+                utxos: Mutex::new(HashMap::new()),
+                txs: Mutex::new(Vec::new()),
             }
         }
         /// Fund an outpoint paying `spk` (stands in for the funder's wallet send).
         fn fund(&self, outpoint: OutPoint, value: u64, spk: ScriptBuf) {
-            self.utxos.borrow_mut().insert(
+            self.utxos.lock().unwrap().insert(
                 outpoint,
                 TxOut {
                     value: Amount::from_sat(value),
@@ -183,7 +183,7 @@ mod tests {
         }
         fn broadcast(&self, tx: &Transaction) -> Result<Txid> {
             let txid = tx.compute_txid();
-            self.txs.borrow_mut().push(tx.clone());
+            self.txs.lock().unwrap().push(tx.clone());
             Ok(txid)
         }
         fn get_txout(
@@ -193,7 +193,8 @@ mod tests {
         ) -> Result<Option<TxOutInfo>> {
             Ok(self
                 .utxos
-                .borrow()
+                .lock()
+                .unwrap()
                 .get(outpoint)
                 .filter(|o| &o.script_pubkey == expected_spk)
                 .map(|o| TxOutInfo {
@@ -205,7 +206,8 @@ mod tests {
         fn find_funding(&self, spk: &ScriptBuf) -> Result<Option<(OutPoint, TxOutInfo)>> {
             Ok(self
                 .utxos
-                .borrow()
+                .lock()
+                .unwrap()
                 .iter()
                 .find(|(_, o)| &o.script_pubkey == spk)
                 .map(|(op, o)| {
@@ -228,7 +230,7 @@ mod tests {
             _watch: &ScriptBuf,
             _from: u64,
         ) -> Result<Option<Vec<Vec<u8>>>> {
-            for tx in self.txs.borrow().iter() {
+            for tx in self.txs.lock().unwrap().iter() {
                 if tx.input.iter().any(|i| &i.previous_output == outpoint) {
                     return Ok(Some(tx.input[0].witness.to_vec()));
                 }

@@ -174,6 +174,16 @@ impl ServerHealth {
         self.lock().state
     }
 
+    /// When the current backoff window expires — `None` unless `Down`.
+    /// (`ServerSet` uses it to rank a fully-down fleet: when nothing is
+    /// available, route to whoever recovers soonest.)
+    pub fn down_until(&self) -> Option<Instant> {
+        match self.lock().state {
+            HealthState::Down { until } => Some(until),
+            _ => None,
+        }
+    }
+
     pub fn snapshot(&self) -> HealthSnapshot {
         let inner = self.lock();
         let now = Instant::now();
@@ -239,6 +249,99 @@ pub fn coin_snapshots(coin_id: &str, urls: &[&str]) -> Vec<HealthSnapshot> {
     urls.iter()
         .map(|url| server_health(coin_id, url).snapshot())
         .collect()
+}
+
+// ---- the active set ---------------------------------------------------------
+
+/// How many Electrum VIEW servers (besides the wallet home) are active —
+/// hold a pooled connection and serve reads — at a time. Everything else
+/// in a coin's configured list is cold standby: never dialed until a slot
+/// frees up. This is the invariant that makes a 10+-server list free:
+/// more servers add backup depth, never latency (issue #98).
+pub const ACTIVE_VIEWS: usize = 2;
+
+/// Sticky per-coin selection of the active view servers. Pure bookkeeping
+/// over the health registry — selecting a server dials nothing (backends
+/// are lazy; the first request through it does, on the short first-round
+/// connect budget).
+///
+/// Selection rules, in order:
+/// 1. **Sticky**: a currently-active server that is still configured and
+///    not inside a backoff window keeps its slot. A returning
+///    earlier-in-the-list server never evicts a working one (no
+///    flap-back — each unnecessary switch costs a fresh dial+verify).
+/// 2. **Fill by preference**: empty slots take the first configured-order
+///    candidate that is available (untested counts — that is exactly a
+///    standby being promoted).
+/// 3. **Last resort**: if fewer than `k` servers are available at all,
+///    fill with the down servers whose backoff windows expire soonest —
+///    a fully-down fleet must still route SOMEWHERE so recovery can be
+///    observed the moment a window lapses.
+///
+/// The wallet HOME (`urls[0]`) is not managed here in Phase 1 — it stays
+/// pinned until re-election lands (#99); callers pass the view candidates
+/// only (`urls[1..]`).
+#[derive(Default)]
+pub struct ServerSet {
+    active: Mutex<BTreeMap<String, Vec<String>>>,
+}
+
+impl ServerSet {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Pick (at most) `k` active views for `coin_id` out of `candidates`
+    /// (configured order = preference order). Returns them in a stable
+    /// order: kept slots first, then newly promoted ones.
+    pub fn select<'a>(&self, coin_id: &str, candidates: &[&'a str], k: usize) -> Vec<&'a str> {
+        let mut map = self.active.lock().expect("server set poisoned");
+        let prev = map.get(coin_id).cloned().unwrap_or_default();
+
+        // 1. Sticky: previous picks that are still configured and available.
+        let mut picked: Vec<&'a str> = prev
+            .iter()
+            .filter_map(|kept| candidates.iter().copied().find(|c| *c == kept))
+            .filter(|url| server_health(coin_id, url).available())
+            .take(k)
+            .collect();
+
+        // 2. Preference order for the free slots.
+        for url in candidates {
+            if picked.len() >= k {
+                break;
+            }
+            if !picked.contains(url) && server_health(coin_id, url).available() {
+                picked.push(url);
+            }
+        }
+
+        // 3. Last resort: everything (left) is down — take soonest-to-recover.
+        if picked.len() < k {
+            let mut down: Vec<(&'a str, Instant)> = candidates
+                .iter()
+                .filter(|url| !picked.contains(url))
+                .filter_map(|url| {
+                    server_health(coin_id, url)
+                        .down_until()
+                        .map(|until| (*url, until))
+                })
+                .collect();
+            down.sort_by_key(|(_, until)| *until);
+            for (url, _) in down {
+                if picked.len() >= k {
+                    break;
+                }
+                picked.push(url);
+            }
+        }
+
+        map.insert(
+            coin_id.to_string(),
+            picked.iter().map(|u| u.to_string()).collect(),
+        );
+        picked
+    }
 }
 
 #[cfg(test)]
@@ -313,6 +416,55 @@ mod tests {
             last = now;
         }
         assert!(last < 30.0, "ewma converged near the new level, got {last}");
+    }
+
+    #[test]
+    fn server_set_is_sticky_and_health_aware() {
+        // Unique coin id per test — the registry is process-global.
+        let coin = "test-set-sticky";
+        let all = ["tcp://a:1", "tcp://b:1", "tcp://c:1", "tcp://d:1"];
+        let set = ServerSet::new();
+
+        // Fresh start: configured order wins, standbys stay untouched.
+        assert_eq!(set.select(coin, &all, 2), vec!["tcp://a:1", "tcp://b:1"]);
+
+        // b trips its breaker → replaced by the next candidate; a keeps its
+        // slot (sticky).
+        server_health(coin, "tcp://b:1").record_connect_failure("dead");
+        assert_eq!(set.select(coin, &all, 2), vec!["tcp://a:1", "tcp://c:1"]);
+
+        // b comes back (its window would expire; simulate with a success):
+        // NO flap-back — c keeps the slot it earned.
+        server_health(coin, "tcp://b:1").record_success(Duration::from_millis(5));
+        assert_eq!(set.select(coin, &all, 2), vec!["tcp://a:1", "tcp://c:1"]);
+    }
+
+    #[test]
+    fn server_set_last_resort_routes_to_soonest_recovery() {
+        let coin = "test-set-lastresort";
+        let all = ["tcp://a:1", "tcp://b:1"];
+        let set = ServerSet::new();
+        // Everything down — b twice (longer window), a once (shorter).
+        server_health(coin, "tcp://b:1").record_connect_failure("dead");
+        server_health(coin, "tcp://b:1").record_connect_failure("dead");
+        server_health(coin, "tcp://a:1").record_connect_failure("dead");
+        // A fully-down fleet still routes — soonest-to-recover first.
+        assert_eq!(set.select(coin, &all, 2), vec!["tcp://a:1", "tcp://b:1"]);
+    }
+
+    #[test]
+    fn server_set_handles_short_and_reconfigured_lists() {
+        let coin = "test-set-short";
+        let set = ServerSet::new();
+        // Fewer candidates than slots: take what's there.
+        assert_eq!(set.select(coin, &["tcp://a:1"], 2), vec!["tcp://a:1"]);
+        // Reconfiguration drops a: the sticky entry must not survive it.
+        assert_eq!(
+            set.select(coin, &["tcp://x:1", "tcp://y:1"], 2),
+            vec!["tcp://x:1", "tcp://y:1"]
+        );
+        // Empty candidate list (node-mode coin with no electrum views).
+        assert_eq!(set.select(coin, &[], 2), Vec::<&str>::new());
     }
 
     #[test]

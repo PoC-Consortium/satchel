@@ -91,6 +91,12 @@ pub struct Engine {
     /// instead of a fresh TCP+TLS handshake per call. Lazy + self-healing,
     /// so pooling never pins a dead socket.
     electrum_pool: crate::chain::ElectrumPool,
+    /// Sticky per-coin choice of which configured Electrum servers are the
+    /// ACTIVE views (issue #98). Everything not selected is cold standby:
+    /// no pooled connection (the pool prunes it on the next `get`), no
+    /// reads, promoted only when an active slot frees up — so a 10+-server
+    /// list adds backup depth, never latency.
+    server_set: crate::server_health::ServerSet,
 }
 
 fn chain_params(chain: &ChainRef) -> Result<&'static ChainParams> {
@@ -598,6 +604,7 @@ impl Engine {
             progress: Mutex::new(HashMap::new()),
             wallet_manager: crate::wallet_bdk::WalletManager::new(data_dir),
             electrum_pool: crate::chain::ElectrumPool::new(),
+            server_set: crate::server_health::ServerSet::new(),
         })
     }
 
@@ -644,7 +651,9 @@ impl Engine {
     /// Core-RPC-primary backend list (the node-backed shape): the primary —
     /// and any further Core URLs — are stateless per-call HTTP clients;
     /// Electrum secondaries come from the shared pool so their TCP+TLS
-    /// connections persist across calls (issue #87).
+    /// connections persist across calls (issue #87). Only the ACTIVE
+    /// Electrum views join (issue #98) — the rest of the configured list
+    /// is cold standby, promoted by the `ServerSet` when a slot frees up.
     fn node_backend(
         &self,
         coin_id: &str,
@@ -656,18 +665,30 @@ impl Engine {
             .map(str::trim)
             .filter(|u| !u.is_empty())
             .collect();
+        for url in &urls {
+            anyhow::ensure!(
+                url.starts_with("http://")
+                    || url.starts_with("tcp://")
+                    || url.starts_with("ssl://"),
+                "unsupported backend URL scheme in {url:?} (http:// | tcp:// | ssl://)"
+            );
+        }
+        let electrum: Vec<&str> = urls
+            .iter()
+            .copied()
+            .filter(|u| u.starts_with("tcp://") || u.starts_with("ssl://"))
+            .collect();
+        let views = self
+            .server_set
+            .select(coin_id, &electrum, crate::server_health::ACTIVE_VIEWS);
         let mut backends: Vec<Box<dyn ChainBackend>> = Vec::new();
         for url in &urls {
             if url.starts_with("http://") {
                 backends.push(Box::new(crate::chain::CoreRpcBackend::new(params, url)?));
-            } else if url.starts_with("tcp://") || url.starts_with("ssl://") {
+            } else if views.contains(url) {
                 backends.push(Box::new(
-                    self.electrum_pool.get(params, coin_id, url, &urls)?,
+                    self.electrum_pool.get(params, coin_id, url, &views)?,
                 ));
-            } else {
-                anyhow::bail!(
-                    "unsupported backend URL scheme in {url:?} (http:// | tcp:// | ssl://)"
-                )
             }
         }
         MultiBackend::from_backends(backends)
@@ -706,18 +727,28 @@ impl Engine {
                  (independent chain views) — add a second URL"
             );
         }
+        // Active set (issue #98): the wallet HOME stays pinned to urls[0]
+        // until re-election lands (#99) — the sync worker's socket and the
+        // bdk wallet ride it. The view slots are picked by the ServerSet
+        // (sticky, health-aware); everything else in the list is cold
+        // standby with no pooled connection at all.
+        let home = urls[0];
+        let views = self
+            .server_set
+            .select(coin_id, &urls[1..], crate::server_health::ACTIVE_VIEWS);
+        let live: Vec<&str> = std::iter::once(home).chain(views.iter().copied()).collect();
         // The primary chain view: the coin's pooled long-lived connection.
         // The sync worker dials the same server on its OWN connection (see
         // WalletManager::ensure_worker) so each socket has one caller
         // domain — engine RPCs here (serialized by the registry lock), the
         // worker there.
-        let primary = self.electrum_pool.get(params, coin_id, urls[0], &urls)?;
+        let primary = self.electrum_pool.get(params, coin_id, home, &live)?;
         let wallet = match self.store.seed() {
             Ok(seed) => {
                 let handle = self.wallet_manager.open(coin_id, params, &seed)?;
                 let worker = self
                     .wallet_manager
-                    .ensure_worker(coin_id, params, urls[0], &handle)?;
+                    .ensure_worker(coin_id, params, home, &handle)?;
                 Some((handle, worker))
             }
             Err(_) => None, // locked or absent seed: chain-reads-only backend
@@ -725,9 +756,9 @@ impl Engine {
         let mut backends: Vec<Box<dyn ChainBackend>> = vec![Box::new(
             crate::wallet_bdk::BdkWalletBackend::new(params, primary, wallet),
         )];
-        for url in &urls[1..] {
+        for url in &views {
             backends.push(Box::new(
-                self.electrum_pool.get(params, coin_id, url, &urls)?,
+                self.electrum_pool.get(params, coin_id, url, &live)?,
             ));
         }
         MultiBackend::from_backends(backends)
@@ -766,15 +797,31 @@ impl Engine {
     /// Mirrors the per-coin check the UI shows in `listcoins`.
     fn ensure_chains_live(&self, chains: &[&ChainRef]) -> Result<()> {
         for c in chains {
-            self.backend(c)
-                .and_then(|bk| bk.tip_height())
-                .with_context(|| {
-                    format!(
-                        "chain {} is unreachable — check that its node is running and \
-                         configured in Satchel before starting a swap",
-                        c.coin_id
-                    )
-                })?;
+            let backend = self.backend(c).with_context(|| {
+                format!(
+                    "chain {} is unreachable — check that its node is running and \
+                     configured in Satchel before starting a swap",
+                    c.coin_id
+                )
+            })?;
+            backend.tip_height().with_context(|| {
+                format!(
+                    "chain {} is unreachable — check that its node is running and \
+                     configured in Satchel before starting a swap",
+                    c.coin_id
+                )
+            })?;
+            // The quorum reads above tolerate a dead server behind healthy
+            // siblings — right for display, but the FUNDING WALLET's own
+            // server must answer before we commit to a swap it will have
+            // to fund (issue #98; the wallet re-homes in #99).
+            backend.wallet_view_live().with_context(|| {
+                format!(
+                    "the {} wallet's server is unreachable — the swap could not be \
+                     funded; check the coin's first backend URL or wait for it to recover",
+                    c.coin_id
+                )
+            })?;
         }
         Ok(())
     }
