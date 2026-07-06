@@ -827,10 +827,14 @@ async fn remove_coin(app: tauri::AppHandle, coin_id: String) -> Result<(), Strin
     .map_err(|e| format!("{e:#}"))
 }
 
-/// A stable fingerprint of an Electrum server *set* — sorted + de-duped so
-/// reordering or a repeat never counts as a change. Stored per nodeless coin as
-/// [`CoinConn::default_seen`]; when it stops matching the shipped defaults, the
-/// "new default servers available" prompt surfaces the delta.
+/// A compact, stable fingerprint of an Electrum server *set*. The set is
+/// canonicalized first — trimmed, de-duped, sorted — so reordering or a repeat
+/// never counts as a change, then hashed to a short hex token stored per
+/// nodeless coin as [`CoinConn::default_seen`]. When it stops matching the
+/// shipped defaults, the "new default servers available" prompt surfaces the
+/// delta. Uses FNV-1a rather than storing the list (compact) or std's
+/// `DefaultHasher` (whose algorithm isn't guaranteed stable across builds — the
+/// token must survive an app/toolchain upgrade).
 fn electrum_fp(servers: &[String]) -> String {
     let mut v: Vec<&str> = servers
         .iter()
@@ -839,7 +843,12 @@ fn electrum_fp(servers: &[String]) -> String {
         .collect();
     v.sort_unstable();
     v.dedup();
-    v.join("\n")
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325; // FNV-1a offset basis
+    for byte in v.join("\n").bytes() {
+        h ^= byte as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3); // FNV prime
+    }
+    format!("{h:016x}")
 }
 
 /// The shipped default servers not already in `configured` (trimmed compare),
