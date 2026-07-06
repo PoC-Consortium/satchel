@@ -178,6 +178,7 @@ the **active** merchant. Nested mode (`--merchants`) lays out
 | `listcoins` | — | `{ network, coins:[…] }` | no |
 | `listpairs` | — | `{ network, pairs:[…] }` | no |
 | `validatecoin` | `coin_id`, `chain_data` | `{ ok, tip_height, genesis_hash? }` | no |
+| `serverstatus` | `coin_id` | `{ servers:[…] }` | no |
 
 `listcoins` returns every coin in the shipped registry that is defined on the
 active network. Each entry:
@@ -198,6 +199,16 @@ active network. Each entry:
 | `bech32_hrp` | Address HRP. |
 | `confirmations` | Effective confirmation depth in force. |
 | `default_confirmations` | The network/spacing default depth. |
+| `servers_total` | *Nodeless only.* Count of configured Electrum servers. |
+| `servers_healthy` | *Nodeless only.* Count currently reachable and serving the right chain. |
+| `servers_down` | *Nodeless only.* Count in failure-backoff right now. |
+| `wallet_server_state` | *Nodeless only.* State of the **elected wallet-home** server: `"healthy"`, `"down"`, or `"untested"`. |
+| `wallet_synced_secs_ago` | *Nodeless only.* Seconds since the wallet cache was last confirmed against its server — the "balance as of" staleness signal. |
+
+The five server fields come from the passive health registry (never a probe) —
+see "Multiple Electrum servers & failover" in the chapter "Configuring Coins"
+for the active-set model behind them, and `serverstatus` below for the
+per-server detail.
 
 - `listpairs` — derived (never curated). Each `PairInfo` is
   `{ coin_a, coin_b, protocols, selectable?, both_configured, available }`,
@@ -205,6 +216,21 @@ active network. Each entry:
 - `validatecoin` — genesis-hash checks a *proposed* backend (`chain_data`)
   before Satchel saves it. Builds an ephemeral backend; the running engine
   config is untouched.
+- `serverstatus` — per-server Electrum health for one **nodeless** `coin_id`,
+  a **pure in-memory read** of the health cells that real traffic feeds. It
+  **never dials or probes** (the Network monitor polls it every few seconds),
+  so a server is only ever reported `down` because a genuine request to it
+  failed — not because opening this page touched it. Each `servers[]` row:
+
+| Field | Meaning |
+|---|---|
+| `url` | The server URL (`tcp://…` / `ssl://…`). |
+| `state` | `"healthy"`, `"down"` (in failure-backoff), or `"untested"` (a configured server never yet needed — a cold standby). |
+| `role` | `"wallet"` (the elected home), `"view"` (an active cross-check), or `"standby"` (configured but idle); absent until the coin routes this run. |
+| `retry_in_secs` | When `down`: seconds until the backoff window reopens the server for use (`0` = eligible now). |
+| `latency_ms` | Smoothed request latency. |
+| `requests` / `failures` | Lifetime counters for this run. |
+| `last_error` / `last_error_secs_ago` | Most recent failure text and its age, when any. |
 
 ## Wallet helpers
 

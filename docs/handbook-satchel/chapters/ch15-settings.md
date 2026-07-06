@@ -77,8 +77,8 @@ already in the list, so you normally don't need to touch this.
 
 > **Tip** — This is the place you **add and remove** relays, but to *watch* how
 > they're doing — which are connected, their latency and uptime — open the
-> top-level **Relays** screen in the left navigation (described in the *Tour of
-> the Interface* chapter). That screen is monitor-only.
+> top-level **Network** screen in the left navigation (its Nostr tab; described
+> in the *Tour of the Interface* chapter). That screen is monitor-only.
 
 ### Corkboards
 
