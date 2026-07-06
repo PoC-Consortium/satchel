@@ -340,7 +340,10 @@ type FeePolicy = {
 const FEE_DEFAULTS: FeePolicy = {
   max_feerate_sat_vb: 500,
   reservation_mult: 3,
-  committed_mult: 2,
+  // Match the engine default (committed_mult was changed 2→1: v2 redeems commit
+  // at 1× live market, a CPFP child lifts the fee only if the market climbs).
+  // This fallback shows only until getfeepolicy loads the real value.
+  committed_mult: 1,
 };
 
 function FeesTab() {
