@@ -106,7 +106,10 @@ capabilities = { cltv = true, segwit_v0 = true, taproot = true }
   # no RPC, so a spend below it is rejected (-6). Floor funding/spends here.
   min_feerate_sat_vb = 10
   consensus  = { header_format = "bitcoin", magic = "fbc0b6db", default_p2p_port = 9333, p2pkh_prefix = 48, p2sh_prefix = 5, wif_prefix = 176, bech32_hrp = "ltc", genesis_hash = "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2" }
-  connection = { rpc_host = "127.0.0.1", rpc_port = 9332, auth_method = "cookie", datadir = "%NODEDIR%/Litecoin", cookie_subpath = ".cookie", wallet = "" }
+  # Nodeless defaults verified live against the LTC backend (verify_chain:
+  # TLS + protocol 1.4+ + genesis 12a765e3…). electrum-ltc.org is pooler's
+  # (Litecoin core dev) reference server.
+  connection = { rpc_host = "127.0.0.1", rpc_port = 9332, auth_method = "cookie", datadir = "%NODEDIR%/Litecoin", cookie_subpath = ".cookie", wallet = "", electrum = ["ssl://backup.electrum-ltc.org:443", "ssl://electrum-ltc.bysh.me:50002"] }
 
   [coin.testnet]
   min_feerate_sat_vb = 10
