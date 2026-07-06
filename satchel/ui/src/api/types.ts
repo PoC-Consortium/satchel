@@ -419,6 +419,38 @@ export interface CoinInfo {
   /** Nodeless coin (Electrum-only backends, epic #58): the wallet is the bdk
    *  one derived from the Pact seed — send/receive/activity apply. */
   nodeless?: boolean;
+  /** Electrum fleet health (issue #98): configured / currently-healthy /
+   *  in-failure-backoff counts, from the passive health registry. */
+  servers_total?: number;
+  servers_healthy?: number;
+  servers_down?: number;
+  /** State of the ELECTED wallet-home server (#99): "healthy" | "down" |
+   *  "untested". Only set for nodeless coins. */
+  wallet_server_state?: string | null;
+  /** Seconds since the nodeless wallet cache was last confirmed against its
+   *  server — the "balance as of" staleness signal (#99). */
+  wallet_synced_secs_ago?: number | null;
+}
+
+/** One Electrum server's passive health (`serverstatus`, issues #98/#100).
+ *  Display data only — the backend never dials a server to answer this. */
+export interface ServerStatus {
+  coin_id: string;
+  url: string;
+  /** "healthy" | "down" | "untested" (a standby never touched this run). */
+  state: string;
+  /** "wallet" (elected home) | "view" (active) | "standby"; absent until
+   *  the coin has routed once this run. */
+  role?: string;
+  /** When down: seconds until the failure-backoff window expires. */
+  retry_in_secs?: number;
+  /** Smoothed request latency (EWMA), ms. */
+  latency_ms?: number | null;
+  last_ok_secs_ago?: number;
+  last_error?: string;
+  last_error_secs_ago?: number;
+  requests: number;
+  failures: number;
 }
 
 /** One row of the nodeless wallet's activity feed (`listtransactions`). */
