@@ -891,4 +891,15 @@ export const ja: Bundle = {
     later: "後で",
     retry: "接続を再試行",
   },
+  serverSync: {
+    resetDefaults: "デフォルトに戻す",
+    resetConfirm:
+      "このコインのElectrumサーバーを同梱のデフォルトに置き換えますか？リストに加えた変更はすべて破棄されます。",
+    promptTitle: "新しい推奨Electrumサーバー",
+    promptBody:
+      "更新されたデフォルトのElectrumサーバーが利用可能です。追加すると信頼性が向上します — 既存のサーバーはそのまま保持されます。",
+    coinLine: "{coin} — 新規{count}件",
+    add: "サーバーを追加",
+    ignore: "無視",
+  },
 };

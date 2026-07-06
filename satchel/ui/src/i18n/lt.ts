@@ -893,4 +893,15 @@ export const lt: Bundle = {
     later: "Vėliau",
     retry: "Bandyti prisijungti dar kartą",
   },
+  serverSync: {
+    resetDefaults: "Atkurti numatytuosius",
+    resetConfirm:
+      "Pakeisti šios monetos Electrum serverius pateiktais numatytaisiais? Visi jūsų sąraše atlikti pakeitimai bus atmesti.",
+    promptTitle: "Nauji rekomenduojami Electrum serveriai",
+    promptBody:
+      "Yra atnaujintų numatytųjų Electrum serverių. Jų pridėjimas pagerina patikimumą — jūsų esami serveriai išsaugomi.",
+    coinLine: "{coin} — {count} nauji",
+    add: "Pridėti serverius",
+    ignore: "Nepaisyti",
+  },
 };

@@ -215,6 +215,21 @@ pub fn templates_json(config_dir: &Path, network: &str) -> serde_json::Value {
     json!({ "network": network, "coins": coins })
 }
 
+/// The default Electrum server list shipped in `coins.toml` for `coin_id` on
+/// `network` — empty when the coin declares none (e.g. `btcx` has no public
+/// PoCX Electrum servers yet). Drives the coin-setup "reset to defaults" action
+/// and the "new default servers available" reconcile prompt.
+pub fn default_electrum(config_dir: &Path, coin_id: &str, network: &str) -> Vec<String> {
+    let doc = load_doc(config_dir);
+    doc.coins
+        .iter()
+        .find(|c| c.coin_id == coin_id)
+        .and_then(|c| c.net(network))
+        .and_then(|n| n.connection.as_ref())
+        .map(|conn| conn.electrum.clone())
+        .unwrap_or_default()
+}
+
 /// The icon for a coin as a `data:` URL (read from the file next to
 /// `coins.toml`), or `None` if the coin has no icon or it can't be read.
 pub fn icon_data_url(config_dir: &Path, coin_id: &str) -> Option<String> {

@@ -94,6 +94,14 @@ struct CoinConn {
     /// after the primary Core-RPC URL.
     #[serde(default)]
     extra_backends: Vec<String>,
+    /// Fingerprint of the shipped `coins.toml` default Electrum set this
+    /// nodeless coin was last reconciled against (see [`electrum_fp`]). Drives
+    /// the "new default servers available" prompt: when the shipped defaults
+    /// change, the fingerprint no longer matches and the delta is offered.
+    /// `None` = never reconciled (a coin configured before this feature), which
+    /// surfaces the prompt on the next launch. Ignored for node-backed coins.
+    #[serde(default)]
+    default_seen: Option<String>,
 }
 
 /// The structured connection payload the UI sends to `save_coin` /
@@ -139,6 +147,9 @@ impl CoinConnInput {
             cookie_subpath: self.cookie_subpath,
             wallet: self.wallet,
             extra_backends: self.extra_backends,
+            // Fresh build: the caller (`save_coin`) carries over any prior
+            // fingerprint when replacing an existing coin.
+            default_seen: None,
         };
         conn.chain_data = match self.chain_data {
             Some(raw) if !raw.trim().is_empty() => {
@@ -748,9 +759,15 @@ async fn save_coin(
         {
             let state = app.state::<AppState>();
             let mut cfg = state.config.lock().unwrap();
-            let new = conn.into_conn(coin_id.clone(), active_network(), confirmations)?;
+            let mut new = conn.into_conn(coin_id.clone(), active_network(), confirmations)?;
             match cfg.coins.iter_mut().find(|c| c.coin_id == coin_id) {
-                Some(existing) => *existing = new,
+                Some(existing) => {
+                    // Re-save is a deliberate server choice: keep the reconcile
+                    // fingerprint so a manual edit that matches defaults doesn't
+                    // re-trigger the prompt (a real default change still will).
+                    new.default_seen = existing.default_seen.take();
+                    *existing = new;
+                }
                 None => cfg.coins.push(new),
             }
             save_config(&state.config_dir, &cfg)?;
@@ -804,6 +821,136 @@ async fn remove_coin(app: tauri::AppHandle, coin_id: String) -> Result<(), Strin
             save_config(&state.config_dir, &cfg)?;
         }
         apply_config_change(&app)
+    })
+    .await
+    .map_err(|e| format!("join error: {e}"))?
+    .map_err(|e| format!("{e:#}"))
+}
+
+/// A compact, stable fingerprint of an Electrum server *set*. The set is
+/// canonicalized first — trimmed, de-duped, sorted — so reordering or a repeat
+/// never counts as a change, then hashed to a short hex token stored per
+/// nodeless coin as [`CoinConn::default_seen`]. When it stops matching the
+/// shipped defaults, the "new default servers available" prompt surfaces the
+/// delta. Uses FNV-1a rather than storing the list (compact) or std's
+/// `DefaultHasher` (whose algorithm isn't guaranteed stable across builds — the
+/// token must survive an app/toolchain upgrade).
+fn electrum_fp(servers: &[String]) -> String {
+    let mut v: Vec<&str> = servers
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
+    v.sort_unstable();
+    v.dedup();
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325; // FNV-1a offset basis
+    for byte in v.join("\n").bytes() {
+        h ^= byte as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3); // FNV prime
+    }
+    format!("{h:016x}")
+}
+
+/// The shipped default servers not already in `configured` (trimmed compare),
+/// in default order — the additive delta the reconcile prompt offers and Add
+/// unions in. Never removes anything the user has.
+fn missing_defaults(configured: &[String], defaults: &[String]) -> Vec<String> {
+    let have: std::collections::HashSet<&str> = configured.iter().map(|s| s.trim()).collect();
+    defaults
+        .iter()
+        .filter(|d| !have.contains(d.trim()))
+        .cloned()
+        .collect()
+}
+
+/// One coin's pending default-server delta, for the reconcile prompt.
+#[derive(serde::Serialize)]
+struct ServerUpdate {
+    coin_id: String,
+    /// Shipped default servers not yet in the coin's configured list.
+    new_servers: Vec<String>,
+}
+
+/// Nodeless coins whose shipped `coins.toml` default Electrum set has changed
+/// since they were last reconciled AND carries servers the coin isn't using
+/// yet. A pure read: the UI shows an Add / Ignore prompt, then calls
+/// [`apply_server_updates`]. Node-backed coins, and coins with no shipped
+/// defaults (e.g. `btcx` today), are skipped.
+#[tauri::command]
+fn pending_server_updates(state: tauri::State<AppState>) -> Vec<ServerUpdate> {
+    let net = active_network();
+    let cfg = state.config.lock().unwrap();
+    cfg.coins
+        .iter()
+        .filter(|c| c.funding_wallet == "pact-seed")
+        .filter_map(|c| {
+            let defaults = coins_file::default_electrum(&state.config_dir, &c.coin_id, net);
+            if defaults.is_empty() {
+                return None;
+            }
+            // Already reconciled against this exact default set → nothing to offer.
+            if c.default_seen.as_deref() == Some(electrum_fp(&defaults).as_str()) {
+                return None;
+            }
+            let new_servers = missing_defaults(&c.extra_backends, &defaults);
+            if new_servers.is_empty() {
+                return None;
+            }
+            Some(ServerUpdate {
+                coin_id: c.coin_id.clone(),
+                new_servers,
+            })
+        })
+        .collect()
+}
+
+/// Resolve the reconcile prompt for every pending nodeless coin at once. With
+/// `add`, the shipped default servers missing from each coin are UNIONED in
+/// (existing servers kept, never removed) and the coin's `chain_data`
+/// recomposed, then the managed pactd relaunches so the new views take effect.
+/// Either way each coin's fingerprint advances to the current default set, so
+/// the same delta is never re-offered — it re-surfaces only if the defaults
+/// change again (e.g. when the public PoCX Electrum servers finally ship).
+#[tauri::command]
+async fn apply_server_updates(app: tauri::AppHandle, add: bool) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || -> anyhow::Result<()> {
+        let mut changed = false;
+        {
+            let state = app.state::<AppState>();
+            let net = active_network();
+            let mut cfg = state.config.lock().unwrap();
+            for c in cfg
+                .coins
+                .iter_mut()
+                .filter(|c| c.funding_wallet == "pact-seed")
+            {
+                let defaults = coins_file::default_electrum(&state.config_dir, &c.coin_id, net);
+                if defaults.is_empty() {
+                    continue;
+                }
+                let fp = electrum_fp(&defaults);
+                if c.default_seen.as_deref() == Some(fp.as_str()) {
+                    continue;
+                }
+                if add {
+                    for d in missing_defaults(&c.extra_backends, &defaults) {
+                        c.extra_backends.push(d);
+                        changed = true;
+                    }
+                    // Nodeless: chain_data is the server list verbatim.
+                    if let Ok(cd) = compose::compose_chain_data(c, net) {
+                        c.chain_data = cd;
+                    }
+                }
+                c.default_seen = Some(fp);
+            }
+            save_config(&state.config_dir, &cfg)?;
+        }
+        // Only a relaunch makes new backends reach pactd (config applies at launch).
+        if changed {
+            apply_config_change(&app)?;
+        }
+        Ok(())
     })
     .await
     .map_err(|e| format!("join error: {e}"))?
@@ -1311,6 +1458,8 @@ fn main() {
             get_coin_icon,
             save_coin,
             remove_coin,
+            pending_server_updates,
+            apply_server_updates,
             save_board,
             save_nostr_relays,
             open_external,
@@ -1484,6 +1633,39 @@ mod tests {
     // doesn't add value here.
     #![allow(clippy::field_reassign_with_default)]
     use super::*;
+
+    #[test]
+    fn electrum_fp_ignores_order_dups_and_whitespace() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        // Same set, different order / a repeat / padding → identical fingerprint.
+        assert_eq!(
+            electrum_fp(&s(&["ssl://b:2", "ssl://a:1"])),
+            electrum_fp(&s(&[" ssl://a:1 ", "ssl://b:2", "ssl://a:1", ""])),
+        );
+        // A genuinely different set → different fingerprint (so a real default
+        // change re-triggers the prompt).
+        assert_ne!(
+            electrum_fp(&s(&["ssl://a:1"])),
+            electrum_fp(&s(&["ssl://a:1", "ssl://c:3"])),
+        );
+    }
+
+    #[test]
+    fn missing_defaults_is_additive_and_order_preserving() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        // Only the servers not already configured, in default order.
+        assert_eq!(
+            missing_defaults(
+                &s(&["ssl://a:1", "ssl://b:2"]),
+                &s(&["ssl://a:1", "ssl://b:2", "ssl://c:3", "ssl://d:4"])
+            ),
+            s(&["ssl://c:3", "ssl://d:4"]),
+        );
+        // Nothing to add when the config already covers the defaults.
+        assert!(missing_defaults(&s(&["ssl://a:1", "ssl://b:2"]), &s(&["ssl://a:1"])).is_empty());
+        // Trimmed compare: padding doesn't make an existing server look "new".
+        assert!(missing_defaults(&s(&[" ssl://a:1 "]), &s(&["ssl://a:1"])).is_empty());
+    }
 
     /// A structured coin connection for tests (userpass auth, no recompose
     /// needed since `into_conn` composes from these fields).

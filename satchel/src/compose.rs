@@ -128,6 +128,7 @@ mod tests {
             cookie_subpath: None,
             wallet: Some("alice".into()),
             extra_backends: vec![],
+            default_seen: None,
         }
     }
 

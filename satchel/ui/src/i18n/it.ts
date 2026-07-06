@@ -891,4 +891,15 @@ export const it: Bundle = {
     later: "Più tardi",
     retry: "Riprova connessione",
   },
+  serverSync: {
+    resetDefaults: "Ripristina predefiniti",
+    resetConfirm:
+      "Sostituire i server Electrum di questa moneta con quelli predefiniti forniti? Tutte le modifiche apportate all'elenco andranno perse.",
+    promptTitle: "Nuovi server Electrum consigliati",
+    promptBody:
+      "Sono disponibili server Electrum predefiniti aggiornati. Aggiungerli migliora l'affidabilità — i tuoi server esistenti vengono mantenuti.",
+    coinLine: "{coin} — {count} nuovi",
+    add: "Aggiungi server",
+    ignore: "Ignora",
+  },
 };

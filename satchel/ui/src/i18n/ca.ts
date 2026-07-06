@@ -896,4 +896,15 @@ export const ca: Bundle = {
     later: "Més tard",
     retry: "Torna a connectar",
   },
+  serverSync: {
+    resetDefaults: "Restableix els valors per defecte",
+    resetConfirm:
+      "Vols substituir els servidors Electrum d'aquesta moneda pels valors per defecte de fàbrica? Qualsevol canvi que hagis fet a la llista es descartarà.",
+    promptTitle: "Nous servidors Electrum recomanats",
+    promptBody:
+      "Hi ha disponibles servidors Electrum per defecte actualitzats. Afegir-los millora la fiabilitat — els teus servidors existents es conserven.",
+    coinLine: "{coin} — {count} nous",
+    add: "Afegeix servidors",
+    ignore: "Ignora",
+  },
 };
