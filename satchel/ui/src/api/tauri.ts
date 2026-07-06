@@ -105,23 +105,6 @@ export const getCoinIcon = (coinId: string) =>
 
 export const removeCoin = (coinId: string) => invoke("remove_coin", { coinId }) as Promise<void>;
 
-/** A nodeless coin whose shipped default Electrum servers have new entries not
- *  yet in its configured list (issue: default-server rollout to existing users). */
-export interface ServerUpdate {
-  coin_id: string;
-  new_servers: string[];
-}
-
-/** Nodeless coins with pending default-server additions (a pure read). */
-export const pendingServerUpdates = () =>
-  invoke("pending_server_updates") as Promise<ServerUpdate[]>;
-
-/** Resolve the reconcile prompt: `add` unions the new defaults into every
- *  pending coin (and relaunches pactd); either way it records the current
- *  default set so the same delta is not offered again. */
-export const applyServerUpdates = (add: boolean) =>
-  invoke("apply_server_updates", { add }) as Promise<void>;
-
 export const saveBoard = (urls: string) => invoke("save_board", { urls }) as Promise<void>;
 
 /** Save Nostr relay URLs (comma-separated; empty disables the transport). */

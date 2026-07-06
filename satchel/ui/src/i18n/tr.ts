@@ -897,11 +897,5 @@ export const tr: Bundle = {
     resetDefaults: "Varsayılanlara sıfırla",
     resetConfirm:
       "Bu coin'in Electrum sunucuları, birlikte gelen varsayılanlarla değiştirilsin mi? Listede yaptığınız tüm değişiklikler atılır.",
-    promptTitle: "Yeni önerilen Electrum sunucuları",
-    promptBody:
-      "Güncellenmiş varsayılan Electrum sunucuları mevcut. Bunları eklemek güvenilirliği artırır — mevcut sunucularınız korunur.",
-    coinLine: "{coin} — {count} yeni",
-    add: "Sunucuları ekle",
-    ignore: "Yoksay",
   },
 };

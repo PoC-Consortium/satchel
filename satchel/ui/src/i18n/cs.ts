@@ -898,11 +898,5 @@ export const cs: Bundle = {
     resetDefaults: "Obnovit na výchozí",
     resetConfirm:
       "Nahradit Electrum servery této mince dodanými výchozími? Veškeré změny, které jste v seznamu provedli, budou zahozeny.",
-    promptTitle: "Nové doporučené Electrum servery",
-    promptBody:
-      "Jsou k dispozici aktualizované výchozí Electrum servery. Jejich přidání zvyšuje spolehlivost — vaše stávající servery zůstávají zachovány.",
-    coinLine: "{coin} — {count} nových",
-    add: "Přidat servery",
-    ignore: "Ignorovat",
   },
 };

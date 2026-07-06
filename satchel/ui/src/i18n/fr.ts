@@ -900,11 +900,5 @@ export const fr: Bundle = {
     resetDefaults: "Réinitialiser aux valeurs par défaut",
     resetConfirm:
       "Remplacer les serveurs Electrum de ce coin par les valeurs par défaut fournies ? Toutes les modifications que vous avez apportées à la liste seront perdues.",
-    promptTitle: "Nouveaux serveurs Electrum recommandés",
-    promptBody:
-      "Des serveurs Electrum par défaut mis à jour sont disponibles. Les ajouter améliore la fiabilité — vos serveurs existants sont conservés.",
-    coinLine: "{coin} — {count} nouveaux",
-    add: "Ajouter les serveurs",
-    ignore: "Ignorer",
   },
 };

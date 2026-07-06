@@ -898,11 +898,5 @@ export const nl: Bundle = {
     resetDefaults: "Terug naar standaardwaarden",
     resetConfirm:
       "De Electrum-servers van deze munt vervangen door de meegeleverde standaardwaarden? Alle wijzigingen die je in de lijst hebt aangebracht, gaan verloren.",
-    promptTitle: "Nieuwe aanbevolen Electrum-servers",
-    promptBody:
-      "Er zijn bijgewerkte standaard Electrum-servers beschikbaar. Ze toevoegen verbetert de betrouwbaarheid — je bestaande servers blijven behouden.",
-    coinLine: "{coin} — {count} nieuw",
-    add: "Servers toevoegen",
-    ignore: "Negeren",
   },
 };

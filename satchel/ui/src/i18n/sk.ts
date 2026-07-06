@@ -897,11 +897,5 @@ export const sk: Bundle = {
     resetDefaults: "Obnoviť na predvolené",
     resetConfirm:
       "Nahradiť Electrum servery tejto mince dodávanými predvolenými? Všetky zmeny, ktoré ste v zozname urobili, sa zahodia.",
-    promptTitle: "Nové odporúčané Electrum servery",
-    promptBody:
-      "Sú dostupné aktualizované predvolené Electrum servery. Ich pridanie zlepší spoľahlivosť — vaše existujúce servery zostávajú zachované.",
-    coinLine: "{coin} — {count} nových",
-    add: "Pridať servery",
-    ignore: "Ignorovať",
   },
 };

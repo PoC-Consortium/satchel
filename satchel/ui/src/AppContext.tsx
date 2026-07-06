@@ -31,8 +31,8 @@ import type {
 //   seed      — merchant active but its seed isn't provisioned yet
 //   unlock    — encrypted merchant came up locked
 //   disconnected — pactd unreachable / getinfo failed
-//   coins     — seed ready, but fewer than 2 coins are configured + live
-//   ready     — connected, seed present + unlocked, ≥2 live coins: app usable
+//   coins     — seed ready, but fewer than 2 coins are CONFIGURED
+//   ready     — connected, seed present + unlocked, ≥2 configured coins: usable
 export type Phase =
   | "loading"
   | "no-tauri"
@@ -43,8 +43,12 @@ export type Phase =
   | "disconnected"
   | "ready";
 
-// A swap needs two chains, so trading is gated on at least two live coins.
-const MIN_LIVE_COINS = 2;
+// A swap needs two chains, so trading is gated on at least two CONFIGURED coins.
+// Deliberately NOT on liveness: a configured coin whose node is momentarily
+// unreachable (right after a relaunch, or a flaky Electrum server) must not
+// bounce the user back into the setup wizard — liveness is enforced per-action
+// server-side (ensure_chains_live), not by this routing gate.
+const MIN_COINS = 2;
 
 export interface LogLine {
   time: string;
@@ -350,15 +354,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Coin gate: trading needs ≥2 coins with a live node. A fresh install (or
-    // one whose nodes are all down) lands on the coin-setup step instead of the
-    // trading UI. Probe live so a configured-but-down coin doesn't pass.
+    // Coin gate: show the first-run coin-setup step only when trading isn't yet
+    // possible — i.e. fewer than 2 coins are *configured*. Gating on CONFIGURED
+    // (not live) means a configured-but-momentarily-unreachable coin doesn't
+    // bounce the user into the setup wizard; per-action liveness is checked
+    // server-side (ensure_chains_live).
     try {
       const cl = await rpc<{ coins: CoinInfo[] }>("listcoins");
       setCoins(cl.coins);
       cl.coins.forEach((c) => setSymbol(c.id, c.symbol));
-      const live = cl.coins.filter((c) => c.configured && c.status === "ok").length;
-      if (live < MIN_LIVE_COINS) {
+      const configured = cl.coins.filter((c) => c.configured).length;
+      if (configured < MIN_COINS) {
         setPhase("coins");
         return;
       }
