@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { errMsg, getCoinIcon, inTauri, listMerchants, rpc } from "./api/tauri";
-import { adaptorToSwap, isActive, pendingTakeToSwap, v1ToSwap } from "./format";
+import { adaptorToSwap, fmtBare, isActive, pendingTakeToSwap, v1ToSwap } from "./format";
 import { notifySwapEvents, updateTray } from "./notify";
 import { tr, useI18n } from "./i18n";
 import { COIN_ICON } from "./assets/coins";
@@ -51,6 +51,14 @@ export interface LogLine {
   msg: string;
 }
 
+/** Last-known wallet balance for one coin. `error` rides alongside the cached
+ *  value when a refresh fails — the UI keeps showing the stale number. */
+export interface Bal {
+  text: string;
+  sat?: number;
+  error?: string;
+}
+
 interface AppCtx {
   phase: Phase;
   ready: boolean;
@@ -80,6 +88,11 @@ interface AppCtx {
    *  header status row + screens don't each re-poll. Empty until connected. */
   coins: CoinInfo[];
   refreshCoins: () => Promise<void>;
+
+  /** coin_id → last-known wallet balance, cached app-wide so the Wallets page
+   *  shows values instantly on every visit — stale, never blank (#91). */
+  balances: Record<string, Bal>;
+  refreshBalances: (coinIds: string[]) => Promise<void>;
 
   /** coin_id → icon data URL (or null when there's none), for file-coins
    *  without a bundled asset (e.g. ltc). Fetched once per id; the header and
@@ -124,6 +137,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [watchOnly, setWatchOnlyState] = useState(false);
   const [swaps, setSwaps] = useState<Swap[]>([]);
   const [coins, setCoins] = useState<CoinInfo[]>([]);
+  const [balances, setBalances] = useState<Record<string, Bal>>({});
   const [coinIcons, setCoinIcons] = useState<Record<string, string | null>>({});
   const [relays, setRelays] = useState<RelayStatus[]>([]);
   const [symbols, setSymbols] = useState<Record<string, string>>({});
@@ -233,6 +247,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setConn(false);
     }
   }, [setConn, setSymbol]);
+
+  // Wallet balances, fetched in parallel (pactd serializes on its lock anyway,
+  // but each card updates as its coin lands instead of queuing behind the
+  // slowest one). A failed refresh keeps the cached value and records the
+  // error alongside it — never blanks a number the user already saw.
+  const refreshBalances = useCallback(async (coinIds: string[]) => {
+    await Promise.all(
+      coinIds.map(async (id) => {
+        try {
+          const r = await rpc<{ balance_sat: number }>("getbalance", [id]);
+          setBalances((b) => ({
+            ...b,
+            [id]: { text: fmtBare(r.balance_sat), sat: r.balance_sat },
+          }));
+        } catch (e) {
+          setBalances((b) => ({
+            ...b,
+            [id]: b[id] ? { ...b[id], error: errMsg(e) } : { text: "—", error: errMsg(e) },
+          }));
+        }
+      }),
+    );
+  }, []);
 
   // Nostr relay connectivity for the header dot. Cheap (a local pactd call); the
   // RELAY poll cadence (pactd tick) is separate — this only reads pactd's view.
@@ -410,6 +447,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshSwaps,
     coins,
     refreshCoins,
+    balances,
+    refreshBalances,
     coinIcons,
     relays,
     symbols,

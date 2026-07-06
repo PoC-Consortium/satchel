@@ -1,68 +1,44 @@
-import { useCallback, useEffect, useState } from "react";
-import { Alert, Box, Button, Card, CardContent, Stack, Tooltip, Typography } from "@mui/material";
-import { useApp } from "../AppContext";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, Box, Button, Card, CardContent, Skeleton, Stack, Tooltip, Typography } from "@mui/material";
+import { useApp, type Bal } from "../AppContext";
 import { useNavigate } from "../ui/nav";
 import { useT } from "../i18n";
-import { errMsg, rpc } from "../api/tauri";
 import { EmptyState } from "../components/StatusViews";
 import CoinGlyph from "../components/CoinGlyph";
 import { ActivityDialog, ReceiveDialog, SendDialog } from "../dialogs/WalletActions";
-import { fmtBare } from "../format";
 import { C } from "../theme";
 import type { CoinInfo } from "../api/types";
-
-interface Bal {
-  text: string;
-  sat?: number;
-  error?: string;
-}
 
 // Every configured coin's card offers Send / Receive (user decision
 // 2026-07-04: RPC-backed wallets get them too — the engine's
 // getnewaddress/sendtoaddress always worked against the node wallet).
 // Activity stays Electrum-only: listtransactions reads the bdk tx graph;
 // an RPC coin's node wallet has its own tooling for history.
+//
+// Cards seed from AppContext.coins and balances from the app-wide cache, so
+// the page renders instantly on every visit — stale, never blank (#91). The
+// mount-time refreshes update statuses and numbers in place; only a coin
+// that has never reported a balance shows a skeleton slot.
 export default function WalletScreen() {
-  const { setConn, setSymbol, watchOnly } = useApp();
+  const { coins, refreshCoins, balances, refreshBalances, connOk, watchOnly } = useApp();
   const navigate = useNavigate();
   const t = useT();
 
-  const [coins, setCoins] = useState<CoinInfo[] | null>(null);
-  const [notConnected, setNotConnected] = useState(false);
-  const [balances, setBalances] = useState<Record<string, Bal>>({});
+  const configured = useMemo(() => coins.filter((c) => c.configured), [coins]);
+  // Keyed as a joined string so the global 10s coins poll (fresh array, same
+  // ids) doesn't refire the balance fetch on every tick.
+  const configuredIds = useMemo(() => configured.map((c) => c.id).join(","), [configured]);
 
-  const load = useCallback(async () => {
-    let configured: CoinInfo[];
-    try {
-      configured = (await rpc<{ coins: CoinInfo[] }>("listcoins")).coins.filter((c) => c.configured);
-      setConn(true);
-      setNotConnected(false);
-    } catch {
-      setNotConnected(true);
-      setCoins(null);
-      return;
-    }
-    configured.forEach((c) => setSymbol(c.id, c.symbol));
-    setCoins(configured);
-
-    // Balances load after the cards render (each independent — one failing
-    // doesn't blank the others).
-    for (const c of configured) {
-      try {
-        const r = await rpc<{ balance_sat: number }>("getbalance", [c.id]);
-        setBalances((b) => ({
-          ...b,
-          [c.id]: { text: fmtBare(r.balance_sat), sat: r.balance_sat },
-        }));
-      } catch (e) {
-        setBalances((b) => ({ ...b, [c.id]: { text: "—", error: errMsg(e) } }));
-      }
-    }
-  }, [setConn, setSymbol]);
+  const reload = useCallback(async () => {
+    await Promise.all([
+      refreshCoins(),
+      configuredIds ? refreshBalances(configuredIds.split(",")) : Promise.resolve(),
+    ]);
+  }, [refreshCoins, refreshBalances, configuredIds]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void reload();
+  }, [reload]);
 
   return (
     <>
@@ -78,11 +54,11 @@ export default function WalletScreen() {
         </Box>
       </Alert>
 
-      {notConnected ? (
+      {!connOk ? (
         <EmptyState title={t("wallets.notConnected")}>{t("wallets.notConnectedBody")}</EmptyState>
-      ) : coins && coins.length === 0 && watchOnly ? (
+      ) : configured.length === 0 && watchOnly ? (
         <EmptyState title={t("wallets.watchOnlyTitle")}>{t("wallets.watchOnlyBody")}</EmptyState>
-      ) : coins && coins.length === 0 ? (
+      ) : configured.length === 0 ? (
         <EmptyState
           title={t("wallets.noCoins")}
           action={
@@ -95,8 +71,8 @@ export default function WalletScreen() {
         </EmptyState>
       ) : (
         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 1.875 }}>
-          {(coins ?? []).map((c) => (
-            <WalletCard key={c.id} c={c} bal={balances[c.id]} onChanged={load} />
+          {configured.map((c) => (
+            <WalletCard key={c.id} c={c} bal={balances[c.id]} onChanged={reload} />
           ))}
         </Box>
       )}
@@ -152,19 +128,25 @@ function WalletCard({
           )}
         </Box>
         <Box sx={{ ml: "auto", textAlign: "right" }}>
-          <Tooltip title={bal?.error ?? ""} disableHoverListener={!bal?.error}>
-            <Typography
-              sx={{
-                fontFamily: C.mono,
-                fontSize: 22,
-                fontWeight: 600,
-                fontVariantNumeric: "tabular-nums",
-                color: bal?.error ? "error.main" : "text.primary",
-              }}
-            >
-              {bal?.text ?? "…"}
-            </Typography>
-          </Tooltip>
+          {bal ? (
+            <Tooltip title={bal.error ?? ""} disableHoverListener={!bal.error}>
+              <Typography
+                sx={{
+                  fontFamily: C.mono,
+                  fontSize: 22,
+                  fontWeight: 600,
+                  fontVariantNumeric: "tabular-nums",
+                  color: bal.error ? "error.main" : "text.primary",
+                }}
+              >
+                {bal.text}
+              </Typography>
+            </Tooltip>
+          ) : (
+            // First-ever load only: no cached balance for this coin yet. Sized
+            // to the balance line so the card doesn't reflow when it lands.
+            <Skeleton variant="text" sx={{ fontSize: 22, width: 96, ml: "auto" }} />
+          )}
           <Typography sx={{ fontSize: 10.5, color: "text.secondary", letterSpacing: "0.06em", textTransform: "uppercase" }}>
             {t("wallets.balanceLabel", { symbol: c.symbol })}
           </Typography>
