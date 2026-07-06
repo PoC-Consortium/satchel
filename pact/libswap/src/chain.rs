@@ -2199,7 +2199,7 @@ impl MultiBackend {
 
         let results: Vec<Result<T>> = if slots.iter().flatten().count() <= 1 {
             // 0 or 1 live view: no thread ceremony (regtest single-server).
-            slots.into_iter().flatten().map(|b| op(b)).collect()
+            slots.into_iter().flatten().map(&op).collect()
         } else {
             let op = &op;
             std::thread::scope(|s| {

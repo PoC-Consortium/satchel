@@ -234,9 +234,12 @@ fn backoff(streak: u32) -> Duration {
 
 // ---- registry ---------------------------------------------------------------
 
-static REGISTRY: OnceLock<Mutex<BTreeMap<(String, String), Arc<ServerHealth>>>> = OnceLock::new();
+/// Registry key: `(coin_id, url)` — one cell per server relationship.
+type HealthMap = BTreeMap<(String, String), Arc<ServerHealth>>;
 
-fn registry() -> &'static Mutex<BTreeMap<(String, String), Arc<ServerHealth>>> {
+static REGISTRY: OnceLock<Mutex<HealthMap>> = OnceLock::new();
+
+fn registry() -> &'static Mutex<HealthMap> {
     REGISTRY.get_or_init(|| Mutex::new(BTreeMap::new()))
 }
 
