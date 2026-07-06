@@ -936,12 +936,6 @@ export const en = {
     resetDefaults: "Reset to defaults",
     resetConfirm:
       "Replace this coin's Electrum servers with the shipped defaults? Any changes you made to the list will be discarded.",
-    promptTitle: "New recommended Electrum servers",
-    promptBody:
-      "Updated default Electrum servers are available. Adding them improves reliability — your existing servers are kept.",
-    coinLine: "{coin} — {count} new",
-    add: "Add servers",
-    ignore: "Ignore",
   },
 };
 

@@ -897,11 +897,5 @@ export const hr: Bundle = {
     resetDefaults: "Vrati na zadano",
     resetConfirm:
       "Zamijeniti Electrum poslužitelje ovog novčića s isporučenim zadanima? Sve promjene koje ste unijeli u popis bit će odbačene.",
-    promptTitle: "Novi preporučeni Electrum poslužitelji",
-    promptBody:
-      "Dostupni su ažurirani zadani Electrum poslužitelji. Njihovo dodavanje poboljšava pouzdanost — vaši postojeći poslužitelji ostaju sačuvani.",
-    coinLine: "{coin} — {count} novih",
-    add: "Dodaj poslužitelje",
-    ignore: "Zanemari",
   },
 };

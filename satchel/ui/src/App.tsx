@@ -8,7 +8,6 @@ import { FxProvider } from "./fx";
 import { ContactsProvider } from "./contacts";
 import { UpdateProvider } from "./update";
 import UpdateDialog from "./components/UpdateDialog";
-import ServerUpdatePrompt from "./components/ServerUpdatePrompt";
 import { ConfirmProvider } from "./ui/ConfirmProvider";
 import { DialogsCtx, type DialogOpeners } from "./ui/dialogs";
 import { NavCtx } from "./ui/nav";
@@ -165,7 +164,6 @@ export default function App() {
 
           <ExitGate />
           <UpdateDialog />
-          <ServerUpdatePrompt />
           <Toasts />
         </DialogsCtx.Provider>
       </NavCtx.Provider>

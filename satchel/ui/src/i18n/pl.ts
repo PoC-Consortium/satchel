@@ -897,11 +897,5 @@ export const pl: Bundle = {
     resetDefaults: "Przywróć domyślne",
     resetConfirm:
       "Zastąpić serwery Electrum tej monety dostarczonymi ustawieniami domyślnymi? Wszelkie zmiany wprowadzone na liście zostaną odrzucone.",
-    promptTitle: "Nowe zalecane serwery Electrum",
-    promptBody:
-      "Dostępne są zaktualizowane domyślne serwery Electrum. Dodanie ich poprawia niezawodność — Twoje istniejące serwery zostają zachowane.",
-    coinLine: "{coin} — {count} nowych",
-    add: "Dodaj serwery",
-    ignore: "Zignoruj",
   },
 };

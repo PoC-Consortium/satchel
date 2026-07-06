@@ -897,11 +897,5 @@ export const ro: Bundle = {
     resetDefaults: "Resetează la valorile implicite",
     resetConfirm:
       "Înlocuiești serverele Electrum ale acestei monede cu valorile implicite livrate? Orice modificări făcute în listă vor fi eliminate.",
-    promptTitle: "Servere Electrum recomandate noi",
-    promptBody:
-      "Sunt disponibile servere Electrum implicite actualizate. Adăugarea lor îmbunătățește fiabilitatea — serverele tale existente sunt păstrate.",
-    coinLine: "{coin} — {count} noi",
-    add: "Adaugă servere",
-    ignore: "Ignoră",
   },
 };

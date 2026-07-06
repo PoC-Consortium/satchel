@@ -897,11 +897,5 @@ export const id: Bundle = {
     resetDefaults: "Kembalikan ke bawaan",
     resetConfirm:
       "Ganti server Electrum koin ini dengan bawaan yang disertakan? Semua perubahan yang Anda buat pada daftar akan dibuang.",
-    promptTitle: "Server Electrum rekomendasi baru",
-    promptBody:
-      "Server Electrum bawaan yang diperbarui tersedia. Menambahkannya meningkatkan keandalan — server Anda yang sudah ada tetap dipertahankan.",
-    coinLine: "{coin} — {count} baru",
-    add: "Tambah server",
-    ignore: "Abaikan",
   },
 };
