@@ -931,10 +931,7 @@ export const en = {
     retry: "Retry connection",
   },
   // Electrum default-server reconcile (the "new default servers" prompt + the
-  // coin-setup "reset to defaults" action). OPTIONAL group (see the Bundle type
-  // below): shipped in English only for now — the runtime falls back to English
-  // for locales that don't carry it yet, and the next language sync translates
-  // it across all bundles and folds it back into the strict Bundle type.
+  // coin-setup "reset to defaults" action). Translated across all bundles.
   serverSync: {
     resetDefaults: "Reset to defaults",
     resetConfirm:
@@ -950,10 +947,7 @@ export const en = {
 
 // STRICT since the rc10 language sync: every locale carries every key, and tsc
 // enforces it — a missing/extra key in any bundle fails the build. When new copy
-// ships in en.ts, either translate all 26 bundles in the same change (preferred;
-// the rc10 sync pattern) or add it under an OPTIONAL group (like `serverSync`
-// above) so the runtime falls back to English until the next language sync folds
-// it in. `serverSync` is optional below; make it required once it is translated.
-export type Bundle = Omit<typeof en, "serverSync"> & {
-  serverSync?: (typeof en)["serverSync"];
-};
+// ships in en.ts, translate all 26 bundles in the same change (the rc10/rc11 sync
+// pattern). A new group may ship optional for one release (runtime falls back to
+// English) and then be folded back here once every bundle carries it.
+export type Bundle = typeof en;

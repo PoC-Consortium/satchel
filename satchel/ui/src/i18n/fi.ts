@@ -894,4 +894,15 @@ export const fi: Bundle = {
     later: "Myöhemmin",
     retry: "Yritä yhteyttä uudelleen",
   },
+  serverSync: {
+    resetDefaults: "Palauta oletukset",
+    resetConfirm:
+      "Korvataanko tämän kolikon Electrum-palvelimet toimitetuilla oletuksilla? Kaikki listaan tekemäsi muutokset hylätään.",
+    promptTitle: "Uusia suositeltuja Electrum-palvelimia",
+    promptBody:
+      "Päivitettyjä oletus-Electrum-palvelimia on saatavilla. Niiden lisääminen parantaa luotettavuutta — nykyiset palvelimesi säilytetään.",
+    coinLine: "{coin} — {count} uutta",
+    add: "Lisää palvelimet",
+    ignore: "Ohita",
+  },
 };

@@ -891,4 +891,15 @@ export const ptBR: Bundle = {
     later: "Depois",
     retry: "Tentar reconectar",
   },
+  serverSync: {
+    resetDefaults: "Restaurar padrões",
+    resetConfirm:
+      "Substituir os servidores Electrum desta moeda pelos padrões incluídos? Quaisquer alterações que você fez na lista serão descartadas.",
+    promptTitle: "Novos servidores Electrum recomendados",
+    promptBody:
+      "Novos servidores Electrum padrão estão disponíveis. Adicioná-los melhora a confiabilidade — seus servidores existentes são mantidos.",
+    coinLine: "{coin} — {count} novos",
+    add: "Adicionar servidores",
+    ignore: "Ignorar",
+  },
 };

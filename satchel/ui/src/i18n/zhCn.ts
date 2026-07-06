@@ -890,4 +890,15 @@ export const zhCn: Bundle = {
     later: "稍后",
     retry: "重新连接",
   },
+  serverSync: {
+    resetDefaults: "重置为默认值",
+    resetConfirm:
+      "将此币种的 Electrum 服务器替换为随附的默认值？你对列表所做的任何更改都将被丢弃。",
+    promptTitle: "新的推荐 Electrum 服务器",
+    promptBody:
+      "有可用的更新版默认 Electrum 服务器。添加它们可提升可靠性 — 你现有的服务器会保留。",
+    coinLine: "{coin} — {count} 个新增",
+    add: "添加服务器",
+    ignore: "忽略",
+  },
 };

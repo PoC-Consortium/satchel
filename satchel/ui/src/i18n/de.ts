@@ -902,4 +902,15 @@ export const de: Bundle = {
     later: "Später",
     retry: "Verbindung erneut versuchen",
   },
+  serverSync: {
+    resetDefaults: "Auf Standard zurücksetzen",
+    resetConfirm:
+      "Die Electrum-Server dieses Coins durch die mitgelieferten Standards ersetzen? Alle Änderungen, die du an der Liste vorgenommen hast, werden verworfen.",
+    promptTitle: "Neue empfohlene Electrum-Server",
+    promptBody:
+      "Aktualisierte Standard-Electrum-Server sind verfügbar. Sie hinzuzufügen verbessert die Zuverlässigkeit — deine vorhandenen Server bleiben erhalten.",
+    coinLine: "{coin} — {count} neu",
+    add: "Server hinzufügen",
+    ignore: "Ignorieren",
+  },
 };
