@@ -86,6 +86,48 @@ two-phase build, CPFP, RBF bump — are served by that wallet, and the
 - An Electrum-FIRST list must be Electrum-only; with a Core-RPC primary,
   Electrum URLs remain plain chain-data views as before.
 
+### Multiple Electrum servers & failover
+
+A nodeless coin's Electrum list is not a fixed primary-plus-spares — the engine
+runs it as an **active set** (issue #98). At any moment only a few servers are
+*active*: one **wallet home** (the bdk wallet and its sync worker are pinned to
+it) plus a couple of **views** (independent read-only cross-checks). The rest
+sit as cold **standbys**, holding no socket until they are promoted. This is
+what lets the list grow to a dozen servers without adding latency — only the
+active few are ever dialed.
+
+Health is **passive**: a server's state (`healthy` / `down` / `untested`) is
+derived from whether real requests to it succeed. Nothing probes on a schedule,
+and opening the Network monitor (`serverstatus`) never dials. A server that
+fails trips a backoff (`retry_in_secs`) and is skipped *instantly* by later
+requests — no stalling on its connect timeout — then half-opens for a retry
+once the window expires.
+
+Failover is automatic and role-aware:
+
+- A **view** that goes down is benched and a healthy standby is promoted in its
+  place.
+- If the **wallet home** goes down, the home is re-elected onto a healthy,
+  already-verified *view* — a warm socket, so the wallet migrates with a sync
+  gap of seconds, never onto a cold or unverified server. A home that is dead
+  from the start is skipped the same way at boot.
+
+The governing principle is **tolerate absence, never tolerate disagreement**.
+An unreachable server is simply skipped and the others cover, so *more servers
+make a coin more robust, not more fragile*. But when servers that **do** answer
+disagree about an on-chain fact, the read fails closed rather than trust either
+(spec §10). On **mainnet**, a nodeless coin's money-critical reads — confirming
+a counterparty's funding, finality depth, the deadline clocks — require **two
+agreeing responders**, so running on a single reachable server is a *degraded*
+state: balances still display, but a swap will not start or advance until a
+second view returns. A coin is only fully **offline** when *no* configured
+server answers. (On test networks the quorum relaxes to one, so a single server
+both displays and trades.)
+
+Watch it live per coin with `serverstatus`, or Satchel's Network screen; the
+`servers_total` / `servers_healthy` / `servers_down` / `wallet_server_state`
+fields on `listcoins` summarize the same registry.
+
 ### Per-coin minimum feerate
 
 pactd derives its funding and spend feerate from the node's `estimatesmartfee`,
@@ -187,13 +229,18 @@ Three RPC methods report the live state of your coin and pair configuration —
 covered in full in the API part of this handbook, but worth knowing here:
 
 - `listcoins` — every registry coin with its capabilities, whether it is
-  `configured`, a live `status` probe, tip height, genesis hash, bech32 HRP, and
-  its effective and default confirmation depth.
+  `configured`, a live `status` probe, tip height, genesis hash, bech32 HRP, its
+  effective and default confirmation depth, and — for nodeless coins — the
+  Electrum fleet summary (`servers_total` / `servers_healthy` / `servers_down` /
+  `wallet_server_state`).
 - `listpairs` — every derivable pair with its protocol list (`htlc` / `adaptor`),
   whether both legs are configured, and whether it is currently available.
 - `validatecoin` — a genesis check of a *proposed* backend for a coin, without
   touching the engine's live configuration; use it to confirm a node before you
   attach it.
+- `serverstatus` — per-server Electrum health for one nodeless coin (roles,
+  state, latency, backoff), a passive in-memory read that never dials. Backs the
+  Network monitor and the failover model described above.
 
 *See the chapter on coins-and-pairs RPCs for the full field lists and return
 shapes.*

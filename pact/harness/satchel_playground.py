@@ -34,7 +34,8 @@ import urllib.request
 
 sys.stdout.reconfigure(line_buffering=True)
 
-from regtest_harness import ElectrsServer, Harness
+from regtest_harness import (
+    ElectrsServer, Harness, ELECTRS_ELECTRUM_PORT, ELECTRS_MONITORING_PORT)
 from test_swap_e2e import build_workspace, Corkboard, Party, COINS_TOML
 
 # Timing model mirrored from the nostr playground: per-chain block cadence at
@@ -52,6 +53,21 @@ REPOST_EVERY_SECS = 30
 # leg, and a faucet for her wizard-created wallet. Default (playground-cork.ps1)
 # is the classic all-Core layout on :19443.
 NODELESS = "--nodeless" in sys.argv[1:]
+
+
+def _arg_val(flag, default):
+    """Read `--flag VALUE` out of argv (VALUE follows the flag)."""
+    a = sys.argv[1:]
+    return a[a.index(flag) + 1] if flag in a and a.index(flag) + 1 < len(a) else default
+
+
+# --electrs-count N (nodeless only, default 1): stand up N INDEPENDENT electrs
+# instances over the SAME regtest PoCX node, so the Electrum active-set /
+# failover path (issue #98 and its follow-ups) can be exercised for real —
+# kill one server and watch a standby get promoted, or wire a dead endpoint and
+# confirm the coin stays green. Electrum/monitoring ports step by 2 from the
+# base (19750/1, 19752/3, 19754/5, …), staying below the BTC electrs at 19760.
+ELECTRS_COUNT = int(_arg_val("--electrs-count", "1")) if NODELESS else 1
 
 # Alice's managed pactd (Satchel regtest offset) + its cookie, for the faucet.
 ALICE_RPC = "http://127.0.0.1:9739/"
@@ -161,11 +177,25 @@ def main():
         board = Corkboard(h.workdir)
         board.start()
         electrs = None
+        electrs_all = []
         if NODELESS:
-            electrs = ElectrsServer(h.workdir, h.pocx)
-            electrs.start()
-            electrs.wait_synced(h.pocx.rpc("getblockcount"))
-            print(f"[satchel-pg] electrs up on {electrs.url} (Alice's nodeless btcx)")
+            want_h = h.pocx.rpc("getblockcount")
+            for i in range(ELECTRS_COUNT):
+                e = ElectrsServer(
+                    h.workdir, h.pocx,
+                    electrum_port=ELECTRS_ELECTRUM_PORT + 2 * i,
+                    monitoring_port=ELECTRS_MONITORING_PORT + 2 * i,
+                    name="electrs" if i == 0 else f"electrs{i + 1}")
+                e.start()
+                e.wait_synced(want_h)
+                electrs_all.append(e)
+            electrs = electrs_all[0]  # home / wallet leg
+            if len(electrs_all) == 1:
+                print(f"[satchel-pg] electrs up on {electrs.url} (Alice's nodeless btcx)")
+            else:
+                print(f"[satchel-pg] {len(electrs_all)} electrs up: "
+                      f"{', '.join(e.url for e in electrs_all)} "
+                      "(Alice's nodeless btcx active-set fleet)")
 
         # Extra wallets for the two-sided book — created HERE, not in the shared
         # Harness, so the e2e suite's 2-party funding layout stays untouched:
@@ -322,8 +352,8 @@ def main():
             bob.stop()
             carol.stop()
             board.stop()
-            if electrs:
-                electrs.stop()
+            for e in electrs_all:
+                e.stop()
 
 
 if __name__ == "__main__":

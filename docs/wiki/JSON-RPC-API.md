@@ -57,9 +57,10 @@ A machine restored from the seed alone can rediscover in-flight swaps from encry
 
 | Method | Purpose |
 |---|---|
-| `listcoins` | All registry coins with capabilities, live status/tip, confirmation depths, the backing `wallet` name, and a `nodeless` boolean (`true` = Electrum-connected, wallet on the Pact seed). |
+| `listcoins` | All registry coins with capabilities, live status/tip, confirmation depths, the backing `wallet` name, a `nodeless` boolean (`true` = Electrum-connected, wallet on the Pact seed), and — for nodeless coins — the Electrum fleet summary (`servers_total` / `servers_healthy` / `servers_down` / `wallet_server_state`). |
 | `listpairs` | Derived (never curated) tradeable pairs with supported protocols. |
 | `validatecoin` | Genesis-hash check of a proposed backend; engine config untouched. |
+| `serverstatus` | Per-server Electrum health for one nodeless coin (`url`, `state`, `role` = wallet/view/standby, latency, backoff). A passive in-memory read — never dials or probes. Backs the Network monitor and the active-set failover (see [Configuring Coins](Configuring-Coins)). |
 
 ## Swaps — v1 HTLC
 

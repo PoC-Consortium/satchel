@@ -57,7 +57,7 @@ export default function RelaysScreen() {
         >
           <Tab value="nostr" label={t("relays.tabNostr")} />
           {serverCoins.map((c) => (
-            <Tab key={c.id} value={c.id} label={c.symbol} />
+            <Tab key={c.id} value={c.id} label={c.display_name} />
           ))}
         </Tabs>
       </Box>

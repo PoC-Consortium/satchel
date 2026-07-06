@@ -39,8 +39,9 @@ Below the groups:
 - **Wallets** — per-coin balances with **Send** and **Receive** (node-backed, or a pact-seed wallet over Electrum servers; Electrum coins add an **Activity** history).
 - **Contacts** — your private nicknames and standings for the people you trade
   with, kept only on this device.
-- **Relays** — a read-only monitor of your Nostr relays, so you can see at a
-  glance which ones are connected and how healthy they are.
+- **Network** — a read-only monitor of your connections: one tab for your Nostr
+  relays and one tab per Electrum-backed coin, so you can see at a glance which
+  relays and servers are connected and how healthy they are.
 
 And at the foot of the rail:
 
@@ -137,14 +138,20 @@ just above the network stamp, a steady reminder that posting, taking, and fundin
 are switched off until you leave watch-only mode and connect two coins. (See
 *"Setting Up Your Coins"* for what watch-only mode lets you do.)
 
-## The Relays monitor
+## The Network monitor
 
-Click **Relays** in the navigation to open a simple health screen for your Nostr
-relays. It's a **monitor only** — one row per relay you've configured — so you can
-see whether your offers have a way out onto the network.
+Click **Network** in the navigation to open a read-only health screen for your
+connections. It has one tab for your **Nostr relays** and one tab per
+**Electrum-backed coin**. It's a **monitor only** — it never dials or probes;
+every status you see comes from the connections your normal activity already
+uses.
 
-The header reads **"{up} / {total} connected"** — how many of your relays are
-live right now — with a refresh button beside it. Each row then shows:
+### Nostr relays
+
+The relays tab lists one row per relay you've configured, so you can see whether
+your offers have a way out onto the network. The header reads
+**"{up} / {total} connected"** — how many of your relays are live right now —
+with a refresh button beside it. Each row then shows:
 
 - A **status dot** — green when the relay is connected, amber while it's
   connecting, red if it was terminated or banned, grey otherwise.
@@ -155,7 +162,28 @@ live right now — with a refresh button beside it. Each row then shows:
 If you have no relays configured (or none are reachable), the screen points you to
 **Settings** to add some.
 
-![The Relays monitor: one row per Nostr relay with status, latency, and uptime.](images/processed/ch06-relays.png){width=80%}
+![The Network monitor's Nostr tab: one row per relay with status, latency, and uptime.](images/processed/ch06-relays.png){width=80%}
+
+### Electrum servers (per coin)
+
+Each coin that runs over Electrum servers gets its own tab, named for the coin.
+It lists every server you've configured for that coin, and shows how the app is
+using them right now:
+
+- A **health dot** — green for healthy, red for a server in back-off (with a
+  short retry countdown), grey for one that's simply never been needed yet.
+- The **server URL** and its **role**: **wallet** (the one your balance and
+  sends run through), **view** (an independent server the app cross-checks
+  against), or **standby** (configured but idle, ready to step in).
+- The current **state** and **latency**.
+
+You don't manage anything here — the app picks a wallet server and a couple of
+views automatically, and if one drops it promotes a standby and moves on, so a
+single server going down never interrupts you. The **"{healthy} / {total}"**
+count in the header tells you how much headroom you have. It's the place to look
+if a coin ever shows a connection warning: as long as at least one server is
+healthy you're covered, and on mainnet a swap keeps two independent servers
+agreeing before it trusts anything on-chain.
 
 > **Note** — This screen only *shows* you relay health; you don't add or remove
 > relays here. To change which relays Satchel uses, go to **Settings → Network**

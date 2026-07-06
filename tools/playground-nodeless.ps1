@@ -33,6 +33,26 @@
   startup banner prints the playground nodes' connection details to enter in the
   form (user/pass auth, NOT cookie). Mirrors playground-nostr.ps1 -FirstRun.
 
+.PARAMETER MultiElectrs
+  Stand up a FLEET of independent electrs instances over the same regtest PoCX
+  node and wire Alice's nodeless BTCX across them, so the Electrum active-set /
+  failover path (issue #98 and follow-ups) can be exercised for real:
+
+    home  tcp://127.0.0.1:19750   (wallet leg)
+    view  tcp://127.0.0.1:19752   (active view)
+    view  tcp://127.0.0.1:19754   (active view)
+    view  tcp://127.0.0.1:19756   (LIVE standby — promotion target)
+    view  tcp://127.0.0.1:19999   (DEAD endpoint — nothing listens; proves a
+                                    down server stays cold and never stalls)
+
+  Test moves (kill by PORT only — never by name; the mainnet node is untouched):
+    * Kill an active view (19752/19754): a standby is promoted; coin stays green.
+      PowerShell> Get-NetTCPConnection -LocalPort 19752 -State Listen |
+                  ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+    * The dead 19999 endpoint should never block a call by its connect timeout.
+    * Kill the home (19750): the wallet re-elects a new home from a live view.
+  Watch it on the Network tab (per-coin Electrum) or via `serverstatus` RPC.
+
 .NOTES
   SAFETY: teardown is PID/PORT-ONLY. We kill the process trees we started and,
   as a backstop, whatever still listens on the playground ports. We NEVER
@@ -40,7 +60,7 @@
   name-based kill would take it down. The mainnet node is not on any of these
   ports.
 #>
-param([switch]$Down, [switch]$FirstRun)
+param([switch]$Down, [switch]$FirstRun, [switch]$MultiElectrs)
 
 $ErrorActionPreference = "Stop"
 $Repo    = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path   # repo root (script now lives in tools/)
@@ -59,9 +79,11 @@ $PidFile = Join-Path $LogDir "pids.txt"
 # Bob/Carol pactd (:19737/8) + adaptor spares (:19739/40),
 # PoCX regtest RPC+REST (:18443 - bindex/electrs hardcodes the regtest default;
 # the user's mainnet node is NOT on this port), BTC/LTC regtest RPC
-# (:19543/:19643), electrs (:19750 Electrum, :19751 monitoring), Corkboard
-# (:19790), Vite (:5173). 19443 stays listed to sweep pre-nodeless stale runs.
-$Ports = 9739, 19737, 19738, 19739, 19740, 18443, 19443, 19543, 19643, 19750, 19751, 19790, 5173
+# (:19543/:19643), electrs (:19750 Electrum, :19751 monitoring; -MultiElectrs
+# adds fleet instances 19752/3, 19754/5, 19756/7 — all below the BTC electrs at
+# 19760), Corkboard (:19790), Vite (:5173). 19443 sweeps pre-nodeless stale runs.
+$Ports = 9739, 19737, 19738, 19739, 19740, 18443, 19443, 19543, 19643, `
+         19750, 19751, 19752, 19753, 19754, 19755, 19756, 19757, 19790, 5173
 
 # Force-kill a process tree by PID. Routes through `cmd /c ... 2>nul` so the
 # native stderr ("process not found" for an already-dead PID) is swallowed by
@@ -137,8 +159,37 @@ $pactdPath = (Join-Path $Repo "pact\target\debug\pactd.exe") -replace '\\', '/'
 # gate) runs and you wire btcx/btc/ltc yourself; otherwise all three are
 # pre-wired so Alice is ready to trade immediately. (Single-quoted JSON line:
 # the `@` in the RPC URLs must stay literal.)
+# BTCX's Electrum leg. IMPORTANT: for a nodeless (pact-seed) coin, pactd/Satchel
+# consume `chain_data` VERBATIM — compose_chain_data() is skipped when
+# auth_method is None, so `extra_backends` is NOT read at launch. The FULL server
+# set must therefore live in chain_data (home first, then views/standbys); we set
+# extra_backends to the same list, which is exactly how the coin-setup UI
+# persists a nodeless coin. The single-electrs default is just :19750; with
+# -MultiElectrs the fleet is home :19750 + views :19752/:19754 + LIVE standby
+# :19756 + DEAD :19999 (proves a down server stays cold). btc/ltc are node-backed
+# and identical either way (the `@` in their RPC URLs must stay literal).
+# Order = active-set seniority: [0]=wallet home, [1..2]=active views, [3..]=cold
+# standbys. The DEAD :19999 sits in a VIEW slot (2nd view) — NOT last — so it is
+# actually dialed at boot: it should show DOWN, a standby (:19754) should promote
+# to restore two healthy views, and the live 1st view :19752 keeps quorum steady
+# throughout. Home stays live (:19750) — killing a live home is the separate #99
+# wallet-refailover drill. Live standby :19756 trails so a later view-kill still
+# has somewhere to promote.
+$btcxServers = if ($MultiElectrs) {
+  # Active-set fleet, home first: [0] = wallet home, [1..2] = active views,
+  # [3] = a LIVE standby (promotion target), [4] = a DEAD endpoint that stays a
+  # cold standby — proving a down server is tolerated (never dialed, no stall)
+  # without perturbing boot. Reorder to stage other drills: put :19999 in a view
+  # slot ([2]) to watch startup down-detection + promotion, or in slot [0] to
+  # exercise boot-time wallet-home re-election (#99).
+  @("tcp://127.0.0.1:19750", "tcp://127.0.0.1:19752", "tcp://127.0.0.1:19754", "tcp://127.0.0.1:19756", "tcp://127.0.0.1:19999")
+} else {
+  @("tcp://127.0.0.1:19750")
+}
+$btcxChainData = $btcxServers -join ","
+$btcxBackends  = "[" + (($btcxServers | ForEach-Object { '"' + $_ + '"' }) -join ",") + "]"
 $coinsJson = if ($FirstRun) { '[]' } else {
-  '[{ "coin_id": "btcx", "chain_data": "tcp://127.0.0.1:19750", "funding_wallet": "pact-seed", "extra_backends": ["tcp://127.0.0.1:19750"], "confirmations": 10 }, { "coin_id": "btc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19543/wallet/alice_btc", "funding_wallet": "core-rpc", "confirmations": 6 }, { "coin_id": "ltc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19643/wallet/alice_ltc", "funding_wallet": "core-rpc", "confirmations": 6 }]'
+  '[{ "coin_id": "btcx", "chain_data": "' + $btcxChainData + '", "funding_wallet": "pact-seed", "extra_backends": ' + $btcxBackends + ', "confirmations": 10 }, { "coin_id": "btc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19543/wallet/alice_btc", "funding_wallet": "core-rpc", "confirmations": 6 }, { "coin_id": "ltc", "chain_data": "http://pactharness:pactharness@127.0.0.1:19643/wallet/alice_ltc", "funding_wallet": "core-rpc", "confirmations": 6 }]'
 }
 $satchelJson = @"
 {
@@ -176,7 +227,11 @@ $env:LITECOIND     = Join-Path $Repo "pact\harness\bin\litecoind.exe"
 # Infra + Bob + Carol. build_workspace() inside it builds pactd.exe, so by the
 # time the banner prints, the binary Satchel spawns exists.
 Write-Host "[playground] starting regtest stack + Bob/Carol (building if needed) ..."
-$pg = Start-Process -FilePath "python" -ArgumentList "satchel_playground.py","--nodeless" `
+# -MultiElectrs → 4 independent electrs (home + 2 views + 1 live standby); the
+# DEAD :19999 in the coin config is never launched (that's the point).
+$pgArgs = @("satchel_playground.py", "--nodeless")
+if ($MultiElectrs) { $pgArgs += @("--electrs-count", "4") }
+$pg = Start-Process -FilePath "python" -ArgumentList $pgArgs `
     -WorkingDirectory (Join-Path $Repo "pact\harness") `
     -RedirectStandardOutput (Join-Path $LogDir "playground.out.log") `
     -RedirectStandardError  (Join-Path $LogDir "playground.err.log") `
@@ -245,6 +300,16 @@ if ($FirstRun) {
     Write-Host "  drops 100 BTCX right after the wizard. Corkboard -> take any"
     Write-Host "  side; Swaps tab walks to 'completed' - BTCX legs fund from"
     Write-Host "  your pact-seed wallet."
+}
+if ($MultiElectrs) {
+    Write-Host ''
+    Write-Host '  MULTI-ELECTRS: BTCX is nodeless across a 4-server fleet +1 dead:'
+    Write-Host '    home 19750 | views 19752 19754 | live standby 19756 | DEAD 19999'
+    Write-Host '  Watch roles on the Network tab (per-coin Electrum) or serverstatus RPC.'
+    Write-Host '  Failover drill (kill by PORT only - mainnet node is never touched):'
+    Write-Host '    Get-NetTCPConnection -LocalPort 19752 -State Listen |'
+    Write-Host '      ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }'
+    Write-Host '  -> a standby is promoted, coin stays green, no 10s stall on 19999.'
 }
 Write-Host ""
 Write-Host "  CLOSE THE SATCHEL WINDOW to tear the whole stack down."
