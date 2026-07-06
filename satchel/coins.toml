@@ -74,7 +74,12 @@ capabilities = { cltv = true, segwit_v0 = true, taproot = true }
 
   [coin.mainnet]
   consensus  = { header_format = "bitcoin", magic = "f9beb4d9", default_p2p_port = 8333, p2pkh_prefix = 0, p2sh_prefix = 5, wif_prefix = 128, bech32_hrp = "bc", genesis_hash = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" }
-  connection = { rpc_host = "127.0.0.1", rpc_port = 8332, auth_method = "cookie", datadir = "%NODEDIR%/Bitcoin", cookie_subpath = ".cookie", wallet = "", electrum = ["ssl://electrum.blockstream.info:50002", "ssl://electrum.emzy.de:50002"] }
+  # Nodeless default fleet (#102) — with the active-set pool (#98) only the
+  # wallet home + 2 views hold connections; the rest are cold backups, so a
+  # long list adds resilience, never latency. All verified live 2026-07-06
+  # via `cargo run -p libswap --example electrum_probe -- btc --all` (TLS +
+  # protocol 1.4+ + BTC genesis 00000000…). Re-run that gate before editing.
+  connection = { rpc_host = "127.0.0.1", rpc_port = 8332, auth_method = "cookie", datadir = "%NODEDIR%/Bitcoin", cookie_subpath = ".cookie", wallet = "", electrum = ["ssl://electrum.blockstream.info:50002", "ssl://electrum.emzy.de:50002", "ssl://electrum.bitaroo.net:50002", "ssl://fortress.qtornado.com:443", "ssl://bitcoin.lu.ke:50002", "ssl://electrum.hodlister.co:50002", "ssl://electrum3.hodlister.co:50002", "ssl://e.keff.org:50002", "ssl://2ex.digitaleveryware.com:50002", "ssl://bitcoin.aranguren.org:50002", "ssl://guichet.centure.cc:50002", "ssl://electrum.acinq.co:50002", "ssl://electrum1.bluewallet.io:443"] }
 
   [coin.testnet]
   consensus  = { header_format = "bitcoin", magic = "0b110907", default_p2p_port = 18333, p2pkh_prefix = 111, p2sh_prefix = 196, wif_prefix = 239, bech32_hrp = "tb", genesis_hash = "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943" }
@@ -106,10 +111,14 @@ capabilities = { cltv = true, segwit_v0 = true, taproot = true }
   # no RPC, so a spend below it is rejected (-6). Floor funding/spends here.
   min_feerate_sat_vb = 10
   consensus  = { header_format = "bitcoin", magic = "fbc0b6db", default_p2p_port = 9333, p2pkh_prefix = 48, p2sh_prefix = 5, wif_prefix = 176, bech32_hrp = "ltc", genesis_hash = "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2" }
-  # Nodeless defaults verified live against the LTC backend (verify_chain:
-  # TLS + protocol 1.4+ + genesis 12a765e3…). electrum-ltc.org is pooler's
-  # (Litecoin core dev) reference server.
-  connection = { rpc_host = "127.0.0.1", rpc_port = 9332, auth_method = "cookie", datadir = "%NODEDIR%/Litecoin", cookie_subpath = ".cookie", wallet = "", electrum = ["ssl://backup.electrum-ltc.org:443", "ssl://electrum-ltc.bysh.me:50002"] }
+  # Nodeless default fleet (#102) — active-set pool (#98): home + 2 views
+  # live, the rest cold backup, so a dead entry costs nothing. All 7 verified
+  # live 2026-07-06 via `cargo run -p libswap --example electrum_probe -- ltc
+  # --all` (verify_chain: TLS + protocol 1.4+ + genesis 12a765e3…) — including
+  # electrum-ltc.bysh.me, the flaky server behind #98, kept at the tail.
+  # Re-run that gate before editing. electrum-ltc.org is pooler's (Litecoin
+  # core dev) reference server.
+  connection = { rpc_host = "127.0.0.1", rpc_port = 9332, auth_method = "cookie", datadir = "%NODEDIR%/Litecoin", cookie_subpath = ".cookie", wallet = "", electrum = ["ssl://backup.electrum-ltc.org:443", "ssl://electrum.ltc.xurious.com:50002", "ssl://electrum1.cipig.net:20063", "ssl://electrum2.cipig.net:20063", "ssl://ltc.rentonisk.com:50002", "ssl://electrum-ltc.petrkr.net:60002", "ssl://electrum-ltc.bysh.me:50002"] }
 
   [coin.testnet]
   min_feerate_sat_vb = 10
