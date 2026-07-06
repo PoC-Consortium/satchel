@@ -930,12 +930,30 @@ export const en = {
     later: "Later",
     retry: "Retry connection",
   },
+  // Electrum default-server reconcile (the "new default servers" prompt + the
+  // coin-setup "reset to defaults" action). OPTIONAL group (see the Bundle type
+  // below): shipped in English only for now — the runtime falls back to English
+  // for locales that don't carry it yet, and the next language sync translates
+  // it across all bundles and folds it back into the strict Bundle type.
+  serverSync: {
+    resetDefaults: "Reset to defaults",
+    resetConfirm:
+      "Replace this coin's Electrum servers with the shipped defaults? Any changes you made to the list will be discarded.",
+    promptTitle: "New recommended Electrum servers",
+    promptBody:
+      "Updated default Electrum servers are available. Adding them improves reliability — your existing servers are kept.",
+    coinLine: "{coin} — {count} new",
+    add: "Add servers",
+    ignore: "Ignore",
+  },
 };
 
-// STRICT since the rc10 language sync: every locale carries every key, and
-// tsc enforces it — a missing/extra key in any bundle fails the build. When
-// new copy ships in en.ts, either translate all 26 bundles in the same change
-// (preferred; the rc10 sync pattern) or temporarily re-introduce a
-// `WithOptional` escape hatch for the new keys and remove it at the next
-// language sync (runtime falls back to English for missing keys either way).
-export type Bundle = typeof en;
+// STRICT since the rc10 language sync: every locale carries every key, and tsc
+// enforces it — a missing/extra key in any bundle fails the build. When new copy
+// ships in en.ts, either translate all 26 bundles in the same change (preferred;
+// the rc10 sync pattern) or add it under an OPTIONAL group (like `serverSync`
+// above) so the runtime falls back to English until the next language sync folds
+// it in. `serverSync` is optional below; make it required once it is translated.
+export type Bundle = Omit<typeof en, "serverSync"> & {
+  serverSync?: (typeof en)["serverSync"];
+};
