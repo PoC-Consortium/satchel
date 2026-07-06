@@ -1646,7 +1646,10 @@ mod tests {
         let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
         // Only the servers not already configured, in default order.
         assert_eq!(
-            missing_defaults(&s(&["ssl://a:1", "ssl://b:2"]), &s(&["ssl://a:1", "ssl://b:2", "ssl://c:3", "ssl://d:4"])),
+            missing_defaults(
+                &s(&["ssl://a:1", "ssl://b:2"]),
+                &s(&["ssl://a:1", "ssl://b:2", "ssl://c:3", "ssl://d:4"])
+            ),
             s(&["ssl://c:3", "ssl://d:4"]),
         );
         // Nothing to add when the config already covers the defaults.
