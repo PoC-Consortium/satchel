@@ -354,7 +354,7 @@ export const fi: Bundle = {
       "Saldo, jonka varojen tarkistus varaa korotuspuskuriksi. Korkeampi pelastaa suuremmista maksupiikeistä, mutta sitoo enemmän saldoa ja hylkää enemmän swapeja. Oletus 3.",
     feeCommitted: "Lunastuksen ylimitoitus (×)",
     feeCommittedHint:
-      "Kuinka paljon ylimääräistä v2-lunastusmaksu maksetaan etukäteen, jotta se vahvistuu silloinkin kun Satchel on suljettu. Koskee vain uusia swapeja. Oletus 2.",
+      "Kuinka paljon ylimääräistä v2-lunastusmaksu maksetaan etukäteen, jotta se vahvistuu silloinkin kun Satchel on suljettu. Koskee vain uusia swapeja. Oletus 1.",
     feeSave: "Tallenna",
     feeSaving: "Tallennetaan…",
     feeSaved: "Tallennettu",

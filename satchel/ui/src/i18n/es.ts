@@ -354,7 +354,7 @@ export const es: Bundle = {
       "El saldo que la comprobación de fondos aparta como margen para aumentos. Más alto rescata picos de comisión mayores pero inmoviliza más saldo y rechaza más swaps. Por defecto 3.",
     feeCommitted: "Sobreprovisión de redención (×)",
     feeCommittedHint:
-      "Cuánto se prepaga de más la comisión de redención v2 para que confirme incluso con Satchel cerrado. Solo se aplica a swaps nuevos. Por defecto 2.",
+      "Cuánto se prepaga de más la comisión de redención v2 para que confirme incluso con Satchel cerrado. Solo se aplica a swaps nuevos. Por defecto 1.",
     feeSave: "Guardar",
     feeSaving: "Guardando…",
     feeSaved: "Guardado",
