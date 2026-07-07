@@ -354,7 +354,7 @@ export const pl: Bundle = {
       "Saldo, które kontrola środków odkłada jako zapas na podbicie. Wyższe ratuje większe skoki opłat, ale blokuje więcej salda i odrzuca więcej swapów. Domyślnie 3.",
     feeCommitted: "Nadwyżka na wykup (×)",
     feeCommittedHint:
-      "Ile dodatkowo opłata za wykup v2 jest opłacana z góry, aby potwierdziła się nawet przy zamkniętym Satchel. Dotyczy tylko nowych swapów. Domyślnie 2.",
+      "Ile dodatkowo opłata za wykup v2 jest opłacana z góry, aby potwierdziła się nawet przy zamkniętym Satchel. Dotyczy tylko nowych swapów. Domyślnie 1.",
     feeSave: "Zapisz",
     feeSaving: "Zapisywanie…",
     feeSaved: "Zapisano",

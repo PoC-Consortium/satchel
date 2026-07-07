@@ -354,7 +354,7 @@ export const cs: Bundle = {
       "Zůstatek, který kontrola prostředků odloží stranou jako rezervu pro navýšení. Vyšší zachrání větší skoky poplatků, ale váže více zůstatku a odmítne více swapů. Výchozí 3.",
     feeCommitted: "Předzásobení výplaty (×)",
     feeCommittedHint:
-      "Kolik navíc se předplatí na poplatek za v2 výplatu, aby se potvrdila, i když je Satchel zavřený. Platí jen pro nové swapy. Výchozí 2.",
+      "Kolik navíc se předplatí na poplatek za v2 výplatu, aby se potvrdila, i když je Satchel zavřený. Platí jen pro nové swapy. Výchozí 1.",
     feeSave: "Uložit",
     feeSaving: "Ukládání…",
     feeSaved: "Uloženo",

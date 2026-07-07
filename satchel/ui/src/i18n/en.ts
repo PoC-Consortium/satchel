@@ -363,13 +363,13 @@ export const en = {
       "Safety/cost trade-offs for fee bumps, not required setup. New values apply to future bumps; swaps already funded keep the policy they were funded under.",
     feeMax: "Max feerate (sat/vB)",
     feeMaxHint:
-      "Ceiling for every fee bump. Default 500, also the hard system maximum. Lower it to cap costs.",
+      "Ceiling for funding fee bumps (HTLC + adaptor); default 500, also the hard system maximum. Lower it to cap funding costs. Redeem and refund bumps ignore it — near a timelock they pay whatever it takes, up to the value at stake, so a leg is never lost to a fee cap.",
     feeReservation: "Funding bump reservation (×)",
     feeReservationHint:
-      "Balance the funds check sets aside as bump headroom. Higher rescues bigger fee spikes but ties up more balance and rejects more swaps. Default 3.",
+      "Funding bumps only (HTLC + adaptor). Both the balance the funds check reserves as bump headroom and the cap on a funding bump (this multiple of its original feerate). Higher rescues bigger fee spikes but ties up more balance and rejects more swaps. Default 3.",
     feeCommitted: "Redeem over-provision (×)",
     feeCommittedHint:
-      "How much extra the v2 redeem fee is pre-paid so it confirms even when Satchel is closed. Applies to new swaps only. Default 2.",
+      "Adaptor (v2) swaps only. How much over market the redeem fee is pre-paid at signing, so it still confirms while Satchel is closed — a v2 redeem can't be fee-bumped, only pre-paid or lifted by CPFP. Applies to new swaps only. Default 1 (commit at market; the CPFP nurse raises it if fees climb).",
     feeSave: "Save",
     feeSaving: "Saving…",
     feeSaved: "Saved",

@@ -354,7 +354,7 @@ export const de: Bundle = {
       "Anteil des Guthabens, den die Mittelprüfung als Bump-Puffer zurücklegt. Höher rettet größere Gebührenspitzen, bindet aber mehr Guthaben und lehnt mehr Swaps ab. Standard 3.",
     feeCommitted: "Redeem-Überprovisionierung (×)",
     feeCommittedHint:
-      "Wie viel zusätzlich die v2-Redeem-Gebühr vorausbezahlt wird, damit sie auch bei geschlossenem Satchel bestätigt. Gilt nur für neue Swaps. Standard 2.",
+      "Wie viel zusätzlich die v2-Redeem-Gebühr vorausbezahlt wird, damit sie auch bei geschlossenem Satchel bestätigt. Gilt nur für neue Swaps. Standard 1.",
     feeSave: "Speichern",
     feeSaving: "Speichern…",
     feeSaved: "Gespeichert",

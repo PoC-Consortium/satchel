@@ -354,7 +354,7 @@ export const tr: Bundle = {
       "Fon kontrolünün artırma payı olarak ayırdığı miktar. Yüksek olması daha büyük ücret sıçramalarını kurtarır ancak daha fazla bakiyeyi bağlar ve daha fazla takası reddeder. Varsayılan 3.",
     feeCommitted: "Geri alma fazla tahsisi (×)",
     feeCommittedHint:
-      "Satchel kapalıyken bile onaylansın diye v2 geri alma ücretinin ne kadar fazla önceden ödendiği. Yalnızca yeni takaslara uygulanır. Varsayılan 2.",
+      "Satchel kapalıyken bile onaylansın diye v2 geri alma ücretinin ne kadar fazla önceden ödendiği. Yalnızca yeni takaslara uygulanır. Varsayılan 1.",
     feeSave: "Kaydet",
     feeSaving: "Kaydediliyor…",
     feeSaved: "Kaydedildi",
