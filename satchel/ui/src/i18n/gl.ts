@@ -361,7 +361,7 @@ export const gl: Bundle = {
     about: "Acerca de",
     version: "Versión {version}",
     updateUpToDate: "Ao día",
-    updateCheckPlaceholder: "A comprobación de actualizacións chegará nunha versión posterior.",
+    checkUpdate: "Buscar actualizacións",
     protocols: "Protocolos de intercambio",
     protocolsHint:
       "O que fala esta versión — as ofertas cunha versión distinta pódense ver pero non tomar. As dúas partes do intercambio deben coincidir.",

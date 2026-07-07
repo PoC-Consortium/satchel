@@ -20,20 +20,21 @@ import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
 import SettingsBrightnessOutlinedIcon from "@mui/icons-material/SettingsBrightnessOutlined";
 import CloseIcon from "@mui/icons-material/Close";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import type { ReactNode } from "react";
 import { useApp } from "../AppContext";
 import { usePrefs } from "../prefs";
 import { useI18n, useT, LANGUAGES } from "../i18n";
 import { ensureNotifyPermission, sendTestNotification } from "../notify";
 import type { NotifyPrefs, UiPrefs } from "../api/types";
-import { APP_VERSION, UPDATE_AVAILABLE } from "../version";
+import { useUpdate } from "../update";
 import { C } from "../theme";
 import { errMsg, listCoinConfig, rpc, saveBoard, saveNostrRelays } from "../api/tauri";
 import CoinsScreen from "./CoinsScreen";
 
 // UI-3: Settings is split into MUI Tabs — General/Appearance (theme, language),
 // Coins (node config), Network (relays + boards), Notifications (issue #55),
-// About (version + update placeholder + the trust-model note). All prior
+// About (version + update check + the trust-model note). All prior
 // functionality is preserved; it is only reorganised behind tabs.
 type SettingsTab = "general" | "coins" | "network" | "fees" | "notifications" | "about";
 
@@ -505,6 +506,11 @@ function NotificationsTab() {
 function AboutTab() {
   const t = useT();
   const { info } = useApp();
+  // The live version + update state come from the same UpdateProvider the sidebar
+  // badge uses (issue #121) — so "Check for updates" here opens the very dialog
+  // the version-click in the left menu does, and the indicator matches. The
+  // version string is the backend's (rc-tagged), not the static build constant.
+  const { version, info: update, showBadge, openDialog } = useUpdate();
   // The wire epochs this build speaks (rc10), straight from getinfo — offer
   // chips on the Corkboard show the same numbers, so a user can see at a
   // glance whether an offer matches their build.
@@ -515,10 +521,35 @@ function AboutTab() {
   ].join(" · ");
   return (
     <Section title={t("settings.about")}>
-      <Row label={t("settings.version", { version: APP_VERSION })} hint={t("settings.updateCheckPlaceholder")}>
-        <Typography sx={{ fontSize: 13, color: UPDATE_AVAILABLE ? "primary.main" : "text.secondary" }}>
-          {t("settings.updateUpToDate")}
-        </Typography>
+      {/* Version + update check (issue #121, phoenix About-parity): shows the
+          installed version, an up-arrow + latest version when a newer release
+          exists, and a button that re-checks and opens the shared UpdateDialog
+          (release notes + link) — the same one the sidebar version badge opens. */}
+      <Row label={t("settings.version", { version })}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          {showBadge ? (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <ArrowUpwardIcon sx={{ fontSize: 15, color: "primary.main" }} />
+              <Typography sx={{ fontSize: 13, color: "primary.main" }}>{t("update.title")}</Typography>
+              <Typography sx={{ fontSize: 13, fontFamily: C.mono, color: "primary.main", fontWeight: 600 }}>
+                v{update?.latestVersion}
+              </Typography>
+            </Box>
+          ) : (
+            <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
+              {t("settings.updateUpToDate")}
+            </Typography>
+          )}
+          <Button
+            size="small"
+            variant={showBadge ? "contained" : "outlined"}
+            color={showBadge ? "primary" : "inherit"}
+            onClick={openDialog}
+            sx={{ flex: "none" }}
+          >
+            {t("settings.checkUpdate")}
+          </Button>
+        </Box>
       </Row>
       <Row label={t("settings.protocols")} hint={t("settings.protocolsHint")}>
         <Typography sx={{ fontSize: 13, color: "text.secondary", fontFamily: C.mono }}>

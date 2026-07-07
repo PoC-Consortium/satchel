@@ -361,7 +361,7 @@ export const tr: Bundle = {
     about: "Hakkında",
     version: "Sürüm {version}",
     updateUpToDate: "Güncel",
-    updateCheckPlaceholder: "Güncelleme kontrolü daha sonraki bir sürümde gelecek.",
+    checkUpdate: "Güncellemeleri denetle",
     protocols: "Takas protokolleri",
     protocolsHint:
       "Bu sürümün konuştuğu şey — farklı sürümdeki teklifler görüntülenebilir ama alınamaz. Takasın iki tarafı da eşleşmelidir.",

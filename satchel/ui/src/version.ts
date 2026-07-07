@@ -6,6 +6,3 @@
 // string carries the pre-release suffix (the rc release tag); the bundle/manifest
 // versions stay numeric `0.1.0` (Windows installers reject non-numeric versions).
 export const APP_VERSION = "0.1.0-rc1";
-
-/** Update-check state — hard-wired "up to date" until C7 wires GitHub polling. */
-export const UPDATE_AVAILABLE = false;

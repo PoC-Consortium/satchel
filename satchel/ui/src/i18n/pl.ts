@@ -361,7 +361,7 @@ export const pl: Bundle = {
     about: "O programie",
     version: "Wersja {version}",
     updateUpToDate: "Aktualne",
-    updateCheckPlaceholder: "Sprawdzanie aktualizacji pojawi się w późniejszym wydaniu.",
+    checkUpdate: "Sprawdź aktualizacje",
     protocols: "Protokoły swapów",
     protocolsHint:
       "Co obsługuje ta wersja — oferty z inną wersją można przeglądać, ale nie brać. Obie strony swapu muszą się zgadzać.",

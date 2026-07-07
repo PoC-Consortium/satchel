@@ -361,7 +361,7 @@ export const ptBR: Bundle = {
     about: "Sobre",
     version: "Versão {version}",
     updateUpToDate: "Atualizado",
-    updateCheckPlaceholder: "A verificação de atualização chega em uma versão futura.",
+    checkUpdate: "Verificar atualizações",
     protocols: "Protocolos de swap",
     protocolsHint:
       "O que esta versão fala — ofertas com versão diferente podem ser vistas, mas não aceitas. Os dois lados do swap precisam coincidir.",

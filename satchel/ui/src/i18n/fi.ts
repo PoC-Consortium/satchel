@@ -361,7 +361,7 @@ export const fi: Bundle = {
     about: "Tietoja",
     version: "Versio {version}",
     updateUpToDate: "Ajan tasalla",
-    updateCheckPlaceholder: "Päivitystarkistus saapuu myöhemmässä julkaisussa.",
+    checkUpdate: "Tarkista päivitykset",
     protocols: "Swap-protokollat",
     protocolsHint:
       "Mitä tämä versio puhuu — eri versiota käyttäviä tarjouksia voi selata mutta ei ottaa. Swapin molempien osapuolten on täsmättävä.",

@@ -361,7 +361,7 @@ export const sk: Bundle = {
     about: "O aplikácii",
     version: "Verzia {version}",
     updateUpToDate: "Aktuálne",
-    updateCheckPlaceholder: "Kontrola aktualizácií príde v neskoršom vydaní.",
+    checkUpdate: "Skontrolovať aktualizácie",
     protocols: "Swapové protokoly",
     protocolsHint:
       "Čo táto verzia podporuje — ponuky s inou verziou si možno prezerať, ale nie prijať. Obe strany swapu sa musia zhodovať.",

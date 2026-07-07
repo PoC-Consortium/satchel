@@ -361,7 +361,7 @@ export const cs: Bundle = {
     about: "O aplikaci",
     version: "Verze {version}",
     updateUpToDate: "Aktuální",
-    updateCheckPlaceholder: "Kontrola aktualizací přijde v pozdějším vydání.",
+    checkUpdate: "Zkontrolovat aktualizace",
     protocols: "Swapové protokoly",
     protocolsHint:
       "Co tato verze podporuje — nabídky s jinou verzí lze procházet, ale ne přijmout. Obě strany swapu se musí shodovat.",

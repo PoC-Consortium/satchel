@@ -361,7 +361,7 @@ export const ja: Bundle = {
     about: "概要",
     version: "バージョン {version}",
     updateUpToDate: "最新の状態です",
-    updateCheckPlaceholder: "アップデートのチェックは今後のリリースで追加されます。",
+    checkUpdate: "更新を確認",
     protocols: "スワップ プロトコル",
     protocolsHint:
       "このビルドが対応するバージョンです。バージョンが異なるオファーは閲覧できますが、受けられません。スワップの両者が一致する必要があります。",

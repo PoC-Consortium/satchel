@@ -361,7 +361,7 @@ export const id: Bundle = {
     about: "Tentang",
     version: "Versi {version}",
     updateUpToDate: "Versi terbaru",
-    updateCheckPlaceholder: "Pemeriksaan pembaruan hadir di rilis berikutnya.",
+    checkUpdate: "Periksa pembaruan",
     protocols: "Protokol swap",
     protocolsHint:
       "Apa yang didukung build ini — penawaran dengan versi berbeda bisa dilihat tetapi tidak bisa diambil. Kedua sisi swap harus cocok.",

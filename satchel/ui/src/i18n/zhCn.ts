@@ -361,7 +361,7 @@ export const zhCn: Bundle = {
     about: "关于",
     version: "版本 {version}",
     updateUpToDate: "已是最新",
-    updateCheckPlaceholder: "更新检查将在后续版本中提供。",
+    checkUpdate: "检查更新",
     protocols: "交换协议",
     protocolsHint:
       "此版本支持的协议——版本不同的报价可以浏览但无法接受。交换双方必须一致。",
