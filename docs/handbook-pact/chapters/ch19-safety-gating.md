@@ -151,8 +151,8 @@ and the pinned test vectors. Two operational details are worth understanding:
 - **v2's cooperative redeem is not RBF-bumpable.** Its fee is sealed into the
   pre-signed adaptor sighash, so it cannot be fee-bumped after the fact the way
   an ordinary RBF transaction can. The engine handles this two ways: the redeem
-  commits at the live market rate at init (live estimate × `committed_mult`,
-  default **1**, clamped) plus a CPFP redeem-bump child that spends the redeem's
+  commits at the live market rate at init (live estimate, clamped) plus a CPFP
+  redeem-bump child that spends the redeem's
   own sweep output to lift the package feerate if the network gets busy. The
   single-key refund path is always bumpable, so the funder is never the stuck
   party. See the chapter "Fees, Fee-Bumping & Auto-Refund".

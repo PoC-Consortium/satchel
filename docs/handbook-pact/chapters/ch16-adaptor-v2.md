@@ -105,8 +105,8 @@ Worst-case vsize: `KEYPATH_REDEEM_VSIZE = 111` (`taproot.rs:40`).
 > **Warning** — The cooperative key-path redeem is **NOT RBF-bumpable**: its
 > fee is sealed into the pre-signed adaptor sighash and cannot be re-signed
 > unilaterally — which is why it is also broadcast without the BIP125 signal.
-> It commits at the live market rate at init (`committed_mult`,
-> default 1) and is dragged through by a CPFP child that spends the redeem's own
+> It commits at the live market rate at init and is dragged through by a CPFP
+> child that spends the redeem's own
 > sweep output if the market rises. See the chapter "Fees, Fee-Bumping &
 > Auto-Refund".
 

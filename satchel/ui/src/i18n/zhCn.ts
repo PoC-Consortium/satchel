@@ -352,9 +352,6 @@ export const zhCn: Bundle = {
     feeReservation: "注资加价预留（×）",
     feeReservationHint:
       "资金检查作为加价余量预留的份额。越高越能挽救更大的费用飙升，但会占用更多余额并拒绝更多交换。默认 3。",
-    feeCommitted: "赎回超额预付（×）",
-    feeCommittedHint:
-      "v2 赎回费用预付多少额外金额，以便即使 Satchel 已关闭也能确认。仅适用于新交换。默认 1。",
     feeSave: "保存",
     feeSaving: "正在保存…",
     feeSaved: "已保存",

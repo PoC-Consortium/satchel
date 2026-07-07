@@ -352,9 +352,6 @@ export const ja: Bundle = {
     feeReservation: "資金引き上げ予備 (×)",
     feeReservationHint:
       "資金チェックが引き上げの余裕として確保する金額です。高くすると大きな手数料スパイクに対応できますが、より多くの残高が拘束され、より多くのスワップが拒否されます。デフォルトは 3 です。",
-    feeCommitted: "リデーム過剰引き当て (×)",
-    feeCommittedHint:
-      "Satchel を閉じていても確定するよう、v2 のリデーム手数料を前払いする割増分です。新しいスワップにのみ適用されます。デフォルトは 1 です。",
     feeSave: "保存",
     feeSaving: "保存中…",
     feeSaved: "保存しました",

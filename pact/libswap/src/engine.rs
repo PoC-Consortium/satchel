@@ -396,12 +396,12 @@ fn validate_offer_offsets(network: Network, t1_secs: u32, t2_secs: u32) -> Resul
 /// market's fallback (≈1), i.e. this floor.
 pub(crate) const MIN_REDEEM_FEERATE: u64 = 1;
 
-// The v2 committed-redeem multiplier is `FeeBumpPolicy::redeem.committed_mult`
-// (default 1 — commit at market, CPFP-bump up if it rises); see crate::fee_policy.
+// The v2 cooperative redeem is committed at live market and can't be RBF'd; the
+// deadline-aware CPFP child lifts it if the market rises (no over-provision knob).
 
 /// Upper bound on a negotiated redeem feerate (sat/vB) — the **protocol** bound
 /// (spec v2 §5), distinct from the local `FeeBumpPolicy::max_feerate_sat_vb` bump
-/// ceiling (which happens to equal it). Caps the initiator's over-provisioning AND
+/// ceiling (which happens to equal it). Caps the initiator's committed rate AND
 /// lets the participant reject an init that sets an absurd rate to grief the
 /// counterparty (whose redeem fee would eat its output). Matches the estimator's
 /// own clamp.
@@ -955,22 +955,19 @@ impl Engine {
     }
 
     /// The cooperative-redeem feerate (sat/vB) the initiator fixes at init for
-    /// `chain` (M2): `committed_mult × live market`, floored at
-    /// [`MIN_REDEEM_FEERATE`] (min-relay) and clamped to the **protocol**
-    /// [`MAX_REDEEM_FEERATE`] (NOT the local `max_feerate_sat_vb` bump ceiling).
-    /// With the default `committed_mult == 1` this commits at market with no
-    /// over-provision — the committed fee can't be RBF'd, but the CPFP child
-    /// lifts it if market climbs while it's pending. On regtest the node can't
-    /// estimate, so market lands on its ≈1 fallback (= the floor). The value is
-    /// negotiated into the init and must pass the counterparty's protocol
-    /// validation (§2 init check); a conservative fallback applies when no
-    /// backend is reachable. Only the initiator calls this; the participant
-    /// adopts the value from the signed init, so the two never diverge.
+    /// `chain` (M2): the **live market** rate, floored at [`MIN_REDEEM_FEERATE`]
+    /// (min-relay) and clamped to the **protocol** [`MAX_REDEEM_FEERATE`] (NOT the
+    /// local `max_feerate_sat_vb` bump ceiling). Committed at market with no
+    /// over-provision — the committed fee can't be RBF'd, but the deadline-aware
+    /// CPFP child lifts it if the market climbs while it's pending. On regtest the
+    /// node can't estimate, so market lands on its ≈1 fallback (= the floor). The
+    /// value is negotiated into the init and must pass the counterparty's protocol
+    /// validation (§2 init check); a conservative fallback applies when no backend
+    /// is reachable. Only the initiator calls this; the participant adopts the
+    /// value from the signed init, so the two never diverge.
     fn adaptor_redeem_feerate(&self, chain: &ChainRef) -> u64 {
         match self.backend(chain).and_then(|b| b.fee_rate_sat_per_vb()) {
-            Ok(rate) => rate
-                .saturating_mul(self.fee_bump.redeem.committed_mult)
-                .clamp(MIN_REDEEM_FEERATE, MAX_REDEEM_FEERATE),
+            Ok(rate) => rate.clamp(MIN_REDEEM_FEERATE, MAX_REDEEM_FEERATE),
             Err(_) => ADAPTOR_REDEEM_FEERATE_FALLBACK,
         }
     }

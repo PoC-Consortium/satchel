@@ -367,9 +367,6 @@ export const en = {
     feeReservation: "Funding bump reservation (×)",
     feeReservationHint:
       "Funding bumps only (HTLC + adaptor). Both the balance the funds check reserves as bump headroom and the cap on a funding bump (this multiple of its original feerate). Higher rescues bigger fee spikes but ties up more balance and rejects more swaps. Default 3.",
-    feeCommitted: "Redeem over-provision (×)",
-    feeCommittedHint:
-      "Adaptor (v2) swaps only. How much over market the redeem fee is pre-paid at signing, so it still confirms while Satchel is closed — a v2 redeem can't be fee-bumped, only pre-paid or lifted by CPFP. Applies to new swaps only. Default 1 (commit at market; the CPFP nurse raises it if fees climb).",
     feeSave: "Save",
     feeSaving: "Saving…",
     feeSaved: "Saved",

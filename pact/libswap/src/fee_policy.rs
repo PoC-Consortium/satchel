@@ -72,13 +72,11 @@ pub struct FundingPolicy {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct RedeemPolicy {
-    /// v2: multiplier on the live feerate baked into the adaptor signature at
-    /// funding time. Fixed per swap at funding → applies to NEW swaps only. The
-    /// key-path redeem is NOT RBF-bumpable; rather than over-provision every swap
-    /// up front, default 1 (commit at market) and rely on the **deadline-aware
-    /// CPFP nurse** (#48) to escalate the child fee as the timelock nears. Raise it
-    /// for a baked-in unattended floor if you would rather not depend on the
-    /// scheduler reaching the CPFP path (spec v2 §8 "generous at signing").
+    /// **Deprecated / inert.** The v2 redeem now always commits at 1× live market
+    /// (its fee can't be RBF'd; the deadline-aware CPFP nurse lifts it if fees
+    /// climb), so this multiplier is no longer read by any fee path and is no
+    /// longer exposed by `get/setfeepolicy`. Retained as a field only so policies
+    /// persisted before its removal still deserialize under `deny_unknown_fields`.
     pub committed_mult: u64,
     /// v1: percent the fee escalates per scheduler tick. Default 50.
     pub step_pct: u64,

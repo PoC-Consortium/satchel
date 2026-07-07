@@ -352,9 +352,6 @@ export const it: Bundle = {
     feeReservation: "Riserva per bump di funding (×)",
     feeReservationHint:
       "Saldo che il controllo dei fondi accantona come margine per i bump. Un valore più alto salva i picchi di fee più grandi ma immobilizza più saldo e rifiuta più swap. Predefinito 3.",
-    feeCommitted: "Sovra-provisioning del redeem (×)",
-    feeCommittedHint:
-      "Quanto extra viene pre-pagato per la fee del redeem v2 affinché venga confermato anche quando Satchel è chiuso. Si applica solo ai nuovi swap. Predefinito 1.",
     feeSave: "Salva",
     feeSaving: "Salvataggio…",
     feeSaved: "Salvato",

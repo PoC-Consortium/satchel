@@ -352,9 +352,6 @@ export const lt: Bundle = {
     feeReservation: "Finansavimo didinimo rezervas (×)",
     feeReservationHint:
       "Likutis, kurį lėšų patikra atideda kaip didinimo atsargą. Didesnis padeda atremti didesnius mokesčio šuolius, bet užima daugiau likučio ir atmeta daugiau mainų. Numatytoji 3.",
-    feeCommitted: "Atpirkimo perteklinis aprūpinimas (×)",
-    feeCommittedHint:
-      "Kiek papildomai iš anksto apmokamas v2 atpirkimo mokestis, kad jis patvirtinamas net uždarius Satchel. Taikoma tik naujiems mainams. Numatytoji 1.",
     feeSave: "Įrašyti",
     feeSaving: "Įrašoma…",
     feeSaved: "Įrašyta",

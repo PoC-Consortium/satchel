@@ -352,9 +352,6 @@ export const sk: Bundle = {
     feeReservation: "Rezervácia na navýšenie podfinancovania (×)",
     feeReservationHint:
       "Zostatok, ktorý si kontrola prostriedkov odloží ako rezervu na navýšenie. Vyššia zachráni väčšie skoky poplatkov, ale viaže viac zostatku a odmietne viac swapov. Predvolene 3.",
-    feeCommitted: "Predzásobenie redeemu (×)",
-    feeCommittedHint:
-      "O koľko sa vopred zaplatí navyše poplatok za v2 redeem, aby sa potvrdil, aj keď je Satchel zatvorený. Platí len pre nové swapy. Predvolene 1.",
     feeSave: "Uložiť",
     feeSaving: "Ukladanie…",
     feeSaved: "Uložené",

@@ -352,9 +352,6 @@ export const nl: Bundle = {
     feeReservation: "Funding-bump-reservering (×)",
     feeReservationHint:
       "Saldo dat de fondscontrole apart zet als bump-speelruimte. Hoger redt grotere fee-pieken maar zet meer saldo vast en weigert meer swaps. Standaard 3.",
-    feeCommitted: "Redeem-overprovisie (×)",
-    feeCommittedHint:
-      "Hoeveel extra de v2-redeem-fee vooruit wordt betaald zodat hij bevestigt zelfs wanneer Satchel gesloten is. Geldt alleen voor nieuwe swaps. Standaard 1.",
     feeSave: "Opslaan",
     feeSaving: "Opslaan…",
     feeSaved: "Opgeslagen",

@@ -117,23 +117,16 @@ A couple of things to know before you change anything:
 - New values affect **future** bumps only. A swap that's already funded keeps the
   policy it was funded under, so changing these won't disturb a trade in flight.
 
-The three knobs are:
+The two knobs are:
 
 - **Max feerate (sat/vB)** — the ceiling for every fee bump, so a runaway fee
   market can never drain you. Range 1–500; **default 500** (also the hard system
   maximum).
 - **Funding bump reservation (×)** — how much extra balance the funds check sets
   aside as headroom for a possible future bump. Range 1–100; **default 3**.
-- **Redeem over-provision (×)** — a multiplier on the market rate a Private
-  (Taproot) redeem commits to up front (its fee is fixed when the swap is signed
-  and can't be raised by ordinary replacement). Range 1–100; **default 1** — i.e.
-  it commits at the live market rate, with no padding, and the engine accelerates
-  it with a child transaction only if the market actually climbs while it's
-  pending. Raise it above 1 if you'd rather pre-pay a cushion. Applies to new
-  swaps only.
 
 Press **Save** to apply your changes — they take effect **live, with no restart** —
-or **Reset to defaults** to put all three back the way they came.
+or **Reset to defaults** to put both back the way they came.
 
 ![The Fees tab: the fee-bumping knobs with Save and Reset to defaults.](images/processed/ch14-fees-tab.png){width=80%}
 

@@ -352,9 +352,6 @@ export const ro: Bundle = {
     feeReservation: "Rezervă pentru creșterea finanțării (×)",
     feeReservationHint:
       "Soldul pe care verificarea fondurilor îl pune deoparte ca marjă pentru creștere. Mai mare salvează spike-uri de comision mai mari, dar blochează mai mult sold și respinge mai multe swap-uri. Implicit 3.",
-    feeCommitted: "Supra-provizionare la redeem (×)",
-    feeCommittedHint:
-      "Cu cât în plus este pre-plătit comisionul de redeem v2 astfel încât să se confirme chiar și când Satchel este închis. Se aplică doar swap-urilor noi. Implicit 1.",
     feeSave: "Salvează",
     feeSaving: "Se salvează…",
     feeSaved: "Salvat",
