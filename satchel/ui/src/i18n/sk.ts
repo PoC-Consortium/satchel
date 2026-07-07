@@ -349,7 +349,7 @@ export const sk: Bundle = {
     feeMax: "Max. sadzba poplatku (sat/vB)",
     feeMaxHint:
       "Strop pre navýšenia poplatku pri financovaní (HTLC + adaptor); predvolene 500, zároveň aj tvrdé systémové maximum. Znížte ho, aby ste obmedzili náklady na financovanie. Navýšenia pri vyplatení a vrátení ho ignorujú — blízko časového zámku zaplatia, koľko treba, až do hodnoty v stávke, takže sa žiadna časť swapu nikdy nestratí kvôli stropu poplatku.",
-    feeReservation: "Rezervácia na navýšenie podfinancovania (×)",
+    feeReservation: "Rezervácia na navýšenie financovania (×)",
     feeReservationHint:
       "Iba navýšenia pri financovaní (HTLC + adaptor). Zároveň zostatok, ktorý si kontrola prostriedkov odloží ako rezervu na navýšenie, aj strop navýšenia pri financovaní (tento násobok jeho pôvodnej sadzby). Vyššia zachráni väčšie skoky poplatkov, ale viaže viac zostatku a odmietne viac swapov. Predvolene 3.",
     feeSave: "Uložiť",
