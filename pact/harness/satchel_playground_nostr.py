@@ -21,6 +21,8 @@ nostr_relays=[the relay] and board_urls=[] (relays-only) and launches Satchel.
 """
 
 import os
+# Regtest seeds take the obfuscation wrap (#120), off the dev keychain.
+os.environ.setdefault("PACT_DISABLE_KEYRING", "1")
 import shlex
 import socket
 import subprocess

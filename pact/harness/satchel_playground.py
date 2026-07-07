@@ -28,6 +28,8 @@ so confirmations and timelocks advance.
 import base64
 import json
 import os
+# Regtest seeds take the obfuscation wrap (#120), off the dev keychain.
+os.environ.setdefault("PACT_DISABLE_KEYRING", "1")
 import sys
 import time
 import urllib.request
