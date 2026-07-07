@@ -744,6 +744,13 @@ impl ChainBackend for BdkWalletBackend {
         self.chain.fee_rate_for(conf_target, conservative)
     }
 
+    fn fee_rate_for_kvb(&self, conf_target: u16, conservative: bool) -> Result<u64> {
+        // Delegate to the Electrum chain's PRECISE sat/kvB estimate (not the
+        // integer-rounded trait default) — the funding nurse prices its RBF off
+        // this, and the field-stranded funding was on this bdk/Electrum path.
+        self.chain.fee_rate_for_kvb(conf_target, conservative)
+    }
+
     fn fee_estimate(&self, conf_target: u16) -> Result<Option<u64>> {
         self.chain.fee_estimate(conf_target)
     }
@@ -1001,9 +1008,12 @@ impl ChainBackend for BdkWalletBackend {
         })
     }
 
-    fn wallet_bumpfee(&self, txid: &str, feerate_sat_vb: u64) -> Result<String> {
+    fn wallet_bumpfee(&self, txid: &str, feerate_sat_kvb: u64) -> Result<String> {
         let txid = Txid::from_str(txid)?;
-        let feerate = FeeRate::from_sat_per_vb(feerate_sat_vb).context("feerate overflow")?;
+        // sat/kvB → sat/kwu (1 vB = 4 wu), rounding UP so the replacement never
+        // lands below the node's fractional Rule-4 minimum — the same idiom the
+        // send path uses, ceil'd here because this feeds an RBF acceptance check.
+        let feerate = FeeRate::from_sat_per_kwu(feerate_sat_kvb.div_ceil(4));
         let txid = self.with_synced_wallet(|entry| {
             let mut builder = entry
                 .wallet

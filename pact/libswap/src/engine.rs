@@ -441,18 +441,47 @@ pub(crate) const CPFP_CHILD_VSIZE: u64 = 150;
 /// small to fund the child. The committed redeem fee can't be RBF'd, so a child
 /// is the only lever — see spec/protocol-v2.md. Pure, so the CPFP fee policy is
 /// unit-testable without a node.
-pub(crate) fn cpfp_child_fee(
+pub(crate) fn cpfp_child_fee_kvb(
     parent_fee: u64,
     parent_vsize: u64,
-    target_feerate: u64,
+    target_kvb: u64,
 ) -> Option<u64> {
-    let parent_feerate = parent_fee / parent_vsize.max(1);
-    if target_feerate <= parent_feerate {
+    let parent_feerate_kvb = parent_fee.saturating_mul(1000) / parent_vsize.max(1);
+    if target_kvb <= parent_feerate_kvb {
         return None; // the parent already clears the target unaided
     }
     let package_vsize = parent_vsize + CPFP_CHILD_VSIZE;
-    let desired_package_fee = target_feerate.saturating_mul(package_vsize);
+    // sat/kvB × vsize → sat, rounded UP so the realised package feerate meets
+    // (never undershoots) the target at the estimator's native resolution.
+    let desired_package_fee = target_kvb.saturating_mul(package_vsize).div_ceil(1000);
     Some(desired_package_fee.saturating_sub(parent_fee))
+}
+
+/// The sat/kvB rate the v1 funding RBF nurse should bump to, or `None` when the
+/// market hasn't risen above what the funding already pays (no bump warranted).
+/// All inputs sat/kvB (the estimator's native resolution) — so `old_feerate_kvb`
+/// is the funding tx's TRUE feerate (fee×1000/vsize), never truncated to a whole
+/// sat/vB. The offered rate is floored to `old + incr`: a BIP125 replacement must
+/// beat the old feerate by the node's incremental relay fee (Rule 4), and the
+/// old code's whole-sat/vB offer landed just below the node's fractional minimum
+/// (a 1.004 sat/vB tx, offered "2", needed 2.004) and re-offered the same value
+/// every tick → funding stranded for blocks. Pure, so that floor is unit-tested.
+pub(crate) fn funding_bump_rate_kvb(
+    old_feerate_kvb: u64,
+    market_kvb: u64,
+    incr_kvb: u64,
+    ceiling_kvb: u64,
+    reservation_mult: u64,
+) -> Option<u64> {
+    // Chase market, bounded by the policy ceiling AND the funds-gate reservation
+    // (× old_feerate, the headroom that gate set aside).
+    let target_kvb = market_kvb
+        .min(ceiling_kvb)
+        .min(reservation_mult.saturating_mul(old_feerate_kvb));
+    if target_kvb <= old_feerate_kvb {
+        return None; // market hasn't risen above what we already pay
+    }
+    Some(target_kvb.max(old_feerate_kvb.saturating_add(incr_kvb)))
 }
 
 /// Default confirmation requirement per chain — the fallback when the operator
@@ -3060,23 +3089,26 @@ impl Engine {
         // as the redeem timelock nears, computed by the caller. The CPFP child is
         // funded out of the sweep output, so the package fee is also implicitly
         // hard-capped by `parent_value` (the dust check below).
-        let target = self.fee_bump.claim_feerate(
-            backend.fee_rate_for(conf_target, conservative)?,
+        // sat/kvB (native estimator resolution). A CPFP child is not a BIP125
+        // replacement, so no incremental-relay floor applies.
+        let target_kvb = self.fee_bump.claim_feerate_kvb(
+            backend.fee_rate_for_kvb(conf_target, conservative)?,
             amount,
             crate::taproot::KEYPATH_REDEEM_VSIZE,
         );
         let Some(child_fee) =
-            cpfp_child_fee(parent_fee, crate::taproot::KEYPATH_REDEEM_VSIZE, target)
+            cpfp_child_fee_kvb(parent_fee, crate::taproot::KEYPATH_REDEEM_VSIZE, target_kvb)
         else {
             return Ok(None); // parent already clears the target unaided
         };
         // CPFP budget is the sweep output value. If the child can't be funded to
         // the desired target, surface it — a silent under-bump near a deadline
         // otherwise reads as "we did everything" (#48 open question).
+        let target_vb = target_kvb as f64 / 1000.0;
         let Some(child_value) = parent_value.checked_sub(child_fee) else {
             eprintln!(
                 "warning: v2 redeem CPFP budget-limited (parent {}): sweep output {parent_value} sat \
-                 cannot fund a child to reach {target} sat/vB (need {child_fee} sat)",
+                 cannot fund a child to reach {target_vb:.3} sat/vB (need {child_fee} sat)",
                 parent.compute_txid()
             );
             return Ok(None); // output can't cover the child fee
@@ -3084,7 +3116,7 @@ impl Engine {
         if child_value <= DUST_LIMIT_SAT {
             eprintln!(
                 "warning: v2 redeem CPFP budget-limited (parent {}): child would be dust at \
-                 {target} sat/vB (sweep output {parent_value} sat)",
+                 {target_vb:.3} sat/vB (sweep output {parent_value} sat)",
                 parent.compute_txid()
             );
             return Ok(None);
@@ -3185,19 +3217,25 @@ impl Engine {
         if backend.get_txout(&change_outpoint, &change_spk)?.is_none() {
             return Ok(None);
         }
+        // sat/kvB throughout (native estimator resolution): a CPFP child needs no
+        // BIP125 increment (it doesn't replace the parent), so unlike the v1 RBF
+        // funding nurse there is no Rule-4 floor here — just chase market, bounded
+        // by the ceiling and the funds-gate reservation.
         let (parent_fee, parent_vsize) = backend.wallet_tx_fee_vsize(txid)?;
-        let old_feerate = parent_fee / parent_vsize.max(1);
-        let market = backend.fee_rate_for(backend.funding_conf_target(), false)?;
-        let target = market.min(self.fee_bump.max_feerate_sat_vb).min(
-            self.fee_bump
-                .funding
-                .reservation_mult
-                .saturating_mul(old_feerate),
-        );
-        if target <= old_feerate {
+        let old_feerate_kvb = parent_fee.saturating_mul(1000) / parent_vsize.max(1);
+        let market_kvb = backend.fee_rate_for_kvb(backend.funding_conf_target(), false)?;
+        let target_kvb = market_kvb
+            .min(self.fee_bump.max_feerate_sat_vb.saturating_mul(1000))
+            .min(
+                self.fee_bump
+                    .funding
+                    .reservation_mult
+                    .saturating_mul(old_feerate_kvb),
+            );
+        if target_kvb <= old_feerate_kvb {
             return Ok(None);
         }
-        let Some(child_fee) = cpfp_child_fee(parent_fee, parent_vsize, target) else {
+        let Some(child_fee) = cpfp_child_fee_kvb(parent_fee, parent_vsize, target_kvb) else {
             return Ok(None); // parent already clears the target
         };
         let Some(child_value) = change_value.checked_sub(child_fee) else {
@@ -3241,7 +3279,10 @@ impl Engine {
         Ok(Some(TickEvent {
             swap_id: rec.swap_id.clone(),
             action: "funding-cpfp-bump".into(),
-            detail: format!("leg {leg}: {child_txid} (package -> {target} sat/vB)"),
+            detail: format!(
+                "leg {leg}: {child_txid} (package -> {:.3} sat/vB)",
+                target_kvb as f64 / 1000.0
+            ),
         }))
     }
 
@@ -3271,25 +3312,29 @@ impl Engine {
         };
         let destination = old_tx.output[0].script_pubkey.clone();
         let old_fee = amount.saturating_sub(old_tx.output[0].value.to_sat());
-        let old_feerate = old_fee / REFUND_TX_VSIZE.max(1);
+        let old_feerate_kvb = old_fee.saturating_mul(1000) / REFUND_TX_VSIZE.max(1);
         // The v2 refund is a single-key RBF spend — same unified strategy as the
         // v1 redeem/refund (was a market-blind escalate()): market-tracking,
         // value-capped target, bump only when it clears BIP125 Rule 4, else
-        // re-anchor the same tx only if it was evicted.
-        let market = backend.fee_rate_sat_per_vb()?;
-        let target = self.fee_bump.claim_feerate(market, amount, REFUND_TX_VSIZE);
-        let incr = backend.incremental_relay_feerate()?;
+        // re-anchor the same tx only if it was evicted. All sat/kvB (native
+        // estimator resolution).
+        let market_kvb = backend.fee_rate_for_kvb(6, false)?;
+        let target_kvb = self
+            .fee_bump
+            .claim_feerate_kvb(market_kvb, amount, REFUND_TX_VSIZE);
+        let incr_kvb = backend.incremental_relay_feerate_kvb()?;
         // BIP125 Rule 4 also constrains the ABSOLUTE fee: the replacement must
-        // pay at least `incr * vsize` MORE than the tx it evicts. `target * vsize`
-        // can fall short of that when old_feerate was truncated (old_fee / vsize),
-        // so the node rejects the RBF (-26). Floor new_fee there; the feerate gate
-        // below still decides WHETHER a bump is worth making.
-        let new_fee = target
+        // pay at least `incr * vsize` MORE than the tx it evicts, else the node
+        // rejects the RBF (-26). Compute both fees in sat (kvB × vsize, rounded
+        // up) and floor new_fee to old_fee + incr·vsize. The gate below only asks
+        // whether the market rose above what we pay (mirrors `maybe_bump`); the
+        // increment lives in the absolute floor, not the gate.
+        let new_fee = target_kvb
             .saturating_mul(REFUND_TX_VSIZE)
-            .max(old_fee.saturating_add(incr.saturating_mul(REFUND_TX_VSIZE)));
-        let bump_floor = old_feerate.saturating_add(incr);
+            .div_ceil(1000)
+            .max(old_fee.saturating_add(incr_kvb.saturating_mul(REFUND_TX_VSIZE).div_ceil(1000)));
         let dustless = amount > new_fee + DUST_LIMIT_SAT;
-        if target < bump_floor || !dustless {
+        if target_kvb <= old_feerate_kvb || !dustless {
             if backend.is_in_mempool(&old_txid)? {
                 return Ok(None);
             }
@@ -3330,7 +3375,9 @@ impl Engine {
             swap_id: rec.swap_id.clone(),
             action: "adaptor-fee-bump".into(),
             detail: format!(
-                "{txid} (refund fee {old_fee} -> {new_fee} sat, {old_feerate} -> {target} sat/vB)"
+                "{txid} (refund fee {old_fee} -> {new_fee} sat, {:.3} -> {:.3} sat/vB)",
+                old_feerate_kvb as f64 / 1000.0,
+                target_kvb as f64 / 1000.0
             ),
         }))
     }
@@ -5116,7 +5163,7 @@ impl Engine {
             REFUND_TX_VSIZE
         };
         let old_fee = amount.saturating_sub(old_tx.output[0].value.to_sat());
-        let old_feerate = old_fee / vsize.max(1);
+        let old_feerate_kvb = old_fee.saturating_mul(1000) / vsize.max(1);
 
         // Step 3: market-tracking, value-capped target. This nurses redeem and
         // refund (both claim spends) → value-capped, NOT the funding fee ceiling.
@@ -5135,25 +5182,30 @@ impl Engine {
         } else {
             (6, false)
         };
-        let market = backend.fee_rate_for(conf_target, conservative)?;
-        let target = self.fee_bump.claim_feerate(market, amount, vsize);
+        // sat/kvB throughout — Core/Electrum quote BTC/kvB, so keep that native
+        // resolution instead of rounding the market to a whole sat/vB.
+        let market_kvb = backend.fee_rate_for_kvb(conf_target, conservative)?;
+        let target_kvb = self.fee_bump.claim_feerate_kvb(market_kvb, amount, vsize);
 
-        // Step 4 gate: a replacement must clear BIP125 Rule 4 (beat the old
-        // feerate by the node's incremental relay fee). If the target doesn't —
-        // because the market hasn't risen, or we're already paying enough — there
-        // is nothing to bump (the "already paying enough" no-op that escalate()
-        // lacked). Re-anchor the existing tx only if it was evicted (step 5).
-        let incr = backend.incremental_relay_feerate()?;
-        // Rule 4 also constrains the ABSOLUTE fee: the replacement must pay at
-        // least `incr * vsize` more than the tx it evicts. `target * vsize` can
-        // fall short of that when old_feerate was truncated (old_fee / vsize), so
-        // floor new_fee there — otherwise the node rejects the RBF (-26).
-        let new_fee = target
+        // Step 4 gate: bump when the market has risen above what the tx already
+        // pays — nothing to do otherwise (the "already paying enough" no-op that
+        // escalate() lacked). Re-anchor the existing tx only if it was evicted
+        // (step 5). The BIP125 Rule-4 increment is enforced by the ABSOLUTE
+        // `new_fee` floor below, NOT by the gate: with a 1-sat/vB increment the
+        // old integer gate `target < old + incr` collapsed to exactly this
+        // `target <= old` test, so keeping the increment in the gate too (now in
+        // precise kvB) would wrongly refuse a sub-sat/vB rise that master acted on.
+        let incr_kvb = backend.incremental_relay_feerate_kvb()?;
+        // Rule 4 constrains the ABSOLUTE fee: the replacement must pay at least
+        // `incr * vsize` more than the tx it evicts. Compute both fees in sat
+        // (kvB × vsize, rounded up) and floor to old_fee + incr·vsize — otherwise
+        // the node rejects the RBF (-26).
+        let new_fee = target_kvb
             .saturating_mul(vsize)
-            .max(old_fee.saturating_add(incr.saturating_mul(vsize)));
-        let bump_floor = old_feerate.saturating_add(incr);
+            .div_ceil(1000)
+            .max(old_fee.saturating_add(incr_kvb.saturating_mul(vsize).div_ceil(1000)));
         let dustless = amount > new_fee + DUST_LIMIT_SAT;
-        if target < bump_floor || !dustless {
+        if target_kvb <= old_feerate_kvb || !dustless {
             return self.reanchor_if_evicted(rec, backend, &old_tx, &old_txid);
         }
 
@@ -5190,7 +5242,9 @@ impl Engine {
             swap_id: rec.swap_id.clone(),
             action: "fee-bump".into(),
             detail: format!(
-                "{txid} (fee {old_fee} -> {new_fee} sat, {old_feerate} -> {target} sat/vB)"
+                "{txid} (fee {old_fee} -> {new_fee} sat, {:.3} -> {:.3} sat/vB)",
+                old_feerate_kvb as f64 / 1000.0,
+                target_kvb as f64 / 1000.0
             ),
         }))
     }
@@ -5278,23 +5332,29 @@ impl Engine {
         }
         // Recompute the broadcast feerate; chase market, bounded by the policy
         // ceiling AND the funds-gate reservation (× old_feerate, so the bump stays
-        // within the headroom that gate set aside).
+        // within the headroom that gate set aside). All sat/kvB — the estimator's
+        // native resolution — so a sub-integer market and the tx's true feerate
+        // (fee/vsize, NOT truncated to a whole sat/vB) are compared exactly.
         let (old_fee, fvsize) = backend.wallet_tx_fee_vsize(txid)?;
-        let old_feerate = old_fee / fvsize.max(1);
-        let market = backend.fee_rate_for(backend.funding_conf_target(), false)?;
-        let target = market.min(self.fee_bump.max_feerate_sat_vb).min(
-            self.fee_bump
-                .funding
-                .reservation_mult
-                .saturating_mul(old_feerate),
-        );
-        if target <= old_feerate {
-            return Ok(None); // already paying enough
-        }
+        let old_feerate_kvb = old_fee.saturating_mul(1000) / fvsize.max(1);
+        let market_kvb = backend.fee_rate_for_kvb(backend.funding_conf_target(), false)?;
+        let incr_kvb = backend.incremental_relay_feerate_kvb()?;
+        // Chase market (floored to the Rule-4 minimum so the RBF is ACCEPTED, not
+        // rejected as it was in the field — see `funding_bump_rate_kvb`), or a
+        // no-op when the market hasn't moved.
+        let Some(rate_kvb) = funding_bump_rate_kvb(
+            old_feerate_kvb,
+            market_kvb,
+            incr_kvb,
+            self.fee_bump.max_feerate_sat_vb.saturating_mul(1000),
+            self.fee_bump.funding.reservation_mult,
+        ) else {
+            return Ok(None);
+        };
         // RBF via the wallet. A recoverable failure (insufficient funds — the funds
         // gate is a soft pre-flight, not a lock — or not-replaceable) is a graceful
         // no-op for this tick, never a crash: the funding stalls → refund.
-        let new_txid = match backend.wallet_bumpfee(txid, target) {
+        let new_txid = match backend.wallet_bumpfee(txid, rate_kvb) {
             Ok(t) => t,
             Err(e) => {
                 return Ok(Some(TickEvent {
@@ -5359,7 +5419,11 @@ impl Engine {
         Ok(Some(TickEvent {
             swap_id: rec.swap_id.clone(),
             action: "funding-fee-bump".into(),
-            detail: format!("leg {leg}: {new_txid} (funding {old_feerate} -> {target} sat/vB)"),
+            detail: format!(
+                "leg {leg}: {new_txid} (funding {:.3} -> {:.3} sat/vB)",
+                old_feerate_kvb as f64 / 1000.0,
+                rate_kvb as f64 / 1000.0
+            ),
         }))
     }
 }
@@ -6915,7 +6979,9 @@ impl Engine {
             coin_id: coin_id.to_string(),
             network,
         })?
-        .wallet_bumpfee(txid, sat_per_vb)
+        // The RPC surface takes whole sat/vB from the user; the backend bumps at
+        // sat/kvB resolution.
+        .wallet_bumpfee(txid, sat_per_vb.saturating_mul(1000))
     }
 
     /// The wallet activity feed for a nodeless coin (`listtransactions`, design
@@ -7661,25 +7727,83 @@ mod tests {
     #[test]
     fn cpfp_child_fee_lifts_package_to_target() {
         // v2+: the cooperative redeem can't be RBF'd, so a child bumps the
-        // package. Parent: 111 vB at 10 sat/vB committed = 1110 sat fee.
+        // package. Parent: 111 vB at 10 sat/vB (= 10_000 sat/kvB) committed.
         let parent_vsize = crate::taproot::KEYPATH_REDEEM_VSIZE;
         let parent_fee = 10 * parent_vsize; // committed at 10 sat/vB
 
         // Target below what the parent already pays: no child needed.
-        assert_eq!(cpfp_child_fee(parent_fee, parent_vsize, 5), None);
-        assert_eq!(cpfp_child_fee(parent_fee, parent_vsize, 10), None);
+        assert_eq!(cpfp_child_fee_kvb(parent_fee, parent_vsize, 5_000), None);
+        assert_eq!(cpfp_child_fee_kvb(parent_fee, parent_vsize, 10_000), None);
 
-        // Target 50 sat/vB: the package (parent+child vsizes) must pay
-        // 50 * (111 + 150) = 13050 sat; child covers the shortfall over parent.
+        // Target 50 sat/vB (50_000 sat/kvB): the package (parent+child vsizes)
+        // must pay 50 * (111 + 150) = 13050 sat; child covers the shortfall.
         let pkg_vsize = parent_vsize + CPFP_CHILD_VSIZE;
-        let child = cpfp_child_fee(parent_fee, parent_vsize, 50).unwrap();
+        let child = cpfp_child_fee_kvb(parent_fee, parent_vsize, 50_000).unwrap();
         assert_eq!(child, 50 * pkg_vsize - parent_fee);
         // The realised package feerate meets the target.
         assert!((parent_fee + child) / pkg_vsize >= 50);
         // No arbitrary floor: the child pays EXACTLY the top-up to reach market.
         // A zero-fee parent at target 1 sat/vB → the natural package fee
         // (1 × package vsize = 261 sat), not lifted to any minimum.
-        assert_eq!(cpfp_child_fee(0, parent_vsize, 1).unwrap(), pkg_vsize);
+        assert_eq!(
+            cpfp_child_fee_kvb(0, parent_vsize, 1_000).unwrap(),
+            pkg_vsize
+        );
+        // Sub-integer precision now survives: a 1.5 sat/vB (1_500 sat/kvB) target
+        // on a zero-fee parent lifts the package to ceil(1.5 × 261) = 392 sat —
+        // not rounded down to 1 sat/vB the way the old integer path would have.
+        assert_eq!(
+            cpfp_child_fee_kvb(0, parent_vsize, 1_500).unwrap(),
+            (1_500 * pkg_vsize).div_ceil(1000)
+        );
+    }
+
+    #[test]
+    fn funding_bump_clears_bip125_rule4_at_sub_sat_vb() {
+        // Regression for the field deadlock (swap 084f20d3): a funding broadcast
+        // at ~1.004 sat/vB (fee 1004 sat over ~1000 vB) stranded because the old
+        // integer nurse truncated old→"1", offered "2", and the node required
+        // 2.004 → rejected every tick. In sat/kvB the offer must clear old+incr.
+        let old_kvb = 1_004; // 1.004 sat/vB, the true broadcast feerate
+        let incr_kvb = 1_000; // 1 sat/vB incremental relay fee (mainnet default)
+        let ceiling_kvb = 500_000; // default 500 sat/vB policy ceiling
+        let mult = 3; // default funding.reservation_mult
+
+        // Market risen to ~2.0 sat/vB: the offered rate MUST reach at least the
+        // node's Rule-4 minimum (old + incr = 2.004 sat/vB), not the old "2".
+        let rate = funding_bump_rate_kvb(old_kvb, 2_000, incr_kvb, ceiling_kvb, mult).unwrap();
+        assert!(
+            rate >= old_kvb + incr_kvb,
+            "offer {rate} sat/kvB must clear the {}=old+incr Rule-4 floor",
+            old_kvb + incr_kvb
+        );
+        assert_eq!(rate, 2_004); // exactly the required minimum, in kvB
+
+        // Market well above the floor: chase it precisely (no rounding to a whole
+        // sat/vB), still bounded by the reservation (3 × old = 3.012 sat/vB).
+        assert_eq!(
+            funding_bump_rate_kvb(old_kvb, 2_800, incr_kvb, ceiling_kvb, mult),
+            Some(2_800)
+        );
+        assert_eq!(
+            funding_bump_rate_kvb(old_kvb, 9_000, incr_kvb, ceiling_kvb, mult),
+            Some(mult * old_kvb) // reservation cap: 3 × 1004 = 3012
+        );
+
+        // Market NOT risen above what we already pay → no bump (no churn).
+        assert_eq!(
+            funding_bump_rate_kvb(old_kvb, old_kvb, incr_kvb, ceiling_kvb, mult),
+            None
+        );
+        assert_eq!(
+            funding_bump_rate_kvb(old_kvb, 900, incr_kvb, ceiling_kvb, mult),
+            None
+        );
+
+        // The offer never exceeds the reservation for any funding ≥ 1 sat/vB, so
+        // the funds-gate headroom is respected even when the incr floor kicks in.
+        let just_above = funding_bump_rate_kvb(old_kvb, old_kvb + 1, incr_kvb, ceiling_kvb, mult);
+        assert!(just_above.unwrap() <= mult * old_kvb);
     }
 
     #[test]
