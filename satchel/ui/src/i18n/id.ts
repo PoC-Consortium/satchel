@@ -348,10 +348,10 @@ export const id: Bundle = {
       "Trade-off keamanan/biaya untuk penaikan biaya, bukan pengaturan wajib. Nilai baru berlaku untuk penaikan mendatang; swap yang sudah didanai mempertahankan kebijakan saat didanai.",
     feeMax: "Feerate maksimum (sat/vB)",
     feeMaxHint:
-      "Batas atas untuk setiap penaikan biaya. Bawaan 500, juga maksimum sistem mutlak. Turunkan untuk membatasi biaya.",
+      "Batas atas untuk penaikan biaya pendanaan (HTLC + adaptor); bawaan 500, juga maksimum sistem mutlak. Turunkan untuk membatasi biaya pendanaan. Penaikan penebusan dan pengembalian mengabaikannya — di dekat kunci waktu, mereka membayar berapa pun yang diperlukan, hingga nilai yang dipertaruhkan, sehingga tidak ada sisi swap yang hilang karena batas biaya.",
     feeReservation: "Cadangan penaikan pendanaan (×)",
     feeReservationHint:
-      "Saldo yang disisihkan pemeriksaan dana sebagai ruang penaikan. Lebih tinggi menyelamatkan lonjakan biaya yang lebih besar tapi mengikat lebih banyak saldo dan menolak lebih banyak swap. Bawaan 3.",
+      "Hanya penaikan pendanaan (HTLC + adaptor). Sekaligus saldo yang disisihkan pemeriksaan dana sebagai ruang penaikan dan batas sebuah penaikan pendanaan (kelipatan ini dari tarif aslinya). Lebih tinggi menyelamatkan lonjakan biaya yang lebih besar tapi mengikat lebih banyak saldo dan menolak lebih banyak swap. Bawaan 3.",
     feeSave: "Simpan",
     feeSaving: "Menyimpan…",
     feeSaved: "Tersimpan",

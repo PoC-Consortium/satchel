@@ -348,10 +348,10 @@ export const ca: Bundle = {
       "Compromisos de seguretat/cost per als increments de comissions, no és una configuració obligatòria. Els valors nous s'apliquen a futurs increments; els intercanvis ja finançats mantenen la política amb què es van finançar.",
     feeMax: "Feerate màxim (sat/vB)",
     feeMaxHint:
-      "Límit per a cada increment de comissió. Per defecte 500, també el màxim absolut del sistema. Baixa'l per limitar els costos.",
+      "Límit per als increments de comissió de finançament (HTLC + adaptor); per defecte 500, també el màxim absolut del sistema. Baixa'l per limitar els costos de finançament. Els increments de reemborsament i devolució l'ignoren — prop d'un bloqueig temporal paguen el que calgui, fins al valor en joc, així que mai no es perd un tram per un límit de comissió.",
     feeReservation: "Reserva per a increment de finançament (×)",
     feeReservationHint:
-      "El saldo que la comprovació de fons reserva com a marge per a increments. Més alt rescata pics de comissions més grans però immobilitza més saldo i rebutja més intercanvis. Per defecte 3.",
+      "Només per a increments de finançament (HTLC + adaptor). Alhora el saldo que la comprovació de fons reserva com a marge per a increments i el límit d'un increment de finançament (aquest múltiple de la seva tarifa original). Més alt rescata pics de comissions més grans però immobilitza més saldo i rebutja més intercanvis. Per defecte 3.",
     feeSave: "Desa",
     feeSaving: "Desant…",
     feeSaved: "Desat",

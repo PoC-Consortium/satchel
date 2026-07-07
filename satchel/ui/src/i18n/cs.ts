@@ -348,10 +348,10 @@ export const cs: Bundle = {
       "Kompromisy bezpečnost/cena pro navyšování poplatků, ne povinné nastavení. Nové hodnoty platí pro budoucí navýšení; již financované swapy si ponechávají politiku, pod kterou byly financovány.",
     feeMax: "Max. feerate (sat/vB)",
     feeMaxHint:
-      "Strop pro každé navýšení poplatku. Výchozí 500, zároveň pevné systémové maximum. Snížením omezíte náklady.",
+      "Strop pro navýšení poplatku u financování (HTLC + adaptor); výchozí 500, zároveň pevné systémové maximum. Snížením omezíte náklady na financování. Navýšení u vyplacení a vrácení jej ignorují — v blízkosti časového zámku zaplatí, kolik je třeba, až do hodnoty v sázce, takže se kvůli stropu poplatku nikdy neztratí žádná část swapu.",
     feeReservation: "Rezerva pro navýšení financování (×)",
     feeReservationHint:
-      "Zůstatek, který kontrola prostředků odloží stranou jako rezervu pro navýšení. Vyšší zachrání větší skoky poplatků, ale váže více zůstatku a odmítne více swapů. Výchozí 3.",
+      "Pouze navýšení u financování (HTLC + adaptor). Zároveň zůstatek, který kontrola prostředků odloží stranou jako rezervu pro navýšení, i strop navýšení u financování (tento násobek jeho původní sazby). Vyšší zachrání větší skoky poplatků, ale váže více zůstatku a odmítne více swapů. Výchozí 3.",
     feeSave: "Uložit",
     feeSaving: "Ukládání…",
     feeSaved: "Uloženo",

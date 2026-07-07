@@ -348,10 +348,10 @@ export const pl: Bundle = {
       "Kompromisy bezpieczeństwo/koszt dla podbicia opłat, nie jest to wymagana konfiguracja. Nowe wartości obowiązują dla przyszłych podbić; swapy już sfinansowane zachowują politykę, pod którą zostały sfinansowane.",
     feeMax: "Maks. feerate (sat/vB)",
     feeMaxHint:
-      "Górny limit dla każdego podbicia opłaty. Domyślnie 500, to także twardy maksimum systemu. Obniż, aby ograniczyć koszty.",
+      "Górny limit dla podbić opłaty przy finansowaniu (HTLC + adaptor); domyślnie 500, to także twardy maksimum systemu. Obniż, aby ograniczyć koszty finansowania. Podbicia przy wykupie i zwrocie go ignorują — blisko blokady czasowej płacą, ile trzeba, aż do wartości stawki, więc żadna noga nigdy nie przepada przez limit opłaty.",
     feeReservation: "Rezerwa na podbicie finansowania (×)",
     feeReservationHint:
-      "Saldo, które kontrola środków odkłada jako zapas na podbicie. Wyższe ratuje większe skoki opłat, ale blokuje więcej salda i odrzuca więcej swapów. Domyślnie 3.",
+      "Tylko podbicia finansowania (HTLC + adaptor). Zarówno saldo, które kontrola środków odkłada jako zapas na podbicie, jak i limit podbicia finansowania (ta wielokrotność jego pierwotnej stawki). Wyższe ratuje większe skoki opłat, ale blokuje więcej salda i odrzuca więcej swapów. Domyślnie 3.",
     feeSave: "Zapisz",
     feeSaving: "Zapisywanie…",
     feeSaved: "Zapisano",

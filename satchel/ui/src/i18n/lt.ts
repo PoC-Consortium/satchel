@@ -348,10 +348,10 @@ export const lt: Bundle = {
       "Saugumo / kainos kompromisai mokesčių didinimui, ne privaloma konfigūracija. Naujos reikšmės taikomos būsimam didinimui; jau finansuoti mainai išlaiko politiką, su kuria buvo finansuoti.",
     feeMax: "Maks. mokesčio norma (sat/vB)",
     feeMaxHint:
-      "Kiekvieno mokesčio didinimo riba. Numatytoji 500, taip pat ir griežta sistemos maksimali. Sumažinkite, kad apribotumėte išlaidas.",
+      "Finansavimo mokesčio didinimų riba (HTLC + adaptor); numatytoji 500, taip pat ir griežta sistemos maksimali. Sumažinkite, kad apribotumėte finansavimo išlaidas. Išpirkimo ir grąžinimo didinimai jos nepaiso — prie laiko užrakto jie sumoka, kiek reikia, iki statomos vertės, todėl dėl mokesčio ribos niekada neprarandama nė viena mainų dalis.",
     feeReservation: "Finansavimo didinimo rezervas (×)",
     feeReservationHint:
-      "Likutis, kurį lėšų patikra atideda kaip didinimo atsargą. Didesnis padeda atremti didesnius mokesčio šuolius, bet užima daugiau likučio ir atmeta daugiau mainų. Numatytoji 3.",
+      "Tik finansavimo didinimai (HTLC + adaptor). Ir likutis, kurį lėšų patikra atideda kaip didinimo atsargą, ir finansavimo didinimo riba (šis pradinio jo mokesčio tarifo kartotinis). Didesnis padeda atremti didesnius mokesčio šuolius, bet užima daugiau likučio ir atmeta daugiau mainų. Numatytoji 3.",
     feeSave: "Įrašyti",
     feeSaving: "Įrašoma…",
     feeSaved: "Įrašyta",

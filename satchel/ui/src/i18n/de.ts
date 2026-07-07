@@ -348,10 +348,10 @@ export const de: Bundle = {
       "Sicherheits-/Kosten-Abwägungen für Gebühren-Bumps, keine erforderliche Einrichtung. Neue Werte gelten für künftige Bumps; bereits finanzierte Swaps behalten die Richtlinie, unter der sie finanziert wurden.",
     feeMax: "Maximale Feerate (sat/vB)",
     feeMaxHint:
-      "Obergrenze für jeden Gebühren-Bump. Standard 500, zugleich das harte Systemmaximum. Senke ihn, um Kosten zu deckeln.",
+      "Obergrenze für Finanzierungs-Bumps (HTLC + adaptor); Standard 500, zugleich das harte Systemmaximum. Senke sie, um die Finanzierungskosten zu deckeln. Bumps beim Einlösen und Rückerstatten ignorieren sie — nahe einer Zeitsperre zahlen sie, was nötig ist, bis zum eingesetzten Wert, sodass niemals ein Leg an einer Gebührenobergrenze verloren geht.",
     feeReservation: "Reserve für Finanzierungs-Bump (×)",
     feeReservationHint:
-      "Anteil des Guthabens, den die Mittelprüfung als Bump-Puffer zurücklegt. Höher rettet größere Gebührenspitzen, bindet aber mehr Guthaben und lehnt mehr Swaps ab. Standard 3.",
+      "Nur Finanzierungs-Bumps (HTLC + adaptor). Zugleich das Guthaben, das die Mittelprüfung als Bump-Puffer zurücklegt, und die Obergrenze eines Finanzierungs-Bumps (dieses Vielfache seiner ursprünglichen Feerate). Höher rettet größere Gebührenspitzen, bindet aber mehr Guthaben und lehnt mehr Swaps ab. Standard 3.",
     feeSave: "Speichern",
     feeSaving: "Speichern…",
     feeSaved: "Gespeichert",

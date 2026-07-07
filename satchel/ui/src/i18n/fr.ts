@@ -348,10 +348,10 @@ export const fr: Bundle = {
       "Compromis sécurité/coût pour les augmentations de frais, pas une configuration requise. Les nouvelles valeurs s'appliquent aux futures augmentations ; les swaps déjà financés conservent la politique sous laquelle ils ont été financés.",
     feeMax: "Feerate max (sat/vB)",
     feeMaxHint:
-      "Plafond pour chaque augmentation de frais. Par défaut 500, qui est aussi le maximum système absolu. Abaissez-le pour limiter les coûts.",
+      "Plafond pour les augmentations de frais de financement (HTLC + adaptor) ; par défaut 500, qui est aussi le maximum système absolu. Abaissez-le pour limiter les coûts de financement. Les augmentations de rachat et de remboursement l'ignorent — près d'un verrou temporel, elles paient ce qu'il faut, jusqu'à la valeur en jeu, de sorte qu'une jambe n'est jamais perdue à cause d'un plafond de frais.",
     feeReservation: "Réserve d'augmentation au financement (×)",
     feeReservationHint:
-      "Solde que le contrôle de fonds met de côté comme marge d'augmentation. Plus élevé sauve de plus gros pics de frais mais immobilise plus de solde et rejette plus de swaps. Par défaut 3.",
+      "Augmentations de financement uniquement (HTLC + adaptor). À la fois le solde que le contrôle de fonds met de côté comme marge d'augmentation et le plafond d'une augmentation de financement (ce multiple de son taux de frais initial). Plus élevé sauve de plus gros pics de frais mais immobilise plus de solde et rejette plus de swaps. Par défaut 3.",
     feeSave: "Enregistrer",
     feeSaving: "Enregistrement…",
     feeSaved: "Enregistré",
