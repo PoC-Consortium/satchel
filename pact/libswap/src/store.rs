@@ -791,13 +791,15 @@ impl Store {
     }
 
     /// Mark `revoked` only if still `live` — so the C5 auto-revoke that fires when
-    /// a take commits doesn't clobber the `taken` state set at commit time.
-    pub fn my_offer_mark_revoked(&self, offer_id: &str) -> Result<()> {
-        self.conn.execute(
+    /// a take commits doesn't clobber the `taken` state set at commit time. Returns
+    /// how many rows changed (1 if this actually withdrew a live offer of ours, 0
+    /// if it was already terminal or not ours) so callers can log real revocations.
+    pub fn my_offer_mark_revoked(&self, offer_id: &str) -> Result<usize> {
+        let n = self.conn.execute(
             "UPDATE my_offers SET state = 'revoked' WHERE offer_id = ?1 AND state = 'live'",
             params![offer_id],
         )?;
-        Ok(())
+        Ok(n)
     }
 
     /// Stamp the last successful re-publish of a live offer.
