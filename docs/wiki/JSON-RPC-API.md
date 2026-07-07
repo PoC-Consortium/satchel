@@ -20,8 +20,8 @@
 | `listmethods` | Machine-readable array of every method name. |
 | `walletstatus` | `{ seed_exists, encrypted, locked }`. |
 | `setwatchonly` | Toggle watch-only mode for the active merchant (`on: bool`); persisted, no relaunch. In watch-only you can browse the board and withdraw your own offers but cannot post/take/fund. |
-| `getfeepolicy` | Active merchant's fee-bump policy `{ max_feerate_sat_vb, reservation_mult, committed_mult }`. |
-| `setfeepolicy` | Update the fee-bump policy — positional, all optional `[max_feerate_sat_vb?, reservation_mult?, committed_mult?]`; returns the updated policy; persisted per-merchant. The fee-bump itself is automatic market-tracking (no manual step knob). |
+| `getfeepolicy` | Active merchant's fee-bump policy `{ max_feerate_sat_vb, reservation_mult }`. |
+| `setfeepolicy` | Update the fee-bump policy — positional, all optional `[max_feerate_sat_vb?, reservation_mult?]`; returns the updated policy; persisted per-merchant. The fee-bump itself is automatic market-tracking (no manual step knob). |
 | `stop` | Trigger graceful shutdown. |
 
 ## Seed / wallet lifecycle

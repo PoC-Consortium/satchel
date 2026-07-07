@@ -352,9 +352,6 @@ export const ptBR: Bundle = {
     feeReservation: "Reserva para bump de funding (×)",
     feeReservationHint:
       "Saldo que a verificação de fundos reserva como folga para bumps. Mais alto resgata picos de taxa maiores, mas imobiliza mais saldo e rejeita mais swaps. Padrão 3.",
-    feeCommitted: "Sobreprovisão do redeem (×)",
-    feeCommittedHint:
-      "Quanto a mais a taxa de redeem v2 é pré-paga para que confirme mesmo com o Satchel fechado. Aplica-se apenas a novos swaps. Padrão 1.",
     feeSave: "Salvar",
     feeSaving: "Salvando…",
     feeSaved: "Salvo",

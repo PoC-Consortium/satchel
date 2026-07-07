@@ -131,16 +131,16 @@ Two mitigations make this safe in practice.
 signing (`engine.rs`, `adaptor_redeem_feerate`):
 
 ```text
-adaptor_redeem_feerate = live_market_estimate × redeem.committed_mult(1)
+adaptor_redeem_feerate = live_market_estimate
                          clamped to [MIN_REDEEM_FEERATE = 1, MAX_REDEEM_FEERATE = 500] sat/vB
                          fallback 20 sat/vB if no backend is reachable
 ```
 
-With the default `committed_mult = 1` the redeem commits at the **live market
-rate, with no over-provision** — the CPFP child below is what lifts it if the
-market climbs while it's pending, so padding the committed fee up front is no
-longer needed (the multiplier was 2× before this, and 3× before CPFP existed).
-Raise `committed_mult` above 1 to deliberately pre-pay a cushion. There is no
+The redeem commits at the **live market rate, with no over-provision** — the
+CPFP child below is what lifts it if the market climbs while it's pending, so
+padding the committed fee up front is no longer needed (there was an
+over-provision multiplier before this — 2× at one point, and 3× before CPFP
+existed — but it has been removed). There is no
 longer a regtest special-case: regtest has no fee history, so the estimate lands
 on its ≈1 sat/vB floor (`MIN_REDEEM_FEERATE`) like any other quiet chain. Note
 the clamp here is the **protocol** bound `MAX_REDEEM_FEERATE` (the value is
@@ -336,20 +336,18 @@ owned per-merchant by pactd's store and surfaced as typed RPC:
   A change is validated, applied to the live engine, and persisted, so it
   survives a restart with no Satchel involved.
 - **Satchel → Settings → Fees** edits the **active merchant's** policy over the
-  same RPC (applied live, no relaunch). It exposes three knobs
-  (`max_feerate_sat_vb`, `reservation_mult`, `committed_mult`); every fee is
+  same RPC (applied live, no relaunch). It exposes two knobs
+  (`max_feerate_sat_vb`, `reservation_mult`); every fee is
   market-derived, so there is no minimum-fee floor to show. The retired
   `step_pct` knob was removed from this page when the bump strategy was unified.
 
 Changes take effect on the **next** bump; swaps already funded keep the
-`committed_mult` and gate reservation they were funded under (both fixed at
-funding time).
+gate reservation they were funded under (fixed at funding time).
 
 | Field | Default | Meaning |
 |---|---|---|
 | `max_feerate_sat_vb` | 500 sat/vB | ceiling for **funding** bumps only (redeem/refund are bounded by the value-at-risk cap instead, so they can exceed it near a deadline); settable `1..=500`. The estimator's own sanity clamp is a separate 10 000 sat/vB overflow guard. |
 | `funding.reservation_mult` | 3× | funds-gate headroom + funding-nurse bound (`× old_feerate`) |
-| `redeem.committed_mult` | 1× | v2 committed-redeem multiplier over live market (1 = commit at market, no padding; CPFP lifts it if the market climbs) |
 
 > **Note** — `min_fee_sat` (the old 1000-sat floor) and `redeem.step_pct` /
 > `refund.step_pct` (default 50) are **retired**. The floor and the per-tick

@@ -352,9 +352,6 @@ export const id: Bundle = {
     feeReservation: "Cadangan penaikan pendanaan (×)",
     feeReservationHint:
       "Saldo yang disisihkan pemeriksaan dana sebagai ruang penaikan. Lebih tinggi menyelamatkan lonjakan biaya yang lebih besar tapi mengikat lebih banyak saldo dan menolak lebih banyak swap. Bawaan 3.",
-    feeCommitted: "Kelebihan provisi redeem (×)",
-    feeCommittedHint:
-      "Seberapa banyak ekstra biaya redeem v2 dibayar di muka agar terkonfirmasi bahkan saat Satchel ditutup. Hanya berlaku untuk swap baru. Bawaan 1.",
     feeSave: "Simpan",
     feeSaving: "Menyimpan…",
     feeSaved: "Tersimpan",

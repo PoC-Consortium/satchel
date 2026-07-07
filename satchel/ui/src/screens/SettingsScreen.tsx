@@ -329,21 +329,18 @@ function UrlList({
 
 // Fee-bump policy — per the active merchant (pactd's store owns it; the engine
 // reloads it on launch). Read via getfeepolicy, written via setfeepolicy (typed,
-// applied live, no relaunch). Three knobs; every fee is market-derived, so there
-// is no minimum-fee floor to expose (the old min_fee_sat was removed).
+// applied live, no relaunch). Two knobs, both funding-side; every fee is
+// market-derived, so there is no minimum-fee floor to expose. (The v2 redeem
+// over-provision knob was removed — redeems commit at market and the CPFP nurse
+// lifts them if fees climb.)
 type FeePolicy = {
   max_feerate_sat_vb: number;
   reservation_mult: number;
-  committed_mult: number;
 };
 
 const FEE_DEFAULTS: FeePolicy = {
   max_feerate_sat_vb: 500,
   reservation_mult: 3,
-  // Match the engine default (committed_mult was changed 2→1: v2 redeems commit
-  // at 1× live market, a CPFP child lifts the fee only if the market climbs).
-  // This fallback shows only until getfeepolicy loads the real value.
-  committed_mult: 1,
 };
 
 function FeesTab() {
@@ -372,12 +369,8 @@ function FeesTab() {
     setBusy(true);
     setStatus(t("settings.feeSaving"));
     try {
-      // Positional params: max, reservation, committed.
-      await rpc("setfeepolicy", [
-        pol.max_feerate_sat_vb,
-        pol.reservation_mult,
-        pol.committed_mult,
-      ]);
+      // Positional params: max, reservation.
+      await rpc("setfeepolicy", [pol.max_feerate_sat_vb, pol.reservation_mult]);
       log(t("log.feePolicyUpdated"));
       setStatus(t("settings.feeSaved"));
       await load();
@@ -407,7 +400,6 @@ function FeesTab() {
   // i18n no-literal-string guard (they are property keys, not display copy).
   const maxField = num("max_feerate_sat_vb", 1, 500);
   const reservationField = num("reservation_mult", 1, 100);
-  const committedField = num("committed_mult", 1, 100);
 
   return (
     <Section title={t("settings.fees")}>
@@ -422,9 +414,6 @@ function FeesTab() {
       </Row>
       <Row label={t("settings.feeReservation")} hint={t("settings.feeReservationHint")}>
         {reservationField}
-      </Row>
-      <Row label={t("settings.feeCommitted")} hint={t("settings.feeCommittedHint")}>
-        {committedField}
       </Row>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mt: 1.5 }}>
         <Button variant="contained" onClick={() => void save()} disabled={busy || !loaded}>

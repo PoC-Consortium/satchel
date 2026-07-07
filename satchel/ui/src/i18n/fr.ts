@@ -352,9 +352,6 @@ export const fr: Bundle = {
     feeReservation: "Réserve d'augmentation au financement (×)",
     feeReservationHint:
       "Solde que le contrôle de fonds met de côté comme marge d'augmentation. Plus élevé sauve de plus gros pics de frais mais immobilise plus de solde et rejette plus de swaps. Par défaut 3.",
-    feeCommitted: "Surprovisionnement du redeem (×)",
-    feeCommittedHint:
-      "Combien les frais de redeem v2 sont surpayés à l'avance pour qu'il confirme même quand Satchel est fermé. S'applique uniquement aux nouveaux swaps. Par défaut 1.",
     feeSave: "Enregistrer",
     feeSaving: "Enregistrement…",
     feeSaved: "Enregistré",

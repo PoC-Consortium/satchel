@@ -352,9 +352,6 @@ export const hr: Bundle = {
     feeReservation: "Rezervacija za povećanje financiranja (×)",
     feeReservationHint:
       "Stanje koje provjera sredstava izdvaja kao rezervu za povećanje. Više spašava veće skokove naknade, ali veže više stanja i odbija više swapova. Zadano 3.",
-    feeCommitted: "Predoplata naknade za otkup (×)",
-    feeCommittedHint:
-      "Koliko se dodatno unaprijed plaća v2 naknada za otkup kako bi se potvrdila čak i kad je Satchel zatvoren. Vrijedi samo za nove swapove. Zadano 1.",
     feeSave: "Spremi",
     feeSaving: "Spremanje…",
     feeSaved: "Spremljeno",

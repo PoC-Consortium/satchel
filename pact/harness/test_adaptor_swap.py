@@ -356,9 +356,9 @@ def test_adaptor_redeem_cpfp_ltc(h):
         redeem_txid = rec["final_txid_b"]
         assert h.ltc.rpc("gettxout", redeem_txid, 0) is not None, "LTC redeem output missing pre-CPFP"
 
-        # The redeem's fee was sealed at litecoind's 10 sat/vB floor (committed_mult=1
-        # commits at market); raise the market above it so the nurse sees it
-        # under-priced and CPFP-bumps it.
+        # The redeem's fee was sealed at litecoind's 10 sat/vB floor (v2 redeems
+        # commit at the live market rate); raise the market above it so the nurse
+        # sees it under-priced and CPFP-bumps it.
         alice.rpc("_settestfeerate", 20)
 
         # The unconfirmed LTC redeem → a tick must CPFP-bump it on litecoind.

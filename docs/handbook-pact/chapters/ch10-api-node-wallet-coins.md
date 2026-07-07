@@ -46,8 +46,8 @@ merchant* error) are covered in the chapter "JSON-RPC Conventions".
 ### Fee policy
 
 The active merchant's local fee-bump policy — the knobs that drive funding-nurse
-bumps, the v2 committed-redeem feerate, and the market-tracking refund/redeem
-bumps. Both methods are scoped to the active merchant.
+bumps and the market-tracking refund/redeem bumps. Both methods are scoped to
+the active merchant.
 
 | Method | Params | Returns | Mutates |
 |---|---|---|---|
@@ -57,12 +57,12 @@ bumps. Both methods are scoped to the active merchant.
 The policy object is a flat shape:
 
 ```json
-{ "max_feerate_sat_vb": 500, "reservation_mult": 3, "committed_mult": 1 }
+{ "max_feerate_sat_vb": 500, "reservation_mult": 3 }
 ```
 
 - `getfeepolicy` — read-only; returns the active merchant's current policy.
 - `setfeepolicy` — **positional** params, all optional, in order
-  `[max_feerate_sat_vb?, reservation_mult?, committed_mult?]`.
+  `[max_feerate_sat_vb?, reservation_mult?]`.
   Only the fields you supply change; the rest keep their current values. The new
   values are validated server-side, applied live, and persisted per-merchant (they
   survive a restart). Returns the full updated policy (same shape).
@@ -71,7 +71,6 @@ The policy object is a flat shape:
 |---|---|---|---|
 | `max_feerate_sat_vb` | 500 | `1..=500` | Local ceiling on any bump's feerate (sat/vB). |
 | `reservation_mult` | 3 | `1..=1000` | Funding-nurse target multiplier over the old feerate. |
-| `committed_mult` | 1 | `1..=1000` | v2 committed-redeem multiplier over live market (1 = commit at market; a CPFP child lifts it if the market climbs). |
 
 > Every spend and bump is market-derived (`target_feerate` = `min(market,
 > value-at-risk, max_feerate_sat_vb)`); there is no minimum-fee floor. The former

@@ -352,9 +352,6 @@ export const ca: Bundle = {
     feeReservation: "Reserva per a increment de finançament (×)",
     feeReservationHint:
       "El saldo que la comprovació de fons reserva com a marge per a increments. Més alt rescata pics de comissions més grans però immobilitza més saldo i rebutja més intercanvis. Per defecte 3.",
-    feeCommitted: "Sobreprovisió de bescanvi (×)",
-    feeCommittedHint:
-      "Quant extra es paga per avançat la comissió de bescanvi v2 perquè es confirmi fins i tot amb Satchel tancat. S'aplica només a intercanvis nous. Per defecte 1.",
     feeSave: "Desa",
     feeSaving: "Desant…",
     feeSaved: "Desat",
