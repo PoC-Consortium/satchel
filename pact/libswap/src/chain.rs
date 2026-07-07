@@ -278,9 +278,13 @@ pub trait ChainBackend: Send + Sync {
 
     /// [`ChainBackend::fee_rate_for`] at sat/kvB resolution (same fallback
     /// semantics). Sends and swap funding price off THIS — the fraction is
-    /// real queue priority at the bottom of the market (rc10 field report).
-    fn fee_rate_for_kvb(&self, conf_target: u16) -> Result<u64> {
-        Ok(self.fee_rate_for(conf_target, false)? * 1000)
+    /// real queue priority at the bottom of the market (rc10 field report), and
+    /// the bump nurses use it so a sub-integer market move isn't rounded away
+    /// (which stranded funding: the RBF then landed below the node's fractional
+    /// Rule-4 minimum). `conservative` mirrors [`Self::fee_rate_for`] — the
+    /// deadline-escalated claim bands ask for the robuster estimate.
+    fn fee_rate_for_kvb(&self, conf_target: u16, conservative: bool) -> Result<u64> {
+        Ok(self.fee_rate_for(conf_target, conservative)? * 1000)
     }
 
     /// Resolve a [`SendFee`] to the sat/kvB rate a send prices itself at:
@@ -288,7 +292,7 @@ pub trait ChainBackend: Send + Sync {
     /// clamped to the coin floor and the sanity max.
     fn resolve_send_fee(&self, fee: SendFee) -> Result<u64> {
         match fee {
-            SendFee::Target(conf_target) => self.fee_rate_for_kvb(conf_target),
+            SendFee::Target(conf_target) => self.fee_rate_for_kvb(conf_target, false),
             SendFee::RatePerKvb(rate) => Ok(rate
                 .clamp(1, SANITY_MAX_SAT_PER_VB * 1000)
                 .max(self.params().min_feerate_sat_vb * 1000)),
@@ -321,6 +325,18 @@ pub trait ChainBackend: Send + Sync {
     /// Defaults to 1 sat/vB when the node can't report it.
     fn incremental_relay_feerate(&self) -> Result<u64> {
         Ok(1)
+    }
+
+    /// [`Self::incremental_relay_feerate`] at **sat/kvB** resolution — the
+    /// minimum a BIP125 replacement must beat the replaced tx by, kept at the
+    /// estimator's native granularity so the funding-RBF Rule-4 floor is exact
+    /// (`incrementalrelayfee` is quoted in BTC/kvB). Defaults to the integer
+    /// sat/vB value ×1000; Core overrides with the precise node value.
+    fn incremental_relay_feerate_kvb(&self) -> Result<u64> {
+        Ok(self
+            .incremental_relay_feerate()?
+            .saturating_mul(1000)
+            .max(1000))
     }
 
     /// Fresh receive address from the user's core wallet (sweep target).
@@ -426,10 +442,13 @@ pub trait ChainBackend: Send + Sync {
     }
 
     /// RBF-bump a wallet-owned tx via the node's `bumpfee`, targeting `feerate`
-    /// (sat/vB); returns the replacement txid. The v1 funding nurse: the funding is
-    /// wallet-owned and broadcast BIP125-replaceable. Errors if not replaceable or
-    /// the wallet can't afford the higher fee. Wallet-backed Core primary only.
-    fn wallet_bumpfee(&self, _txid: &str, _feerate_sat_vb: u64) -> Result<String> {
+    /// (**sat/kvB**, the estimator's native resolution — so a 1.004 sat/vB tx is
+    /// bumped to a precise rate that clears the node's fractional Rule-4 minimum,
+    /// not rounded to a whole sat/vB that lands just below it); returns the
+    /// replacement txid. The v1 funding nurse: the funding is wallet-owned and
+    /// broadcast BIP125-replaceable. Errors if not replaceable or the wallet
+    /// can't afford the higher fee. Wallet-backed Core primary only.
+    fn wallet_bumpfee(&self, _txid: &str, _feerate_sat_kvb: u64) -> Result<String> {
         bail!("this backend has no wallet; cannot bumpfee")
     }
 }
@@ -495,8 +514,8 @@ impl<T: ChainBackend + ?Sized> ChainBackend for std::sync::Arc<T> {
     fn fee_estimate_kvb(&self, conf_target: u16) -> Result<Option<u64>> {
         (**self).fee_estimate_kvb(conf_target)
     }
-    fn fee_rate_for_kvb(&self, conf_target: u16) -> Result<u64> {
-        (**self).fee_rate_for_kvb(conf_target)
+    fn fee_rate_for_kvb(&self, conf_target: u16, conservative: bool) -> Result<u64> {
+        (**self).fee_rate_for_kvb(conf_target, conservative)
     }
     fn resolve_send_fee(&self, fee: SendFee) -> Result<u64> {
         (**self).resolve_send_fee(fee)
@@ -509,6 +528,9 @@ impl<T: ChainBackend + ?Sized> ChainBackend for std::sync::Arc<T> {
     }
     fn incremental_relay_feerate(&self) -> Result<u64> {
         (**self).incremental_relay_feerate()
+    }
+    fn incremental_relay_feerate_kvb(&self) -> Result<u64> {
+        (**self).incremental_relay_feerate_kvb()
     }
     fn wallet_new_address(&self) -> Result<String> {
         (**self).wallet_new_address()
@@ -556,8 +578,8 @@ impl<T: ChainBackend + ?Sized> ChainBackend for std::sync::Arc<T> {
     ) -> Result<Option<(u32, u64, ScriptBuf)>> {
         (**self).wallet_change_output(funding_txid, htlc_spk)
     }
-    fn wallet_bumpfee(&self, txid: &str, feerate_sat_vb: u64) -> Result<String> {
-        (**self).wallet_bumpfee(txid, feerate_sat_vb)
+    fn wallet_bumpfee(&self, txid: &str, feerate_sat_kvb: u64) -> Result<String> {
+        (**self).wallet_bumpfee(txid, feerate_sat_kvb)
     }
 }
 
@@ -846,9 +868,9 @@ impl ChainBackend for CoreRpcBackend {
         Ok(self.smart_fee_estimate_kvb(conf_target, false))
     }
 
-    fn fee_rate_for_kvb(&self, conf_target: u16) -> Result<u64> {
+    fn fee_rate_for_kvb(&self, conf_target: u16, conservative: bool) -> Result<u64> {
         Ok(self
-            .smart_fee_estimate_kvb(conf_target, false)
+            .smart_fee_estimate_kvb(conf_target, conservative)
             .unwrap_or(self.params.min_feerate_sat_vb.max(1) * 1000))
     }
 
@@ -858,14 +880,23 @@ impl ChainBackend for CoreRpcBackend {
     }
 
     fn incremental_relay_feerate(&self) -> Result<u64> {
+        // Integer sat/vB view (ceil, min 1) derived from the precise sat/kvB one.
+        let kvb = self.incremental_relay_feerate_kvb()?;
+        Ok(kvb.div_ceil(1000).max(1))
+    }
+
+    fn incremental_relay_feerate_kvb(&self) -> Result<u64> {
+        // `incrementalrelayfee` is quoted in BTC/kvB — keep it at that native
+        // resolution (ceil, never round a required increment down), floored at
+        // the 1000 sat/kvB (1 sat/vB) default when the node can't report it.
         let rate = self
             .rpc
             .call("getmempoolinfo", &[])
             .ok()
             .and_then(|r| r["incrementalrelayfee"].as_f64()) // BTC per kvB
-            .map(|btc_kvb| ((btc_kvb * 1e8) / 1000.0).ceil() as u64)
-            .unwrap_or(1);
-        Ok(rate.max(1))
+            .map(|btc_kvb| (btc_kvb * 1e8).ceil() as u64)
+            .unwrap_or(1000);
+        Ok(rate.max(1000))
     }
 
     fn wallet_new_address(&self) -> Result<String> {
@@ -969,7 +1000,7 @@ impl ChainBackend for CoreRpcBackend {
         // Funding prices at the per-coin ~30-min target (see funding_conf_target),
         // not a blind 6-block target — at full sat/kvB resolution, passed to the
         // node as decimal sat/vB (the fraction is real queue priority).
-        let fee_rate = self.fee_rate_for_kvb(self.funding_conf_target())? as f64 / 1000.0;
+        let fee_rate = self.fee_rate_for_kvb(self.funding_conf_target(), false)? as f64 / 1000.0;
         // 1. raw tx carrying only the funding output (no inputs yet). The output
         //    key is the funding address, so build the object with a dynamic key.
         let mut outputs = serde_json::Map::new();
@@ -1154,12 +1185,15 @@ impl ChainBackend for CoreRpcBackend {
         Ok(None) // no wallet-owned change (exact-UTXO funding)
     }
 
-    fn wallet_bumpfee(&self, txid: &str, feerate_sat_vb: u64) -> Result<String> {
-        // Core's `bumpfee` `fee_rate` option is sat/vB (Core ≥ 0.21).
-        let res = self.rpc.call(
-            "bumpfee",
-            &[json!(txid), json!({ "fee_rate": feerate_sat_vb })],
-        )?;
+    fn wallet_bumpfee(&self, txid: &str, feerate_sat_kvb: u64) -> Result<String> {
+        // Core's `bumpfee` `fee_rate` option is sat/vB (Core ≥ 0.21) and accepts
+        // 3 decimals — pass the exact sat/kvB rate as decimal sat/vB so a
+        // fractional target (e.g. 2.004) clears the node's Rule-4 minimum
+        // instead of being truncated to a whole "2" that lands below it.
+        let fee_rate = feerate_sat_kvb as f64 / 1000.0;
+        let res = self
+            .rpc
+            .call("bumpfee", &[json!(txid), json!({ "fee_rate": fee_rate })])?;
         Ok(res["txid"]
             .as_str()
             .context("bumpfee: no replacement txid")?
@@ -2044,7 +2078,9 @@ impl ChainBackend for ElectrumBackend {
             }))
     }
 
-    fn fee_rate_for_kvb(&self, conf_target: u16) -> Result<u64> {
+    fn fee_rate_for_kvb(&self, conf_target: u16, _conservative: bool) -> Result<u64> {
+        // Electrum's `estimatefee` takes only a block target (no conservative
+        // mode), so `_conservative` is honored via the tighter conf_target alone.
         Ok(self
             .fee_estimate_kvb(conf_target)?
             .unwrap_or(self.params.min_feerate_sat_vb.max(1) * 1000))
@@ -2476,6 +2512,22 @@ impl ChainBackend for MultiBackend {
         Ok(hits.into_iter().max().expect("nonempty by quorum").max(1))
     }
 
+    fn fee_rate_for_kvb(&self, conf_target: u16, conservative: bool) -> Result<u64> {
+        // Precise sat/kvB counterpart of `fee_rate_for` — the bump nurses read
+        // THIS, so keep the fan-out at native resolution (don't fall through to
+        // the integer-rounded default). Most conservative responding view wins.
+        let hits = self.require_responders(
+            "fee rate (kvB)",
+            1,
+            self.fan_out(|b| b.fee_rate_for_kvb(conf_target, conservative)),
+        )?;
+        Ok(hits
+            .into_iter()
+            .max()
+            .expect("nonempty by quorum")
+            .max(1000))
+    }
+
     fn fee_estimate(&self, conf_target: u16) -> Result<Option<u64>> {
         // Most conservative responding view wins, like fee_rate_for; "no
         // estimate" only when no RESPONDER has one (the send form's
@@ -2499,6 +2551,10 @@ impl ChainBackend for MultiBackend {
         // The replacement is broadcast to all backends, but the primary is the
         // node enforcing RBF acceptance for our wallet; its floor governs.
         self.primary().incremental_relay_feerate()
+    }
+
+    fn incremental_relay_feerate_kvb(&self) -> Result<u64> {
+        self.primary().incremental_relay_feerate_kvb()
     }
 
     fn wallet_new_address(&self) -> Result<String> {
@@ -2561,8 +2617,8 @@ impl ChainBackend for MultiBackend {
         self.primary().wallet_change_output(funding_txid, htlc_spk)
     }
 
-    fn wallet_bumpfee(&self, txid: &str, feerate_sat_vb: u64) -> Result<String> {
-        self.primary().wallet_bumpfee(txid, feerate_sat_vb)
+    fn wallet_bumpfee(&self, txid: &str, feerate_sat_kvb: u64) -> Result<String> {
+        self.primary().wallet_bumpfee(txid, feerate_sat_kvb)
     }
 }
 

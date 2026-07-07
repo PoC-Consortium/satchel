@@ -186,6 +186,36 @@ impl FeeBumpPolicy {
         let value_cap = value_at_risk.saturating_mul(FEE_CAP_PCT) / 100 / vsize.max(1);
         market_sat_vb.min(value_cap).max(1)
     }
+
+    /// [`Self::target_feerate`] at **sat/kvB** resolution — the estimator's
+    /// native unit (Core/Electrum quote BTC/kvB). The bump nurses carry fees in
+    /// sat/kvB end-to-end so a 1.4 sat/vB market is never rounded to an integer
+    /// "1" (which stranded funding, then made the RBF land below the node's
+    /// fractional Rule-4 minimum). Same caps as the integer form, scaled ×1000;
+    /// floored at 1 sat/vB (1000 sat/kvB), the relay minimum.
+    pub fn target_feerate_kvb(&self, market_kvb: u64, value_at_risk: u64, vsize: u64) -> u64 {
+        let value_cap_kvb = value_at_risk
+            .saturating_mul(FEE_CAP_PCT)
+            .saturating_mul(1000)
+            / 100
+            / vsize.max(1);
+        market_kvb
+            .min(value_cap_kvb)
+            .min(self.max_feerate_sat_vb.saturating_mul(1000))
+            .max(1000)
+    }
+
+    /// [`Self::claim_feerate`] at **sat/kvB** resolution (see
+    /// [`Self::target_feerate_kvb`]). Value-capped only, NOT ceiling-capped — a
+    /// genuine mainnet spike must stay payable near a redeem/refund deadline.
+    pub fn claim_feerate_kvb(&self, market_kvb: u64, value_at_risk: u64, vsize: u64) -> u64 {
+        let value_cap_kvb = value_at_risk
+            .saturating_mul(FEE_CAP_PCT)
+            .saturating_mul(1000)
+            / 100
+            / vsize.max(1);
+        market_kvb.min(value_cap_kvb).max(1000)
+    }
 }
 
 #[cfg(test)]
@@ -237,6 +267,29 @@ mod tests {
         // …but the value cap still binds: a 900 market on a leg worth only
         // ~500 sat/vB of value is clamped to the value, not paid in full.
         assert_eq!(p.claim_feerate(900, 100_000, VSIZE), 100_000 / VSIZE);
+    }
+
+    #[test]
+    fn kvb_forms_preserve_sub_sat_vb_precision() {
+        let p = FeeBumpPolicy::default(); // ceiling 500 → 500_000 sat/kvB
+                                          // A 1.4 sat/vB market (1_400 sat/kvB) is preserved, NOT rounded to 1.
+        assert_eq!(p.target_feerate_kvb(1_400, 206_250, VSIZE), 1_400);
+        assert_eq!(p.claim_feerate_kvb(1_400, 206_250, VSIZE), 1_400);
+        // The integer form is exactly the kvB form ÷ 1000 (rounded), so they
+        // agree at whole-sat/vB inputs.
+        assert_eq!(p.target_feerate_kvb(8_000, 206_250, VSIZE), 8_000);
+        assert_eq!(p.target_feerate_kvb(8_000, 206_250, VSIZE) / 1000, 8);
+        // Ceiling still binds for target (funding): 900 sat/vB clamps to 500.
+        assert_eq!(p.target_feerate_kvb(900_000, 10_000_000, VSIZE), 500_000);
+        // …but claim ignores the ceiling (deadline insurance) — 900 sat/vB stays.
+        assert_eq!(p.claim_feerate_kvb(900_000, 10_000_000, VSIZE), 900_000);
+        // Value cap (100% of the claim) still bites in kvB units.
+        assert_eq!(
+            p.claim_feerate_kvb(900_000, 100_000, VSIZE),
+            100_000u64 * 1000 / VSIZE
+        );
+        // Never below the 1 sat/vB (1_000 sat/kvB) relay floor.
+        assert_eq!(p.claim_feerate_kvb(0, 206_250, VSIZE), 1_000);
     }
 
     #[test]
