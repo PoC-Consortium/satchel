@@ -156,20 +156,16 @@ export const cs: Bundle = {
     signet: "Signet",
     notRealFunds: "Nejde o skutečné prostředky — toto je síť {network}",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Pouze sledování",
-    badgeTip:
-      "Režim pouze sledování — můžete procházet nástěnku a stahovat své vlastní nabídky, ale nemůžete vystavovat, přijímat ani financovat. Pro obchodování nastavte mince v Nastavení.",
-    coinWizardButton: "Procházet v režimu pouze sledování",
-    coinWizardHint:
-      "Přeskočte nastavení mincí a jen procházejte nástěnku (pouze pro čtení). Stále můžete stahovat své vlastní nabídky — užitečné pro stažení nabídek ponechaných jinou relací. Kdykoli to vypnete v Nastavení.",
-    postBlockedTitle: "Režim pouze sledování",
-    postBlockedBody:
-      "Toto je relace pouze pro sledování, takže nemůže vystavovat nabídky. Pro obchodování nastavte alespoň dvě mince v Nastavení → Mince.",
-    takeBlockedBody: "Režim pouze sledování — tuto nabídku si můžete prohlédnout, ale k jejímu přijetí jsou potřeba nastavené mince.",
-    takeBlockedTip: "Režim pouze sledování — pro přijímání nabídek nastavte mince v Nastavení.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Nastavte dvě mince pro obchodování",
+    tradeBody:
+      "Vystavování, přijímání a financování swapu vyžaduje dvě připojené mince. Přidejte je v Nastavení → Mince.",
+    tradeCta: "Nastavit mince",
+    takeNeedsCoins:
+      "Tuto nabídku si můžete prohlédnout, ale k jejímu přijetí je potřeba obě její mince připojené a v provozu.",
   },
   merchants: {
     title: "Vaši merchanti",
@@ -320,10 +316,6 @@ export const cs: Bundle = {
     themeHint: "Zvolte, jak Satchel vypadá. Systémový se řídí nastavením vašeho OS.",
     language: "Jazyk",
     languageHint: "Další jazyky přibývají s přispěnými překlady.",
-    mode: "Režim",
-    watchOnly: "Režim pouze sledování",
-    watchOnlyHint:
-      "Procházejte nástěnku bez nastavování mincí. Stále můžete stahovat své vlastní nabídky, ale nemůžete vystavovat, přijímat ani financovat. Vypněte pro obchodování (budete potřebovat připojené alespoň dvě mince).",
     network: "Síť",
     boards: "Corkboardy",
     boardsDesc:
@@ -457,15 +449,6 @@ export const cs: Bundle = {
     unsupportedByEngineTip:
       "Tato mince je definována v coins.toml, ale není zabudována v této verzi enginu, takže ji nelze obchodovat.",
   },
-  coinWizard: {
-    title: "Připojte své mince",
-    intro:
-      "Vyberte alespoň dvě mince a každou nasměrujte na svůj vlastní uzel. Swap potřebuje dva řetězce, takže obchodování se odemkne, jakmile jsou připojeny a v provozu dva uzly. Mince můžete přidat nebo změnit později v Nastavení.",
-    progress: "Připojeno {count} z {min} mincí",
-    continue: "Pokračovat",
-    live: "V provozu",
-    nodeDown: "Uzel mimo provoz",
-  },
   wallets: {
     degraded: "omezeno",
     degradedWalletTip: "Server peněženky je nedostupný — zůstatek může být zastaralý a odesílání přechází na záložní servery.",
@@ -479,9 +462,6 @@ export const cs: Bundle = {
     noCoins: "Zatím žádné nastavené mince",
     noCoinsBody: "Připojte minci v Nastavení → Mince a její peněženka se objeví zde.",
     goToCoins: "Přejít na Mince",
-    watchOnlyTitle: "V režimu pouze sledování žádné peněženky",
-    watchOnlyBody:
-      "Toto je relace pouze pro sledování bez připojených mincí, takže nejsou žádné peněženky k zobrazení. Vypněte režim pouze sledování v Nastavení a připojte minci pro financování swapů.",
     walletName: "peněženka · {wallet}",
     walletScopedHint: "Každé RPC pro tuto minci je vázáno na tuto peněženku uzlu.",
     walletDefault: "výchozí peněženka (bez vazby)",
@@ -725,7 +705,6 @@ export const cs: Bundle = {
     notConnected: "nepřipojeno: {err}",
     connected: "připojeno k pactd {version} ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "pouze sledování: {err}",
     switchedMerchant: "přepnuto na merchanta {id}",
     renamedMerchant: "merchant přejmenován na {name}",
     renameMerchantError: "přejmenování merchanta: {err}",

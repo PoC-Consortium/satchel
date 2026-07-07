@@ -217,6 +217,6 @@ If instead you only have *offers* posted (no live swap), the exit gate is gentle
 it lets you withdraw your offers and exit, or keep the engine running so
 counterparties can still take them while Satchel is closed.
 
-> **Note** — In **watch-only mode** the exit gate never appears: a watch-only
-> session holds no offer liveness and can hold no live swap, so there is nothing
-> to protect and the window simply closes.
+> **Note** — With nothing to protect — no live swap and no posted offers — there's
+> no gate to show, so the window simply closes. If you're only browsing the board
+> without any offers or swaps of your own, closing Satchel is always immediate.

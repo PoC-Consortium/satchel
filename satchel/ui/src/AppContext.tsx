@@ -31,24 +31,16 @@ import type {
 //   seed      — merchant active but its seed isn't provisioned yet
 //   unlock    — encrypted merchant came up locked
 //   disconnected — pactd unreachable / getinfo failed
-//   coins     — seed ready, but fewer than 2 coins are CONFIGURED
-//   ready     — connected, seed present + unlocked, ≥2 configured coins: usable
+//   ready     — connected, seed present + unlocked: usable (browsing is always
+//               available; trading is gated per-action, not by a coin wall)
 export type Phase =
   | "loading"
   | "no-tauri"
   | "wizard"
   | "seed"
   | "unlock"
-  | "coins"
   | "disconnected"
   | "ready";
-
-// A swap needs two chains, so trading is gated on at least two CONFIGURED coins.
-// Deliberately NOT on liveness: a configured coin whose node is momentarily
-// unreachable (right after a relaunch, or a flaky Electrum server) must not
-// bounce the user back into the setup wizard — liveness is enforced per-action
-// server-side (ensure_chains_live), not by this routing gate.
-const MIN_COINS = 2;
 
 export interface LogLine {
   time: string;
@@ -76,14 +68,6 @@ interface AppCtx {
   info: Info | null;
   identity: string | null;
   network: string | null;
-
-  /** Watch-only mode: a viewer session (no coins) that browses the board and
-   *  may withdraw its own offers, but can't post/take/fund. Sourced from
-   *  `getinfo`; toggled via `setWatchOnly`. */
-  watchOnly: boolean;
-  /** Enter/leave watch-only mode (pactd `setwatchonly`), then re-boot so every
-   *  gate re-evaluates. */
-  setWatchOnly: (on: boolean) => Promise<void>;
 
   swaps: Swap[];
   refreshSwaps: () => Promise<void>;
@@ -138,7 +122,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [info, setInfo] = useState<Info | null>(null);
   const [identity, setIdentity] = useState<string | null>(null);
   const [network, setNetwork] = useState<string | null>(null);
-  const [watchOnly, setWatchOnlyState] = useState(false);
   const [swaps, setSwaps] = useState<Swap[]>([]);
   const [coins, setCoins] = useState<CoinInfo[]>([]);
   const [balances, setBalances] = useState<Record<string, Bal>>({});
@@ -336,62 +319,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // identity cache to keep in sync anymore (this supersedes C1).
     log(tr("log.connected", { version: gi.version ?? "?", protocol: gi.protocol ?? "?" }));
 
-    // Watch-only is a viewer session with no coins: skip the coin gate entirely
-    // and go straight to the (read-only) trading UI. The mode is engine-owned
-    // (getinfo) so it survives restarts and gates post/take/fund authoritatively.
-    setWatchOnlyState(!!gi.watch_only);
-    if (gi.watch_only) {
-      // Still load coins so the wallet/header render honestly (typically none).
-      try {
-        const cl = await rpc<{ coins: CoinInfo[] }>("listcoins");
-        setCoins(cl.coins);
-        cl.coins.forEach((c) => setSymbol(c.id, c.symbol));
-      } catch (e) {
-        log(tr("log.listcoinsError", { err: errMsg(e) }));
-      }
-      setPhase("ready");
-      void refreshSwaps();
-      return;
-    }
-
-    // Coin gate: show the first-run coin-setup step only when trading isn't yet
-    // possible — i.e. fewer than 2 coins are *configured*. Gating on CONFIGURED
-    // (not live) means a configured-but-momentarily-unreachable coin doesn't
-    // bounce the user into the setup wizard; per-action liveness is checked
-    // server-side (ensure_chains_live).
+    // Browsing is always available: after unlock we land straight in the app,
+    // regardless of how many coins are configured. There is no hard coin wall to
+    // get trapped in (#119) — trading is gated PER-ACTION (each screen prompts to
+    // set up the pair's coins) and enforced server-side (ensure_chains_live).
+    // Load coins up front so the wallet/header/board render honestly; a fresh
+    // merchant typically has none, and the empty states nudge coin setup.
     try {
       const cl = await rpc<{ coins: CoinInfo[] }>("listcoins");
       setCoins(cl.coins);
       cl.coins.forEach((c) => setSymbol(c.id, c.symbol));
-      const configured = cl.coins.filter((c) => c.configured).length;
-      if (configured < MIN_COINS) {
-        setPhase("coins");
-        return;
-      }
     } catch (e) {
       log(tr("log.listcoinsError", { err: errMsg(e) }));
-      setPhase("coins");
-      return;
     }
 
     setPhase("ready");
     void refreshSwaps();
     void refreshCoins();
   }, [log, refreshSwaps, refreshCoins, setConn, setSymbol]);
-
-  // Enter/leave watch-only mode: flip it engine-side (persisted), then re-boot
-  // so the coin gate / trading gates all re-evaluate against the new mode.
-  const setWatchOnly = useCallback(
-    async (on: boolean) => {
-      try {
-        await rpc("setwatchonly", [on]);
-        await boot();
-      } catch (e) {
-        log(tr("log.watchOnlyError", { err: errMsg(e) }));
-      }
-    },
-    [boot, log],
-  );
 
   // Initial boot.
   useEffect(() => {
@@ -447,8 +392,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     info,
     identity,
     network,
-    watchOnly,
-    setWatchOnly,
     swaps,
     refreshSwaps,
     coins,

@@ -156,20 +156,16 @@ export const fr: Bundle = {
     signet: "Signet",
     notRealFunds: "Pas de fonds réels — c'est le réseau {network}",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Lecture seule",
-    badgeTip:
-      "Mode lecture seule — parcourez le board et retirez vos propres offres, mais vous ne pouvez pas publier, prendre ni financer. Configurez des coins dans Paramètres pour trader.",
-    coinWizardButton: "Parcourir en lecture seule",
-    coinWizardHint:
-      "Ignorez la configuration des coins et parcourez simplement le board (lecture seule). Vous pouvez tout de même retirer vos propres offres — pratique pour retirer des offres laissées par une autre session. Désactivez-le à tout moment dans Paramètres.",
-    postBlockedTitle: "Mode lecture seule",
-    postBlockedBody:
-      "Ceci est une session en lecture seule, elle ne peut donc pas publier d'offres. Configurez au moins deux coins dans Paramètres → Coins pour trader.",
-    takeBlockedBody: "Mode lecture seule — vous pouvez consulter cette offre, mais la prendre nécessite des coins configurés.",
-    takeBlockedTip: "Mode lecture seule — configurez des coins dans Paramètres pour prendre des offres.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Configurez deux coins pour trader",
+    tradeBody:
+      "Publier, prendre et financer un swap nécessite deux coins connectés. Ajoutez-les dans Paramètres → Coins.",
+    tradeCta: "Configurer les coins",
+    takeNeedsCoins:
+      "Vous pouvez consulter cette offre, mais la prendre nécessite que ses deux coins soient connectés et en service.",
   },
   merchants: {
     title: "Vos merchants",
@@ -320,10 +316,6 @@ export const fr: Bundle = {
     themeHint: "Choisissez l'apparence de Satchel. Système suit le réglage de votre OS.",
     language: "Langue",
     languageHint: "D'autres langues arrivent à mesure que des traductions sont contribuées.",
-    mode: "Mode",
-    watchOnly: "Mode lecture seule",
-    watchOnlyHint:
-      "Parcourez le board sans configurer de coins. Vous pouvez tout de même retirer vos propres offres, mais ne pouvez pas publier, prendre ni financer. Désactivez-le pour trader (vous aurez besoin d'au moins deux coins connectés).",
     network: "Réseau",
     boards: "Corkboards",
     boardsDesc:
@@ -456,15 +448,6 @@ export const fr: Bundle = {
     unsupportedByEngineTip:
       "Ce coin est défini dans coins.toml mais n'est pas intégré dans cette version du moteur, il ne peut donc pas être tradé.",
   },
-  coinWizard: {
-    title: "Connectez vos coins",
-    intro:
-      "Choisissez au moins deux coins et pointez chacun vers votre propre nœud. Un swap a besoin de deux chaînes, donc le trading se débloque une fois que deux nœuds sont connectés et en service. Vous pourrez ajouter ou changer des coins plus tard dans Paramètres.",
-    progress: "{count} sur {min} coins connectés",
-    continue: "Continuer",
-    live: "En service",
-    nodeDown: "Nœud hors service",
-  },
   wallets: {
     degraded: "dégradé",
     degradedWalletTip: "Le serveur du portefeuille est injoignable — le solde peut être obsolète et les envois basculent sur les serveurs de secours.",
@@ -478,9 +461,6 @@ export const fr: Bundle = {
     noCoins: "Aucun coin configuré pour l'instant",
     noCoinsBody: "Connectez un coin dans Paramètres → Coins et son portefeuille apparaîtra ici.",
     goToCoins: "Aller aux Coins",
-    watchOnlyTitle: "Aucun portefeuille en mode lecture seule",
-    watchOnlyBody:
-      "Ceci est une session en lecture seule sans coins connectés, il n'y a donc aucun portefeuille à afficher. Désactivez la lecture seule dans Paramètres et connectez un coin pour financer des swaps.",
     walletName: "portefeuille · {wallet}",
     walletScopedHint: "Chaque RPC pour ce coin est limité à ce portefeuille de nœud.",
     walletDefault: "portefeuille par défaut (non limité)",
@@ -724,7 +704,6 @@ export const fr: Bundle = {
     notConnected: "non connecté : {err}",
     connected: "connecté à pactd {version} ({protocol})",
     listcoinsError: "listcoins : {err}",
-    watchOnlyError: "lecture seule : {err}",
     switchedMerchant: "basculé sur le merchant {id}",
     renamedMerchant: "merchant renommé en {name}",
     renameMerchantError: "renommer le merchant : {err}",

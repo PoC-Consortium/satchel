@@ -176,9 +176,6 @@ export interface Info {
   identity?: string | null;
   seed_exists?: boolean;
   locked?: boolean;
-  /** Watch-only mode: a viewer session (no coins) that browses the board and
-   *  may withdraw its own offers, but can't post/take/fund. */
-  watch_only?: boolean;
   /** Wire-compatibility epoch this pactd speaks per protocol family (rc10),
    *  e.g. { "pact-htlc-v1": 1, "pact-htlc-v2": 2 }. Offers whose signed
    *  `wire` differs are badged un-takeable. */

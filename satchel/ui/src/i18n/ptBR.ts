@@ -156,20 +156,16 @@ export const ptBR: Bundle = {
     signet: "Signet",
     notRealFunds: "Não são fundos reais — esta é a rede {network}",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Somente visualização",
-    badgeTip:
-      "Modo somente visualização — navegue pelo board e retire suas próprias ofertas, mas você não pode publicar, aceitar ou fazer funding. Configure moedas em Configurações para negociar.",
-    coinWizardButton: "Navegar no modo somente visualização",
-    coinWizardHint:
-      "Pule a configuração de moedas e apenas navegue pelo board (somente leitura). Você ainda pode retirar suas próprias ofertas — útil para remover ofertas deixadas por outra sessão. Desative quando quiser em Configurações.",
-    postBlockedTitle: "Modo somente visualização",
-    postBlockedBody:
-      "Esta é uma sessão somente visualização, então não é possível publicar ofertas. Configure pelo menos duas moedas em Configurações → Moedas para negociar.",
-    takeBlockedBody: "Modo somente visualização — você pode revisar esta oferta, mas aceitá-la exige moedas configuradas.",
-    takeBlockedTip: "Modo somente visualização — configure moedas em Configurações para aceitar ofertas.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Configure duas moedas para negociar",
+    tradeBody:
+      "Publicar, aceitar e financiar um swap exigem duas moedas conectadas. Adicione-as em Configurações → Moedas.",
+    tradeCta: "Configurar moedas",
+    takeNeedsCoins:
+      "Você pode revisar este comprovante, mas aceitá-lo exige as duas moedas conectadas e ativas.",
   },
   merchants: {
     title: "Seus merchants",
@@ -320,10 +316,6 @@ export const ptBR: Bundle = {
     themeHint: "Escolha a aparência do Satchel. Sistema segue a configuração do seu SO.",
     language: "Idioma",
     languageHint: "Mais idiomas chegam à medida que traduções são contribuídas.",
-    mode: "Modo",
-    watchOnly: "Modo somente visualização",
-    watchOnlyHint:
-      "Navegue pelo board sem configurar moedas. Você ainda pode retirar suas próprias ofertas, mas não pode publicar, aceitar nem fazer funding. Desative para negociar (você precisará de pelo menos duas moedas conectadas).",
     network: "Rede",
     boards: "Corkboards",
     boardsDesc:
@@ -457,15 +449,6 @@ export const ptBR: Bundle = {
     unsupportedByEngineTip:
       "Esta moeda está definida em coins.toml, mas não foi compilada nesta versão da engine, então não pode ser negociada.",
   },
-  coinWizard: {
-    title: "Conecte suas moedas",
-    intro:
-      "Escolha pelo menos duas moedas e aponte cada uma para o seu próprio node. Um swap precisa de duas chains, então a negociação é liberada assim que dois nodes estiverem conectados e ativos. Você pode adicionar ou alterar moedas depois em Configurações.",
-    progress: "{count} de {min} moedas conectadas",
-    continue: "Continuar",
-    live: "Ativo",
-    nodeDown: "Node fora do ar",
-  },
   wallets: {
     degraded: "degradado",
     degradedWalletTip: "O servidor da carteira está inacessível — o saldo pode estar desatualizado e os envios usam os servidores de backup.",
@@ -479,9 +462,6 @@ export const ptBR: Bundle = {
     noCoins: "Nenhuma moeda configurada ainda",
     noCoinsBody: "Conecte uma moeda em Configurações → Moedas e a carteira dela aparece aqui.",
     goToCoins: "Ir para Moedas",
-    watchOnlyTitle: "Sem carteiras no modo somente visualização",
-    watchOnlyBody:
-      "Esta é uma sessão somente visualização sem moedas conectadas, então não há carteiras para exibir. Desative o modo somente visualização em Configurações e conecte uma moeda para financiar swaps.",
     walletName: "carteira · {wallet}",
     walletScopedHint: "Toda RPC para esta moeda é direcionada a esta carteira do node.",
     walletDefault: "carteira padrão (não direcionada)",
@@ -722,7 +702,6 @@ export const ptBR: Bundle = {
     notConnected: "não conectado: {err}",
     connected: "conectado ao pactd {version} ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "somente visualização: {err}",
     switchedMerchant: "trocado para o merchant {id}",
     renamedMerchant: "merchant renomeado para {name}",
     renameMerchantError: "renomear merchant: {err}",

@@ -156,20 +156,16 @@ export const hr: Bundle = {
     signet: "Signet",
     notRealFunds: "Nisu stvarna sredstva — ovo je {network} mreža",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Samo za pregled",
-    badgeTip:
-      "Način samo za pregled — pregledavajte ploču i povlačite vlastite ponude, ali ne možete objavljivati, preuzimati ni financirati. Postavite kovanice u Postavkama za trgovanje.",
-    coinWizardButton: "Pregledavaj u načinu samo za pregled",
-    coinWizardHint:
-      "Preskočite postavljanje kovanica i samo pregledavajte ploču (samo za čitanje). I dalje možete povući vlastite ponude — zgodno za uklanjanje ponuda koje je ostavila druga sesija. Isključite ga bilo kada u Postavkama.",
-    postBlockedTitle: "Način samo za pregled",
-    postBlockedBody:
-      "Ovo je sesija samo za pregled, pa ne može objavljivati ponude. Postavite barem dvije kovanice u Postavke → Kovanice za trgovanje.",
-    takeBlockedBody: "Način samo za pregled — možete pregledati ovu ponudu, ali za preuzimanje su potrebne postavljene kovanice.",
-    takeBlockedTip: "Način samo za pregled — postavite kovanice u Postavkama za preuzimanje ponuda.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Postavite dvije kovanice za trgovanje",
+    tradeBody:
+      "Objavljivanje, preuzimanje i financiranje swapa zahtijevaju dvije povezane kovanice. Dodajte ih u Postavke → Kovanice.",
+    tradeCta: "Postavi kovanice",
+    takeNeedsCoins:
+      "Možete pregledati ovaj slip, ali za preuzimanje su potrebne obje njegove kovanice povezane i aktivne.",
   },
   merchants: {
     title: "Vaši trgovci",
@@ -320,10 +316,6 @@ export const hr: Bundle = {
     themeHint: "Odaberite kako Satchel izgleda. Sustav prati postavku vašeg OS-a.",
     language: "Jezik",
     languageHint: "Više jezika stiže kako se doprinose prijevodi.",
-    mode: "Način",
-    watchOnly: "Način samo za pregled",
-    watchOnlyHint:
-      "Pregledavajte ploču bez postavljanja kovanica. I dalje možete povući vlastite ponude, ali ne možete objavljivati, preuzimati ni financirati. Isključite za trgovanje (trebat će vam barem dvije povezane kovanice).",
     network: "Mreža",
     boards: "Corkboardovi",
     boardsDesc:
@@ -457,15 +449,6 @@ export const hr: Bundle = {
     unsupportedByEngineTip:
       "Ova kovanica je definirana u coins.toml, ali nije ugrađena u ovu verziju enginea, pa se njome ne može trgovati.",
   },
-  coinWizard: {
-    title: "Povežite svoje kovanice",
-    intro:
-      "Odaberite barem dvije kovanice i usmjerite svaku na vlastiti čvor. Swap treba dva lanca, pa se trgovanje otključava kad su dva čvora povezana i aktivna. Kovanice možete dodati ili promijeniti kasnije u Postavkama.",
-    progress: "{count} od {min} kovanica povezano",
-    continue: "Nastavi",
-    live: "Aktivno",
-    nodeDown: "Čvor nedostupan",
-  },
   wallets: {
     degraded: "degradirano",
     degradedWalletTip: "Poslužitelj novčanika je nedostupan — stanje može biti zastarjelo, a slanja prelaze na pričuvne poslužitelje.",
@@ -479,9 +462,6 @@ export const hr: Bundle = {
     noCoins: "Još nema postavljenih kovanica",
     noCoinsBody: "Povežite kovanicu u Postavke → Kovanice i njezin se novčanik pojavi ovdje.",
     goToCoins: "Idi na Kovanice",
-    watchOnlyTitle: "Nema novčanika u načinu samo za pregled",
-    watchOnlyBody:
-      "Ovo je sesija samo za pregled bez povezanih kovanica, pa nema novčanika za prikaz. Isključite način samo za pregled u Postavkama i povežite kovanicu za financiranje swapova.",
     walletName: "novčanik · {wallet}",
     walletScopedHint: "Svaki RPC za ovu kovanicu ograničen je na ovaj novčanik čvora.",
     walletDefault: "zadani novčanik (bez ograničenja)",
@@ -722,7 +702,6 @@ export const hr: Bundle = {
     notConnected: "nije povezano: {err}",
     connected: "povezano s pactd {version} ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "samo za pregled: {err}",
     switchedMerchant: "prebačeno na trgovca {id}",
     renamedMerchant: "trgovac preimenovan u {name}",
     renameMerchantError: "preimenovanje trgovca: {err}",

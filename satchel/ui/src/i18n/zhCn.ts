@@ -156,20 +156,16 @@ export const zhCn: Bundle = {
     signet: "Signet",
     notRealFunds: "非真实资金 — 这是 {network} 网络",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "仅查看",
-    badgeTip:
-      "仅查看模式 — 你可以浏览牌板并撤回自己的报价，但无法发布、接受或注资。请在设置中配置币种以进行交易。",
-    coinWizardButton: "以仅查看模式浏览",
-    coinWizardHint:
-      "跳过币种设置，仅浏览牌板（只读）。你仍可撤回自己的报价 — 便于撤下另一次会话遗留的报价。可随时在设置中关闭。",
-    postBlockedTitle: "仅查看模式",
-    postBlockedBody:
-      "这是一个仅查看会话，因此无法发布报价。请在设置 → 币种中至少设置两种币以进行交易。",
-    takeBlockedBody: "仅查看模式 — 你可以核对此报价，但接受它需要先设置币种。",
-    takeBlockedTip: "仅查看模式 — 请在设置中设置币种以接受报价。",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "设置两种币以进行交易",
+    tradeBody:
+      "发布、接受和为交换注资都需要两种已连接的币。请在设置 → 币种中添加它们。",
+    tradeCta: "设置币种",
+    takeNeedsCoins:
+      "你可以核对此报价，但接受它需要其两种币都已连接并上线。",
   },
   merchants: {
     title: "你的商户",
@@ -320,10 +316,6 @@ export const zhCn: Bundle = {
     themeHint: "选择 Satchel 的外观。“跟随系统”会遵循你的操作系统设置。",
     language: "语言",
     languageHint: "随着翻译的贡献，会陆续加入更多语言。",
-    mode: "模式",
-    watchOnly: "仅查看模式",
-    watchOnlyHint:
-      "无需设置币种即可浏览牌板。你仍可撤回自己的报价，但无法发布、接受或注资。关闭后即可交易（你需要至少连接两种币）。",
     network: "网络",
     boards: "Corkboard 牌板",
     boardsDesc:
@@ -457,15 +449,6 @@ export const zhCn: Bundle = {
     unsupportedByEngineTip:
       "此币种在 coins.toml 中已定义，但未编译进此版本的引擎，因此无法交易。",
   },
-  coinWizard: {
-    title: "连接你的币种",
-    intro:
-      "至少选择两种币，并将每种各自指向你自己的节点。一笔交换需要两条链，因此当两个节点连接并上线后即可开始交易。你之后可在设置中添加或更改币种。",
-    progress: "已连接 {count} / {min} 种币",
-    continue: "继续",
-    live: "在线",
-    nodeDown: "节点下线",
-  },
   wallets: {
     degraded: "降级",
     degradedWalletTip: "钱包服务器不可达 — 余额可能过期，发送将切换到备用服务器。",
@@ -479,9 +462,6 @@ export const zhCn: Bundle = {
     noCoins: "尚未设置任何币种",
     noCoinsBody: "在设置 → 币种中连接一种币，其钱包就会显示在这里。",
     goToCoins: "前往币种",
-    watchOnlyTitle: "仅查看模式下没有钱包",
-    watchOnlyBody:
-      "这是一个未连接任何币种的仅查看会话，因此没有可显示的钱包。请在设置中关闭仅查看，并连接一种币以为交换注资。",
     walletName: "钱包 · {wallet}",
     walletScopedHint: "此币种的每次 RPC 都限定到该节点钱包。",
     walletDefault: "默认钱包（未限定）",
@@ -722,7 +702,6 @@ export const zhCn: Bundle = {
     notConnected: "未连接：{err}",
     connected: "已连接到 pactd {version}（{protocol}）",
     listcoinsError: "listcoins：{err}",
-    watchOnlyError: "仅查看：{err}",
     switchedMerchant: "已切换到商户 {id}",
     renamedMerchant: "商户已重命名为 {name}",
     renameMerchantError: "重命名商户：{err}",

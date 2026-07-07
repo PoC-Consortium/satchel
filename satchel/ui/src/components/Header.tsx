@@ -23,7 +23,6 @@ import { useT } from "../i18n";
 import CashrateWidget from "./CashrateWidget";
 import LanguageMenu from "./LanguageMenu";
 import NetworkStamp from "./NetworkStamp";
-import WatchOnlyStamp from "./WatchOnlyStamp";
 import StatusIndicators from "./StatusIndicators";
 import Identicon from "./Identicon";
 
@@ -96,9 +95,8 @@ export default function Header({
 
       <StatusIndicators onLiveSwaps={onLiveSwaps} />
 
-      {/* Stamps, absolutely centered in the bar (phoenix banner style). The
-          watch-only stamp sits on top; the network stamp below it (each renders
-          nothing when inapplicable, so this is empty on mainnet + non-watch-only). */}
+      {/* Network stamp, absolutely centered in the bar (phoenix banner style).
+          Renders nothing when inapplicable, so this is empty on mainnet. */}
       <Box
         sx={{
           position: "absolute",
@@ -113,7 +111,6 @@ export default function Header({
           "& > *": { pointerEvents: "auto" },
         }}
       >
-        <WatchOnlyStamp />
         <NetworkStamp network={network} />
       </Box>
 

@@ -4,7 +4,7 @@
 // shows up. Posting locks nothing; an offer is just a withdrawable advert.
 
 import { useCallback, useState } from "react";
-import { Box, Card, CardContent, Typography } from "@mui/material";
+import { Box, Button, Card, CardContent, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import OfferForm from "../components/OfferForm";
 import { errMsg, rpc } from "../api/tauri";
@@ -14,7 +14,7 @@ import { useT } from "../i18n";
 import { EmptyState } from "../components/StatusViews";
 
 export default function PostOfferScreen() {
-  const { log, watchOnly } = useApp();
+  const { log, coins } = useApp();
   const navigate = useNavigate();
   const t = useT();
   const [busy, setBusy] = useState(false);
@@ -46,9 +46,22 @@ export default function PostOfferScreen() {
     [log, navigate],
   );
 
-  if (watchOnly) {
+  // Per-action gate (#119): posting needs two connected coins to form a pair.
+  // Instead of a hard app-wide wall, this screen shows a soft nudge to set them
+  // up (the engine also refuses authoritatively). Gates on CONFIGURED, not live,
+  // so a momentarily-down node doesn't hide the form.
+  if (coins.filter((c) => c.configured).length < 2) {
     return (
-      <EmptyState title={t("watchOnly.postBlockedTitle")}>{t("watchOnly.postBlockedBody")}</EmptyState>
+      <EmptyState
+        title={t("setup.tradeTitle")}
+        action={
+          <Button variant="contained" onClick={() => navigate("settings", "coins")}>
+            {t("setup.tradeCta")}
+          </Button>
+        }
+      >
+        {t("setup.tradeBody")}
+      </EmptyState>
     );
   }
 

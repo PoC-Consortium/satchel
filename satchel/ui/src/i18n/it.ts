@@ -156,20 +156,16 @@ export const it: Bundle = {
     signet: "Signet",
     notRealFunds: "Non sono fondi reali — questa è la rete {network}",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Solo visualizzazione",
-    badgeTip:
-      "Modalità solo visualizzazione — sfoglia la bacheca e ritira le tue offerte, ma non puoi pubblicare, accettare o effettuare il funding. Configura le coin in Impostazioni per fare trading.",
-    coinWizardButton: "Sfoglia in modalità solo visualizzazione",
-    coinWizardHint:
-      "Salta la configurazione delle coin e sfoglia semplicemente la bacheca (sola lettura). Puoi comunque ritirare le tue offerte — utile per rimuovere offerte lasciate da un'altra sessione. Disattivala in qualsiasi momento nelle Impostazioni.",
-    postBlockedTitle: "Modalità solo visualizzazione",
-    postBlockedBody:
-      "Questa è una sessione di sola visualizzazione, quindi non può pubblicare offerte. Configura almeno due coin in Impostazioni → Coin per fare trading.",
-    takeBlockedBody: "Modalità solo visualizzazione — puoi rivedere questa offerta, ma accettarla richiede coin configurate.",
-    takeBlockedTip: "Modalità solo visualizzazione — configura le coin nelle Impostazioni per accettare offerte.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Configura due coin per fare trading",
+    tradeBody:
+      "Pubblicare, accettare ed effettuare il funding di uno swap richiede due coin connesse. Aggiungile in Impostazioni → Coin.",
+    tradeCta: "Configura le coin",
+    takeNeedsCoins:
+      "Puoi rivedere questa slip, ma accettarla richiede entrambe le sue coin connesse e attive.",
   },
   merchants: {
     title: "I tuoi merchant",
@@ -320,10 +316,6 @@ export const it: Bundle = {
     themeHint: "Scegli l'aspetto di Satchel. Sistema segue l'impostazione del tuo OS.",
     language: "Lingua",
     languageHint: "Altre lingue arriveranno man mano che vengono contribuite le traduzioni.",
-    mode: "Modalità",
-    watchOnly: "Modalità solo visualizzazione",
-    watchOnlyHint:
-      "Sfoglia la bacheca senza configurare coin. Puoi comunque ritirare le tue offerte, ma non puoi pubblicare, accettare o effettuare il funding. Disattivala per fare trading (ti serviranno almeno due coin connesse).",
     network: "Rete",
     boards: "Corkboard",
     boardsDesc:
@@ -456,15 +448,6 @@ export const it: Bundle = {
     unsupportedByEngineTip:
       "Questa coin è definita in coins.toml ma non è integrata in questa versione dell'engine, quindi non può essere scambiata.",
   },
-  coinWizard: {
-    title: "Collega le tue coin",
-    intro:
-      "Scegli almeno due coin e punta ognuna al tuo nodo. Uno swap richiede due chain, quindi il trading si sblocca quando due nodi sono connessi e attivi. Puoi aggiungere o cambiare coin in seguito nelle Impostazioni.",
-    progress: "{count} di {min} coin connesse",
-    continue: "Continua",
-    live: "Attivo",
-    nodeDown: "Nodo offline",
-  },
   wallets: {
     degraded: "degradato",
     degradedWalletTip: "Il server del portafoglio è irraggiungibile — il saldo può essere obsoleto e gli invii passano ai server di riserva.",
@@ -478,9 +461,6 @@ export const it: Bundle = {
     noCoins: "Ancora nessuna coin configurata",
     noCoinsBody: "Collega una coin in Impostazioni → Coin e il suo wallet apparirà qui.",
     goToCoins: "Vai a Coin",
-    watchOnlyTitle: "Nessun wallet in modalità solo visualizzazione",
-    watchOnlyBody:
-      "Questa è una sessione di sola visualizzazione senza coin connesse, quindi non ci sono wallet da mostrare. Disattiva la sola visualizzazione nelle Impostazioni e collega una coin per finanziare gli swap.",
     walletName: "wallet · {wallet}",
     walletScopedHint: "Ogni RPC per questa coin è limitato a questo wallet del nodo.",
     walletDefault: "wallet predefinito (non limitato)",
@@ -720,7 +700,6 @@ export const it: Bundle = {
     notConnected: "non connesso: {err}",
     connected: "connesso a pactd {version} ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "solo visualizzazione: {err}",
     switchedMerchant: "passato al merchant {id}",
     renamedMerchant: "merchant rinominato in {name}",
     renameMerchantError: "rinomina merchant: {err}",

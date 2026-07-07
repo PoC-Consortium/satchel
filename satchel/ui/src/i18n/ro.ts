@@ -156,20 +156,16 @@ export const ro: Bundle = {
     signet: "Signet",
     notRealFunds: "Nu sunt fonduri reale — aceasta este rețeaua {network}",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Doar vizualizare",
-    badgeTip:
-      "Mod doar-vizualizare — răsfoiește board-ul și retrage-ți propriile oferte, dar nu poți posta, accepta sau finanța. Configurează monede în Setări pentru a tranzacționa.",
-    coinWizardButton: "Răsfoiește în mod doar-vizualizare",
-    coinWizardHint:
-      "Sari peste configurarea monedelor și doar răsfoiește board-ul (doar citire). Poți totuși să-ți retragi propriile oferte — util pentru a retrage oferte lăsate active de o altă sesiune. Dezactivează oricând în Setări.",
-    postBlockedTitle: "Mod doar-vizualizare",
-    postBlockedBody:
-      "Aceasta este o sesiune doar-vizualizare, deci nu poate posta oferte. Configurează cel puțin două monede în Setări → Monede pentru a tranzacționa.",
-    takeBlockedBody: "Mod doar-vizualizare — poți verifica această ofertă, dar acceptarea ei necesită monede configurate.",
-    takeBlockedTip: "Mod doar-vizualizare — configurează monede în Setări pentru a accepta oferte.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Configurează două monede pentru a tranzacționa",
+    tradeBody:
+      "Postarea, acceptarea și finanțarea unui swap necesită două monede conectate. Adaugă-le în Setări → Monede.",
+    tradeCta: "Configurează monede",
+    takeNeedsCoins:
+      "Poți verifica acest bilet, dar acceptarea lui necesită ambele monede conectate și active.",
   },
   merchants: {
     title: "Merchant-urile tale",
@@ -320,10 +316,6 @@ export const ro: Bundle = {
     themeHint: "Alege cum arată Satchel. Sistem urmează setarea sistemului tău de operare.",
     language: "Limbă",
     languageHint: "Mai multe limbi apar pe măsură ce sunt contribuite traduceri.",
-    mode: "Mod",
-    watchOnly: "Mod doar-vizualizare",
-    watchOnlyHint:
-      "Răsfoiește board-ul fără a configura monede. Poți totuși să-ți retragi propriile oferte, dar nu poți posta, accepta sau finanța. Dezactivează pentru a tranzacționa (vei avea nevoie de cel puțin două monede conectate).",
     network: "Rețea",
     boards: "Corkboard-uri",
     boardsDesc:
@@ -457,15 +449,6 @@ export const ro: Bundle = {
     unsupportedByEngineTip:
       "Această monedă este definită în coins.toml dar nu este integrată în această versiune a engine-ului, deci nu poate fi tranzacționată.",
   },
-  coinWizard: {
-    title: "Conectează-ți monedele",
-    intro:
-      "Alege cel puțin două monede și îndreaptă fiecare către propriul tău nod. Un swap are nevoie de două lanțuri, așa că tranzacționarea se deblochează odată ce două noduri sunt conectate și active. Poți adăuga sau schimba monede mai târziu în Setări.",
-    progress: "{count} din {min} monede conectate",
-    continue: "Continuă",
-    live: "Activ",
-    nodeDown: "Nod oprit",
-  },
   wallets: {
     degraded: "degradat",
     degradedWalletTip: "Serverul portofelului este inaccesibil — soldul poate fi învechit, iar trimiterile trec pe serverele de rezervă.",
@@ -479,9 +462,6 @@ export const ro: Bundle = {
     noCoins: "Nicio monedă configurată încă",
     noCoinsBody: "Conectează o monedă în Setări → Monede și portofelul ei apare aici.",
     goToCoins: "Mergi la Monede",
-    watchOnlyTitle: "Niciun portofel în modul doar-vizualizare",
-    watchOnlyBody:
-      "Aceasta este o sesiune doar-vizualizare fără monede conectate, deci nu există portofele de afișat. Dezactivează doar-vizualizare în Setări și conectează o monedă pentru a finanța swap-uri.",
     walletName: "portofel · {wallet}",
     walletScopedHint: "Fiecare RPC pentru această monedă este limitat la acest portofel al nodului.",
     walletDefault: "portofel implicit (nelimitat)",
@@ -722,7 +702,6 @@ export const ro: Bundle = {
     notConnected: "neconectat: {err}",
     connected: "conectat la pactd {version} ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "doar-vizualizare: {err}",
     switchedMerchant: "s-a schimbat la merchant-ul {id}",
     renamedMerchant: "merchant redenumit în {name}",
     renameMerchantError: "redenumire merchant: {err}",

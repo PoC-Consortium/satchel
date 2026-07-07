@@ -164,20 +164,16 @@ export const en = {
     signet: "Signet",
     notRealFunds: "Not real funds — this is the {network} network",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Watch only",
-    badgeTip:
-      "Watch-only mode — browse the board and withdraw your own offers, but you can't post, take, or fund. Set up coins in Settings to trade.",
-    coinWizardButton: "Browse in watch-only mode",
-    coinWizardHint:
-      "Skip coin setup and just browse the board (read-only). You can still withdraw your own offers — handy for pulling offers left up by another session. Switch it off any time in Settings.",
-    postBlockedTitle: "Watch-only mode",
-    postBlockedBody:
-      "This is a watch-only session, so it can't post offers. Set up at least two coins in Settings → Coins to trade.",
-    takeBlockedBody: "Watch-only mode — you can review this offer, but taking it needs coins set up.",
-    takeBlockedTip: "Watch-only mode — set up coins in Settings to take offers.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Set up two coins to trade",
+    tradeBody:
+      "Posting, taking, and funding a swap need two connected coins. Add them under Settings › Coins.",
+    tradeCta: "Set up coins",
+    takeNeedsCoins:
+      "You can review this slip, but taking it needs both of its coins connected and live.",
   },
   merchants: {
     title: "Your merchants",
@@ -335,10 +331,6 @@ export const en = {
     themeHint: "Choose how Satchel looks. System follows your OS setting.",
     language: "Language",
     languageHint: "More languages land as translations are contributed.",
-    mode: "Mode",
-    watchOnly: "Watch-only mode",
-    watchOnlyHint:
-      "Browse the board without setting up coins. You can still withdraw your own offers, but can't post, take, or fund. Turn off to trade (you'll need at least two coins connected).",
     network: "Network",
     boards: "Corkboards",
     boardsDesc:
@@ -473,15 +465,6 @@ export const en = {
     unsupportedByEngineTip:
       "This coin is defined in coins.toml but not built into this version of the engine, so it can't be traded.",
   },
-  coinWizard: {
-    title: "Connect your coins",
-    intro:
-      "Pick at least two coins and point each at your own node. A swap needs two chains, so trading unlocks once two nodes are connected and live. You can add or change coins later in Settings.",
-    progress: "{count} of {min} coins connected",
-    continue: "Continue",
-    live: "Live",
-    nodeDown: "Node down",
-  },
   wallets: {
     // Degraded, not dead (issues #98/#100): a minority of the coin's
     // Electrum fleet — possibly the wallet-home server — is down while
@@ -499,9 +482,6 @@ export const en = {
     noCoins: "No coins set up yet",
     noCoinsBody: "Connect a coin in Settings → Coins and its wallet appears here.",
     goToCoins: "Go to Coins",
-    watchOnlyTitle: "No wallets in watch-only mode",
-    watchOnlyBody:
-      "This is a watch-only session with no coins connected, so there are no wallets to show. Turn off watch-only in Settings and connect a coin to fund swaps.",
     walletName: "wallet · {wallet}",
     walletScopedHint: "Every RPC for this coin is scoped to this node wallet.",
     walletDefault: "default wallet (not scoped)",
@@ -750,7 +730,6 @@ export const en = {
     notConnected: "not connected: {err}",
     connected: "connected to pactd {version} ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "watch-only: {err}",
     switchedMerchant: "switched to merchant {id}",
     renamedMerchant: "renamed merchant to {name}",
     renameMerchantError: "rename merchant: {err}",

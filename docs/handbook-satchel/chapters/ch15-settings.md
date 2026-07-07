@@ -24,18 +24,14 @@ The **General** tab holds your look-and-feel preferences.
   languages**, each listed under its own native name; pick one and the app
   switches straight away. (There's also a globe picker in the header for changing
   language on the fly.)
-- **Mode** — a **Watch-only mode** toggle. Switch it **on** and Satchel becomes a
-  browse-only window: you can look around the **Corkboard** and **withdraw your
-  own offers**, but you can't **post**, **take**, or **fund** a swap — handy for
-  watching the market before you connect any coins. Switch it **off** to trade
-  normally. Either way Satchel **restarts the session** to apply the change, so
-  give it a moment to come back.
+
 > **Tip** — There's also a quick theme and language reach from the header, but the
 > **General** tab is the canonical place to set them.
 
-> **Note** — In **Watch-only mode** a **"Watch only"** badge shows in the header,
-> and the post, take, and fund actions are switched off until you turn the toggle
-> back off and have **two live coins** connected.
+> **Note** — There's no "browse mode" to turn on: Satchel always lets you browse
+> the **Corkboard** freely, whether or not you've connected any coins. Trading is
+> gated per action instead — posting, taking, and funding need **two live coins**,
+> and each nudges you to **Settings → Coins** when you reach for it.
 
 ## Coins
 

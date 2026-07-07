@@ -156,20 +156,16 @@ export const de: Bundle = {
     signet: "Signet",
     notRealFunds: "Keine echten Mittel — dies ist das {network}-Netzwerk",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Nur Beobachten",
-    badgeTip:
-      "Nur-Beobachten-Modus — durchstöbere das Board und ziehe deine eigenen Angebote zurück, aber du kannst nicht einstellen, annehmen oder finanzieren. Richte Coins in den Einstellungen ein, um zu handeln.",
-    coinWizardButton: "Im Nur-Beobachten-Modus durchstöbern",
-    coinWizardHint:
-      "Überspringe die Coin-Einrichtung und durchstöbere einfach das Board (schreibgeschützt). Du kannst trotzdem deine eigenen Angebote zurückziehen — praktisch, um Angebote zu entfernen, die eine andere Sitzung hinterlassen hat. Du kannst es jederzeit in den Einstellungen ausschalten.",
-    postBlockedTitle: "Nur-Beobachten-Modus",
-    postBlockedBody:
-      "Dies ist eine Nur-Beobachten-Sitzung, daher können keine Angebote eingestellt werden. Richte mindestens zwei Coins unter Einstellungen → Coins ein, um zu handeln.",
-    takeBlockedBody: "Nur-Beobachten-Modus — du kannst dieses Angebot prüfen, aber zum Annehmen müssen Coins eingerichtet sein.",
-    takeBlockedTip: "Nur-Beobachten-Modus — richte Coins in den Einstellungen ein, um Angebote anzunehmen.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Richte zwei Coins zum Handeln ein",
+    tradeBody:
+      "Einstellen, Annehmen und Finanzieren eines Swaps brauchen zwei verbundene Coins. Füge sie unter Einstellungen → Coins hinzu.",
+    tradeCta: "Coins einrichten",
+    takeNeedsCoins:
+      "Du kannst dieses Angebot prüfen, aber zum Annehmen müssen beide Coins verbunden und live sein.",
   },
   merchants: {
     title: "Deine Merchants",
@@ -320,10 +316,6 @@ export const de: Bundle = {
     themeHint: "Wähle, wie Satchel aussieht. System folgt deiner Betriebssystem-Einstellung.",
     language: "Sprache",
     languageHint: "Weitere Sprachen kommen hinzu, sobald Übersetzungen beigetragen werden.",
-    mode: "Modus",
-    watchOnly: "Nur-Beobachten-Modus",
-    watchOnlyHint:
-      "Durchstöbere das Board, ohne Coins einzurichten. Du kannst weiterhin deine eigenen Angebote zurückziehen, aber nicht einstellen, annehmen oder finanzieren. Schalte es aus, um zu handeln (du brauchst mindestens zwei verbundene Coins).",
     network: "Netzwerk",
     boards: "Corkboards",
     boardsDesc:
@@ -457,15 +449,6 @@ export const de: Bundle = {
     unsupportedByEngineTip:
       "Dieser Coin ist in coins.toml definiert, aber nicht in diese Version der Engine eingebaut, daher kann er nicht gehandelt werden.",
   },
-  coinWizard: {
-    title: "Verbinde deine Coins",
-    intro:
-      "Wähle mindestens zwei Coins und richte jeden auf deine eigene Node. Ein Swap braucht zwei Chains, daher wird der Handel freigeschaltet, sobald zwei Nodes verbunden und live sind. Du kannst Coins später in den Einstellungen hinzufügen oder ändern.",
-    progress: "{count} von {min} Coins verbunden",
-    continue: "Weiter",
-    live: "Live",
-    nodeDown: "Node offline",
-  },
   wallets: {
     degraded: "beeinträchtigt",
     degradedWalletTip: "Der Wallet-Server ist nicht erreichbar — der Kontostand kann veraltet sein; Sendungen weichen auf Backup-Server aus.",
@@ -479,9 +462,6 @@ export const de: Bundle = {
     noCoins: "Noch keine Coins eingerichtet",
     noCoinsBody: "Verbinde einen Coin unter Einstellungen → Coins, und seine Wallet erscheint hier.",
     goToCoins: "Zu Coins",
-    watchOnlyTitle: "Keine Wallets im Nur-Beobachten-Modus",
-    watchOnlyBody:
-      "Dies ist eine Nur-Beobachten-Sitzung ohne verbundene Coins, daher gibt es keine Wallets anzuzeigen. Schalte Nur-Beobachten in den Einstellungen aus und verbinde einen Coin, um Swaps zu finanzieren.",
     walletName: "Wallet · {wallet}",
     walletScopedHint: "Jeder RPC für diesen Coin ist auf diese Node-Wallet beschränkt.",
     walletDefault: "Standard-Wallet (nicht beschränkt)",
@@ -725,7 +705,6 @@ export const de: Bundle = {
     notConnected: "nicht verbunden: {err}",
     connected: "verbunden mit pactd {version} ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "Nur-Beobachten: {err}",
     switchedMerchant: "zu Merchant {id} gewechselt",
     renamedMerchant: "Merchant umbenannt in {name}",
     renameMerchantError: "Merchant umbenennen: {err}",

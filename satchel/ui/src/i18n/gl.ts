@@ -156,20 +156,16 @@ export const gl: Bundle = {
     signet: "Signet",
     notRealFunds: "Non son fondos reais — esta é a rede {network}",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Só visualización",
-    badgeTip:
-      "Modo só visualización — navega polo taboleiro e retira as túas propias ofertas, pero non podes publicar, tomar nin financiar. Configura moedas en Axustes para negociar.",
-    coinWizardButton: "Navegar en modo só visualización",
-    coinWizardHint:
-      "Omite a configuración de moedas e só navega polo taboleiro (só lectura). Aínda podes retirar as túas propias ofertas — útil para retirar ofertas deixadas por outra sesión. Desactívao cando queiras en Axustes.",
-    postBlockedTitle: "Modo só visualización",
-    postBlockedBody:
-      "Esta é unha sesión só de visualización, polo que non pode publicar ofertas. Configura polo menos dúas moedas en Axustes → Moedas para negociar.",
-    takeBlockedBody: "Modo só visualización — podes revisar esta oferta, pero tomala precisa ter moedas configuradas.",
-    takeBlockedTip: "Modo só visualización — configura moedas en Axustes para tomar ofertas.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Configura dúas moedas para negociar",
+    tradeBody:
+      "Publicar, tomar e financiar un intercambio precisa dúas moedas conectadas. Engádeas en Axustes → Moedas.",
+    tradeCta: "Configurar moedas",
+    takeNeedsCoins:
+      "Podes revisar esta oferta, pero tomala precisa que as súas dúas moedas estean conectadas e activas.",
   },
   merchants: {
     title: "Os teus comerciantes",
@@ -320,10 +316,6 @@ export const gl: Bundle = {
     themeHint: "Escolle como se ve Satchel. Sistema segue a configuración do teu SO.",
     language: "Idioma",
     languageHint: "Engádense máis idiomas a medida que se contribúen traducións.",
-    mode: "Modo",
-    watchOnly: "Modo só visualización",
-    watchOnlyHint:
-      "Navega polo taboleiro sen configurar moedas. Aínda podes retirar as túas propias ofertas, pero non podes publicar, tomar nin financiar. Desactívao para negociar (precisarás polo menos dúas moedas conectadas).",
     network: "Rede",
     boards: "Corkboards",
     boardsDesc:
@@ -456,15 +448,6 @@ export const gl: Bundle = {
     unsupportedByEngineTip:
       "Esta moeda está definida en coins.toml pero non está incorporada nesta versión do motor, polo que non se pode negociar.",
   },
-  coinWizard: {
-    title: "Conecta as túas moedas",
-    intro:
-      "Escolle polo menos dúas moedas e apunta cada unha ao teu propio nodo. Un intercambio precisa dúas cadeas, así que a negociación desbloquéase unha vez que dous nodos estean conectados e activos. Podes engadir ou cambiar moedas máis tarde en Axustes.",
-    progress: "{count} de {min} moedas conectadas",
-    continue: "Continuar",
-    live: "Activa",
-    nodeDown: "Nodo caído",
-  },
   wallets: {
     degraded: "degradado",
     degradedWalletTip: "O servidor da carteira está inaccesible — o saldo pode estar desactualizado e os envíos pasan aos servidores de reserva.",
@@ -478,9 +461,6 @@ export const gl: Bundle = {
     noCoins: "Aínda non hai moedas configuradas",
     noCoinsBody: "Conecta unha moeda en Axustes → Moedas e a súa carteira aparecerá aquí.",
     goToCoins: "Ir a Moedas",
-    watchOnlyTitle: "Non hai carteiras no modo só visualización",
-    watchOnlyBody:
-      "Esta é unha sesión só de visualización sen moedas conectadas, polo que non hai carteiras que mostrar. Desactiva o modo só visualización en Axustes e conecta unha moeda para financiar intercambios.",
     walletName: "carteira · {wallet}",
     walletScopedHint: "Toda RPC para esta moeda está acoutada a esta carteira do nodo.",
     walletDefault: "carteira predeterminada (sen acoutar)",
@@ -720,7 +700,6 @@ export const gl: Bundle = {
     notConnected: "sen conexión: {err}",
     connected: "conectado a pactd {version} ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "só visualización: {err}",
     switchedMerchant: "cambiouse ao comerciante {id}",
     renamedMerchant: "comerciante renomeado a {name}",
     renameMerchantError: "renomear comerciante: {err}",

@@ -156,20 +156,16 @@ export const hi: Bundle = {
     signet: "Signet",
     notRealFunds: "असली funds नहीं — यह {network} network है",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "केवल देखें",
-    badgeTip:
-      "केवल-देखें मोड — बोर्ड ब्राउज़ करें और अपने offers वापस लें, लेकिन आप पोस्ट, ले या फंड नहीं कर सकते। व्यापार के लिए Settings में coins सेट अप करें।",
-    coinWizardButton: "केवल-देखें मोड में ब्राउज़ करें",
-    coinWizardHint:
-      "coin सेटअप छोड़ें और बस बोर्ड ब्राउज़ करें (read-only)। आप अब भी अपने offers वापस ले सकते हैं — किसी अन्य सत्र द्वारा छोड़े गए offers हटाने के लिए सुविधाजनक। इसे Settings में कभी भी बंद करें।",
-    postBlockedTitle: "केवल-देखें मोड",
-    postBlockedBody:
-      "यह एक केवल-देखें सत्र है, इसलिए यह offers पोस्ट नहीं कर सकता। व्यापार के लिए Settings → Coins में कम से कम दो coins सेट अप करें।",
-    takeBlockedBody: "केवल-देखें मोड — आप इस offer की समीक्षा कर सकते हैं, लेकिन इसे लेने के लिए coins सेट अप होने चाहिए।",
-    takeBlockedTip: "केवल-देखें मोड — offers लेने के लिए Settings में coins सेट अप करें।",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "व्यापार के लिए दो coins सेट अप करें",
+    tradeBody:
+      "किसी स्वैप को पोस्ट, ले और फंड करने के लिए दो कनेक्टेड coins चाहिए। इन्हें Settings → Coins में जोड़ें।",
+    tradeCta: "Coins सेट अप करें",
+    takeNeedsCoins:
+      "आप इस offer की समीक्षा कर सकते हैं, लेकिन इसे लेने के लिए इसके दोनों coins कनेक्ट और लाइव होने चाहिए।",
   },
   merchants: {
     title: "आपके merchants",
@@ -320,10 +316,6 @@ export const hi: Bundle = {
     themeHint: "चुनें कि Satchel कैसा दिखता है। सिस्टम आपकी OS सेटिंग का अनुसरण करता है।",
     language: "भाषा",
     languageHint: "जैसे-जैसे अनुवाद योगदान किए जाते हैं और भाषाएँ जुड़ती जाती हैं।",
-    mode: "मोड",
-    watchOnly: "केवल-देखें मोड",
-    watchOnlyHint:
-      "coins सेट अप किए बिना बोर्ड ब्राउज़ करें। आप अब भी अपने offers वापस ले सकते हैं, लेकिन पोस्ट, ले या फंड नहीं कर सकते। व्यापार के लिए बंद करें (आपको कम से कम दो coins कनेक्ट करने होंगे)।",
     network: "Network",
     boards: "Corkboards",
     boardsDesc:
@@ -457,15 +449,6 @@ export const hi: Bundle = {
     unsupportedByEngineTip:
       "यह coin coins.toml में परिभाषित है पर engine के इस संस्करण में निर्मित नहीं है, इसलिए इसका व्यापार नहीं किया जा सकता।",
   },
-  coinWizard: {
-    title: "अपने coins कनेक्ट करें",
-    intro:
-      "कम से कम दो coins चुनें और हर एक को अपने node पर इंगित करें। एक स्वैप के लिए दो chains चाहिए, इसलिए दो nodes कनेक्ट और लाइव होने पर व्यापार खुल जाता है। आप बाद में Settings में coins जोड़ या बदल सकते हैं।",
-    progress: "{min} में से {count} coins कनेक्टेड",
-    continue: "जारी रखें",
-    live: "लाइव",
-    nodeDown: "Node बंद",
-  },
   wallets: {
     degraded: "degraded",
     degradedWalletTip: "Wallet सर्वर पहुँच से बाहर है — बैलेंस पुराना हो सकता है और भेजना backup सर्वरों पर चला जाता है।",
@@ -479,9 +462,6 @@ export const hi: Bundle = {
     noCoins: "अभी कोई coins सेट अप नहीं",
     noCoinsBody: "Settings → Coins में एक coin कनेक्ट करें और इसका wallet यहाँ दिखाई देगा।",
     goToCoins: "Coins पर जाएँ",
-    watchOnlyTitle: "केवल-देखें मोड में कोई wallets नहीं",
-    watchOnlyBody:
-      "यह बिना किसी coins के एक केवल-देखें सत्र है, इसलिए दिखाने के लिए कोई wallets नहीं हैं। Settings में केवल-देखें बंद करें और स्वैप फंड करने के लिए एक coin कनेक्ट करें।",
     walletName: "wallet · {wallet}",
     walletScopedHint: "इस coin के लिए हर RPC इस node wallet तक सीमित है।",
     walletDefault: "डिफ़ॉल्ट wallet (सीमित नहीं)",
@@ -722,7 +702,6 @@ export const hi: Bundle = {
     notConnected: "कनेक्ट नहीं: {err}",
     connected: "pactd {version} से कनेक्टेड ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "केवल-देखें: {err}",
     switchedMerchant: "merchant {id} पर स्विच किया गया",
     renamedMerchant: "merchant का नाम बदलकर {name} किया गया",
     renameMerchantError: "merchant का नाम बदलें: {err}",

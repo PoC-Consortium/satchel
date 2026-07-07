@@ -29,7 +29,6 @@ import ContactsScreen from "./screens/ContactsScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import Wizard from "./dialogs/Wizard";
 import SeedProvision from "./dialogs/SeedProvision";
-import CoinWizard from "./dialogs/CoinWizard";
 import Unlock from "./dialogs/Unlock";
 import MerchantManager from "./dialogs/MerchantManager";
 import ExitGate from "./components/ExitGate";
@@ -41,7 +40,19 @@ export default function App() {
   const t = useT();
   const { prefs, update } = usePrefs();
   const [route, setRoute] = useState<Route>("board");
+  // Deep-link target for the Settings tabs: an empty-state CTA ("set up coins")
+  // navigates to Settings AND opens the Coins tab. Passed to SettingsScreen as
+  // its initial tab; plain sidebar nav to Settings leaves it undefined (General).
+  const [settingsTab, setSettingsTab] = useState<string | undefined>(undefined);
   const [modal, setModal] = useState<Modal>(null);
+  // Router used by every nav entry point (NavCtx, sidebar, header): switch
+  // route, optionally targeting a Settings sub-tab in the same jump. Always
+  // (re)sets the pending tab — plain nav passes none, clearing a stale deep-link
+  // target so a later Settings visit lands on General, not a leftover Coins tab.
+  const navigate = useCallback((r: Route, tab?: string) => {
+    setRoute(r);
+    setSettingsTab(tab);
+  }, []);
   // Nav open/closed is a persisted UI pref (UI-1, in satchel.json) — the source
   // of truth is `prefs`, toggled through the prefs updater.
   const navOpen = prefs.nav_open;
@@ -65,7 +76,6 @@ export default function App() {
   const showFirstRun = app.phase === "wizard" && modal === null;
   const showSeedGate = app.phase === "seed" && modal === null;
   const showUnlockGate = app.phase === "unlock" && modal === null;
-  const showCoinGate = app.phase === "coins" && modal === null;
 
   function screen() {
     if (app.phase === "no-tauri") return <NoTauri />;
@@ -90,7 +100,7 @@ export default function App() {
       case "contacts":
         return <ContactsScreen />;
       case "settings":
-        return <SettingsScreen />;
+        return <SettingsScreen initialTab={settingsTab} />;
     }
   }
 
@@ -100,10 +110,10 @@ export default function App() {
     <ContactsProvider>
     <UpdateProvider>
     <ConfirmProvider>
-      <NavCtx.Provider value={setRoute}>
+      <NavCtx.Provider value={navigate}>
         <DialogsCtx.Provider value={openers}>
           <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
-            <Sidebar route={route} onNavigate={setRoute} open={navOpen} onToggle={toggleNav} />
+            <Sidebar route={route} onNavigate={navigate} open={navOpen} onToggle={toggleNav} />
             <Box
               component="main"
               sx={{ flexGrow: 1, minWidth: 0, display: "flex", flexDirection: "column" }}
@@ -111,8 +121,8 @@ export default function App() {
               <Header
                 navOpen={navOpen}
                 onMenuToggle={toggleNav}
-                onSettings={() => setRoute("settings")}
-                onLiveSwaps={() => setRoute("board")}
+                onSettings={() => navigate("settings")}
+                onLiveSwaps={() => navigate("board")}
               />
               {/* Scrolling content column — the log lives OUTSIDE this so it
                   stays docked while long pages scroll (UI-4). */}
@@ -142,7 +152,6 @@ export default function App() {
             />
           )}
           {showUnlockGate && <Unlock onDone={app.boot} onSwitch={openers.openMerchants} />}
-          {showCoinGate && <CoinWizard onDone={app.boot} />}
 
           {/* User-triggered dialogs. */}
           {modal?.kind === "merchants" && (

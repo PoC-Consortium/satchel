@@ -156,20 +156,16 @@ export const lt: Bundle = {
     signet: "Signet",
     notRealFunds: "Ne tikros lėšos — tai {network} tinklas",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Tik stebėjimas",
-    badgeTip:
-      "Tik stebėjimo režimas — naršykite lentoje ir pašalinkite savo pasiūlymus, bet negalite skelbti, priimti ar finansuoti. Norėdami prekiauti, sukonfigūruokite monetas skiltyje Nustatymai.",
-    coinWizardButton: "Naršyti tik stebėjimo režimu",
-    coinWizardHint:
-      "Praleiskite monetų konfigūravimą ir tiesiog naršykite lentoje (tik skaitymui). Vis tiek galite pašalinti savo pasiūlymus — patogu pašalinti pasiūlymus, paliktus kitos sesijos. Galite išjungti bet kada skiltyje Nustatymai.",
-    postBlockedTitle: "Tik stebėjimo režimas",
-    postBlockedBody:
-      "Tai tik stebėjimo sesija, todėl negalima skelbti pasiūlymų. Norėdami prekiauti, sukonfigūruokite bent dvi monetas skiltyje Nustatymai → Monetos.",
-    takeBlockedBody: "Tik stebėjimo režimas — galite peržiūrėti šį pasiūlymą, bet norint jį priimti reikia sukonfigūruotų monetų.",
-    takeBlockedTip: "Tik stebėjimo režimas — norėdami priimti pasiūlymus, sukonfigūruokite monetas skiltyje Nustatymai.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Sukonfigūruokite dvi monetas prekybai",
+    tradeBody:
+      "Skelbimui, priėmimui ir mainų finansavimui reikia dviejų prijungtų monetų. Pridėkite jas skiltyje Nustatymai → Monetos.",
+    tradeCta: "Sukonfigūruoti monetas",
+    takeNeedsCoins:
+      "Galite peržiūrėti šį lapelį, bet norint jį priimti reikia, kad abi jo monetos būtų prijungtos ir veiktų.",
   },
   merchants: {
     title: "Jūsų prekiautojai",
@@ -320,10 +316,6 @@ export const lt: Bundle = {
     themeHint: "Pasirinkite, kaip atrodo Satchel. Sisteminė seka jūsų OS nustatymą.",
     language: "Kalba",
     languageHint: "Daugiau kalbų atsiras, kai bus prisidėta vertimų.",
-    mode: "Režimas",
-    watchOnly: "Tik stebėjimo režimas",
-    watchOnlyHint:
-      "Naršykite lentoje nekonfigūruodami monetų. Vis tiek galite pašalinti savo pasiūlymus, bet negalite skelbti, priimti ar finansuoti. Išjunkite, kad prekiautumėte (reikės bent dviejų prijungtų monetų).",
     network: "Tinklas",
     boards: "Corkboard lentos",
     boardsDesc:
@@ -457,15 +449,6 @@ export const lt: Bundle = {
     unsupportedByEngineTip:
       "Ši moneta apibrėžta coins.toml faile, bet neįtraukta į šią variklio versiją, todėl ja prekiauti negalima.",
   },
-  coinWizard: {
-    title: "Prijunkite savo monetas",
-    intro:
-      "Pasirinkite bent dvi monetas ir kiekvieną nukreipkite į savo paties mazgą. Mainams reikia dviejų grandinių, todėl prekyba atsirakina, kai prijungiamos ir veikia dvi monetos. Vėliau monetas galite pridėti ar pakeisti skiltyje Nustatymai.",
-    progress: "Prijungta {count} iš {min} monetų",
-    continue: "Tęsti",
-    live: "Veikia",
-    nodeDown: "Mazgas neveikia",
-  },
   wallets: {
     degraded: "pablogėjęs",
     degradedWalletTip: "Piniginės serveris nepasiekiamas — likutis gali būti pasenęs, o siuntimai pereina į atsarginius serverius.",
@@ -479,9 +462,6 @@ export const lt: Bundle = {
     noCoins: "Monetų dar nesukonfigūruota",
     noCoinsBody: "Prijunkite monetą skiltyje Nustatymai → Monetos ir jos piniginė pasirodys čia.",
     goToCoins: "Eiti į Monetas",
-    watchOnlyTitle: "Tik stebėjimo režimu piniginių nėra",
-    watchOnlyBody:
-      "Tai tik stebėjimo sesija be prijungtų monetų, todėl rodyti nėra jokių piniginių. Išjunkite tik stebėjimą skiltyje Nustatymai ir prijunkite monetą mainams finansuoti.",
     walletName: "piniginė · {wallet}",
     walletScopedHint: "Kiekvienas šios monetos RPC yra apribotas šiai mazgo piniginei.",
     walletDefault: "numatytoji piniginė (neapribota)",
@@ -722,7 +702,6 @@ export const lt: Bundle = {
     notConnected: "neprijungta: {err}",
     connected: "prisijungta prie pactd {version} ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "tik stebėjimas: {err}",
     switchedMerchant: "perjungta į prekiautoją {id}",
     renamedMerchant: "prekiautojas pervadintas į {name}",
     renameMerchantError: "prekiautojo pervadinimas: {err}",

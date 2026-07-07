@@ -6,13 +6,14 @@ This page orients you to the screens. For step-by-step chapters see the **Satche
 
 ## First run
 
-Satchel uses a **merchant** model: one merchant = one seed = one trading identity = one data directory (the Bitcoin-Core-wallet analog), owned by pactd. Before you can trade, first-run walks three gates:
+Satchel uses a **merchant** model: one merchant = one seed = one trading identity = one data directory (the Bitcoin-Core-wallet analog), owned by pactd. First-run walks two gates, then drops you straight into the app:
 
 1. **Merchant** — create or import a merchant (name it, e.g. "Main"). You can later rename the active merchant inline from the sidebar — only the label changes, so it's safe even mid-swap.
 2. **Seed** — generate a BIP39 mnemonic (reveal → verify, skipped on regtest) or import one, then choose **No passphrase (recommended)** or **Encrypt**. Importing uses a numbered word-grid with per-word BIP39 autocomplete, invalid-word highlighting, paste support, and a live status line that validates the checksum before you can continue. Satchel itself stores no seed or passphrase; an encrypted seed is unlocked per session in pactd memory only.
-3. **≥2 live coins** — you must connect at least two coins with status `ok` before reaching the trading screens. See [Configuring Coins](Configuring-Coins). To skip this and just look around, pick **Browse in watch-only mode** (see below).
 
-> **Watch-only mode** — browse the whole board and withdraw your own offers with **no coins configured**. A **"Watch only"** badge sits in the header, the post/take screens show a watch-only notice, and the Take button is disabled. Trading is blocked until you connect two live coins; toggle the mode under **Settings → Mode** (it reboots the engine).
+There is **no coin-setup wall**: after unlocking you land in the app regardless of how many coins you've configured, and empty states nudge you toward coin setup. Configure coins any time under **Settings → Coins** (see [Configuring Coins](Configuring-Coins)).
+
+> **Browsing is always on; trading is gated per action.** With **no coins configured** you can still browse the whole live board (every pair shows automatically), the wallet page, and the relays. Trading needs two live coins, enforced where you act rather than at the door: the **Post an offer** and **Create slip** screens show a soft **"Set up two coins to trade"** prompt (with a button to **Settings → Coins**) until at least two coins are connected, and a board offer's or slip's **Take** button stays disabled until both of that pair's coins are connected and live (the engine also refuses authoritatively).
 
 ## The screens
 

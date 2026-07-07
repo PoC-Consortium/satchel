@@ -96,7 +96,7 @@ export default function Sidebar({
   const theme = useTheme();
   const narrow = useMediaQuery(theme.breakpoints.down("sm"));
   const t = useT();
-  const { activeMerchant, activeId, identity, ready, watchOnly, boot, log } = useApp();
+  const { activeMerchant, activeId, identity, ready, boot, log } = useApp();
   const { version, showBadge, openDialog } = useUpdate();
   const { openMerchants } = useDialogs();
 
@@ -140,13 +140,6 @@ export default function Sidebar({
     onNavigate(r);
     if (narrow) onToggle();
   };
-
-  // Watch-only hides the two posting actions (you can't post or create slips);
-  // browsing, taking a slip (display-only), Swaps/Wallets/Settings all stay.
-  const publicItems = watchOnly ? PUBLIC_ITEMS.filter((n) => n.route !== "post-offer") : PUBLIC_ITEMS;
-  const privateItems = watchOnly
-    ? PRIVATE_ITEMS.filter((n) => n.route !== "private-create")
-    : PRIVATE_ITEMS;
 
   const body = (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", width: WIDTH }}>
@@ -291,12 +284,12 @@ export default function Sidebar({
       {/* Primary nav: the PUBLIC + PRIVATE venue groups, then Swaps/Wallets. */}
       <List sx={{ px: 1, pt: 1, flex: 1 }}>
         <SectionLabel>{t("nav.public")}</SectionLabel>
-        {publicItems.map((n) => (
+        {PUBLIC_ITEMS.map((n) => (
           <NavRow key={n.route} label={t(n.labelKey)} icon={n.icon} active={route === n.route} nested onClick={() => go(n.route)} />
         ))}
 
         <SectionLabel>{t("nav.private")}</SectionLabel>
-        {privateItems.map((n) => (
+        {PRIVATE_ITEMS.map((n) => (
           <NavRow key={n.route} label={t(n.labelKey)} icon={n.icon} active={route === n.route} nested onClick={() => go(n.route)} />
         ))}
 

@@ -156,20 +156,16 @@ export const es: Bundle = {
     signet: "Signet",
     notRealFunds: "No son fondos reales — esta es la red {network}",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Solo lectura",
-    badgeTip:
-      "Modo solo lectura — explora el tablón y retira tus propias ofertas, pero no puedes publicar, tomar ni financiar. Configura monedas en Ajustes para operar.",
-    coinWizardButton: "Explorar en modo solo lectura",
-    coinWizardHint:
-      "Omite la configuración de monedas y solo explora el tablón (solo lectura). Aún puedes retirar tus propias ofertas — útil para retirar ofertas dejadas por otra sesión. Desactívalo cuando quieras en Ajustes.",
-    postBlockedTitle: "Modo solo lectura",
-    postBlockedBody:
-      "Esta es una sesión de solo lectura, así que no puede publicar ofertas. Configura al menos dos monedas en Ajustes → Monedas para operar.",
-    takeBlockedBody: "Modo solo lectura — puedes revisar esta oferta, pero tomarla requiere tener monedas configuradas.",
-    takeBlockedTip: "Modo solo lectura — configura monedas en Ajustes para tomar ofertas.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Configura dos monedas para operar",
+    tradeBody:
+      "Publicar, tomar y financiar un swap requiere dos monedas conectadas. Añádelas en Ajustes → Monedas.",
+    tradeCta: "Configurar monedas",
+    takeNeedsCoins:
+      "Puedes revisar este slip, pero para tomarlo necesitas ambas monedas conectadas y activas.",
   },
   merchants: {
     title: "Tus merchants",
@@ -320,10 +316,6 @@ export const es: Bundle = {
     themeHint: "Elige cómo se ve Satchel. Sistema sigue la configuración de tu sistema operativo.",
     language: "Idioma",
     languageHint: "Se irán añadiendo más idiomas a medida que se aporten traducciones.",
-    mode: "Modo",
-    watchOnly: "Modo solo lectura",
-    watchOnlyHint:
-      "Explora el tablón sin configurar monedas. Aún puedes retirar tus propias ofertas, pero no puedes publicar, tomar ni financiar. Desactívalo para operar (necesitarás al menos dos monedas conectadas).",
     network: "Red",
     boards: "Corkboards",
     boardsDesc:
@@ -456,15 +448,6 @@ export const es: Bundle = {
     unsupportedByEngineTip:
       "Esta moneda está definida en coins.toml pero no está integrada en esta versión del motor, así que no se puede operar.",
   },
-  coinWizard: {
-    title: "Conecta tus monedas",
-    intro:
-      "Elige al menos dos monedas y apunta cada una a tu propio nodo. Un swap necesita dos cadenas, así que el trading se desbloquea una vez que dos nodos están conectados y activos. Puedes añadir o cambiar monedas más adelante en Ajustes.",
-    progress: "{count} de {min} monedas conectadas",
-    continue: "Continuar",
-    live: "Activo",
-    nodeDown: "Nodo caído",
-  },
   wallets: {
     degraded: "degradado",
     degradedWalletTip: "El servidor de la cartera no responde — el saldo puede estar desactualizado y los envíos usan los servidores de respaldo.",
@@ -478,9 +461,6 @@ export const es: Bundle = {
     noCoins: "Aún no hay monedas configuradas",
     noCoinsBody: "Conecta una moneda en Ajustes → Monedas y su cartera aparecerá aquí.",
     goToCoins: "Ir a Monedas",
-    watchOnlyTitle: "No hay carteras en modo solo lectura",
-    watchOnlyBody:
-      "Esta es una sesión de solo lectura sin monedas conectadas, así que no hay carteras que mostrar. Desactiva solo lectura en Ajustes y conecta una moneda para financiar swaps.",
     walletName: "cartera · {wallet}",
     walletScopedHint: "Cada RPC de esta moneda se acota a esta cartera del nodo.",
     walletDefault: "cartera por defecto (sin acotar)",
@@ -724,7 +704,6 @@ export const es: Bundle = {
     notConnected: "sin conexión: {err}",
     connected: "conectado a pactd {version} ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "solo lectura: {err}",
     switchedMerchant: "cambiado al merchant {id}",
     renamedMerchant: "merchant renombrado a {name}",
     renameMerchantError: "renombrar merchant: {err}",

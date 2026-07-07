@@ -133,10 +133,12 @@ about, because that's the real thing.
 > **Warning** — If there's no network stamp, you are on mainnet and trading with
 > real money. Double-check amounts before you confirm anything.
 
-If you've chosen to browse without connecting coins, a **"Watch only"** stamp sits
-just above the network stamp, a steady reminder that posting, taking, and funding
-are switched off until you leave watch-only mode and connect two coins. (See
-*"Setting Up Your Coins"* for what watch-only mode lets you do.)
+If you haven't connected coins yet, you can still browse the board freely —
+nothing walls off the app. What's gated is the money-moving actions, and they're
+gated **per action** rather than app-wide: posting, taking, and funding stay out
+of reach until you connect two live coins, with each action pointing you to
+**Settings → Coins** at the moment you reach for it. (See *"Setting Up Your
+Coins"* for the details.)
 
 ## The Network monitor
 

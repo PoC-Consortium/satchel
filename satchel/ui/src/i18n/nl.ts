@@ -156,20 +156,16 @@ export const nl: Bundle = {
     signet: "Signet",
     notRealFunds: "Geen echte fondsen — dit is het {network}-netwerk",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Alleen-bekijken",
-    badgeTip:
-      "Alleen-bekijken-modus — bekijk het bord en trek je eigen aanbiedingen terug, maar je kunt niet plaatsen, aannemen of funden. Stel munten in bij Instellingen om te handelen.",
-    coinWizardButton: "Bekijken in alleen-bekijken-modus",
-    coinWizardHint:
-      "Sla muntinstelling over en bekijk gewoon het bord (alleen-lezen). Je kunt nog steeds je eigen aanbiedingen terugtrekken — handig om aanbiedingen op te halen die door een andere sessie zijn achtergelaten. Schakel het op elk moment uit in Instellingen.",
-    postBlockedTitle: "Alleen-bekijken-modus",
-    postBlockedBody:
-      "Dit is een alleen-bekijken-sessie, dus er kunnen geen aanbiedingen worden geplaatst. Stel minstens twee munten in bij Instellingen → Munten om te handelen.",
-    takeBlockedBody: "Alleen-bekijken-modus — je kunt dit aanbod bekijken, maar om het aan te nemen zijn ingestelde munten nodig.",
-    takeBlockedTip: "Alleen-bekijken-modus — stel munten in bij Instellingen om aanbiedingen aan te nemen.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Stel twee munten in om te handelen",
+    tradeBody:
+      "Plaatsen, aannemen en funden van een swap vereisen twee verbonden munten. Voeg ze toe bij Instellingen → Munten.",
+    tradeCta: "Munten instellen",
+    takeNeedsCoins:
+      "Je kunt deze slip bekijken, maar om hem aan te nemen moeten beide munten verbonden en actief zijn.",
   },
   merchants: {
     title: "Jouw merchants",
@@ -320,10 +316,6 @@ export const nl: Bundle = {
     themeHint: "Kies hoe Satchel eruitziet. Systeem volgt je OS-instelling.",
     language: "Taal",
     languageHint: "Meer talen verschijnen naarmate vertalingen worden bijgedragen.",
-    mode: "Modus",
-    watchOnly: "Alleen-bekijken-modus",
-    watchOnlyHint:
-      "Bekijk het bord zonder munten in te stellen. Je kunt nog steeds je eigen aanbiedingen terugtrekken, maar niet plaatsen, aannemen of funden. Schakel uit om te handelen (je hebt minstens twee verbonden munten nodig).",
     network: "Netwerk",
     boards: "Corkboards",
     boardsDesc:
@@ -457,15 +449,6 @@ export const nl: Bundle = {
     unsupportedByEngineTip:
       "Deze munt is gedefinieerd in coins.toml maar niet ingebouwd in deze versie van de engine, dus hij kan niet verhandeld worden.",
   },
-  coinWizard: {
-    title: "Verbind je munten",
-    intro:
-      "Kies minstens twee munten en wijs elk naar je eigen node. Een swap heeft twee ketens nodig, dus handelen ontgrendelt zodra twee nodes verbonden en live zijn. Je kunt later munten toevoegen of wijzigen in Instellingen.",
-    progress: "{count} van {min} munten verbonden",
-    continue: "Doorgaan",
-    live: "Live",
-    nodeDown: "Node ligt eruit",
-  },
   wallets: {
     degraded: "verminderd",
     degradedWalletTip: "De wallet-server is onbereikbaar — het saldo kan verouderd zijn en verzendingen wijken uit naar reserveservers.",
@@ -479,9 +462,6 @@ export const nl: Bundle = {
     noCoins: "Nog geen munten ingesteld",
     noCoinsBody: "Verbind een munt in Instellingen → Munten en zijn wallet verschijnt hier.",
     goToCoins: "Ga naar Munten",
-    watchOnlyTitle: "Geen wallets in alleen-bekijken-modus",
-    watchOnlyBody:
-      "Dit is een alleen-bekijken-sessie zonder verbonden munten, dus er zijn geen wallets om te tonen. Schakel alleen-bekijken uit in Instellingen en verbind een munt om swaps te funden.",
     walletName: "wallet · {wallet}",
     walletScopedHint: "Elke RPC voor deze munt is afgebakend tot deze node-wallet.",
     walletDefault: "standaard wallet (niet afgebakend)",
@@ -722,7 +702,6 @@ export const nl: Bundle = {
     notConnected: "niet verbonden: {err}",
     connected: "verbonden met pactd {version} ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "alleen-bekijken: {err}",
     switchedMerchant: "overgeschakeld naar merchant {id}",
     renamedMerchant: "merchant hernoemd naar {name}",
     renameMerchantError: "merchant hernoemen: {err}",

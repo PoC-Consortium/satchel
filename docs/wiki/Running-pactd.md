@@ -48,8 +48,6 @@ pactd [--data-dir <DIR>] [--coins-file <coins.toml>] [--coin <id>=<url[,url]> ..
 - **`RUST_LOG`** — log verbosity (default `INFO`).
 - **`SATCHEL_DATA_DIR`** — overrides the OS app-data base directory Satchel uses. It cascades to the `pactd` instance Satchel manages and to all config and merchants underneath, so pointing it elsewhere gives you a fully isolated stack — handy for playground/tester instances that mustn't touch your real data dir.
 
-> **Note** — **watch-only mode** is per-merchant and toggled at runtime via the `setwatchonly` RPC (no relaunch). A watch-only merchant can browse the board and withdraw its own offers but cannot post, take, or fund. See [JSON-RPC API](JSON-RPC-API).
-
 ## Regtest example
 
 ```sh
