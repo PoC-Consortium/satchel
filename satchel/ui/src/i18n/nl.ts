@@ -348,10 +348,10 @@ export const nl: Bundle = {
       "Veiligheids-/kostenafwegingen voor fee-bumps, geen verplichte instelling. Nieuwe waarden gelden voor toekomstige bumps; reeds gefunde swaps behouden het beleid waaronder ze zijn gefund.",
     feeMax: "Max feerate (sat/vB)",
     feeMaxHint:
-      "Plafond voor elke fee-bump. Standaard 500, tevens het harde systeemmaximum. Verlaag het om kosten te beperken.",
+      "Plafond voor funding-fee-bumps (HTLC + adaptor); standaard 500, tevens het harde systeemmaximum. Verlaag het om de fundingkosten te beperken. Bumps bij inlossen en terugbetalen negeren het — vlak bij een timelock betalen ze wat nodig is, tot aan de waarde die op het spel staat, zodat er nooit een leg verloren gaat door een fee-plafond.",
     feeReservation: "Funding-bump-reservering (×)",
     feeReservationHint:
-      "Saldo dat de fondscontrole apart zet als bump-speelruimte. Hoger redt grotere fee-pieken maar zet meer saldo vast en weigert meer swaps. Standaard 3.",
+      "Alleen funding-bumps (HTLC + adaptor). Zowel het saldo dat de fondscontrole apart zet als bump-speelruimte als het plafond van een funding-bump (dit veelvoud van de oorspronkelijke feerate). Hoger redt grotere fee-pieken maar zet meer saldo vast en weigert meer swaps. Standaard 3.",
     feeSave: "Opslaan",
     feeSaving: "Opslaan…",
     feeSaved: "Opgeslagen",

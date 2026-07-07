@@ -348,10 +348,10 @@ export const gl: Bundle = {
       "Compensacións de seguranza/custo para aumentos de comisión, non é configuración obrigatoria. Os novos valores aplícanse a futuros aumentos; os intercambios xa financiados conservan a política coa que se financiaron.",
     feeMax: "Taxa máxima (sat/vB)",
     feeMaxHint:
-      "Tope para cada aumento de comisión. Predeterminado 500, tamén o máximo absoluto do sistema. Báixao para limitar custos.",
+      "Tope para os aumentos de comisión de financiamento (HTLC + adaptor); predeterminado 500, tamén o máximo absoluto do sistema. Báixao para limitar os custos de financiamento. Os aumentos de resgate e reembolso ignórano — preto dun bloqueo temporal pagan o que faga falta, ata o valor en xogo, así que nunca se perde un tramo do intercambio por un tope de comisión.",
     feeReservation: "Reserva para aumento de financiamento (×)",
     feeReservationHint:
-      "Saldo que a comprobación de fondos aparta como marxe para aumentos. Maior rescata picos de comisión máis grandes pero inmobiliza máis saldo e rexeita máis intercambios. Predeterminado 3.",
+      "Só aumentos de financiamento (HTLC + adaptor). Á vez o saldo que a comprobación de fondos aparta como marxe para aumentos e o tope dun aumento de financiamento (este múltiplo da súa comisión orixinal). Maior rescata picos de comisión máis grandes pero inmobiliza máis saldo e rexeita máis intercambios. Predeterminado 3.",
     feeSave: "Gardar",
     feeSaving: "Gardando…",
     feeSaved: "Gardado",

@@ -348,10 +348,10 @@ export const fi: Bundle = {
       "Turvallisuus-/kustannuskompromissit maksun korotuksille, ei pakollinen määritys. Uudet arvot koskevat tulevia korotuksia; jo rahoitetut swapit säilyttävät käytännön, jolla ne rahoitettiin.",
     feeMax: "Maksimimaksu (sat/vB)",
     feeMaxHint:
-      "Katto jokaiselle maksun korotukselle. Oletus 500, myös järjestelmän kova maksimi. Laske sitä rajataksesi kustannuksia.",
+      "Katto rahoituksen maksunkorotuksille (HTLC + adaptor); oletus 500, myös järjestelmän kova maksimi. Laske sitä rajataksesi rahoituskustannuksia. Lunastus- ja palautuskorotukset ohittavat sen — aikalukon lähellä ne maksavat mitä tarvitaan, aina panoksena olevaan arvoon asti, joten yhtäkään haaraa ei koskaan menetetä maksukaton takia.",
     feeReservation: "Rahoituskorotuksen varaus (×)",
     feeReservationHint:
-      "Saldo, jonka varojen tarkistus varaa korotuspuskuriksi. Korkeampi pelastaa suuremmista maksupiikeistä, mutta sitoo enemmän saldoa ja hylkää enemmän swapeja. Oletus 3.",
+      "Vain rahoituskorotukset (HTLC + adaptor). Sekä saldo, jonka varojen tarkistus varaa korotuspuskuriksi, että rahoituskorotuksen katto (tämä kerrannainen sen alkuperäisestä maksutasosta). Korkeampi pelastaa suuremmista maksupiikeistä, mutta sitoo enemmän saldoa ja hylkää enemmän swapeja. Oletus 3.",
     feeSave: "Tallenna",
     feeSaving: "Tallennetaan…",
     feeSaved: "Tallennettu",

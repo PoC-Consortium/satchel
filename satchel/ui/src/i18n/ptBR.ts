@@ -348,10 +348,10 @@ export const ptBR: Bundle = {
       "Contrapartidas de segurança/custo para fee bumps, não é configuração obrigatória. Novos valores se aplicam a bumps futuros; swaps já financiados mantêm a política sob a qual foram financiados.",
     feeMax: "Feerate máxima (sat/vB)",
     feeMaxHint:
-      "Teto para todo fee bump. Padrão 500, também o máximo absoluto do sistema. Reduza para limitar custos.",
+      "Teto para fee bumps de funding (HTLC + adaptor); padrão 500, também o máximo absoluto do sistema. Reduza para limitar os custos de funding. Bumps de resgate e reembolso o ignoram — perto de um timelock, pagam o que for preciso, até o valor em jogo, então nenhuma perna se perde por causa de um teto de taxa.",
     feeReservation: "Reserva para bump de funding (×)",
     feeReservationHint:
-      "Saldo que a verificação de fundos reserva como folga para bumps. Mais alto resgata picos de taxa maiores, mas imobiliza mais saldo e rejeita mais swaps. Padrão 3.",
+      "Apenas bumps de funding (HTLC + adaptor). Tanto o saldo que a verificação de fundos reserva como folga para bumps quanto o teto de um bump de funding (este múltiplo da taxa original). Mais alto resgata picos de taxa maiores, mas imobiliza mais saldo e rejeita mais swaps. Padrão 3.",
     feeSave: "Salvar",
     feeSaving: "Salvando…",
     feeSaved: "Salvo",

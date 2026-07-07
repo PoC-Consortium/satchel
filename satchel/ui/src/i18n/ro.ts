@@ -348,10 +348,10 @@ export const ro: Bundle = {
       "Compromisuri siguranță/cost pentru creșterea comisioanelor, nu o configurare obligatorie. Valorile noi se aplică creșterilor viitoare; swap-urile deja finanțate păstrează politica sub care au fost finanțate.",
     feeMax: "Feerate maxim (sat/vB)",
     feeMaxHint:
-      "Plafon pentru fiecare creștere de comision. Implicit 500, totodată maximul absolut al sistemului. Coboară-l pentru a limita costurile.",
+      "Plafon pentru creșterile de comision de finanțare (HTLC + adaptor); implicit 500, totodată maximul absolut al sistemului. Coboară-l pentru a limita costurile de finanțare. Creșterile de răscumpărare și rambursare îl ignoră — lângă un blocaj temporal plătesc cât e nevoie, până la valoarea în joc, așa că o latură nu se pierde niciodată din cauza unui plafon de comision.",
     feeReservation: "Rezervă pentru creșterea finanțării (×)",
     feeReservationHint:
-      "Soldul pe care verificarea fondurilor îl pune deoparte ca marjă pentru creștere. Mai mare salvează spike-uri de comision mai mari, dar blochează mai mult sold și respinge mai multe swap-uri. Implicit 3.",
+      "Doar creșteri de finanțare (HTLC + adaptor). Atât soldul pe care verificarea fondurilor îl pune deoparte ca marjă pentru creștere, cât și plafonul unei creșteri de finanțare (acest multiplu al ratei sale inițiale). Mai mare salvează spike-uri de comision mai mari, dar blochează mai mult sold și respinge mai multe swap-uri. Implicit 3.",
     feeSave: "Salvează",
     feeSaving: "Se salvează…",
     feeSaved: "Salvat",

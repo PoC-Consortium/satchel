@@ -348,10 +348,10 @@ export const hr: Bundle = {
       "Kompromisi sigurnosti/troška za povećanje naknade, nisu obavezno postavljanje. Nove vrijednosti vrijede za buduća povećanja; već financirani swapovi zadržavaju politiku pod kojom su financirani.",
     feeMax: "Maks. feerate (sat/vB)",
     feeMaxHint:
-      "Gornja granica za svako povećanje naknade. Zadano 500, ujedno i tvrdi sistemski maksimum. Smanjite je da ograničite troškove.",
+      "Gornja granica za povećanja naknade kod financiranja (HTLC + adaptor); zadano 500, ujedno i tvrdi sistemski maksimum. Smanjite je da ograničite troškove financiranja. Povećanja pri isplati i povratu je zanemaruju — blizu vremenske brave plaćaju koliko god treba, do vrijednosti koja je na kocki, tako da se nijedna strana swapa nikad ne izgubi zbog gornje granice naknade.",
     feeReservation: "Rezervacija za povećanje financiranja (×)",
     feeReservationHint:
-      "Stanje koje provjera sredstava izdvaja kao rezervu za povećanje. Više spašava veće skokove naknade, ali veže više stanja i odbija više swapova. Zadano 3.",
+      "Samo povećanja financiranja (HTLC + adaptor). Istovremeno stanje koje provjera sredstava izdvaja kao rezervu za povećanje i gornja granica povećanja financiranja (ovaj višekratnik njegove izvorne stope naknade). Više spašava veće skokove naknade, ali veže više stanja i odbija više swapova. Zadano 3.",
     feeSave: "Spremi",
     feeSaving: "Spremanje…",
     feeSaved: "Spremljeno",

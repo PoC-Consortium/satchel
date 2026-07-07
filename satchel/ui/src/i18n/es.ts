@@ -348,10 +348,10 @@ export const es: Bundle = {
       "Compromisos de seguridad/coste para los aumentos de comisión, no es configuración obligatoria. Los nuevos valores se aplican a futuros aumentos; los swaps ya financiados conservan la política con la que se financiaron.",
     feeMax: "Feerate máximo (sat/vB)",
     feeMaxHint:
-      "Techo para cada aumento de comisión. Por defecto 500, también el máximo absoluto del sistema. Bájalo para limitar costes.",
+      "Techo para los aumentos de comisión de financiación (HTLC + adaptor); por defecto 500, también el máximo absoluto del sistema. Bájalo para limitar los costes de financiación. Los aumentos de canje y reembolso lo ignoran — cerca de un bloqueo temporal pagan lo que haga falta, hasta el valor en juego, así que nunca se pierde un tramo del swap por un tope de comisión.",
     feeReservation: "Reserva para aumento de financiación (×)",
     feeReservationHint:
-      "El saldo que la comprobación de fondos aparta como margen para aumentos. Más alto rescata picos de comisión mayores pero inmoviliza más saldo y rechaza más swaps. Por defecto 3.",
+      "Solo aumentos de financiación (HTLC + adaptor). A la vez el saldo que la comprobación de fondos aparta como margen para aumentos y el tope de un aumento de financiación (este múltiplo de su comisión original). Más alto rescata picos de comisión mayores pero inmoviliza más saldo y rechaza más swaps. Por defecto 3.",
     feeSave: "Guardar",
     feeSaving: "Guardando…",
     feeSaved: "Guardado",

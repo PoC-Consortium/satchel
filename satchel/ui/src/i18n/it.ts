@@ -348,10 +348,10 @@ export const it: Bundle = {
       "Compromessi sicurezza/costo per i fee bump, non una configurazione obbligatoria. I nuovi valori si applicano ai bump futuri; gli swap già fundati mantengono la policy con cui sono stati fundati.",
     feeMax: "Feerate massimo (sat/vB)",
     feeMaxHint:
-      "Tetto per ogni fee bump. Predefinito 500, è anche il massimo rigido di sistema. Abbassalo per limitare i costi.",
+      "Tetto per i fee bump di funding (HTLC + adaptor); predefinito 500, è anche il massimo rigido di sistema. Abbassalo per limitare i costi di funding. I bump di riscatto e rimborso lo ignorano — vicino a un timelock pagano quanto serve, fino al valore in gioco, così una gamba non va mai persa per via di un tetto sulle fee.",
     feeReservation: "Riserva per bump di funding (×)",
     feeReservationHint:
-      "Saldo che il controllo dei fondi accantona come margine per i bump. Un valore più alto salva i picchi di fee più grandi ma immobilizza più saldo e rifiuta più swap. Predefinito 3.",
+      "Solo bump di funding (HTLC + adaptor). Sia il saldo che il controllo dei fondi accantona come margine per i bump sia il tetto di un bump di funding (questo multiplo della sua fee rate originale). Un valore più alto salva i picchi di fee più grandi ma immobilizza più saldo e rifiuta più swap. Predefinito 3.",
     feeSave: "Salva",
     feeSaving: "Salvataggio…",
     feeSaved: "Salvato",

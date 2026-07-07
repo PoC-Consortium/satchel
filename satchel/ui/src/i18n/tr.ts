@@ -348,10 +348,10 @@ export const tr: Bundle = {
       "Ücret artırmaları için güvenlik/maliyet dengeleri, zorunlu kurulum değildir. Yeni değerler gelecekteki artırmalara uygulanır; zaten fonlanmış takaslar, fonlandıkları politikayı korur.",
     feeMax: "Maks. ücret oranı (sat/vB)",
     feeMaxHint:
-      "Her ücret artırması için tavan. Varsayılan 500, aynı zamanda kesin sistem maksimumudur. Maliyetleri sınırlamak için düşürün.",
+      "Fonlama ücret artırmaları için tavan (HTLC + adaptor); varsayılan 500, aynı zamanda kesin sistem maksimumudur. Fonlama maliyetlerini sınırlamak için düşürün. İtfa ve iade artırmaları bunu yok sayar — bir zaman kilidine yaklaşınca, riske atılan değere kadar ne gerekiyorsa öderler, böylece takasın bir tarafı asla ücret tavanı yüzünden kaybedilmez.",
     feeReservation: "Fonlama artırma rezervasyonu (×)",
     feeReservationHint:
-      "Fon kontrolünün artırma payı olarak ayırdığı miktar. Yüksek olması daha büyük ücret sıçramalarını kurtarır ancak daha fazla bakiyeyi bağlar ve daha fazla takası reddeder. Varsayılan 3.",
+      "Yalnızca fonlama artırmaları (HTLC + adaptor). Hem fon kontrolünün artırma payı olarak ayırdığı bakiye hem de bir fonlama artırmasının tavanı (özgün ücret oranının bu katı). Yüksek olması daha büyük ücret sıçramalarını kurtarır ancak daha fazla bakiyeyi bağlar ve daha fazla takası reddeder. Varsayılan 3.",
     feeSave: "Kaydet",
     feeSaving: "Kaydediliyor…",
     feeSaved: "Kaydedildi",
