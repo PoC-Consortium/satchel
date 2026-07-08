@@ -58,8 +58,11 @@ export default function CoinSetup({
   const pick = <T,>(s: T | null | undefined, tpl: T | undefined, def: T): T =>
     s ?? tpl ?? def;
 
+  // New coins default to Electrum (nodeless) — the quick, no-node path most
+  // users want. Editing a saved coin shows its actual mode (a pact-seed coin is
+  // Electrum; anything else is a node/RPC connection).
   const [mode, setMode] = useState<ConnMode>(
-    saved?.funding_wallet === "pact-seed" ? "electrum" : "node",
+    saved ? (saved.funding_wallet === "pact-seed" ? "electrum" : "node") : "electrum",
   );
   const [electrumUrls, setElectrumUrls] = useState(
     saved?.funding_wallet === "pact-seed"
@@ -217,17 +220,18 @@ export default function CoinSetup({
           {t("coins.modeLabel")}
         </Typography>
         <Stack direction="row" spacing={1.5} sx={{ mt: 1, mb: 2 }}>
-          <ChoiceCard
-            title={t("coins.modeNode")}
-            desc={t("coins.modeNodeDesc")}
-            selected={mode === "node"}
-            onClick={() => edited(setMode)("node")}
-          />
+          {/* Electrum (nodeless) first — it's the default, quick, no-node path. */}
           <ChoiceCard
             title={t("coins.modeNodeless")}
             desc={t("coins.modeNodelessDesc")}
             selected={mode === "electrum"}
             onClick={() => edited(setMode)("electrum")}
+          />
+          <ChoiceCard
+            title={t("coins.modeNode")}
+            desc={t("coins.modeNodeDesc")}
+            selected={mode === "node"}
+            onClick={() => edited(setMode)("node")}
           />
         </Stack>
 
