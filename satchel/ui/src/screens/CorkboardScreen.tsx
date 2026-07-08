@@ -58,20 +58,27 @@ const PAIR_KEY = "satchel.corkboard.pair";
 const HIDE_BLOCKED_KEY = "satchel.corkboard.hideBlocked";
 const ALL_PAIRS_KEY = "satchel.corkboard.allPairs";
 
-// Board snapshots survive navigation so returning to the Corkboard paints the
-// last-known book INSTANTLY instead of blanking for a relay round-trip
-// (`boardlistoffers` fans out to the Nostr/HTTP board and can take a couple of
-// seconds). Module-level so it outlives the screen's unmount; keyed by identity
-// because the book is per-merchant (a switch starts fresh). Stale-never-blank:
-// the on-mount load and the 4s poll overwrite it immediately — the same
-// instant-cache pattern the Wallets screen uses (#91).
+// The last board snapshot, kept module-level so it outlives the screen's unmount
+// and returning to the Corkboard paints the book INSTANTLY instead of blanking
+// for a relay round-trip (`boardlistoffers` fans out to the Nostr/HTTP board and
+// can take a couple of seconds). Stale-never-blank: the on-mount load and the 4s
+// poll overwrite it — the same instant-cache pattern the Wallets screen uses
+// (#91).
+//
+// `owner` is the merchant identity the snapshot belongs to, so a merchant switch
+// never shows one merchant's book to another. It is written UNCONDITIONALLY —
+// crucially the very first load runs during boot while `identity` is still null
+// (the board renders in the "loading" phase), and that load is what paints the
+// first book; a null owner is treated as a wildcard on read so that first load
+// still seeds the next return rather than caching only from the second visit on.
 interface BoardSnap {
+  owner: string | null;
   offers: Offer[];
   staged: string[];
   available: string[];
   boards: string;
 }
-const boardCache = new Map<string, BoardSnap>();
+let lastBoard: BoardSnap | null = null;
 
 // One row from pactd `listmyoffers` — the maker's own offers from the local
 // store (the `offer` envelope is Offer-shaped: swap_id / from / body).
@@ -100,9 +107,12 @@ export default function CorkboardScreen() {
   const navigate = useNavigate();
   const t = useT();
 
-  // Seed from the cached snapshot for this merchant so navigating back to the
-  // board renders the last book at once, then the load below refreshes it.
-  const snap = identity ? boardCache.get(identity) : undefined;
+  // Seed from the last snapshot so navigating back to the board renders the last
+  // book at once, then the load below refreshes it. A null-owner snapshot (from
+  // the boot-time load before identity resolved) is accepted for any merchant;
+  // otherwise it must match the active identity so a switch starts fresh.
+  const snap =
+    lastBoard && (lastBoard.owner === null || lastBoard.owner === identity) ? lastBoard : undefined;
   const [loaded, setLoaded] = useState(!!snap);
   const [boardErr, setBoardErr] = useState<string | null>(null);
   const [offers, setOffers] = useState<Offer[]>(() => snap?.offers ?? []);
@@ -200,15 +210,16 @@ export default function CorkboardScreen() {
     setStagedIds(staged);
     setOffers(list);
     setLoaded(true);
-    // Refresh the navigation cache so the next return paints instantly.
-    if (identity) {
-      boardCache.set(identity, {
-        offers: list,
-        staged: [...staged],
-        available: [...avail],
-        boards: boardsStr,
-      });
-    }
+    // Refresh the navigation snapshot so the next return paints instantly. Written
+    // unconditionally (even the boot-time load with a null identity) so the very
+    // first book is cached, not only from the second visit on.
+    lastBoard = {
+      owner: identity,
+      offers: list,
+      staged: [...staged],
+      available: [...avail],
+      boards: boardsStr,
+    };
   }, [boardSel, identity]);
 
   // Re-sync on mount, when the active merchant changes (login / switch — the
