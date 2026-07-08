@@ -1,10 +1,10 @@
 //! Regression-pins libswap against the committed spec test vectors
-//! (spec §13). If this test fails, either the protocol bytes changed
+//! (spec Â§13). If this test fails, either the protocol bytes changed
 //! (requires a protocol version bump) or the vectors file is stale
 //! (regenerate with `cargo run -p libswap --example gen-vectors`).
 
 use libswap::htlc::Htlc;
-use libswap::keys::{hash_preimage, swap_id, PactSeed, COIN_BTC, COIN_BTCX};
+use libswap::keys::{hash_preimage, swap_id, DeriveScope, PactSeed, COIN_BTC, COIN_BTCX};
 use libswap::params::{BTCX_REGTEST, BTC_REGTEST};
 use serde_json::Value;
 
@@ -23,7 +23,7 @@ fn committed_vectors_reproduce() {
     let t1 = v["timelocks"]["t1"].as_u64().unwrap() as u32;
     let t2 = v["timelocks"]["t2"].as_u64().unwrap() as u32;
 
-    let s = alice.preimage(index).unwrap();
+    let s = alice.preimage(DeriveScope::LEGACY, index).unwrap();
     let h = hash_preimage(&s);
     assert_eq!(hex::encode(s), v["secret"]["preimage_s"].as_str().unwrap());
     assert_eq!(hex::encode(h), v["secret"]["hash_h"].as_str().unwrap());
@@ -36,15 +36,21 @@ fn committed_vectors_reproduce() {
 
     let htlc_a = Htlc::new(
         h,
-        bob.swap_pubkey(COIN_BTCX, index).unwrap(),
-        alice.swap_pubkey(COIN_BTCX, index).unwrap(),
+        bob.swap_pubkey(COIN_BTCX, DeriveScope::LEGACY, index)
+            .unwrap(),
+        alice
+            .swap_pubkey(COIN_BTCX, DeriveScope::LEGACY, index)
+            .unwrap(),
         t1,
     )
     .unwrap();
     let htlc_b = Htlc::new(
         h,
-        alice.swap_pubkey(COIN_BTC, index).unwrap(),
-        bob.swap_pubkey(COIN_BTC, index).unwrap(),
+        alice
+            .swap_pubkey(COIN_BTC, DeriveScope::LEGACY, index)
+            .unwrap(),
+        bob.swap_pubkey(COIN_BTC, DeriveScope::LEGACY, index)
+            .unwrap(),
         t2,
     )
     .unwrap();

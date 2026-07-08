@@ -1,13 +1,13 @@
 //! Generates the deterministic test vectors committed at
-//! `spec/vectors/htlc_v2.json` (spec v2 §11).
+//! `spec/vectors/htlc_v2.json` (spec v2 Â§11).
 //!
 //! Run: `cargo run -p libswap --example gen-vectors-v2 > ../spec/vectors/htlc_v2.json`
 //!
-//! Public test seeds — never fund them outside regtest.
+//! Public test seeds â€” never fund them outside regtest.
 
 use bitcoin::secp256k1::Secp256k1;
 use libswap::adaptor_swap::AdaptorSwapParams;
-use libswap::keys::{PactSeed, COIN_BTC, COIN_BTCX};
+use libswap::keys::{DeriveScope, PactSeed, COIN_BTC, COIN_BTCX};
 use libswap::params::{BTCX_REGTEST, BTC_REGTEST};
 use serde_json::json;
 
@@ -32,13 +32,13 @@ fn main() -> anyhow::Result<()> {
         amount_b: AMOUNT_B,
         t1: T1,
         t2: T2,
-        alice_swap_a: alice.swap_pubkey(COIN_BTCX, i)?,
-        alice_swap_b: alice.swap_pubkey(COIN_BTC, i)?,
-        bob_swap_a: bob.swap_pubkey(COIN_BTCX, i)?,
-        bob_swap_b: bob.swap_pubkey(COIN_BTC, i)?,
-        alice_refund_a: alice.refund_xonly_pubkey(COIN_BTCX, i)?,
-        bob_refund_b: bob.refund_xonly_pubkey(COIN_BTC, i)?,
-        adaptor_point: alice.adaptor_point(i)?,
+        alice_swap_a: alice.swap_pubkey(COIN_BTCX, DeriveScope::LEGACY, i)?,
+        alice_swap_b: alice.swap_pubkey(COIN_BTC, DeriveScope::LEGACY, i)?,
+        bob_swap_a: bob.swap_pubkey(COIN_BTCX, DeriveScope::LEGACY, i)?,
+        bob_swap_b: bob.swap_pubkey(COIN_BTC, DeriveScope::LEGACY, i)?,
+        alice_refund_a: alice.refund_xonly_pubkey(COIN_BTCX, DeriveScope::LEGACY, i)?,
+        bob_refund_b: bob.refund_xonly_pubkey(COIN_BTC, DeriveScope::LEGACY, i)?,
+        adaptor_point: alice.adaptor_point(DeriveScope::LEGACY, i)?,
     };
 
     let leg_a = params.leg_a(&secp)?;
@@ -47,7 +47,7 @@ fn main() -> anyhow::Result<()> {
     let out_b = leg_b.spend_info(&secp)?.output_key().to_x_only_public_key();
 
     let vectors = json!({
-        "_comment": "Deterministic pact-htlc-v2 test vectors (spec v2 §11). Public test seeds; regtest only. Regenerate with: cargo run -p libswap --example gen-vectors-v2",
+        "_comment": "Deterministic pact-htlc-v2 test vectors (spec v2 Â§11). Public test seeds; regtest only. Regenerate with: cargo run -p libswap --example gen-vectors-v2",
         "protocol": "pact-htlc-v2",
         "alice_mnemonic": ALICE_MNEMONIC,
         "bob_mnemonic": BOB_MNEMONIC,
@@ -55,7 +55,7 @@ fn main() -> anyhow::Result<()> {
         "amounts": { "amount_a": AMOUNT_A, "amount_b": AMOUNT_B },
         "timelocks": { "t1": T1, "t2": T2 },
         "adaptor": {
-            "secret_t": hex::encode(alice.adaptor_secret(i)?.secret_bytes()),
+            "secret_t": hex::encode(alice.adaptor_secret(DeriveScope::LEGACY, i)?.secret_bytes()),
             "point_T": params.adaptor_point.to_string(),
         },
         "derivation": {

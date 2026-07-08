@@ -56,6 +56,61 @@ fn anchor_levels(anchor: &[u8]) -> [u32; 4] {
     })
 }
 
+/// Per-machine seed-derivation scope — the backbone of the multi-machine
+/// partition (§1 of docs/MULTI_MACHINE_122.md). A random **62-bit** value,
+/// one per install, injected as **two hardened 31-bit BIP32 levels** into every
+/// *initiator / counter-based* derivation so two machines on the same seed
+/// derive **different** preimages / adaptor secrets / swap keys at the same
+/// counter `i` — closing the catastrophic secret-reuse vector.
+///
+/// `0` is the reserved **LEGACY** marker: "derive the pre-scope way, injecting
+/// no scope levels", so a record written before scopes existed re-derives on the
+/// exact original path. Because `0` is never a real machine's own scope (fresh
+/// scopes are drawn nonzero, see `machine::load_or_create_scope`), a legacy
+/// record is *foreign to every machine* — recoverable only via the confirm-gated
+/// path, never silently self-driven. Participant keys are **anchored**, not
+/// counter-based, so the scope is only a machine tag on those records, not a
+/// derivation input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DeriveScope(pub u64);
+
+impl DeriveScope {
+    /// The reserved legacy marker — derive the old way, no scope levels.
+    pub const LEGACY: DeriveScope = DeriveScope(0);
+
+    /// Widest valid scope: two hardened 31-bit levels ⇒ 62 bits.
+    pub const MASK: u64 = (1u64 << 62) - 1;
+
+    /// True for the legacy (pre-scope) marker.
+    pub fn is_legacy(self) -> bool {
+        self.0 == 0
+    }
+
+    /// The hardened BIP32 levels this scope injects: empty for LEGACY (keeping
+    /// the pre-scope path), else `[scope_hi(31 bits), scope_lo(31 bits)]`.
+    fn levels(self) -> Vec<u32> {
+        if self.0 == 0 {
+            Vec::new()
+        } else {
+            let v = self.0 & Self::MASK;
+            vec![((v >> 31) & 0x7FFF_FFFF) as u32, (v & 0x7FFF_FFFF) as u32]
+        }
+    }
+}
+
+/// Build a counter-based derivation path `prefix ++ scope-levels ++ [index]`.
+/// LEGACY injects no scope levels, so a pre-scope record reproduces its original
+/// (shorter) path; a real scope inserts its two hardened levels between the
+/// branch prefix and the counter. Path depths stay distinct from the 7-level
+/// anchored scheme (scoped b1/b3 = 6, b2 = 5, legacy b1/b3 = 4, b2 = 3), so no
+/// two schemes ever derive the same key.
+fn scoped_path(prefix: &[u32], scope: DeriveScope, index: u32) -> Vec<u32> {
+    let mut path = prefix.to_vec();
+    path.extend(scope.levels());
+    path.push(index);
+    path
+}
+
 /// The Pact seed: hot transit keys only; proceeds sweep to the core wallet.
 /// A thin wrapper over [`WalletSeed`] (keys-btcx) that adds the Pact
 /// protocol tree (`m/7228'`) on top of the same master key.
@@ -101,16 +156,18 @@ impl PactSeed {
         Ok(self.identity_keypair()?.x_only_public_key().0)
     }
 
-    /// Swap secret key at `m/7228'/1'/coin'/index'` (HTLC redeem/refund,
-    /// ECDSA). One key per chain per swap; never reused across swaps.
-    pub fn swap_secret_key(&self, coin: u32, index: u32) -> Result<SecretKey> {
-        self.derive(&[PURPOSE, 1, coin, index])
+    /// Swap secret key at `m/7228'/1'/coin'/scope_hi'/scope_lo'/index'` (HTLC
+    /// redeem/refund, ECDSA), or the legacy `m/7228'/1'/coin'/index'` when
+    /// `scope` is LEGACY. One key per chain per swap; never reused across swaps,
+    /// and — with a real scope — never shared across machines on the same seed.
+    pub fn swap_secret_key(&self, coin: u32, scope: DeriveScope, index: u32) -> Result<SecretKey> {
+        self.derive(&scoped_path(&[PURPOSE, 1, coin], scope, index))
     }
 
     /// Compressed pubkey for [`Self::swap_secret_key`].
-    pub fn swap_pubkey(&self, coin: u32, index: u32) -> Result<PublicKey> {
+    pub fn swap_pubkey(&self, coin: u32, scope: DeriveScope, index: u32) -> Result<PublicKey> {
         Ok(self
-            .swap_secret_key(coin, index)?
+            .swap_secret_key(coin, scope, index)?
             .public_key(self.seed.secp()))
     }
 
@@ -131,10 +188,11 @@ impl PactSeed {
     }
 
     /// Deterministic preimage for swap index `i` (spec §4.3) —
-    /// `s = TaggedHash("pact/htlc/preimage/v1", key at m/7228'/2'/i')`.
-    /// Initiator only. Re-derivable from the seed alone.
-    pub fn preimage(&self, index: u32) -> Result<[u8; 32]> {
-        let k = self.derive(&[PURPOSE, 2, index])?;
+    /// `s = TaggedHash("pact/htlc/preimage/v1", key at m/7228'/2'/scope…/i')`
+    /// (branch 2 carries no coin level; LEGACY drops the scope levels).
+    /// Initiator only. Re-derivable from the seed + the swap's scope alone.
+    pub fn preimage(&self, scope: DeriveScope, index: u32) -> Result<[u8; 32]> {
+        let k = self.derive(&scoped_path(&[PURPOSE, 2], scope, index))?;
         Ok(tagged_hash(TAG_PREIMAGE, &k.secret_bytes()))
     }
 
@@ -143,24 +201,40 @@ impl PactSeed {
     /// x-only form of the swap key — the BIP340 / MuSig2 signer for a Taproot
     /// key-path spend. Same derivation as [`Self::swap_secret_key`]; only the
     /// public encoding differs (v1 uses it as compressed ECDSA, v2 as x-only).
-    pub fn swap_xonly_pubkey(&self, coin: u32, index: u32) -> Result<XOnlyPublicKey> {
+    pub fn swap_xonly_pubkey(
+        &self,
+        coin: u32,
+        scope: DeriveScope,
+        index: u32,
+    ) -> Result<XOnlyPublicKey> {
         Ok(self
-            .swap_secret_key(coin, index)?
+            .swap_secret_key(coin, scope, index)?
             .x_only_public_key(self.seed.secp())
             .0)
     }
 
-    /// Refund key at `m/7228'/3'/coin'/index'` — signs the single-key CLTV
-    /// refund tapleaf (spec v2 §3, §4). A *separate* branch from the MuSig2
-    /// swap key so the refund path is single-sig and independent.
-    pub fn refund_secret_key(&self, coin: u32, index: u32) -> Result<SecretKey> {
-        self.derive(&[PURPOSE, 3, coin, index])
+    /// Refund key at `m/7228'/3'/coin'/scope_hi'/scope_lo'/index'` (or legacy
+    /// `m/7228'/3'/coin'/index'`) — signs the single-key CLTV refund tapleaf
+    /// (spec v2 §3, §4). A *separate* branch from the MuSig2 swap key so the
+    /// refund path is single-sig and independent.
+    pub fn refund_secret_key(
+        &self,
+        coin: u32,
+        scope: DeriveScope,
+        index: u32,
+    ) -> Result<SecretKey> {
+        self.derive(&scoped_path(&[PURPOSE, 3, coin], scope, index))
     }
 
     /// x-only pubkey for [`Self::refund_secret_key`] (the refund tapleaf key).
-    pub fn refund_xonly_pubkey(&self, coin: u32, index: u32) -> Result<XOnlyPublicKey> {
+    pub fn refund_xonly_pubkey(
+        &self,
+        coin: u32,
+        scope: DeriveScope,
+        index: u32,
+    ) -> Result<XOnlyPublicKey> {
         Ok(self
-            .refund_secret_key(coin, index)?
+            .refund_secret_key(coin, scope, index)?
             .x_only_public_key(self.seed.secp())
             .0)
     }
@@ -181,12 +255,13 @@ impl PactSeed {
     }
 
     /// Deterministic adaptor secret `t` for swap index `i` (spec v2 §3.1) —
-    /// `t = TaggedHash("pact/adaptor/secret/v2", key at m/7228'/2'/i')`,
-    /// as a valid secp256k1 scalar. Initiator only; the v2 analog of the v1
-    /// preimage. Re-derivable from the seed alone, so losing the state DB
-    /// never loses the secret.
-    pub fn adaptor_secret(&self, index: u32) -> Result<SecretKey> {
-        let k = self.derive(&[PURPOSE, 2, index])?;
+    /// `t = TaggedHash("pact/adaptor/secret/v2", key at m/7228'/2'/scope…/i')`,
+    /// as a valid secp256k1 scalar (branch 2, same key as [`Self::preimage`] but
+    /// a different tagged-hash domain, so the scope carries over for free).
+    /// Initiator only; the v2 analog of the v1 preimage. Re-derivable from the
+    /// seed + the swap's scope alone, so losing the state DB never loses it.
+    pub fn adaptor_secret(&self, scope: DeriveScope, index: u32) -> Result<SecretKey> {
+        let k = self.derive(&scoped_path(&[PURPOSE, 2], scope, index))?;
         let bytes = tagged_hash(TAG_ADAPTOR, &k.secret_bytes());
         SecretKey::from_slice(&bytes)
             .map_err(|e| anyhow::anyhow!("adaptor secret not a valid scalar: {e}"))
@@ -194,8 +269,10 @@ impl PactSeed {
 
     /// The adaptor point `T = t·G` (compressed pubkey) — shared in `init`,
     /// not secret (spec v2 §3.1).
-    pub fn adaptor_point(&self, index: u32) -> Result<PublicKey> {
-        Ok(self.adaptor_secret(index)?.public_key(self.seed.secp()))
+    pub fn adaptor_point(&self, scope: DeriveScope, index: u32) -> Result<PublicKey> {
+        Ok(self
+            .adaptor_secret(scope, index)?
+            .public_key(self.seed.secp()))
     }
 }
 
@@ -217,25 +294,28 @@ mod tests {
         PactSeed::from_mnemonic(TEST_MNEMONIC, "").unwrap()
     }
 
+    /// The pre-scope legacy path (unchanged derivations).
+    const LEG: DeriveScope = DeriveScope::LEGACY;
+
     #[test]
     fn deterministic_and_distinct() {
         let a = seed();
         let b = seed();
-        assert_eq!(a.preimage(0).unwrap(), b.preimage(0).unwrap());
-        assert_ne!(a.preimage(0).unwrap(), a.preimage(1).unwrap());
+        assert_eq!(a.preimage(LEG, 0).unwrap(), b.preimage(LEG, 0).unwrap());
+        assert_ne!(a.preimage(LEG, 0).unwrap(), a.preimage(LEG, 1).unwrap());
         assert_eq!(
-            a.swap_pubkey(COIN_BTCX, 0).unwrap(),
-            b.swap_pubkey(COIN_BTCX, 0).unwrap()
+            a.swap_pubkey(COIN_BTCX, LEG, 0).unwrap(),
+            b.swap_pubkey(COIN_BTCX, LEG, 0).unwrap()
         );
         assert_ne!(
-            a.swap_pubkey(COIN_BTCX, 0).unwrap(),
-            a.swap_pubkey(COIN_BTC, 0).unwrap()
+            a.swap_pubkey(COIN_BTCX, LEG, 0).unwrap(),
+            a.swap_pubkey(COIN_BTC, LEG, 0).unwrap()
         );
     }
 
     #[test]
     fn preimage_is_32_bytes_and_hashes() {
-        let s = seed().preimage(0).unwrap();
+        let s = seed().preimage(LEG, 0).unwrap();
         let h = hash_preimage(&s);
         assert_eq!(s.len(), 32);
         let id = swap_id(&h);
@@ -247,7 +327,40 @@ mod tests {
     fn identity_is_not_a_swap_key() {
         let s = seed();
         let ident = s.identity_keypair().unwrap().public_key();
-        assert_ne!(ident, s.swap_pubkey(COIN_BTC, 0).unwrap());
+        assert_ne!(ident, s.swap_pubkey(COIN_BTC, LEG, 0).unwrap());
+    }
+
+    /// The seed-scope backbone (§1): a real scope must change every
+    /// counter-based initiator secret at the SAME index — this is the whole
+    /// cross-machine partition. Two distinct scopes, and the legacy path, must
+    /// all diverge; the same scope must reproduce.
+    #[test]
+    fn scope_partitions_initiator_secrets() {
+        let s = seed();
+        let s1 = DeriveScope(0x0000_0000_1234_5678);
+        let s2 = DeriveScope(0x0000_0003_9abc_def0 & DeriveScope::MASK);
+        // Preimage / hash H → swap_id all diverge by scope at the same index.
+        assert_ne!(s.preimage(s1, 0).unwrap(), s.preimage(LEG, 0).unwrap());
+        assert_ne!(s.preimage(s1, 0).unwrap(), s.preimage(s2, 0).unwrap());
+        assert_eq!(s.preimage(s1, 0).unwrap(), seed().preimage(s1, 0).unwrap());
+        // Adaptor secret t (branch 2, same key as preimage) diverges too.
+        assert_ne!(
+            s.adaptor_secret(s1, 0).unwrap(),
+            s.adaptor_secret(s2, 0).unwrap()
+        );
+        // Swap key (branch 1) and refund key (branch 3) diverge by scope.
+        assert_ne!(
+            s.swap_pubkey(COIN_BTC, s1, 0).unwrap(),
+            s.swap_pubkey(COIN_BTC, LEG, 0).unwrap()
+        );
+        assert_ne!(
+            s.refund_xonly_pubkey(COIN_BTC, s1, 0).unwrap(),
+            s.refund_xonly_pubkey(COIN_BTC, s2, 0).unwrap()
+        );
+        // A scoped key must never collide with any anchored (participant) key.
+        let h = [0x44u8; 32];
+        let anchored = s.swap_secret_key_anchored(COIN_BTC, &h).unwrap();
+        assert_ne!(anchored, s.swap_secret_key(COIN_BTC, s1, 0).unwrap());
     }
 
     // ---- v2 derivations ----
@@ -257,15 +370,21 @@ mod tests {
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let (a, b) = (seed(), seed());
         // Deterministic across instances, distinct per index.
-        assert_eq!(a.adaptor_secret(0).unwrap(), b.adaptor_secret(0).unwrap());
-        assert_ne!(a.adaptor_secret(0).unwrap(), a.adaptor_secret(1).unwrap());
+        assert_eq!(
+            a.adaptor_secret(LEG, 0).unwrap(),
+            b.adaptor_secret(LEG, 0).unwrap()
+        );
+        assert_ne!(
+            a.adaptor_secret(LEG, 0).unwrap(),
+            a.adaptor_secret(LEG, 1).unwrap()
+        );
         // T = t·G.
-        let t = a.adaptor_secret(3).unwrap();
-        assert_eq!(a.adaptor_point(3).unwrap(), t.public_key(&secp));
+        let t = a.adaptor_secret(LEG, 3).unwrap();
+        assert_eq!(a.adaptor_point(LEG, 3).unwrap(), t.public_key(&secp));
         // The v2 adaptor secret is NOT the v1 preimage (different tag).
         assert_ne!(
-            a.adaptor_secret(0).unwrap().secret_bytes(),
-            a.preimage(0).unwrap()
+            a.adaptor_secret(LEG, 0).unwrap().secret_bytes(),
+            a.preimage(LEG, 0).unwrap()
         );
     }
 
@@ -274,17 +393,17 @@ mod tests {
         let s = seed();
         // Deterministic, distinct per coin/index.
         assert_eq!(
-            s.refund_xonly_pubkey(COIN_BTC, 0).unwrap(),
-            seed().refund_xonly_pubkey(COIN_BTC, 0).unwrap()
+            s.refund_xonly_pubkey(COIN_BTC, LEG, 0).unwrap(),
+            seed().refund_xonly_pubkey(COIN_BTC, LEG, 0).unwrap()
         );
         assert_ne!(
-            s.refund_secret_key(COIN_BTC, 0).unwrap(),
-            s.refund_secret_key(COIN_BTCX, 0).unwrap()
+            s.refund_secret_key(COIN_BTC, LEG, 0).unwrap(),
+            s.refund_secret_key(COIN_BTCX, LEG, 0).unwrap()
         );
         // Branch 3' refund key is independent of the branch 1' swap key.
         assert_ne!(
-            s.refund_secret_key(COIN_BTC, 0).unwrap(),
-            s.swap_secret_key(COIN_BTC, 0).unwrap()
+            s.refund_secret_key(COIN_BTC, LEG, 0).unwrap(),
+            s.swap_secret_key(COIN_BTC, LEG, 0).unwrap()
         );
     }
 
@@ -315,7 +434,7 @@ mod tests {
             s.swap_secret_key_anchored(COIN_BTC, &h1).unwrap()
         );
         // A 33-byte anchor (v2 compressed point) works and differs.
-        let t = s.adaptor_point(0).unwrap().serialize();
+        let t = s.adaptor_point(DeriveScope::LEGACY, 0).unwrap().serialize();
         assert_eq!(
             s.swap_pubkey_anchored(COIN_BTC, &t).unwrap(),
             seed().swap_pubkey_anchored(COIN_BTC, &t).unwrap()
@@ -334,7 +453,7 @@ mod tests {
         let h = [0x33u8; 32];
         let anchored = s.swap_secret_key_anchored(COIN_BTC, &h).unwrap();
         for i in 0..64 {
-            assert_ne!(anchored, s.swap_secret_key(COIN_BTC, i).unwrap());
+            assert_ne!(anchored, s.swap_secret_key(COIN_BTC, LEG, i).unwrap());
         }
     }
 
@@ -366,10 +485,13 @@ mod tests {
     #[test]
     fn swap_xonly_matches_swap_pubkey() {
         let s = seed();
-        let xonly = s.swap_xonly_pubkey(COIN_BTCX, 0).unwrap();
+        let xonly = s.swap_xonly_pubkey(COIN_BTCX, LEG, 0).unwrap();
         assert_eq!(
             xonly,
-            s.swap_pubkey(COIN_BTCX, 0).unwrap().x_only_public_key().0
+            s.swap_pubkey(COIN_BTCX, LEG, 0)
+                .unwrap()
+                .x_only_public_key()
+                .0
         );
     }
 }

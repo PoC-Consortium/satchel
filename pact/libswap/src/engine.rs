@@ -23,7 +23,7 @@ use std::sync::Mutex;
 use crate::adaptor_swap::AdaptorState;
 use crate::chain::{ChainBackend, MultiBackend, SendFee};
 use crate::htlc::extract_preimage;
-use crate::keys::{hash_preimage, swap_id, PactSeed};
+use crate::keys::{hash_preimage, swap_id, DeriveScope, PactSeed};
 use crate::messages::{self, AbortBody, AcceptBody, ChainRef, Envelope, FundedBody, InitBody};
 use crate::params::{ChainParams, Network};
 use crate::registry;
@@ -90,6 +90,16 @@ pub struct Engine {
     /// reads, promoted only when an active slot frees up — so a 10+-server
     /// list adds backup depth, never latency.
     server_set: crate::server_health::ServerSet,
+    /// This install's per-machine seed-derivation scope (§1 of
+    /// docs/MULTI_MACHINE_122.md) — stamped into every NEW swap record and used
+    /// as the derivation salt for its initiator keys/preimage, and as the drive
+    /// discriminator (`rec.derive_scope == machine_scope || adopted`). Loaded
+    /// from the pactd data-dir root's `machine.json` and injected by the merchant
+    /// registry so all merchants on one install share it. Defaults to
+    /// [`DeriveScope::LEGACY`] for a bare `Engine::open` (harness/CLI/tests) —
+    /// legacy means "no partition": new swaps derive on the pre-scope path and
+    /// this machine drives every record, exactly as before scopes existed.
+    pub machine_scope: crate::keys::DeriveScope,
 }
 
 fn chain_params(chain: &ChainRef) -> Result<&'static ChainParams> {
@@ -628,7 +638,9 @@ fn parse_hash(hex_hash: &str) -> Result<[u8; 32]> {
 /// collide across machines sharing the seed.
 fn v1_swap_key(seed: &PactSeed, rec: &SwapRecord, coin: u32) -> Result<SecretKey> {
     match rec.swap_index {
-        Some(i) => seed.swap_secret_key(coin, i),
+        // Re-derive under the swap's ORIGINATING scope (immutable salt, §1), so
+        // an adopted foreign swap re-derives the same keys the maker did.
+        Some(i) => seed.swap_secret_key(coin, DeriveScope(rec.derive_scope), i),
         None => seed.swap_secret_key_anchored(coin, &parse_hash(&rec.hash_h)?),
     }
 }
@@ -642,7 +654,7 @@ fn v2_anchor(rec: &AdaptorSwapRecord) -> Result<[u8; 33]> {
 /// Swap (MuSig2 signer) key for a v2 record — the v2 analog of [`v1_swap_key`].
 fn v2_swap_key(seed: &PactSeed, rec: &AdaptorSwapRecord, coin: u32) -> Result<SecretKey> {
     match rec.swap_index {
-        Some(i) => seed.swap_secret_key(coin, i),
+        Some(i) => seed.swap_secret_key(coin, DeriveScope(rec.derive_scope), i),
         None => seed.swap_secret_key_anchored(coin, &v2_anchor(rec)?),
     }
 }
@@ -650,7 +662,7 @@ fn v2_swap_key(seed: &PactSeed, rec: &AdaptorSwapRecord, coin: u32) -> Result<Se
 /// Refund (CLTV tapleaf) key for a v2 record — same counter/anchored split.
 fn v2_refund_key(seed: &PactSeed, rec: &AdaptorSwapRecord, coin: u32) -> Result<SecretKey> {
     match rec.swap_index {
-        Some(i) => seed.refund_secret_key(coin, i),
+        Some(i) => seed.refund_secret_key(coin, DeriveScope(rec.derive_scope), i),
         None => seed.refund_secret_key_anchored(coin, &v2_anchor(rec)?),
     }
 }
@@ -702,7 +714,20 @@ impl Engine {
             wallet_manager: crate::wallet_bdk::WalletManager::new(data_dir),
             electrum_pool: crate::chain::ElectrumPool::new(),
             server_set: crate::server_health::ServerSet::new(),
+            // Bare open = no partition (legacy scope). pactd's registry injects
+            // the install's real machine.json scope after construction.
+            machine_scope: crate::keys::DeriveScope::LEGACY,
         })
+    }
+
+    /// Whether THIS machine drives `(derive_scope, adopted)` — the drive rule of
+    /// §1/§5 (docs/MULTI_MACHINE_122.md): a record is driven when its scope is
+    /// ours OR it has been explicitly adopted. A LEGACY machine scope (bare
+    /// `Engine::open` — harness/CLI, no `machine.json`) drives everything, so the
+    /// unpartitioned single-machine path behaves exactly as before. A followed
+    /// record (foreign scope AND not adopted) is observed-only, never driven.
+    pub fn drives(&self, derive_scope: u64, adopted: bool) -> bool {
+        self.machine_scope.is_legacy() || adopted || derive_scope == self.machine_scope.0
     }
 
     /// Update the live fee-bump policy and persist it for this merchant (pactd
@@ -1365,12 +1390,19 @@ impl Engine {
 
         let seed = self.store.seed()?;
         let index = self.store.next_swap_index()?;
-        let preimage = seed.preimage(index)?;
+        // Every new initiator secret is scoped to THIS machine (§1) so two
+        // machines on one seed never collide on preimage/H/swap-id at index `i`.
+        let scope = self.machine_scope;
+        let preimage = seed.preimage(scope, index)?;
         let hash_h = hash_preimage(&preimage);
         let id = swap_id(&hash_h);
 
-        let alice_refund_pubkey_a = seed.swap_pubkey(coin_of(&chain_a)?, index)?.to_string();
-        let alice_redeem_pubkey_b = seed.swap_pubkey(coin_of(&chain_b)?, index)?.to_string();
+        let alice_refund_pubkey_a = seed
+            .swap_pubkey(coin_of(&chain_a)?, scope, index)?
+            .to_string();
+        let alice_redeem_pubkey_b = seed
+            .swap_pubkey(coin_of(&chain_b)?, scope, index)?
+            .to_string();
 
         let body = InitBody {
             protocol: crate::PROTOCOL_VERSION.into(),
@@ -1423,6 +1455,10 @@ impl Engine {
             final_txid: None,
             final_tx_hex: None,
             last_action_height: 0,
+            // Stamp the machine scope the keys were derived under (immutable) and
+            // mark it locally driven (own scope ⇒ not adopted).
+            derive_scope: scope.0,
+            adopted: false,
         };
         // Structural check on our own offer before anything is persisted.
         ensure!(t2 < t1, "spec §7.1: T2 must be < T1");
@@ -1539,6 +1575,10 @@ impl Engine {
             final_txid: None,
             final_tx_hex: None,
             last_action_height: 0,
+            // Participant keys are anchored, so scope is only a machine tag here
+            // — but stamp OUR scope so the drive rule recognizes this as ours.
+            derive_scope: self.machine_scope.0,
+            adopted: false,
         };
         self.store.put(&record)?;
         let _ = self.snapshot_v1(&record); // rescue snapshot at accept (#54)
@@ -1584,7 +1624,9 @@ impl Engine {
 
         let seed = self.store.seed()?;
         let index = self.store.next_swap_index()?;
-        let adaptor_point = seed.adaptor_point(index)?;
+        // Scope this v2 initiator's adaptor secret/point to THIS machine (§1).
+        let scope = self.machine_scope;
+        let adaptor_point = seed.adaptor_point(scope, index)?;
         // Fresh core-wallet sweep address for the leg Alice will redeem (B),
         // communicated so both parties co-sign the identical redeem tx and the
         // proceeds land in a spendable core wallet. Best-effort: empty (→ the
@@ -1614,10 +1656,14 @@ impl Engine {
             amount_b,
             t1,
             t2,
-            alice_swap_a: seed.swap_pubkey(coin_of(&chain_a)?, index)?.to_string(),
-            alice_swap_b: seed.swap_pubkey(coin_of(&chain_b)?, index)?.to_string(),
+            alice_swap_a: seed
+                .swap_pubkey(coin_of(&chain_a)?, scope, index)?
+                .to_string(),
+            alice_swap_b: seed
+                .swap_pubkey(coin_of(&chain_b)?, scope, index)?
+                .to_string(),
             alice_refund_a: seed
-                .refund_xonly_pubkey(coin_of(&chain_a)?, index)?
+                .refund_xonly_pubkey(coin_of(&chain_a)?, scope, index)?
                 .to_string(),
             adaptor_point: adaptor_point.to_string(),
             alice_sweep_b: alice_sweep_b.clone(),
@@ -1678,6 +1724,9 @@ impl Engine {
             last_action_height: 0,
             funding_b_tx_hex: None,
             funding_b_broadcast: false,
+            // Scope the keys were derived under (immutable); locally driven.
+            derive_scope: scope.0,
+            adopted: false,
         };
         self.store.put_adaptor(&rec)?;
         let envelope = self.signed_envelope("init", &id, serde_json::to_value(&body)?)?;
@@ -1849,6 +1898,10 @@ impl Engine {
             last_action_height: 0,
             funding_b_tx_hex: None,
             funding_b_broadcast: false,
+            // Participant keys are anchored; stamp OUR scope as the machine tag
+            // so the drive rule treats this taken swap as ours to drive.
+            derive_scope: self.machine_scope.0,
+            adopted: false,
         };
         self.store.put_adaptor(&rec)?;
         let _ = self.snapshot_v2(&rec); // rescue snapshot at accept (#54)
@@ -2501,6 +2554,7 @@ impl Engine {
                 }
                 let t = crate::musig::seckey_to_scalar(
                     &seed.adaptor_secret(
+                        DeriveScope(rec.derive_scope),
                         rec.swap_index
                             .context("initiator record missing its swap index")?,
                     )?,
@@ -3834,6 +3888,7 @@ impl Engine {
                 );
 
                 let preimage = seed.preimage(
+                    DeriveScope(rec.derive_scope),
                     rec.swap_index
                         .context("initiator record missing its swap index")?,
                 )?;
@@ -6817,6 +6872,34 @@ impl Engine {
             "take" => {
                 let me = self.identity()?;
                 let (offer, body) = crate::board::offer_from_take(envelope, &me)?;
+                // §2 (docs/MULTI_MACHINE_122.md): serve a take ONLY if THIS
+                // machine holds the originating offer — keyed on ownership
+                // *existence*, not liveness. `offer_from_take` only checks
+                // `offer.from == our identity`, which BOTH machines on a shared
+                // seed pass; the take arm is the one inbound path that
+                // auto-instantiates a driven swap, so this is the single gate
+                // that stops two machines double-serving one take. A foreign
+                // machine's offers are scope-distinct (§1), so it holds no such
+                // row and drops the take SILENTLY (no reject — the real owner
+                // answers; a second reject would just be noise). We hold an
+                // offer if it's in our board `my_offers` registry OR our local
+                // `private_offer:<id>` store (private slips never hit
+                // `my_offers`). Existence not liveness: after a legit serve the
+                // board row flips to taken/revoked, and a liveness gate would
+                // then wrongly refuse the owner's own retry — idempotency stays
+                // with the `offer_served`/staleness checks below.
+                let we_own_offer = self.store.my_offer_get(&offer.swap_id)?.is_some()
+                    || self
+                        .store
+                        .meta_get(&format!("private_offer:{}", offer.swap_id))?
+                        .is_some();
+                if !we_own_offer {
+                    return event(
+                        &offer.swap_id,
+                        "take-ignored",
+                        "take for an offer this machine does not own — ignored".into(),
+                    );
+                }
                 // Staleness gate FIRST, before ANY side effect (serving,
                 // revoking, record creation): a take older than the taker's
                 // own pending-take prune window is a handshake the taker has

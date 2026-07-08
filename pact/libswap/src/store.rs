@@ -17,7 +17,7 @@
 use anyhow::{bail, Context, Result};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::adaptor_swap::AdaptorState;
@@ -102,6 +102,24 @@ pub struct SwapRecord {
     /// post-load tick is free to act.
     #[serde(default)]
     pub last_action_height: u64,
+    /// Per-machine seed-derivation scope (§1 of docs/MULTI_MACHINE_122.md) this
+    /// swap's INITIATOR keys/preimage were derived under — the immutable salt.
+    /// Stamped with the creating machine's scope at creation and NEVER changed
+    /// (an adopted swap keeps its originating machine's scope forever and
+    /// re-derives from it). `0` is the legacy marker (pre-scope record → derive
+    /// the old way; foreign to every machine → recovery is confirm-gated). On a
+    /// participant record it is only a machine tag, not a derivation input
+    /// (participant keys are anchored). See [`crate::keys::DeriveScope`].
+    #[serde(default)]
+    pub derive_scope: u64,
+    /// Whether THIS machine drives the swap despite a foreign `derive_scope` —
+    /// the *mutable* half of the drive rule `scope == ours || adopted`. Set true
+    /// only by an explicit, confirm-gated take-over of another machine's swap.
+    /// LOCAL-ONLY: it must be reset to false on every snapshot import so it never
+    /// travels (§1 invariant — else a re-published snapshot would confer drive
+    /// with no confirm). Never a derivation input.
+    #[serde(default)]
+    pub adopted: bool,
 }
 
 /// One party's durable view of one **v2** (adaptor) swap (spec v2 §9).
@@ -205,6 +223,16 @@ pub struct AdaptorSwapRecord {
     /// scheduler broadcasts it exactly once.
     #[serde(default)]
     pub funding_b_broadcast: bool,
+    /// Per-machine seed-derivation scope this v2 swap's INITIATOR keys/adaptor
+    /// secret were derived under — the immutable salt. See
+    /// [`SwapRecord::derive_scope`] (identical semantics; `0` = legacy marker,
+    /// participant record → machine tag only).
+    #[serde(default)]
+    pub derive_scope: u64,
+    /// Whether THIS machine drives the swap despite a foreign `derive_scope`.
+    /// See [`SwapRecord::adopted`] — mutable, local-only, reset on import.
+    #[serde(default)]
+    pub adopted: bool,
 }
 
 pub struct Store {
@@ -212,6 +240,14 @@ pub struct Store {
     /// The seed file of this data dir (extracted `seedstore` crate) — one
     /// merchant = one seed = one dir, exactly as before.
     seed_store: SeedStore,
+    data_dir: PathBuf,
+    /// Runtime-only latch (never persisted): set true when [`Self::create_seed`]
+    /// or [`Self::import_seed`] took the #120 reconfirm-with-mnemonic *recovery*
+    /// branch (overwrote an undecryptable keyring seed — the copy-heal /
+    /// keyring-loss case). pactd drains it via
+    /// [`Self::take_pending_scope_rotation`] after a createseed/importseed to
+    /// rotate the machine scope (§0/§1).
+    pending_scope_rotation: bool,
 }
 
 /// A maker's own posted offer (the `my_offers` registry row). `valid_for` is
@@ -320,6 +356,8 @@ impl Store {
         let store = Self {
             conn,
             seed_store: SeedStore::open(data_dir, passphrase)?,
+            data_dir: data_dir.to_path_buf(),
+            pending_scope_rotation: false,
         };
         Ok(store)
     }
@@ -330,6 +368,26 @@ impl Store {
         self.seed_store.wallet_status()
     }
 
+    /// True when the next seed install would take the #120
+    /// reconfirm-with-mnemonic *recovery* branch: an on-disk
+    /// `PACTSEEDv2-keyring` seed this machine can no longer decrypt (data-dir
+    /// copied to a new machine / reset keychain). Mirrors the clobber guard
+    /// inside `seedstore::SeedStore::install_seed`, which doesn't report which
+    /// branch it took; the magic prefix is the crate's stable on-disk format.
+    fn seed_install_would_recover(&self) -> bool {
+        let path = self.data_dir.join(SEED_FILE);
+        let existing = std::fs::read_to_string(&path).unwrap_or_default();
+        existing.trim().starts_with("PACTSEEDv2-keyring") && self.seed_store.mnemonic().is_err()
+    }
+
+    /// Drain the pending machine-scope-rotation latch set by a #120 copy-heal
+    /// re-import (see [`Self::create_seed`] / [`Self::import_seed`]). Returns
+    /// true at most once per event; pactd rotates the install's scope when it
+    /// sees true.
+    pub fn take_pending_scope_rotation(&mut self) -> bool {
+        std::mem::take(&mut self.pending_scope_rotation)
+    }
+
     /// Generate a new random BIP39 seed and return the mnemonic **once** for
     /// the user to back up — Satchel keeps no recovery copy. Encrypted when a
     /// passphrase is supplied. `words` is 12 or 24 (phoenix parity): 12
@@ -337,7 +395,12 @@ impl Store {
     /// storage, and 128 bits already matches secp256k1's security level — 24
     /// (256-bit) for those who want the longer phrase.
     pub fn create_seed(&mut self, passphrase: Option<&str>, words: usize) -> Result<String> {
-        self.seed_store.create_seed(passphrase, words)
+        let recovering = self.seed_install_would_recover();
+        let phrase = self.seed_store.create_seed(passphrase, words)?;
+        // Copy-heal (§0/§1): installing over an undecryptable keyring seed means
+        // this is a new machine (or a reset keychain) — rotate the machine scope.
+        self.pending_scope_rotation |= recovering;
+        Ok(phrase)
     }
 
     /// Generate a fresh random BIP39 mnemonic **without persisting it** — for an
@@ -351,7 +414,11 @@ impl Store {
     /// Import a user-supplied BIP39 mnemonic (validated). Returns the
     /// normalized phrase. Encrypted when a passphrase is supplied.
     pub fn import_seed(&mut self, mnemonic: &str, passphrase: Option<&str>) -> Result<String> {
-        self.seed_store.import_seed(mnemonic, passphrase)
+        let recovering = self.seed_install_would_recover();
+        let phrase = self.seed_store.import_seed(mnemonic, passphrase)?;
+        // Copy-heal (§0/§1): see create_seed — same rotation trigger.
+        self.pending_scope_rotation |= recovering;
+        Ok(phrase)
     }
 
     /// Supply the passphrase for an existing encrypted seed, verifying it by
@@ -684,6 +751,24 @@ impl Store {
         rows.map(|r| Ok(r?)).collect()
     }
 
+    /// One of our offers by id, **ignoring lifecycle state** — the ownership
+    /// *existence* check the maker-take gate keys on (§2 of
+    /// docs/MULTI_MACHINE_122.md). Deliberately not `my_offers_live`: after a
+    /// legit serve the row flips to `taken`/`revoked`, so a liveness gate would
+    /// wrongly refuse the real owner's retry; existence is enough because a
+    /// foreign machine (scope-distinct coordinates, §1) holds no such row at all.
+    pub fn my_offer_get(&self, offer_id: &str) -> Result<Option<MyOffer>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT offer_id, envelope, created, valid_for, last_refresh, state
+             FROM my_offers WHERE offer_id = ?1",
+        )?;
+        let mut rows = stmt.query_map(params![offer_id], Self::row_to_my_offer)?;
+        match rows.next() {
+            Some(r) => Ok(Some(r?)),
+            None => Ok(None),
+        }
+    }
+
     /// Every registered offer (any state) — for the My-offers view.
     pub fn my_offers_all(&self) -> Result<Vec<MyOffer>> {
         let mut stmt = self.conn.prepare(
@@ -1003,6 +1088,8 @@ mod tests {
             final_txid: None,
             final_tx_hex: None,
             last_action_height: 0,
+            derive_scope: 0,
+            adopted: false,
         }
     }
 

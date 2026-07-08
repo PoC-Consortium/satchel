@@ -14,6 +14,11 @@ nostr-sdk = "0.44"
 # provider when both aws-lc-rs and ring are linked, breaking all wss:// relays.
 rustls = "0.23"
 bitcoin = { workspace = true }
+# Exclusive advisory lock on <data-dir>/.lock so only one pactd runs per data
+# dir (§0 of docs/MULTI_MACHINE_122.md — the guard the seed-scope partition
+# rests on). Pure-Rust flock/LockFileEx wrapper, no C dep beyond libc/winapi
+# already in the tree; the OS releases the lock on process exit (no stale PID).
+fs2 = "0.4"
 hex = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }

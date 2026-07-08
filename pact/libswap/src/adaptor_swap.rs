@@ -1,16 +1,16 @@
-//! v2 swap orchestration (pact-htlc-v2, spec v2 §4–§9): the MuSig2 adaptor
+//! v2 swap orchestration (pact-htlc-v2, spec v2 Â§4â€“Â§9): the MuSig2 adaptor
 //! sessions that bind the two legs, on top of [`crate::taproot`] outputs and
 //! [`crate::musig`] glue.
 //!
 //! Roles (as v1): **Alice funds leg A** (refund `T1`), **Bob funds leg B**
 //! (refund `T2 < T1`), Alice holds the adaptor secret `t`. Both redeem
-//! signatures are MuSig2 *adaptor* signatures under the same point `T = t·G`;
+//! signatures are MuSig2 *adaptor* signatures under the same point `T = tÂ·G`;
 //! Alice claiming B reveals `t`, which lets Bob claim A.
 //!
 //! This module covers the engine-independent crypto + transaction flow. The
 //! daemon message routing / chain monitoring that drives it lives in
 //! `engine.rs` (it reuses v1's scheduler); the protocol is proven end to end
-//! by `adaptor_swap_end_to_end` below — both parties, real Taproot outputs,
+//! by `adaptor_swap_end_to_end` below â€” both parties, real Taproot outputs,
 //! real BIP341 sighashes, real adaptor reveal.
 
 use anyhow::{ensure, Context, Result};
@@ -23,11 +23,11 @@ use serde::{Deserialize, Serialize};
 use crate::musig;
 use crate::taproot::TaprootLeg;
 
-/// Protocol string negotiated in `init` for v2 (spec v2 §10). A party that
+/// Protocol string negotiated in `init` for v2 (spec v2 Â§10). A party that
 /// doesn't recognise it MUST `abort`.
 pub const PROTOCOL_V2: &str = "pact-htlc-v2";
 
-/// One party's view of a v2 swap lifecycle (spec v2 §9). Refund states are
+/// One party's view of a v2 swap lifecycle (spec v2 Â§9). Refund states are
 /// reachable from any funded state via the clock, not via messages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -47,18 +47,18 @@ pub enum AdaptorState {
     Aborted,
 }
 
-/// Everything both parties know after `accept` — enough to reconstruct both
-/// Taproot legs and run both adaptor sessions deterministically (spec v2 §7).
+/// Everything both parties know after `accept` â€” enough to reconstruct both
+/// Taproot legs and run both adaptor sessions deterministically (spec v2 Â§7).
 /// All pubkeys are x-only (BIP340); `adaptor_point` is a full point.
 #[derive(Debug, Clone)]
 pub struct AdaptorSwapParams {
     pub amount_a: u64,
     pub amount_b: u64,
-    /// Absolute Unix-time refund locktimes; `t2 < t1` (spec v2 §6).
+    /// Absolute Unix-time refund locktimes; `t2 < t1` (spec v2 Â§6).
     pub t1: u32,
     pub t2: u32,
     // MuSig2 signer keys are full points (with parity); only the *aggregate*
-    // is x-only-ified for Taproot. (The refund keys below are x-only — they
+    // is x-only-ified for Taproot. (The refund keys below are x-only â€” they
     // sign their tapleaf as plain BIP340 single-sig.)
     pub alice_swap_a: PublicKey,
     pub alice_swap_b: PublicKey,
@@ -67,14 +67,14 @@ pub struct AdaptorSwapParams {
     /// Funders' refund keys (single-key CLTV leaves).
     pub alice_refund_a: XOnlyPublicKey,
     pub bob_refund_b: XOnlyPublicKey,
-    /// The adaptor point `T = t·G` (Alice's secret), shared in `init`.
+    /// The adaptor point `T = tÂ·G` (Alice's secret), shared in `init`.
     pub adaptor_point: PublicKey,
 }
 
 impl AdaptorSwapParams {
-    /// Structural timelock rule (spec v2 §6, inherited from v1 §7.1).
+    /// Structural timelock rule (spec v2 Â§6, inherited from v1 Â§7.1).
     pub fn validate_structure(&self) -> Result<()> {
-        ensure!(self.t2 < self.t1, "spec v2 §6: T2 must be < T1");
+        ensure!(self.t2 < self.t1, "spec v2 Â§6: T2 must be < T1");
         ensure!(
             self.amount_a > 0 && self.amount_b > 0,
             "amounts must be positive"
@@ -82,14 +82,14 @@ impl AdaptorSwapParams {
         Ok(())
     }
 
-    /// Leg A — Alice funds, Bob redeems, Alice refunds at `T1`. Internal key
-    /// aggregates `[alice_swap_a, bob_swap_a]` (funder first, spec v2 §4).
+    /// Leg A â€” Alice funds, Bob redeems, Alice refunds at `T1`. Internal key
+    /// aggregates `[alice_swap_a, bob_swap_a]` (funder first, spec v2 Â§4).
     pub fn leg_a<C: Verification>(&self, secp: &Secp256k1<C>) -> Result<TaprootLeg> {
         let internal = aggregate_xonly(secp, &self.alice_swap_a, &self.bob_swap_a)?;
         TaprootLeg::new(internal, self.alice_refund_a, self.t1)
     }
 
-    /// Leg B — Bob funds, Alice redeems, Bob refunds at `T2`. Internal key
+    /// Leg B â€” Bob funds, Alice redeems, Bob refunds at `T2`. Internal key
     /// aggregates `[bob_swap_b, alice_swap_b]` (funder first).
     pub fn leg_b<C: Verification>(&self, secp: &Secp256k1<C>) -> Result<TaprootLeg> {
         let internal = aggregate_xonly(secp, &self.bob_swap_b, &self.alice_swap_b)?;
@@ -125,8 +125,8 @@ pub fn lifted_to_bitcoin(sig: &LiftedSignature) -> Result<bitcoin::secp256k1::sc
 }
 
 /// The taproot-tweaked [`KeyAggContext`] whose aggregated key is the leg's
-/// P2TR **output** key — what the MuSig2 session must sign for so the
-/// key-path signature is valid on-chain (spec v2 §4; BIP341 tweak over the
+/// P2TR **output** key â€” what the MuSig2 session must sign for so the
+/// key-path signature is valid on-chain (spec v2 Â§4; BIP341 tweak over the
 /// refund-leaf merkle root).
 pub fn tweaked_ctx_for_leg<C: Verification>(
     secp: &Secp256k1<C>,
@@ -147,7 +147,7 @@ pub fn tweaked_ctx_for_leg<C: Verification>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::keys::{PactSeed, COIN_BTC, COIN_BTCX};
+    use crate::keys::{DeriveScope, PactSeed, COIN_BTC, COIN_BTCX};
     use crate::params::{BTCX_REGTEST, BTC_REGTEST};
     use crate::taproot::{attach_keypath_signature, build_keypath_redeem, build_refund_tx};
     use bitcoin::secp256k1::{All, Keypair, Message};
@@ -211,7 +211,7 @@ mod tests {
     }
 
     /// The tweaked aggregate (what the MuSig2 session signs for) must equal
-    /// rust-bitcoin's computed Taproot output key — the x-only parity risk
+    /// rust-bitcoin's computed Taproot output key â€” the x-only parity risk
     /// flagged in spec/protocol-v2.md, pinned by a test.
     #[test]
     fn musig_tweak_matches_bitcoin_output_key() {
@@ -219,12 +219,13 @@ mod tests {
         let alice = PactSeed::from_mnemonic(ALICE_M, "").unwrap();
         let bob = PactSeed::from_mnemonic(BOB_M, "").unwrap();
         let (fa, ca) = (
-            alice.swap_pubkey(COIN_BTC, 0).unwrap(),
-            bob.swap_pubkey(COIN_BTC, 0).unwrap(),
+            alice.swap_pubkey(COIN_BTC, DeriveScope::LEGACY, 0).unwrap(),
+            bob.swap_pubkey(COIN_BTC, DeriveScope::LEGACY, 0).unwrap(),
         );
         let leg = TaprootLeg::new(
             aggregate_xonly(&secp, &fa, &ca).unwrap(),
-            bob.refund_xonly_pubkey(COIN_BTC, 0).unwrap(),
+            bob.refund_xonly_pubkey(COIN_BTC, DeriveScope::LEGACY, 0)
+                .unwrap(),
             T2,
         )
         .unwrap();
@@ -249,10 +250,12 @@ mod tests {
         let i = 0u32;
 
         // Keys: leg A on PoCX, leg B on BTC.
-        let alice_swap_a = alice.swap_pubkey(COIN_BTCX, i).unwrap();
-        let alice_swap_b = alice.swap_pubkey(COIN_BTC, i).unwrap();
-        let bob_swap_a = bob.swap_pubkey(COIN_BTCX, i).unwrap();
-        let bob_swap_b = bob.swap_pubkey(COIN_BTC, i).unwrap();
+        let alice_swap_a = alice
+            .swap_pubkey(COIN_BTCX, DeriveScope::LEGACY, i)
+            .unwrap();
+        let alice_swap_b = alice.swap_pubkey(COIN_BTC, DeriveScope::LEGACY, i).unwrap();
+        let bob_swap_a = bob.swap_pubkey(COIN_BTCX, DeriveScope::LEGACY, i).unwrap();
+        let bob_swap_b = bob.swap_pubkey(COIN_BTC, DeriveScope::LEGACY, i).unwrap();
 
         let params = AdaptorSwapParams {
             amount_a: 50_000_000,
@@ -263,9 +266,13 @@ mod tests {
             alice_swap_b,
             bob_swap_a,
             bob_swap_b,
-            alice_refund_a: alice.refund_xonly_pubkey(COIN_BTCX, i).unwrap(),
-            bob_refund_b: bob.refund_xonly_pubkey(COIN_BTC, i).unwrap(),
-            adaptor_point: alice.adaptor_point(i).unwrap(),
+            alice_refund_a: alice
+                .refund_xonly_pubkey(COIN_BTCX, DeriveScope::LEGACY, i)
+                .unwrap(),
+            bob_refund_b: bob
+                .refund_xonly_pubkey(COIN_BTC, DeriveScope::LEGACY, i)
+                .unwrap(),
+            adaptor_point: alice.adaptor_point(DeriveScope::LEGACY, i).unwrap(),
         };
         params.validate_structure().unwrap();
 
@@ -282,15 +289,34 @@ mod tests {
             .starts_with("bcrt1p"));
 
         // Adaptor scalars/points (Alice's secret t and its point T).
-        let t_scalar = musig::seckey_to_scalar(&alice.adaptor_secret(i).unwrap()).unwrap();
+        let t_scalar =
+            musig::seckey_to_scalar(&alice.adaptor_secret(DeriveScope::LEGACY, i).unwrap())
+                .unwrap();
         let t_point = musig::pubkey_to_point(&params.adaptor_point).unwrap();
 
         // Signer scalars per leg (funder index 0, counterparty index 1).
-        let a_sk_b = musig::seckey_to_scalar(&alice.swap_secret_key(COIN_BTC, i).unwrap()).unwrap();
-        let b_sk_b = musig::seckey_to_scalar(&bob.swap_secret_key(COIN_BTC, i).unwrap()).unwrap();
-        let a_sk_a =
-            musig::seckey_to_scalar(&alice.swap_secret_key(COIN_BTCX, i).unwrap()).unwrap();
-        let b_sk_a = musig::seckey_to_scalar(&bob.swap_secret_key(COIN_BTCX, i).unwrap()).unwrap();
+        let a_sk_b = musig::seckey_to_scalar(
+            &alice
+                .swap_secret_key(COIN_BTC, DeriveScope::LEGACY, i)
+                .unwrap(),
+        )
+        .unwrap();
+        let b_sk_b = musig::seckey_to_scalar(
+            &bob.swap_secret_key(COIN_BTC, DeriveScope::LEGACY, i)
+                .unwrap(),
+        )
+        .unwrap();
+        let a_sk_a = musig::seckey_to_scalar(
+            &alice
+                .swap_secret_key(COIN_BTCX, DeriveScope::LEGACY, i)
+                .unwrap(),
+        )
+        .unwrap();
+        let b_sk_a = musig::seckey_to_scalar(
+            &bob.swap_secret_key(COIN_BTCX, DeriveScope::LEGACY, i)
+                .unwrap(),
+        )
+        .unwrap();
 
         // ---- Leg B redeem: Alice claims B (Bob funder idx0, Alice idx1) ----
         let (mut redeem_b, sighash_b) = build_keypath_redeem(
@@ -334,7 +360,7 @@ mod tests {
         let sig_a: AdaptorSignature =
             run_adaptor_session(&ctx_a, sighash_a, t_point, a_sk_a, b_sk_a);
 
-        // Bob never knew t — he extracts it from Alice's on-chain leg-B sig.
+        // Bob never knew t â€” he extracts it from Alice's on-chain leg-B sig.
         let revealed: musig2::secp::MaybeScalar =
             sig_b.reveal_secret(&final_b).expect("reveal t from B");
         // Bob adapts leg A with the recovered secret and claims A.
@@ -344,7 +370,7 @@ mod tests {
 
         // ---- Refund path (independently spendable, single-key) ----
         let alice_refund_kp: Keypair = alice
-            .refund_secret_key(COIN_BTCX, i)
+            .refund_secret_key(COIN_BTCX, DeriveScope::LEGACY, i)
             .unwrap()
             .keypair(&secp);
         let refund_a = build_refund_tx(

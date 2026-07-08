@@ -243,14 +243,14 @@ pub fn build_refund_tx(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::keys::{PactSeed, COIN_BTC, COIN_BTCX};
+    use crate::keys::{DeriveScope, PactSeed, COIN_BTC, COIN_BTCX};
     use crate::params::{BTCX_REGTEST, BTC_REGTEST};
     use std::str::FromStr;
 
     fn test_params() -> (SwapParams, PactSeed, PactSeed, [u8; 32]) {
         let alice = PactSeed::from_seed(&[1u8; 64]).unwrap();
         let bob = PactSeed::from_seed(&[2u8; 64]).unwrap();
-        let s = alice.preimage(0).unwrap();
+        let s = alice.preimage(DeriveScope::LEGACY, 0).unwrap();
         let params = SwapParams {
             chain_a: &BTCX_REGTEST,
             chain_b: &BTC_REGTEST,
@@ -261,10 +261,12 @@ mod tests {
             t2: 1_780_021_600,
             n_a: 1,
             n_b: 1,
-            alice_refund_pubkey_a: alice.swap_pubkey(COIN_BTCX, 0).unwrap(),
-            alice_redeem_pubkey_b: alice.swap_pubkey(COIN_BTC, 0).unwrap(),
-            bob_redeem_pubkey_a: bob.swap_pubkey(COIN_BTCX, 0).unwrap(),
-            bob_refund_pubkey_b: bob.swap_pubkey(COIN_BTC, 0).unwrap(),
+            alice_refund_pubkey_a: alice
+                .swap_pubkey(COIN_BTCX, DeriveScope::LEGACY, 0)
+                .unwrap(),
+            alice_redeem_pubkey_b: alice.swap_pubkey(COIN_BTC, DeriveScope::LEGACY, 0).unwrap(),
+            bob_redeem_pubkey_a: bob.swap_pubkey(COIN_BTCX, DeriveScope::LEGACY, 0).unwrap(),
+            bob_refund_pubkey_b: bob.swap_pubkey(COIN_BTC, DeriveScope::LEGACY, 0).unwrap(),
         };
         (params, alice, bob, s)
     }
@@ -306,7 +308,9 @@ mod tests {
             dest.clone(),
             FLAT_FEE_SAT,
             &s,
-            &alice.swap_secret_key(COIN_BTC, 0).unwrap(),
+            &alice
+                .swap_secret_key(COIN_BTC, DeriveScope::LEGACY, 0)
+                .unwrap(),
         )
         .unwrap();
         assert_eq!(redeem.lock_time, LockTime::ZERO);
@@ -331,7 +335,8 @@ mod tests {
             params.amount_b,
             dest,
             FLAT_FEE_SAT,
-            &bob.swap_secret_key(COIN_BTC, 0).unwrap(),
+            &bob.swap_secret_key(COIN_BTC, DeriveScope::LEGACY, 0)
+                .unwrap(),
         )
         .unwrap();
         assert_eq!(refund.lock_time.to_consensus_u32(), params.t2);
@@ -347,7 +352,9 @@ mod tests {
             ScriptBuf::new(),
             FLAT_FEE_SAT,
             &s,
-            &alice.swap_secret_key(COIN_BTC, 0).unwrap(),
+            &alice
+                .swap_secret_key(COIN_BTC, DeriveScope::LEGACY, 0)
+                .unwrap(),
         );
         assert!(too_small.is_err());
     }

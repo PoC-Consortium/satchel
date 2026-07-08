@@ -28,6 +28,7 @@
 
 use anyhow::{bail, ensure, Context, Result};
 use libswap::engine::Engine;
+use libswap::keys::DeriveScope;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -129,6 +130,12 @@ pub struct MerchantRegistry {
     /// The currently loaded merchant's engine, if any. `None` means no active
     /// merchant (fresh managed install before `createmerchant`).
     engine: Option<Engine>,
+    /// This install's per-machine seed-derivation scope (§1 of
+    /// docs/MULTI_MACHINE_122.md), loaded once from `<data-dir>/machine.json` at
+    /// the ROOT and injected into every merchant engine so all merchants on one
+    /// install share it (different seeds already diverge their keys). pactd owns
+    /// this file; Satchel never sees it.
+    machine_scope: DeriveScope,
 }
 
 impl MerchantRegistry {
@@ -194,22 +201,50 @@ impl MerchantRegistry {
             }
         }
 
+        // Load-or-create the install's machine scope from the ROOT data dir
+        // (per-network for free — the data dir already nests by network). Shared
+        // by every merchant this registry builds.
+        let machine_scope = libswap::machine::load_or_create_scope(data_dir)?;
+
         let mut reg = Self {
             data_dir: data_dir.to_path_buf(),
             layout,
             cfg,
             manifest,
             engine: None,
+            machine_scope,
         };
 
         // Load the active merchant's engine (best-effort: a locked/encrypted
         // seed still opens; identity backfill just stays None until unlocked).
         if let Some(active) = reg.manifest.active.clone() {
-            reg.engine = Some(reg.cfg.build_engine(&reg.dir_of(&active))?);
+            reg.engine = Some(reg.build_engine(&reg.dir_of(&active))?);
             reg.backfill_identity(&active);
         }
         reg.save()?;
         Ok(reg)
+    }
+
+    /// Build a merchant engine and inject the install's machine scope (§1), so
+    /// every merchant on this install shares one scope for the multi-machine
+    /// partition. The single place engines are constructed.
+    fn build_engine(&self, dir: &Path) -> Result<Engine> {
+        let mut engine = self.cfg.build_engine(dir)?;
+        engine.machine_scope = self.machine_scope;
+        Ok(engine)
+    }
+
+    /// Rotate the install's machine scope to a fresh value and re-point the
+    /// active engine at it (the #120 copy-heal path — §0/§1). After this the
+    /// active merchant's in-flight swaps carry the OLD scope, so they demote to
+    /// followed and need an explicit, confirm-gated take-over ("recovered after
+    /// re-import", never "another machine"). Never auto-adopt on rotation.
+    pub fn rotate_machine_scope(&mut self) -> Result<DeriveScope> {
+        self.machine_scope = libswap::machine::rotate_scope(&self.data_dir)?;
+        if let Some(engine) = self.engine.as_mut() {
+            engine.machine_scope = self.machine_scope;
+        }
+        Ok(self.machine_scope)
     }
 
     /// Data dir for a merchant id: the root itself in flat mode, else
@@ -298,7 +333,7 @@ impl MerchantRegistry {
         self.manifest.merchants.push(meta.clone());
 
         // Switch to it in-process (a fresh dir has no live swap to gate on).
-        self.engine = Some(self.cfg.build_engine(&dir)?);
+        self.engine = Some(self.build_engine(&dir)?);
         self.manifest.active = Some(id);
         self.save()?;
         Ok(meta)
@@ -320,7 +355,7 @@ impl MerchantRegistry {
         self.ensure_safe_to_switch_away()?;
 
         let dir = self.dir_of(id);
-        let engine = self.cfg.build_engine(&dir)?;
+        let engine = self.build_engine(&dir)?;
         self.engine = Some(engine);
         self.manifest.active = Some(id.to_string());
         self.backfill_identity(id);
