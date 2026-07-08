@@ -31,10 +31,10 @@ musig2 = { version = "0.4", features = ["rand"] }
 
 scrypt = { version = "0.11", default-features = false }
 chacha20poly1305 = "0.10"
-# OS keystore for the unattended seed-at-rest wrap (#120): Windows Credential
-# Manager / macOS Keychain / Linux Secret Service. crypto-rust avoids an OpenSSL
-# build dep on Linux. Falls back to an obfuscation key where no keystore exists.
-keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+# OS keystore for the unattended seed-at-rest wrap (#120). Only the native
+# backends — Windows Credential Manager + macOS Keychain — no external C deps
+# (Linux Secret Service is deliberately not used; see libswap's target gate).
+keyring = { version = "3", features = ["apple-native", "windows-native"] }
 
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time", "sync"] }
 axum = "0.7"

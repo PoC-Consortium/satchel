@@ -8,12 +8,13 @@
 //! Seed storage (#120): a user passphrase encrypts the BIP39 mnemonic with
 //! scrypt + ChaCha20-Poly1305 (`PACTSEEDv1`). With NO passphrase the seed is
 //! still never written plaintext — it is ChaCha20-Poly1305'd under a machine key
-//! held in the OS keystore (`PACTSEEDv2-keyring`), or, where no keystore exists
-//! (headless Linux), under a built-in obfuscation key (`PACTSEEDv2-obfs`). The
-//! obfuscation key ships in the binary, so an obfs seed is treated as
-//! UNENCRYPTED wherever trust is decided (mainnet gate, `walletstatus`); it only
-//! lifts the file off plaintext ASCII. The machine key auto-unlocks, so the
-//! daemon keeps signing across restarts; only a passphrase seed can be `locked`.
+//! held in the OS keystore (`PACTSEEDv2-keyring`, Windows/macOS only), or, where
+//! no keystore is compiled/available (all Linux — see the Cargo target gate),
+//! under a built-in obfuscation key (`PACTSEEDv2-obfs`). The obfuscation key
+//! ships in the binary, so an obfs seed is treated as UNENCRYPTED wherever trust
+//! is decided (mainnet gate, `walletstatus`); it only lifts the file off
+//! plaintext ASCII. The machine key auto-unlocks, so the daemon keeps signing
+//! across restarts; only a passphrase seed can be `locked`.
 
 use anyhow::{bail, Context, Result};
 use chacha20poly1305::aead::Aead;
@@ -43,7 +44,10 @@ const SEED_V2_KEYRING: &str = "PACTSEEDv2-keyring";
 const SEED_V2_OBFS: &str = "PACTSEEDv2-obfs";
 /// OS-keystore service name; the per-seed account is the random `key_id` stored
 /// in the seed line itself (so the entry survives a same-machine folder move,
-/// but not a copy to a different machine — which is the point).
+/// but not a copy to a different machine — which is the point). Only referenced
+/// by the Windows/macOS keystore path, so it's gated to avoid an unused-const
+/// warning on Linux (where the seed always takes the obfuscation wrap).
+#[cfg(any(windows, target_os = "macos"))]
 const KEYRING_SERVICE: &str = "pactd-seed";
 /// The obfuscation fallback key. This is NOT a secret — it ships in the
 /// open-source binary. It only raises a no-keystore seed from plaintext ASCII to
@@ -1132,11 +1136,19 @@ fn is_passphrase_seed_file(contents: &str) -> bool {
     contents.trim_start().starts_with(SEED_MAGIC)
 }
 
-/// Whether to use the OS keystore. Off under the crate's own unit tests (so they
-/// never touch the developer's real keychain) and when `PACT_DISABLE_KEYRING` is
-/// set (e2e/CI determinism) — both fall back to the obfuscation wrap.
+/// Whether to use the OS keystore. Compiled to `true`-capable only on
+/// Windows/macOS (native, unattended-friendly, no C deps); on Linux and others
+/// it is a const `false`, so those always take the obfuscation wrap and the
+/// `keyring` crate is never linked (see libswap's Cargo target gate). Also off
+/// under the crate's own unit tests (so they never touch the developer's real
+/// keychain) and when `PACT_DISABLE_KEYRING` is set (e2e/CI determinism).
+#[cfg(any(windows, target_os = "macos"))]
 fn keyring_enabled() -> bool {
     !cfg!(test) && std::env::var_os("PACT_DISABLE_KEYRING").is_none()
+}
+#[cfg(not(any(windows, target_os = "macos")))]
+fn keyring_enabled() -> bool {
+    false
 }
 
 fn random_bytes<const N: usize>() -> [u8; N] {
@@ -1169,6 +1181,7 @@ fn decrypt_v2(nonce_hex: &str, ct_hex: &str, key: &[u8; 32]) -> Result<String> {
 }
 
 /// Store a fresh random seed-key in the OS keystore, returning `(key_id, key)`.
+#[cfg(any(windows, target_os = "macos"))]
 fn keyring_put_new() -> Result<(String, [u8; 32])> {
     let key_id = hex::encode(random_bytes::<8>());
     let key = random_bytes::<32>();
@@ -1179,9 +1192,15 @@ fn keyring_put_new() -> Result<(String, [u8; 32])> {
         .context("writing seed key to OS keystore")?;
     Ok((key_id, key))
 }
+#[cfg(not(any(windows, target_os = "macos")))]
+fn keyring_put_new() -> Result<(String, [u8; 32])> {
+    anyhow::bail!("no OS keystore on this platform")
+}
 
 /// Fetch a seed-key from the OS keystore by `key_id`. Errors (→ reconfirm) when
-/// the entry is missing (new machine / reset keychain).
+/// the entry is missing (new machine / reset keychain), or on a platform with no
+/// keystore (a keyring seed copied from Windows/macOS to Linux).
+#[cfg(any(windows, target_os = "macos"))]
 fn keyring_get(key_id: &str) -> Result<[u8; 32]> {
     let entry =
         keyring::Entry::new(KEYRING_SERVICE, key_id).context("opening OS keystore entry")?;
@@ -1191,6 +1210,10 @@ fn keyring_get(key_id: &str) -> Result<[u8; 32]> {
     let bytes = hex::decode(hexkey.trim()).context("bad keystore key encoding")?;
     <[u8; 32]>::try_from(bytes.as_slice())
         .map_err(|_| anyhow::anyhow!("keystore key has wrong length"))
+}
+#[cfg(not(any(windows, target_os = "macos")))]
+fn keyring_get(_key_id: &str) -> Result<[u8; 32]> {
+    anyhow::bail!("this build has no OS keystore — re-import your recovery phrase to continue")
 }
 
 /// The *unattended* at-rest wrap (#120) for a seed created/migrated without a
