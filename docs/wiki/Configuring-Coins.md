@@ -41,13 +41,15 @@ The data-dir / cookie path field understands `~`, `%LOCALAPPDATA%`, `%APPDATA%`,
 
 ## Confirmation depth
 
-Each coin has a confirmation depth for reorg finality (`N≥1`), which gates auto-redeem and swap completion. Set it per-coin with `--coin-confs <id>=<N>` (or the Satchel **Confirmations before final** field). Left blank, a default heuristic applies:
+Each coin has a confirmation depth for reorg finality, which gates auto-redeem and swap completion. It is **per-side**: each party sets its own depth from its own config and it gates only that party's own actions and risk — nobody adopts the counterparty's value. The two sides exchange their chosen depths so each can show the other's confirmation counter precisely, but a value out of range is refused up-front rather than adopted. Set it per-coin with `--coin-confs <id>=<N>` (or the Satchel **Confirmations before final** field). Left blank, a default heuristic applies — which is also the **maximum**:
 
-| Network / chain | Default confirmations |
+| Network / chain | Default confirmations (= maximum) |
 |---|---|
 | regtest | 1 |
 | fast chain | 10 |
 | slow chain | 6 |
+
+On mainnet/testnet the allowed range is **2 up to the default** (spec §7.3 as amended for the rc12 recut): 0- and 1-confirmation trading is disallowed (a single stale block is routine on both chains), and there is no benefit to demanding more than the trustless default, so it is the ceiling. Values outside the band are **clamped** — below 2 rises to 2, above the default drops to the default. Regtest keeps a floor of 1 and no ceiling so the test suite can drive arbitrary depths.
 
 ## Capabilities and pairs
 
