@@ -6,7 +6,7 @@ What you trust, what you don't, and the risks stated honestly.
 
 - **Keys never leave your machine.** The engine (`pactd`) holds the BIP39 seed, derives every swap key from it, signs locally, and broadcasts its own transactions. Satchel persists no seed or passphrase, and the engine's RPC is loopback-only.
 - **Refunds are automatic.** Every locked output has a timelock refund path. If a counterparty walks away, the engine refunds you once the timelock matures — it watches the chain and acts without you. The taker's deadline is always earlier than the maker's, so the maker cannot be stranded.
-- **An encrypted seed is locked at rest.** Choose a passphrase and the seed is stored as scrypt + ChaCha20-Poly1305 and unlocked only in the engine's memory, per session.
+- **The seed is never stored in plaintext.** Choose a passphrase and the seed is encrypted with scrypt + ChaCha20-Poly1305 and stays *locked* until you unlock it in the engine's memory, per session. With no passphrase it is still wrapped at rest — on Windows and macOS under a key held in the OS keystore (Credential Manager / Keychain) that auto-unlocks so trading survives a reboot; on Linux it is only obfuscated and treated as unencrypted. The machine key protects the file at rest, not against someone already logged in as you — a passphrase is what defends against a local attacker.
 
 ## The transports are untrusted and blind
 

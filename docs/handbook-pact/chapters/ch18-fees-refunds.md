@@ -349,8 +349,10 @@ gate reservation they were funded under (fixed at funding time).
 | `max_feerate_sat_vb` | 500 sat/vB | ceiling for **funding** bumps only (redeem/refund are bounded by the value-at-risk cap instead, so they can exceed it near a deadline); settable `1..=500`. The estimator's own sanity clamp is a separate 10 000 sat/vB overflow guard. |
 | `funding.reservation_mult` | 3× | funds-gate headroom + funding-nurse bound (`× old_feerate`) |
 
-> **Note** — `min_fee_sat` (the old 1000-sat floor) and `redeem.step_pct` /
-> `refund.step_pct` (default 50) are **retired**. The floor and the per-tick
+> **Note** — `min_fee_sat` (the old 1000-sat floor), `redeem.committed_mult` (the
+> former v2 redeem over-provision multiplier, removed in #116), and
+> `redeem.step_pct` / `refund.step_pct` (default 50) are **retired**. The floor
+> and the per-tick
 > percentage step both drove the old market-blind escalator that the unified
 > market-tracking strategy replaced. They survive in the `FeeBumpPolicy` struct
 > only for serde back-compat (an old stored policy that still sets them

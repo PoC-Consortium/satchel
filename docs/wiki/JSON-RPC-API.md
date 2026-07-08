@@ -1,6 +1,6 @@
 # JSON-RPC API
 
-[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 63 methods, grouped below by area with a one-line purpose each. This is an index; the daemon itself serves the authoritative catalog via the `help` method (`pact-cli help`). For full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
+[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 65 methods, grouped below by area with a one-line purpose each. This is an index; the daemon itself serves the authoritative catalog via the `help` method (`pact-cli help`). For full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
 
 ## Conventions
 
@@ -105,6 +105,7 @@ v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed). T
 | `boardpostoffer` | Post an offer; fans out to all configured boards. |
 | `boardtake` | Take a posted offer. |
 | `boardrevoke` | Revoke one of my offers. |
+| `revokeoffersforcoin` | Withdraw every live offer whose pair involves a coin (`coin_id`) — Satchel calls it before removing/reconfiguring a coin so its offers de-list cleanly. |
 
 ## Private (off-market) offers
 

@@ -74,16 +74,20 @@ field means in detail.
 ## "Fewer than 2 coins connected"
 
 Satchel needs at least **two live coins** before you can trade — after all, a swap
-is an exchange between two of them. If you see a "X of 2 coins connected" gate, or
-the app won't let you past setup, one or both of your coins isn't fully connected.
+is an exchange between two of them. There's no wall keeping you out: you land in
+the app whatever your coin count, and can browse freely. What's gated is the
+money-moving actions, **per action** — **Post an offer** and **Create slip** show
+a soft "Set up two coins to trade" prompt, and a board offer's **Take** button
+stays disabled until both of its coins are live. If an action is out of reach,
+one or both of your coins isn't fully connected.
 
-- The progress line tells you how many are live. Pick a coin that isn't connected
-  and complete its setup.
+- The per-coin health glyphs in the header tell you how many are live. Pick a coin
+  that isn't connected and complete its setup.
 - A coin counts as *live* only when it's both configured **and** showing
   **Connected**. A coin with a **Connection error** doesn't count — fix it as
   above.
 
-Once two coins are green, the gate clears and you can continue.
+Once two coins are green, those actions unlock.
 
 ## No offers on the Corkboard
 

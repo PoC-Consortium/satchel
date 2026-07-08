@@ -18,6 +18,7 @@ chooses one transport rather than merging.
 | `boardpostoffer` | `give`, `get`, `t1_secs`, `t2_secs`, `protocol?`, `ttl_secs?` | `{ offer_id }` | yes |
 | `boardtake` | `offer_id` | `{ taken }` | yes |
 | `boardrevoke` | `offer_id` | `{ revoked }` | yes |
+| `revokeoffersforcoin` | `coin_id` | `{ revoked }` | yes |
 
 - `boardlistoffers` — lists offers from one board. The optional `board` is an
   HTTP Corkboard URL **or** the literal `"nostr"`; omitted, it defaults to the
@@ -32,6 +33,11 @@ chooses one transport rather than merging.
   validity; omitted, the engine default applies.
 - `boardtake` — takes a posted offer by `offer_id`.
 - `boardrevoke` — revokes one of your own posted offers.
+- `revokeoffersforcoin` — withdraws **every** live offer whose pair involves
+  `coin_id`, across all boards. Satchel calls this before removing or
+  reconfiguring a coin, while `pactd` still has it configured, so the offers are
+  cleanly de-listed rather than orphaned (#97); the surviving offers then ride
+  the skip-de-list relaunch.
 
 > **Note** — **Cumulative funds gate.** `boardpostoffer` rejects an offer the
 > core wallet could not fund — and "fund" means the **sum** of the give-leg

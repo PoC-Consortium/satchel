@@ -135,10 +135,14 @@ as everyone else.
 
 Last, Satchel asks how to store your seed on disk. Two cards:
 
-- **No passphrase (recommended)** — the seed is stored as-is. You never have to
-  type anything to start trading, and Satchel's automatic safety net (the part
-  that gives you your money back if a swap stalls) keeps working even after a
-  reboot, with nothing for you to do.
+- **No passphrase (recommended)** — you never have to type anything to start
+  trading, and Satchel's automatic safety net (the part that gives you your money
+  back if a swap stalls) keeps working even after a reboot, with nothing for you
+  to do. The seed still isn't left as plain text on disk: on Windows and macOS
+  Satchel locks it with a key kept in your operating system's secure store, so
+  the file alone is useless if copied to another machine. That key lives on this
+  computer, though, so it doesn't protect you from someone who is already signed
+  in as you — for that, choose a passphrase below.
 
 - **Encrypt with a passphrase** — the seed is locked with a passphrase you
   choose. It's safer if someone gets access to your computer's files, but there's
@@ -182,7 +186,9 @@ say, a main identity and a separate one for private trades. We cover the
 
 ## What's next
 
-With your merchant created and your seed backed up, Satchel checks that your coin
-nodes are connected. If fewer than two coins are live, it opens the coin setup
-wizard — which is exactly where the next chapter, *"Setting Up Your Coins"*, picks
-up.
+With your merchant created and your seed backed up, Satchel drops you straight
+into the app. On this first run it offers a **one-time, skippable coin-setup
+dialog** to help you connect two coins — but it never blocks: click **Later** to
+go straight to browsing with zero coins configured, or set them up now. It won't
+appear again once dismissed. Connecting coins is exactly what the next chapter,
+*"Setting Up Your Coins"*, covers.

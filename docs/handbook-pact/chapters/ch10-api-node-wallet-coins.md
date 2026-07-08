@@ -60,7 +60,7 @@ The policy object is a flat shape:
 
 | Field | Default | Range | What it does |
 |---|---|---|---|
-| `max_feerate_sat_vb` | 500 | `1..=500` | Local ceiling on any bump's feerate (sat/vB). |
+| `max_feerate_sat_vb` | 500 | `1..=500` | Local ceiling on **funding** bumps' feerate (sat/vB); redeem/refund bumps ignore it (value-capped instead). |
 | `reservation_mult` | 3 | `1..=1000` | Funding-nurse target multiplier over the old feerate. |
 
 > Every spend and bump is market-derived (`target_feerate` = `min(market,
