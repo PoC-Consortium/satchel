@@ -994,9 +994,11 @@ impl Engine {
         backend.tip_height()
     }
 
-    /// Network admission policy: regtest is free; testnet and mainnet permit a
-    /// plaintext seed but warn (encryption is the user's choice, as in Bitcoin
-    /// Core). Mainnet is open for both v1 (HTLC) and v2+ (adaptor) swaps.
+    /// Network admission policy: regtest is free; testnet and mainnet permit an
+    /// unencrypted seed but warn. Post-#120 "unencrypted" means the obfuscation
+    /// fallback (no OS keystore) or a legacy plaintext seed — a keystore or
+    /// passphrase seed is encrypted and passes silently. Mainnet is open for
+    /// both v1 (HTLC) and v2+ (adaptor) swaps.
     fn ensure_network_allowed(&self, network: Network) -> Result<()> {
         match network {
             Network::Regtest => Ok(()),

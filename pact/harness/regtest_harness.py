@@ -26,6 +26,10 @@ Smoke test (no Pact involved):  python regtest_harness.py --smoke
 
 import json
 import os
+# Regtest seeds take the obfuscation wrap (#120), not a real OS-keystore key —
+# keeps playground/e2e runs off the developer's Windows/macOS keychain. pactd
+# subprocesses inherit this env.
+os.environ.setdefault("PACT_DISABLE_KEYRING", "1")
 import platform
 import shutil
 import subprocess

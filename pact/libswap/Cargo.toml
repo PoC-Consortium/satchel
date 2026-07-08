@@ -25,6 +25,14 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 hex = { workspace = true }
 
+# The OS-keystore seed wrap (#120) is compiled only where the store is native
+# and unattended-friendly with no C deps: Windows Credential Manager / macOS
+# Keychain. Linux is deliberately excluded — a daemon-usable Secret Service
+# can't be relied on (headless has none; the sync backend needs libdbus), so
+# Linux always takes the obfuscation fallback instead of a fragile dbus dep.
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+keyring = { workspace = true }
+
 [[example]]
 name = "gen-vectors"
 path = "examples/gen-vectors.rs"

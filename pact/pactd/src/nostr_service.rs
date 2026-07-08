@@ -455,6 +455,8 @@ mod tests {
     }
 
     fn party(tag: &str) -> Party {
+        // Off the real OS keychain: seeds here take the obfuscation wrap (#120).
+        std::env::set_var("PACT_DISABLE_KEYRING", "1");
         let dir = std::env::temp_dir().join(format!("pact-nostr-e2e-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let store = Store::init(&dir, None).unwrap();

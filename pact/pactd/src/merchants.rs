@@ -520,7 +520,7 @@ fn adopt_existing(data_dir: &Path, manifest: &mut Manifest) -> Result<()> {
             continue; // empty/partial dir — nothing to adopt
         }
         let encrypted = std::fs::read_to_string(&seed_path)
-            .map(|c| c.starts_with("PACTSEEDv1"))
+            .map(|c| libswap::store::is_encrypted_seed_file(&c))
             .unwrap_or(false);
         adopted.push(MerchantMeta {
             id: id.clone(),
@@ -579,6 +579,9 @@ mod tests {
     }
 
     fn temp_dir(tag: &str) -> PathBuf {
+        // Keep tests off the developer's real OS keychain and deterministic:
+        // seeds provisioned here take the obfuscation wrap, not a keyring key.
+        std::env::set_var("PACT_DISABLE_KEYRING", "1");
         let dir =
             std::env::temp_dir().join(format!("pactd-merchants-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);

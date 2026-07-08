@@ -1110,13 +1110,16 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         }
         "createseed" => {
             let passphrase = p.opt_str(0, "passphrase").filter(|s| !s.is_empty());
-            let encrypted = passphrase.is_some();
             // Optional word count (12 default | 24) — phoenix parity.
             let words = p.opt_u64(1, "words").unwrap_or(12) as usize;
             let mnemonic = blocking_mut(app, move |e| {
                 e.store.create_seed(passphrase.as_deref(), words)
             })
             .await?;
+            // Report the actual at-rest status (#120): a no-passphrase seed is
+            // now keyring-encrypted where a keystore exists, obfuscation (=
+            // unencrypted) where it doesn't — not simply `passphrase.is_some()`.
+            let encrypted = blocking(app, |e| e.store.seed_is_encrypted()).await?;
             kick_nostr(app);
             // The mnemonic is returned exactly once, for the user to back up.
             Ok(json!({ "mnemonic": mnemonic, "encrypted": encrypted }))
@@ -1132,13 +1135,18 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         "importseed" => {
             let mnemonic = p.str(0, "mnemonic")?;
             let passphrase = p.opt_str(1, "passphrase").filter(|s| !s.is_empty());
-            let encrypted = passphrase.is_some();
             let phrase = blocking_mut(app, move |e| {
                 e.store.import_seed(&mnemonic, passphrase.as_deref())
             })
             .await?;
-            let identity =
-                blocking(app, |e| Ok(e.store.seed()?.identity_pubkey()?.to_string())).await?;
+            // Actual at-rest status (#120), see `createseed`.
+            let (identity, encrypted) = blocking(app, |e| {
+                Ok((
+                    e.store.seed()?.identity_pubkey()?.to_string(),
+                    e.store.seed_is_encrypted()?,
+                ))
+            })
+            .await?;
             kick_nostr(app);
             // Echo the normalized phrase so the client can confirm, plus the
             // derived identity so the UI can show the new merchant at once.
