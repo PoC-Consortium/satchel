@@ -449,6 +449,15 @@ export const sk: Bundle = {
     unsupportedByEngineTip:
       "Táto minca je definovaná v coins.toml, ale nie je zabudovaná do tejto verzie enginu, takže sa s ňou nedá obchodovať.",
   },
+  coinWizard: {
+    title: "Pripojte svoje mince",
+    intro:
+      "Vyberte aspoň dve mince a každú nasmerujte na svoj vlastný uzol. Swap potrebuje dva reťazce, takže obchodovanie sa odomkne, keď sú pripojené a aktívne dva uzly. Mince môžete pridať alebo zmeniť neskôr v Nastaveniach.",
+    progress: "Pripojených {count} z {min} mincí",
+    continue: "Pokračovať",
+    live: "Aktívne",
+    nodeDown: "Uzol mimo prevádzky",
+  },
   wallets: {
     degraded: "obmedzené",
     degradedWalletTip: "Server peňaženky je nedostupný — zostatok môže byť zastaraný a odosielanie prechádza na záložné servery.",

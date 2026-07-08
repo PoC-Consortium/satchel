@@ -449,6 +449,15 @@ export const ptBR: Bundle = {
     unsupportedByEngineTip:
       "Esta moeda está definida em coins.toml, mas não foi compilada nesta versão da engine, então não pode ser negociada.",
   },
+  coinWizard: {
+    title: "Conecte suas moedas",
+    intro:
+      "Escolha pelo menos duas moedas e aponte cada uma para o seu próprio node. Um swap precisa de duas chains, então a negociação é liberada assim que dois nodes estiverem conectados e ativos. Você pode adicionar ou alterar moedas depois em Configurações.",
+    progress: "{count} de {min} moedas conectadas",
+    continue: "Continuar",
+    live: "Ativo",
+    nodeDown: "Node fora do ar",
+  },
   wallets: {
     degraded: "degradado",
     degradedWalletTip: "O servidor da carteira está inacessível — o saldo pode estar desatualizado e os envios usam os servidores de backup.",

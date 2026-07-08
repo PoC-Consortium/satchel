@@ -449,6 +449,15 @@ export const nl: Bundle = {
     unsupportedByEngineTip:
       "Deze munt is gedefinieerd in coins.toml maar niet ingebouwd in deze versie van de engine, dus hij kan niet verhandeld worden.",
   },
+  coinWizard: {
+    title: "Verbind je munten",
+    intro:
+      "Kies minstens twee munten en wijs elk naar je eigen node. Een swap heeft twee ketens nodig, dus handelen ontgrendelt zodra twee nodes verbonden en live zijn. Je kunt later munten toevoegen of wijzigen in Instellingen.",
+    progress: "{count} van {min} munten verbonden",
+    continue: "Doorgaan",
+    live: "Live",
+    nodeDown: "Node ligt eruit",
+  },
   wallets: {
     degraded: "verminderd",
     degradedWalletTip: "De wallet-server is onbereikbaar — het saldo kan verouderd zijn en verzendingen wijken uit naar reserveservers.",

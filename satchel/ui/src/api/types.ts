@@ -30,6 +30,9 @@ export interface UiPrefs {
   theme: "dark" | "light" | "system";
   language: string;
   nav_open: boolean;
+  /** One-time first-run flag: true once the user has completed or skipped the
+   *  first-run coin-setup dialog, so it never shows again. */
+  onboarded: boolean;
   /** Desktop-notification switches (issue #55). */
   notify: NotifyPrefs;
 }

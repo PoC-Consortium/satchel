@@ -448,6 +448,15 @@ export const ca: Bundle = {
     unsupportedByEngineTip:
       "Aquesta moneda està definida a coins.toml però no està integrada en aquesta versió del motor, per tant no es pot negociar.",
   },
+  coinWizard: {
+    title: "Connecta les teves monedes",
+    intro:
+      "Tria almenys dues monedes i apunta cadascuna al teu propi node. Un intercanvi necessita dues cadenes, així que la negociació es desbloqueja quan dos nodes estan connectats i actius. Pots afegir o canviar monedes més tard a Configuració.",
+    progress: "{count} de {min} monedes connectades",
+    continue: "Continua",
+    live: "Actiu",
+    nodeDown: "Node caigut",
+  },
   wallets: {
     degraded: "degradat",
     degradedWalletTip: "El servidor del moneder és inaccessible — el saldo pot ser antic i els enviaments passen als servidors de reserva.",

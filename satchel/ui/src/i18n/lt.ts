@@ -449,6 +449,15 @@ export const lt: Bundle = {
     unsupportedByEngineTip:
       "Ši moneta apibrėžta coins.toml faile, bet neįtraukta į šią variklio versiją, todėl ja prekiauti negalima.",
   },
+  coinWizard: {
+    title: "Prijunkite savo monetas",
+    intro:
+      "Pasirinkite bent dvi monetas ir kiekvieną nukreipkite į savo paties mazgą. Mainams reikia dviejų grandinių, todėl prekyba atsirakina, kai prijungiamos ir veikia dvi monetos. Vėliau monetas galite pridėti ar pakeisti skiltyje Nustatymai.",
+    progress: "Prijungta {count} iš {min} monetų",
+    continue: "Tęsti",
+    live: "Veikia",
+    nodeDown: "Mazgas neveikia",
+  },
   wallets: {
     degraded: "pablogėjęs",
     degradedWalletTip: "Piniginės serveris nepasiekiamas — likutis gali būti pasenęs, o siuntimai pereina į atsarginius serverius.",

@@ -449,6 +449,15 @@ export const hr: Bundle = {
     unsupportedByEngineTip:
       "Ova kovanica je definirana u coins.toml, ali nije ugrađena u ovu verziju enginea, pa se njome ne može trgovati.",
   },
+  coinWizard: {
+    title: "Povežite svoje kovanice",
+    intro:
+      "Odaberite barem dvije kovanice i usmjerite svaku na vlastiti čvor. Swap treba dva lanca, pa se trgovanje otključava kad su dva čvora povezana i aktivna. Kovanice možete dodati ili promijeniti kasnije u Postavkama.",
+    progress: "{count} od {min} kovanica povezano",
+    continue: "Nastavi",
+    live: "Aktivno",
+    nodeDown: "Čvor nedostupan",
+  },
   wallets: {
     degraded: "degradirano",
     degradedWalletTip: "Poslužitelj novčanika je nedostupan — stanje može biti zastarjelo, a slanja prelaze na pričuvne poslužitelje.",

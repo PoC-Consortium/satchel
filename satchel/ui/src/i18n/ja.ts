@@ -449,6 +449,15 @@ export const ja: Bundle = {
     unsupportedByEngineTip:
       "このコインは coins.toml で定義されていますが、このバージョンのエンジンには組み込まれていないため、取引できません。",
   },
+  coinWizard: {
+    title: "コインを接続",
+    intro:
+      "少なくとも 2 つのコインを選び、それぞれをご自身のノードに向けます。スワップには 2 つのチェーンが必要なので、2 つのノードが接続されて稼働すると取引が解放されます。コインは後から設定で追加・変更できます。",
+    progress: "{count} / {min} 個のコインを接続済み",
+    continue: "続ける",
+    live: "稼働中",
+    nodeDown: "ノード停止",
+  },
   wallets: {
     degraded: "劣化",
     degradedWalletTip: "ウォレットサーバーに到達できません — 残高が古い可能性があり、送金はバックアップサーバーへフォールバックします。",

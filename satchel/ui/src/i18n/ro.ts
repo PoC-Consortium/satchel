@@ -449,6 +449,15 @@ export const ro: Bundle = {
     unsupportedByEngineTip:
       "Această monedă este definită în coins.toml dar nu este integrată în această versiune a engine-ului, deci nu poate fi tranzacționată.",
   },
+  coinWizard: {
+    title: "Conectează-ți monedele",
+    intro:
+      "Alege cel puțin două monede și îndreaptă fiecare către propriul tău nod. Un swap are nevoie de două lanțuri, așa că tranzacționarea se deblochează odată ce două noduri sunt conectate și active. Poți adăuga sau schimba monede mai târziu în Setări.",
+    progress: "{count} din {min} monede conectate",
+    continue: "Continuă",
+    live: "Activ",
+    nodeDown: "Nod oprit",
+  },
   wallets: {
     degraded: "degradat",
     degradedWalletTip: "Serverul portofelului este inaccesibil — soldul poate fi învechit, iar trimiterile trec pe serverele de rezervă.",

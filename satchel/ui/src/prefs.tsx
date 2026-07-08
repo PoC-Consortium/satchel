@@ -22,6 +22,7 @@ const DEFAULTS: UiPrefs = {
   theme: "system",
   language: "en",
   nav_open: true,
+  onboarded: false,
   notify: {
     enabled: true,
     swap_started: true,

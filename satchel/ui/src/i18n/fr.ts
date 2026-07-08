@@ -448,6 +448,15 @@ export const fr: Bundle = {
     unsupportedByEngineTip:
       "Ce coin est défini dans coins.toml mais n'est pas intégré dans cette version du moteur, il ne peut donc pas être tradé.",
   },
+  coinWizard: {
+    title: "Connectez vos coins",
+    intro:
+      "Choisissez au moins deux coins et pointez chacun vers votre propre nœud. Un swap a besoin de deux chaînes, donc le trading se débloque une fois que deux nœuds sont connectés et en service. Vous pourrez ajouter ou changer des coins plus tard dans Paramètres.",
+    progress: "{count} sur {min} coins connectés",
+    continue: "Continuer",
+    live: "En service",
+    nodeDown: "Nœud hors service",
+  },
   wallets: {
     degraded: "dégradé",
     degradedWalletTip: "Le serveur du portefeuille est injoignable — le solde peut être obsolète et les envois basculent sur les serveurs de secours.",

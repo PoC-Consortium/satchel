@@ -448,6 +448,15 @@ export const it: Bundle = {
     unsupportedByEngineTip:
       "Questa coin è definita in coins.toml ma non è integrata in questa versione dell'engine, quindi non può essere scambiata.",
   },
+  coinWizard: {
+    title: "Collega le tue coin",
+    intro:
+      "Scegli almeno due coin e punta ognuna al tuo nodo. Uno swap richiede due chain, quindi il trading si sblocca quando due nodi sono connessi e attivi. Puoi aggiungere o cambiare coin in seguito nelle Impostazioni.",
+    progress: "{count} di {min} coin connesse",
+    continue: "Continua",
+    live: "Attivo",
+    nodeDown: "Nodo offline",
+  },
   wallets: {
     degraded: "degradato",
     degradedWalletTip: "Il server del portafoglio è irraggiungibile — il saldo può essere obsoleto e gli invii passano ai server di riserva.",

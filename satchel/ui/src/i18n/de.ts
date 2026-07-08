@@ -449,6 +449,15 @@ export const de: Bundle = {
     unsupportedByEngineTip:
       "Dieser Coin ist in coins.toml definiert, aber nicht in diese Version der Engine eingebaut, daher kann er nicht gehandelt werden.",
   },
+  coinWizard: {
+    title: "Verbinde deine Coins",
+    intro:
+      "Wähle mindestens zwei Coins und richte jeden auf deine eigene Node. Ein Swap braucht zwei Chains, daher wird der Handel freigeschaltet, sobald zwei Nodes verbunden und live sind. Du kannst Coins später in den Einstellungen hinzufügen oder ändern.",
+    progress: "{count} von {min} Coins verbunden",
+    continue: "Weiter",
+    live: "Live",
+    nodeDown: "Node offline",
+  },
   wallets: {
     degraded: "beeinträchtigt",
     degradedWalletTip: "Der Wallet-Server ist nicht erreichbar — der Kontostand kann veraltet sein; Sendungen weichen auf Backup-Server aus.",

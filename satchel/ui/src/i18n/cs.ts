@@ -449,6 +449,15 @@ export const cs: Bundle = {
     unsupportedByEngineTip:
       "Tato mince je definována v coins.toml, ale není zabudována v této verzi enginu, takže ji nelze obchodovat.",
   },
+  coinWizard: {
+    title: "Připojte své mince",
+    intro:
+      "Vyberte alespoň dvě mince a každou nasměrujte na svůj vlastní uzel. Swap potřebuje dva řetězce, takže obchodování se odemkne, jakmile jsou připojeny a v provozu dva uzly. Mince můžete přidat nebo změnit později v Nastavení.",
+    progress: "Připojeno {count} z {min} mincí",
+    continue: "Pokračovat",
+    live: "V provozu",
+    nodeDown: "Uzel mimo provoz",
+  },
   wallets: {
     degraded: "omezeno",
     degradedWalletTip: "Server peněženky je nedostupný — zůstatek může být zastaralý a odesílání přechází na záložní servery.",

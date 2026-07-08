@@ -449,6 +449,15 @@ export const zhCn: Bundle = {
     unsupportedByEngineTip:
       "此币种在 coins.toml 中已定义，但未编译进此版本的引擎，因此无法交易。",
   },
+  coinWizard: {
+    title: "连接你的币种",
+    intro:
+      "至少选择两种币，并将每种各自指向你自己的节点。一笔交换需要两条链，因此当两个节点连接并上线后即可开始交易。你之后可在设置中添加或更改币种。",
+    progress: "已连接 {count} / {min} 种币",
+    continue: "继续",
+    live: "在线",
+    nodeDown: "节点下线",
+  },
   wallets: {
     degraded: "降级",
     degradedWalletTip: "钱包服务器不可达 — 余额可能过期，发送将切换到备用服务器。",

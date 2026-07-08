@@ -449,6 +449,15 @@ export const hi: Bundle = {
     unsupportedByEngineTip:
       "यह coin coins.toml में परिभाषित है पर engine के इस संस्करण में निर्मित नहीं है, इसलिए इसका व्यापार नहीं किया जा सकता।",
   },
+  coinWizard: {
+    title: "अपने coins कनेक्ट करें",
+    intro:
+      "कम से कम दो coins चुनें और हर एक को अपने node पर इंगित करें। एक स्वैप के लिए दो chains चाहिए, इसलिए दो nodes कनेक्ट और लाइव होने पर व्यापार खुल जाता है। आप बाद में Settings में coins जोड़ या बदल सकते हैं।",
+    progress: "{min} में से {count} coins कनेक्टेड",
+    continue: "जारी रखें",
+    live: "लाइव",
+    nodeDown: "Node बंद",
+  },
   wallets: {
     degraded: "degraded",
     degradedWalletTip: "Wallet सर्वर पहुँच से बाहर है — बैलेंस पुराना हो सकता है और भेजना backup सर्वरों पर चला जाता है।",
