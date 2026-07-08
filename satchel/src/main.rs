@@ -563,13 +563,16 @@ fn wait_health(listen: &str, secs: u64) -> anyhow::Result<()> {
 /// Stop the managed pactd, if any (graceful RPC `stop`, then kill as a
 /// fallback — the bitcoin-qt shutdown pattern). Safe to call when nothing is
 /// running.
-fn stop_managed(app: &tauri::AppHandle) {
+fn stop_managed(app: &tauri::AppHandle, skip_delist: bool) {
     let managed = app.state::<ManagedPactd>();
     let child = managed.0.lock().unwrap().take();
     if let Some(mut child) = child {
         let conn = app.state::<RpcState>().0.lock().unwrap().clone();
         if !conn.auth.is_empty() {
-            let _ = pactd_call(&conn.url, &conn.auth, "stop", &json!([]));
+            // `skip_delist` = a config-change relaunch (#97): keep the surviving
+            // offers listed across the restart. A genuine close passes false so the
+            // soft de-list still fires.
+            let _ = pactd_call(&conn.url, &conn.auth, "stop", &json!([skip_delist]));
         }
         std::thread::sleep(Duration::from_millis(800));
         let _ = child.kill();
@@ -590,7 +593,9 @@ fn relaunch_pactd(app: &tauri::AppHandle) -> anyhow::Result<()> {
     };
     std::fs::create_dir_all(&data_dir)?;
 
-    stop_managed(app);
+    // Config-change relaunch: skip the shutdown de-list so live offers ride the
+    // restart (#97). Offers on a removed coin are revoked separately, before this.
+    stop_managed(app, true);
     let child = spawn_pactd(&config, &data_dir)?;
     wait_health(&config.listen, 30)?;
     let cookie = std::fs::read_to_string(data_dir.join(".cookie"))?
@@ -814,6 +819,21 @@ fn get_coin_icon(state: tauri::State<AppState>, coin_id: String) -> Option<Strin
 #[tauri::command]
 async fn remove_coin(app: tauri::AppHandle, coin_id: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || -> anyhow::Result<()> {
+        // #97: withdraw offers whose pair involves the coin being removed BEFORE
+        // the relaunch — pactd still has the coin here, so it can sign/publish the
+        // revocations. The relaunch itself then skips de-listing the SURVIVORS.
+        // Best-effort: an unreachable pactd shouldn't block the removal.
+        {
+            let conn = app.state::<RpcState>().0.lock().unwrap().clone();
+            if !conn.auth.is_empty() {
+                let _ = pactd_call(
+                    &conn.url,
+                    &conn.auth,
+                    "revokeoffersforcoin",
+                    &json!([coin_id.clone()]),
+                );
+            }
+        }
         {
             let state = app.state::<AppState>();
             let mut cfg = state.config.lock().unwrap();
@@ -1090,7 +1110,8 @@ async fn quit_app(app: tauri::AppHandle, keep_running: bool, withdraw: bool) -> 
     } else if is_managed {
         // Stop & exit: a stopped daemon can't honor takes — only the no-live-swap
         // branches reach here (or a typed-confirm force-quit accepting the risk).
-        stop_managed(&app);
+        // Genuine close → de-list (don't leave stale listings up while offline).
+        stop_managed(&app, false);
         clear_running_pactd(&app.state::<AppState>().config_dir);
         eprintln!("satchel: stopped managed pactd on quit (withdraw={withdraw})");
     } else {
@@ -1558,7 +1579,7 @@ fn main() {
                 // branch, so `state` never panics here.
                 let detached = *app.state::<DetachFlag>().0.lock().unwrap();
                 if !detached {
-                    stop_managed(app);
+                    stop_managed(app, false); // genuine exit → de-list offers
                 }
             }
         });

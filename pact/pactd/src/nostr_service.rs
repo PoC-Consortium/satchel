@@ -103,7 +103,12 @@ pub fn apply(store: &Store, a: &Apply) -> Result<()> {
         // own tombstone hides it from us: a split-brain "posting…" limbo. No-op
         // for foreign offers (not in `my_offers`) or already-terminal ones
         // (`my_offer_mark_revoked` only touches rows still in state `live`).
-        store.my_offer_mark_revoked(swap_id)?;
+        if store.my_offer_mark_revoked(swap_id)? > 0 {
+            // #96: an incoming NIP-09 deletion just withdrew one of OUR live
+            // offers — log it (previously silent, which made the coin-reconfigure
+            // self-revoke, #97, un-diagnosable in the field).
+            tracing::info!(offer = %swap_id, "offer revoked by an incoming NIP-09 deletion");
+        }
     }
     for (event_id, d_tag, envelope, created, expires) in &a.offers {
         if store.meta_get(&format!("nostr_revoked:{d_tag}"))?.is_some() {

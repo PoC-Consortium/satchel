@@ -154,6 +154,12 @@ struct App {
     /// Expected `Authorization` header values (cookie and/or pact.conf).
     auth_headers: Arc<Vec<String>>,
     shutdown: Arc<Notify>,
+    /// Set by `stop skip_delist=true` (Satchel's config-change relaunch) so the
+    /// clean-shutdown path SKIPS the soft de-list — surviving offers keep their
+    /// relay listings across the ~2s relaunch instead of being pulled and then
+    /// re-read as a self-revocation on boot (#97). A plain `stop`/ctrl_c leaves it
+    /// false, so a genuine close still de-lists.
+    skip_delist_on_stop: Arc<std::sync::atomic::AtomicBool>,
     /// The process-wide Nostr relay client (None when no relays configured).
     /// Carried here so the `boardstatus` RPC can report relay connectivity and
     /// so merchant-load can kick an immediate relay pass (no wait for a tick).
@@ -360,6 +366,14 @@ impl Params {
             .ok()
             .and_then(|v| v.as_str())
             .map(str::to_string)
+    }
+    fn opt_bool(&self, i: usize, name: &str) -> Option<bool> {
+        let v = self.get(i, name).ok()?;
+        v.as_bool().or_else(|| match v.as_str()? {
+            "true" | "1" => Some(true),
+            "false" | "0" => Some(false),
+            _ => None,
+        })
     }
     fn bool(&self, i: usize, name: &str) -> Result<bool> {
         let v = self.get(i, name)?;
@@ -772,6 +786,12 @@ const METHODS: &[(&str, &str, &str, &str)] = &[
         "boardrevoke",
         "<offer_id>",
         "Withdraw one of our board offers (terminal).",
+    ),
+    (
+        "board",
+        "revokeoffersforcoin",
+        "<coin_id>",
+        "Withdraw every live offer whose pair involves a coin (used when removing it).",
     ),
     (
         "board",
@@ -1190,6 +1210,11 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             Ok(blocking_registry(app, move |r| r.info(id.as_deref())).await?)
         }
         "stop" => {
+            // `stop skip_delist=true` (Satchel's config-change relaunch) suppresses
+            // the shutdown soft de-list so surviving offers ride the relaunch (#97).
+            let skip_delist = p.opt_bool(0, "skip_delist").unwrap_or(false);
+            app.skip_delist_on_stop
+                .store(skip_delist, std::sync::atomic::Ordering::SeqCst);
             app.shutdown.notify_one();
             Ok(json!("pactd stopping"))
         }
@@ -1529,8 +1554,22 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         }
         "boardrevoke" => {
             let offer_id = p.str(0, "offer_id")?;
+            let oid = offer_id.clone();
             blocking(app, move |e| e.revoke_board_offer(&offer_id)).await?;
+            tracing::info!(offer = %oid, "offer withdrawn (boardrevoke)");
             Ok(json!({ "revoked": true }))
+        }
+        "revokeoffersforcoin" => {
+            // Reconfigure-time cleanup (#97): Satchel calls this before removing a
+            // coin so offers whose pair involves it are withdrawn while pactd still
+            // has it — the surviving offers then ride the skip-de-list relaunch.
+            let coin_id = p.str(0, "coin_id")?;
+            let cid = coin_id.clone();
+            let revoked = blocking(app, move |e| e.revoke_offers_for_coin(&coin_id)).await?;
+            if !revoked.is_empty() {
+                tracing::info!(coin = %cid, count = revoked.len(), "revoked offers for removed coin");
+            }
+            Ok(json!({ "revoked": revoked }))
         }
         // ---- private (off-market) offers — the Pact handbook (private offers). The maker's
         // offer is built/signed/stored locally but NEVER posted to a board;
@@ -1976,6 +2015,7 @@ async fn main() -> Result<()> {
         network,
         auth_headers: Arc::new(auth_headers),
         shutdown: Arc::new(Notify::new()),
+        skip_delist_on_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         nostr,
     };
 
@@ -2091,7 +2131,18 @@ async fn main() -> Result<()> {
         let reg = app.registry.lock().expect("registry mutex poisoned");
         reg.active_id().is_some()
     };
-    if has_active {
+    let skip_delist = app
+        .skip_delist_on_stop
+        .load(std::sync::atomic::Ordering::SeqCst);
+    if has_active && skip_delist {
+        // Config-change relaunch (#97): DON'T de-list. Surviving offers keep their
+        // relay listings across the ~2s restart; emitting the de-list kind-5 here
+        // would get re-read on boot as a self-revocation and permanently withdraw
+        // them. Offers on a removed pair were already revoked at reconfigure time.
+        tracing::info!(
+            "de-list-on-close skipped (config-change relaunch): offers keep their listings"
+        );
+    } else if has_active {
         // Soft de-list (NOT terminal): drop the relay listings so we don't
         // advertise while offline, but keep the offers live + unblocked so the
         // next startup re-advertises them (see readvertise on boot). The user's
@@ -2207,6 +2258,7 @@ mod tests {
             network: Network::Regtest,
             auth_headers: Arc::new(Vec::new()),
             shutdown: Arc::new(Notify::new()),
+            skip_delist_on_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             nostr: None,
         };
         for (_, name, _, _) in METHODS {
