@@ -94,13 +94,24 @@ Two behaviors flow from this:
   on a stale view.
 
 Override `N` per coin via `Engine.coin_confirmations` (`satchel.json` →
-`--coin-confs`), floored at `≥ 1`. Deeper is safer but slower.
+`--coin-confs`). On mainnet and testnet the allowed band is **`[2, default]`**
+— the heuristic default above is now also the *maximum* — and the engine
+clamps an out-of-band operator value into the band (`confirmations_for`):
+below 2 raises to 2, above the default lowers to the default. Regtest keeps a
+floor of 1 and no cap. Within the band, deeper is safer but slower.
 
-> **Note** — Spec §7.3's suggested-minimums table lists `N_B = 3` for BTC, but
-> the engine's heuristic `default_confirmations` returns **6** for any chain
-> with ≥ 5-minute block spacing, including BTC. The engine default is more
-> conservative than the spec's floor; the spec value is a *minimum*, not the
-> shipped default.
+> **Note** — This is spec §7.3 **as amended for the rc12 recut**. The floor of
+> **2** for both legs replaces the old asymmetric minimums (`N_A ≥ 6`,
+> `N_B ≥ 1`, with earlier spec drafts suggesting e.g. `N_B = 3` for BTC):
+> 1-block reorgs and stale blocks are routine on both chains, depth-2 reorgs
+> are rare even on a 2-minute-spacing chain, so 0/1-conf trading is disallowed
+> while two consenting users may trade at 2. The cap at
+> `default_confirmations` keeps a fat-fingered depth from stalling a live swap
+> for hours. Confirmation depth is **per-side-owned** in both protocols: each
+> side derives its own `N_A`/`N_B` from its own per-coin config; the depths a
+> counterparty advertises in the handshake are advisory display values, never
+> adopted into safety gates (see the chapter "v2 Taproot/MuSig2 Adaptor
+> Swaps" for the advisory exchange).
 
 ## The wallet-lock funding gate
 

@@ -394,7 +394,8 @@ export const hi: Bundle = {
       "Satchel को अपने स्वयं के {sym} node पर इंगित करें। node के genesis-block चेक पास करने तक कुछ भी सहेजा नहीं जाता — आपके funds केवल असली {sym} chain को ही छूते हैं।",
     confirmationsLabel: "अंतिम होने से पहले confirmations",
     confirmationsHint:
-      "इस chain पर एक स्वैप के कार्य करने से पहले funding या redeem कितनी गहरी होनी चाहिए — reorg-सुरक्षा मार्जिन। अधिक सुरक्षित पर धीमा; अनुशंसित डिफ़ॉल्ट ({default}) के लिए खाली छोड़ें।",
+      "इस chain पर एक स्वैप के कार्य करने से पहले funding या redeem कितनी गहरी होनी चाहिए — reorg-सुरक्षा मार्जिन। अनुमत सीमा {min}–{max}; अनुशंसित डिफ़ॉल्ट ({default}) के लिए खाली छोड़ें, जो अधिकतम भी है।",
+    confirmationsRange: "इस coin के लिए confirmations {min} और {max} के बीच होने चाहिए।",
     validateNode: "Node सत्यापित करें",
     checking: "node जाँचा जा रहा है…",
     genesisOk: "Genesis मेल खाया — यह सही chain है",

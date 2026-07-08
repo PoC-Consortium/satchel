@@ -394,7 +394,8 @@ export const lt: Bundle = {
       "Nukreipkite Satchel į savo paties {sym} mazgą. Niekas neįrašoma, kol mazgas nepraeina genezės bloko patikros — jūsų lėšos visada liečia tik tikrą {sym} grandinę.",
     confirmationsLabel: "Patvirtinimų prieš galutinį",
     confirmationsHint:
-      "Kaip giliai finansavimas ar atpirkimas šioje grandinėje turi būti, kol mainai į jį reaguoja — reorganizacijos saugumo atsarga. Didesnis saugiau, bet lėčiau; palikite tuščią rekomenduojamai numatytajai ({default}).",
+      "Kaip giliai finansavimas ar atpirkimas šioje grandinėje turi būti, kol mainai į jį reaguoja — reorganizacijos saugumo atsarga. Leistinas intervalas {min}–{max}; palikite tuščią rekomenduojamai numatytajai ({default}), kuri kartu yra ir maksimumas.",
+    confirmationsRange: "Šiai monetai patvirtinimų skaičius turi būti tarp {min} ir {max}.",
     validateNode: "Patikrinti mazgą",
     checking: "Tikrinamas mazgas…",
     genesisOk: "Genezė sutapo — tai tinkama grandinė",

@@ -102,6 +102,15 @@ export default function CoinSetup({
   }
 
   const portNum = parseInt(port.trim(), 10);
+  // Confirmation-depth policy: min 2 on mainnet/testnet (1 on regtest), max =
+  // the chain's recommended default. Blank still means "use the default".
+  const confMin = coin.min_confirmations ?? 1;
+  const confMax = coin.default_confirmations ?? coin.confirmations ?? 10;
+  const confParsed = parseInt(confs.trim(), 10);
+  const confOutOfRange =
+    confs.trim() !== "" &&
+    Number.isFinite(confParsed) &&
+    (confParsed < confMin || confParsed > confMax);
   const electrumList = useMemo(
     () => electrumUrls.split("\n").map((s) => s.trim()).filter(Boolean),
     [electrumUrls],
@@ -167,6 +176,10 @@ export default function CoinSetup({
       setErr(t("coins.validateFirst"));
       return;
     }
+    if (confOutOfRange) {
+      setErr(t("coins.confirmationsRange", { min: confMin, max: confMax }));
+      return;
+    }
     // Wallet-exclusivity follow-up (design D12): switching a FUNDED Electrum
     // coin to node mode hides the pact-seed wallet — the coins stay safe on
     // the seed and reappear on switching back, but they vanish from view and
@@ -192,8 +205,7 @@ export default function CoinSetup({
     setErr(t("coins.savingReconnecting"));
     setBusy(true);
     try {
-      const parsed = parseInt(confs.trim(), 10);
-      const confValue = Number.isFinite(parsed) && parsed >= 1 ? parsed : null;
+      const confValue = Number.isFinite(confParsed) && confParsed >= 1 ? confParsed : null;
       await saveCoin(coin.id, connInput, confValue);
       log(t("coins.connected", { coin: coin.id }));
       onClose();
@@ -343,12 +355,17 @@ export default function CoinSetup({
           value={confs}
           onChange={(e) => setConfs(e.target.value)}
           placeholder={String(coin.default_confirmations ?? coin.confirmations ?? "")}
+          error={confOutOfRange}
           fullWidth
           sx={{ mt: 2, maxWidth: 220 }}
-          slotProps={{ htmlInput: { min: 1, step: 1 }, inputLabel: { shrink: true } }}
+          slotProps={{ htmlInput: { min: confMin, max: confMax, step: 1 }, inputLabel: { shrink: true } }}
         />
         <Typography sx={{ color: "text.secondary", fontSize: 12, mt: 1 }}>
-          {t("coins.confirmationsHint", { default: coin.default_confirmations ?? coin.confirmations ?? "" })}
+          {t("coins.confirmationsHint", {
+            min: confMin,
+            max: confMax,
+            default: coin.default_confirmations ?? coin.confirmations ?? "",
+          })}
         </Typography>
 
         {verdict && <VerdictBlock v={verdict} />}

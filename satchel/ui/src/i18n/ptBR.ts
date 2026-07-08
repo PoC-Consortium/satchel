@@ -394,7 +394,8 @@ export const ptBR: Bundle = {
       "Aponte o Satchel para o seu próprio node {sym}. Nada é salvo até o node passar na verificação do bloco gênese — seus fundos só tocam a chain real do {sym}.",
     confirmationsLabel: "Confirmações antes de final",
     confirmationsHint:
-      "Quão profundo um funding ou redeem nesta chain deve estar antes de um swap agir sobre ele — a margem de segurança contra reorg. Mais alto é mais seguro, porém mais lento; deixe em branco para o padrão recomendado ({default}).",
+      "Quão profundo um funding ou redeem nesta chain deve estar antes de um swap agir sobre ele — a margem de segurança contra reorg. Faixa permitida {min}–{max}; deixe em branco para o padrão recomendado ({default}), que também é o máximo.",
+    confirmationsRange: "As confirmações devem estar entre {min} e {max} para esta moeda.",
     validateNode: "Validar node",
     checking: "Verificando o node…",
     genesisOk: "Gênese conferido — esta é a chain correta",

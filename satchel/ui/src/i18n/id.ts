@@ -394,7 +394,8 @@ export const id: Bundle = {
       "Arahkan Satchel ke node {sym} Anda sendiri. Tidak ada yang disimpan sampai node lolos pemeriksaan blok genesis — dana Anda hanya pernah menyentuh chain {sym} yang asli.",
     confirmationsLabel: "Konfirmasi sebelum final",
     confirmationsHint:
-      "Seberapa dalam sebuah pendanaan atau redeem di chain ini harus ada sebelum swap bertindak atasnya — margin keamanan reorg. Lebih tinggi lebih aman tapi lebih lambat; biarkan kosong untuk bawaan yang disarankan ({default}).",
+      "Seberapa dalam sebuah pendanaan atau redeem di chain ini harus ada sebelum swap bertindak atasnya — margin keamanan reorg. Rentang yang diizinkan {min}–{max}; biarkan kosong untuk bawaan yang disarankan ({default}), yang juga merupakan maksimum.",
+    confirmationsRange: "Konfirmasi harus antara {min} dan {max} untuk koin ini.",
     validateNode: "Validasi node",
     checking: "Memeriksa node…",
     genesisOk: "Genesis cocok — ini chain yang benar",

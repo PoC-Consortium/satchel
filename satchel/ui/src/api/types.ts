@@ -413,6 +413,8 @@ export interface CoinInfo {
   confirmations?: number;
   /** The network/spacing default depth, shown as the field placeholder. */
   default_confirmations?: number;
+  /** Minimum allowed confirmation depth on this network (2 on mainnet/testnet, 1 on regtest). */
+  min_confirmations?: number;
   /** Core wallet this coin's RPC is scoped to (from the configured URL); null
    *  when none is set — the node's default wallet (not explicitly scoped). */
   wallet?: string | null;

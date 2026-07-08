@@ -394,7 +394,8 @@ export const es: Bundle = {
       "Apunta Satchel a tu propio nodo de {sym}. No se guarda nada hasta que el nodo supera una comprobación del bloque génesis — tus fondos solo tocan la cadena real de {sym}.",
     confirmationsLabel: "Confirmaciones antes de definitivo",
     confirmationsHint:
-      "Cuán profunda debe ser una financiación o redención en esta cadena antes de que un swap actúe sobre ella — el margen de seguridad ante reorgs. Más alto es más seguro pero más lento; déjalo en blanco para el valor por defecto recomendado ({default}).",
+      "Cuán profunda debe ser una financiación o redención en esta cadena antes de que un swap actúe sobre ella — el margen de seguridad ante reorgs. Rango permitido {min}–{max}; déjalo en blanco para el valor por defecto recomendado ({default}), que también es el máximo.",
+    confirmationsRange: "Las confirmaciones deben estar entre {min} y {max} para esta moneda.",
     validateNode: "Validar nodo",
     checking: "Comprobando el nodo…",
     genesisOk: "Génesis coincide — esta es la cadena correcta",

@@ -394,7 +394,8 @@ export const de: Bundle = {
       "Richte Satchel auf deine eigene {sym}-Node. Nichts wird gespeichert, bis die Node eine Genesis-Block-Prüfung besteht — deine Mittel berühren nur jemals die echte {sym}-Chain.",
     confirmationsLabel: "Bestätigungen bis final",
     confirmationsHint:
-      "Wie tief eine Finanzierung oder ein Redeem auf dieser Chain sein muss, bevor ein Swap darauf reagiert — der Reorg-Sicherheitspuffer. Höher ist sicherer, aber langsamer; lass es leer für den empfohlenen Standard ({default}).",
+      "Wie tief eine Finanzierung oder ein Redeem auf dieser Chain sein muss, bevor ein Swap darauf reagiert — der Reorg-Sicherheitspuffer. Erlaubter Bereich {min}–{max}; lass es leer für den empfohlenen Standard ({default}), der zugleich das Maximum ist.",
+    confirmationsRange: "Die Bestätigungen müssen für diesen Coin zwischen {min} und {max} liegen.",
     validateNode: "Node validieren",
     checking: "Node wird geprüft…",
     genesisOk: "Genesis stimmt überein — dies ist die richtige Chain",

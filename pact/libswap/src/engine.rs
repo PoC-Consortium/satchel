@@ -261,10 +261,88 @@ pub(crate) fn local_now() -> u64 {
 /// honour anyway.
 pub(crate) const PRE_FUNDING_TIMEOUT_SECS: u64 = 15 * 60;
 
-/// Spec §7.3 network-profile duration minimums (regtest is exempt, §7.5).
-/// Checked against the local clock at offer/accept time.
-fn validate_profile(network: Network, t1: u32, t2: u32, n_a: u32, n_b: u32) -> Result<()> {
-    if network == Network::Regtest {
+/// Marker context for handshake errors that are DETERMINISTIC given the same
+/// envelope — validation and parse failures that can never succeed on retry.
+/// The relay loop gives up immediately on these (one clear event instead of
+/// ten silent `relay-retry`s), and the taker's init path turns them into a
+/// reasoned abort to the maker. Attached via [`permanent_err`], detected via
+/// [`is_permanent`]. Born of the 2026-07-08 mainnet incident, where a
+/// config-rejected init retried 10× invisibly and then reported "no init
+/// within 900s" — an init that had arrived ten times.
+#[derive(Debug)]
+struct PermanentError;
+
+impl std::fmt::Display for PermanentError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("permanent handshake failure (will not retry)")
+    }
+}
+
+/// Tag an error as [`PermanentError`] (deterministic — retrying is useless).
+fn permanent_err(e: anyhow::Error) -> anyhow::Error {
+    e.context(PermanentError)
+}
+
+/// Whether `err` carries the [`PermanentError`] marker anywhere in its chain.
+fn is_permanent(err: &anyhow::Error) -> bool {
+    err.downcast_ref::<PermanentError>().is_some()
+}
+
+/// `ensure!` whose failure is tagged [`PermanentError`] — for deterministic
+/// validation of a received envelope (same input → same failure, retrying is
+/// useless). Transient checks (chain/backend/seed access) keep plain
+/// `ensure!`/`?` so the relay loop's retry still covers them.
+macro_rules! ensure_permanent {
+    ($cond:expr, $($arg:tt)*) => {
+        if !($cond) {
+            return Err(permanent_err(anyhow::anyhow!($($arg)*)));
+        }
+    };
+}
+
+/// Allowed confirmation-depth band for `chain` — spec §7.3 as amended for the
+/// rc12 recut: floor **2** on mainnet/testnet (a single stale block is routine
+/// on every chain, depth-2 reorgs are rare even at 2-min spacing; 0/1-conf
+/// trading stays disallowed), cap **the chain default** (the trustless
+/// standard is the maximum — anything deeper only stalls the swap toward its
+/// timelocks). Regtest is exempt (§7.5): floor 1, uncapped, so the e2e suite
+/// can drive arbitrary depths.
+pub fn confirmation_bounds(params: &ChainParams) -> (u32, u32) {
+    match params.network {
+        Network::Regtest => (1, u32::MAX),
+        _ => (2, default_confirmations(params)),
+    }
+}
+
+/// Ensure a confirmation depth sits inside [`confirmation_bounds`] for its
+/// chain. Used both for OUR values (backstop — [`Engine::confirmations_for`]
+/// already clamps config into the band) and for the counterparty's advisory
+/// values from init/accept (an out-of-band advertised depth is a foreseeable
+/// liveness stall, rejected up-front).
+fn ensure_confs_in_bounds(chain: &ChainRef, n: u32, leg: &str) -> Result<()> {
+    let (floor, cap) = confirmation_bounds(chain_params(chain)?);
+    ensure!(
+        n >= floor && n <= cap,
+        "spec §7.3: {leg} for {} must be within {floor}..={cap} (got {n}) — the chain default is the maximum",
+        chain.coin_id
+    );
+    Ok(())
+}
+
+/// Spec §7.3 network-profile minimums (regtest is exempt, §7.5). Durations
+/// are checked against the local clock at offer/accept time; confirmation
+/// depths against the per-chain [`confirmation_bounds`]. Each side validates
+/// only its OWN depths here — the counterparty's advisory copies are checked
+/// separately where they arrive.
+fn validate_profile(
+    chain_a: &ChainRef,
+    chain_b: &ChainRef,
+    t1: u32,
+    t2: u32,
+    n_a: u32,
+    n_b: u32,
+) -> Result<()> {
+    if chain_a.network == Network::Regtest {
         return Ok(());
     }
     let now = local_now();
@@ -285,8 +363,8 @@ fn validate_profile(network: Network, t1: u32, t2: u32, n_a: u32, n_b: u32) -> R
         u64::from(t1) <= now + 48 * 3600,
         "spec §7.3: T1 must be ≤ 48h away"
     );
-    ensure!(n_a >= 6, "spec §7.3: N_A must be ≥ 6 (got {n_a})");
-    ensure!(n_b >= 1, "spec §7.3: N_B must be ≥ 1 (got {n_b})");
+    ensure_confs_in_bounds(chain_a, n_a, "N_A")?;
+    ensure_confs_in_bounds(chain_b, n_b, "N_B")?;
     Ok(())
 }
 
@@ -927,12 +1005,18 @@ impl Engine {
     /// The confirmation depth (reorg-safety / finality) to require for `chain`:
     /// the operator's per-coin setting if present, else the network/spacing
     /// [`default_confirmations`] heuristic. The single source of truth for
-    /// N_a/N_b defaults across v1 and v2.
+    /// N_a/N_b across v1 and v2. Operator values are CLAMPED into
+    /// [`confirmation_bounds`] — a legacy or hand-edited config can therefore
+    /// never produce a depth the handshake validation would reject (the
+    /// failure mode of the 2026-07-08 mainnet incident, where a taker's
+    /// btc=2 setting silently killed every v2 take under the old ≥6 floor).
     pub fn confirmations_for(&self, chain: &ChainRef) -> Result<u32> {
+        let params = chain_params(chain)?;
+        let (floor, cap) = confirmation_bounds(params);
         if let Some(n) = self.coin_confirmations.get(&chain.coin_id) {
-            return Ok((*n).max(1));
+            return Ok((*n).clamp(floor, cap));
         }
-        Ok(default_confirmations(chain_params(chain)?))
+        Ok(default_confirmations(params))
     }
 
     /// The cooperative-redeem feerate (sat/vB) the initiator fixes at init for
@@ -954,21 +1038,30 @@ impl Engine {
     }
 
     /// The effective confirmation depth per *configured* coin, for `listcoins`
-    /// (so the setup UI can show the value in force and its default). Returns
-    /// `(effective, default)` for the given coin on `network`.
-    pub fn coin_confirmations_view(&self, network: Network, coin_id: &str) -> Result<(u32, u32)> {
+    /// (so the setup UI can show the value in force, its default, and the
+    /// allowed floor). Returns `(effective, default, min)` for the given coin
+    /// on `network` — `default` doubles as the maximum (see
+    /// [`confirmation_bounds`]), `effective` is clamped like
+    /// [`Self::confirmations_for`].
+    pub fn coin_confirmations_view(
+        &self,
+        network: Network,
+        coin_id: &str,
+    ) -> Result<(u32, u32, u32)> {
         let chain = ChainRef {
             coin_id: coin_id.to_string(),
             network,
         };
-        let default = default_confirmations(chain_params(&chain)?);
+        let params = chain_params(&chain)?;
+        let default = default_confirmations(params);
+        let (floor, cap) = confirmation_bounds(params);
         let effective = self
             .coin_confirmations
             .get(coin_id)
             .copied()
-            .map(|n| n.max(1))
+            .map(|n| n.clamp(floor, cap))
             .unwrap_or(default);
-        Ok((effective, default))
+        Ok((effective, default, floor))
     }
 
     /// Live connection probe for a *configured* coin: verifies the backend
@@ -1258,7 +1351,7 @@ impl Engine {
             Some(n) => n,
             None => self.confirmations_for(&chain_b)?,
         };
-        validate_profile(network, t1, t2, n_a, n_b)?;
+        validate_profile(&chain_a, &chain_b, t1, t2, n_a, n_b)?;
 
         let seed = self.store.seed()?;
         let index = self.store.next_swap_index()?;
@@ -1303,6 +1396,8 @@ impl Engine {
             t2,
             n_a,
             n_b,
+            their_n_a: None,
+            their_n_b: None,
             alice_refund_pubkey_a,
             alice_redeem_pubkey_b,
             bob_redeem_pubkey_a: None,
@@ -1334,46 +1429,61 @@ impl Engine {
             "expected an init message, got {}",
             init.msg_type
         );
-        let body: InitBody =
-            serde_json::from_value(init.body.clone()).context("malformed init body")?;
-        ensure!(
+        // Everything below up to the seed access is DETERMINISTIC validation
+        // of the received init — failures are tagged permanent so the relay
+        // loop fails fast (reasoned abort to the maker) instead of retrying.
+        let body: InitBody = serde_json::from_value(init.body.clone())
+            .context("malformed init body")
+            .map_err(permanent_err)?;
+        ensure_permanent!(
             body.protocol == crate::PROTOCOL_VERSION,
             "unknown protocol {} (we speak {})",
             body.protocol,
             crate::PROTOCOL_VERSION
         );
-        ensure!(
+        ensure_permanent!(
             body.wire == crate::WIRE_V1,
             "peer speaks {} wire v{}, this build speaks v{} — both sides must run compatible releases",
             body.protocol,
             body.wire,
             crate::WIRE_V1
         );
-        chain_params(&body.chain_a)?;
-        chain_params(&body.chain_b)?;
-        ensure!(
+        chain_params(&body.chain_a).map_err(permanent_err)?;
+        chain_params(&body.chain_b).map_err(permanent_err)?;
+        ensure_permanent!(
             body.chain_a.network == body.chain_b.network,
             "both legs must be on the same network tier"
         );
-        self.ensure_network_allowed(body.chain_a.network)?;
-        ensure!(
+        self.ensure_network_allowed(body.chain_a.network)
+            .map_err(permanent_err)?;
+        ensure_permanent!(
             body.chain_a.coin_id != body.chain_b.coin_id,
             "chains must differ"
         );
-        ensure_pair_supported(&body.chain_a, &body.chain_b)?;
-        ensure!(body.t2 < body.t1, "spec §7.1: T2 must be < T1");
-        ensure!(
+        ensure_pair_supported(&body.chain_a, &body.chain_b).map_err(permanent_err)?;
+        ensure_permanent!(body.t2 < body.t1, "spec §7.1: T2 must be < T1");
+        ensure_permanent!(
             body.amount_a > 0 && body.amount_b > 0,
             "amounts must be positive"
         );
-        validate_profile(body.chain_a.network, body.t1, body.t2, body.n_a, body.n_b)?;
-        let hash_h = parse_hash(&body.hash_h)?;
-        ensure!(
+        // Per-side depth ownership (wire v2, rc12 recut): we derive OUR OWN
+        // n_a/n_b from local config — the maker's body values are advisory
+        // (display only), never adopted. Both sets must sit in the §7.3 band;
+        // an out-of-band advisory value is a foreseeable liveness stall and
+        // is refused before any state exists.
+        let n_a = self.confirmations_for(&body.chain_a)?;
+        let n_b = self.confirmations_for(&body.chain_b)?;
+        validate_profile(&body.chain_a, &body.chain_b, body.t1, body.t2, n_a, n_b)
+            .map_err(permanent_err)?;
+        ensure_confs_in_bounds(&body.chain_a, body.n_a, "advisory N_A").map_err(permanent_err)?;
+        ensure_confs_in_bounds(&body.chain_b, body.n_b, "advisory N_B").map_err(permanent_err)?;
+        let hash_h = parse_hash(&body.hash_h).map_err(permanent_err)?;
+        ensure_permanent!(
             init.swap_id == swap_id(&hash_h),
             "swap_id does not match hash_h (spec §4.4)"
         );
-        parse_pubkey(&body.alice_refund_pubkey_a, "alice refund A")?;
-        parse_pubkey(&body.alice_redeem_pubkey_b, "alice redeem B")?;
+        parse_pubkey(&body.alice_refund_pubkey_a, "alice refund A").map_err(permanent_err)?;
+        parse_pubkey(&body.alice_redeem_pubkey_b, "alice redeem B").map_err(permanent_err)?;
 
         let seed = self.store.seed()?;
         // Participant keys are anchored to the swap's hash H (spec §4.2): no
@@ -1400,8 +1510,10 @@ impl Engine {
             hash_h: body.hash_h,
             t1: body.t1,
             t2: body.t2,
-            n_a: body.n_a,
-            n_b: body.n_b,
+            n_a,
+            n_b,
+            their_n_a: Some(body.n_a),
+            their_n_b: Some(body.n_b),
             alice_refund_pubkey_a: body.alice_refund_pubkey_a,
             alice_redeem_pubkey_b: body.alice_redeem_pubkey_b,
             bob_redeem_pubkey_a: Some(bob_redeem_pubkey_a.clone()),
@@ -1424,6 +1536,8 @@ impl Engine {
             wire: crate::WIRE_V1,
             bob_redeem_pubkey_a,
             bob_refund_pubkey_b,
+            n_a,
+            n_b,
         };
         let envelope =
             self.signed_envelope("accept", &init.swap_id, serde_json::to_value(&body)?)?;
@@ -1474,6 +1588,13 @@ impl Engine {
         // both parties build byte-identical redeem txs.
         let redeem_feerate_a = self.adaptor_redeem_feerate(&chain_a);
         let redeem_feerate_b = self.adaptor_redeem_feerate(&chain_b);
+        // OUR per-side confirmation depths (spec §7.3, local policy) — carried
+        // in the init as ADVISORY values so the participant's "waiting for
+        // them" display is exact; the participant derives its own gates.
+        let (n_a, n_b) = (
+            self.confirmations_for(&chain_a)?,
+            self.confirmations_for(&chain_b)?,
+        );
         let body = crate::messages::InitV2Body {
             protocol: crate::adaptor_swap::PROTOCOL_V2.into(),
             wire: crate::WIRE_V2,
@@ -1492,18 +1613,16 @@ impl Engine {
             alice_sweep_b: alice_sweep_b.clone(),
             redeem_feerate_a,
             redeem_feerate_b,
+            n_a,
+            n_b,
             offer_id: None,
         };
         let id = crate::keys::swap_id_v2(&adaptor_point);
-        let (n_a, n_b) = (
-            self.confirmations_for(&chain_a)?,
-            self.confirmations_for(&chain_b)?,
-        );
         // v2 inherits v1 §7.3: enforce the full timelock profile (δ = T1−T2 ≥ 4h
         // is the safety-critical one — the window in which the participant must
         // confirm its unbumpable key-path leg-A redeem after the secret is
         // revealed), not just T2 < T1. Matches v1's take/accept discipline.
-        validate_profile(network, t1, t2, n_a, n_b)?;
+        validate_profile(&chain_a, &chain_b, t1, t2, n_a, n_b)?;
         let rec = AdaptorSwapRecord {
             swap_id: id.clone(),
             role: Role::Initiator,
@@ -1518,6 +1637,8 @@ impl Engine {
             t2,
             n_a,
             n_b,
+            their_n_a: None,
+            their_n_b: None,
             adaptor_point: adaptor_point.to_string(),
             alice_swap_a: body.alice_swap_a.clone(),
             alice_swap_b: body.alice_swap_b.clone(),
@@ -1563,9 +1684,14 @@ impl Engine {
             "expected an init message, got {}",
             init.msg_type
         );
-        let body: crate::messages::InitV2Body =
-            serde_json::from_value(init.body.clone()).context("malformed init-v2 body")?;
-        ensure!(
+        // Everything below up to the sweep/seed access is DETERMINISTIC
+        // validation of the received init — failures are tagged permanent so
+        // the relay loop fails fast (reasoned abort to the maker) instead of
+        // retrying ten times in silence.
+        let body: crate::messages::InitV2Body = serde_json::from_value(init.body.clone())
+            .context("malformed init-v2 body")
+            .map_err(permanent_err)?;
+        ensure_permanent!(
             body.protocol == crate::adaptor_swap::PROTOCOL_V2,
             "unknown protocol {} (we speak {})",
             body.protocol,
@@ -1574,25 +1700,26 @@ impl Engine {
         // Wire gate BEFORE any key material is derived: an epoch mismatch
         // would otherwise surface as a partial-signature failure deep in the
         // MuSig2 handshake (or worse, divergent redeem sighashes).
-        ensure!(
+        ensure_permanent!(
             body.wire == crate::WIRE_V2,
             "peer speaks {} wire v{}, this build speaks v{} — both sides must run compatible releases",
             body.protocol,
             body.wire,
             crate::WIRE_V2
         );
-        ensure!(
+        ensure_permanent!(
             body.chain_a.network == body.chain_b.network,
             "both legs must be on the same network"
         );
-        self.ensure_network_allowed(body.chain_a.network)?;
-        ensure!(
+        self.ensure_network_allowed(body.chain_a.network)
+            .map_err(permanent_err)?;
+        ensure_permanent!(
             body.chain_a.coin_id != body.chain_b.coin_id,
             "chains must differ"
         );
-        ensure_adaptor_supported(&body.chain_a, &body.chain_b)?;
-        ensure!(body.t2 < body.t1, "spec v2 §6: T2 must be < T1");
-        ensure!(
+        ensure_adaptor_supported(&body.chain_a, &body.chain_b).map_err(permanent_err)?;
+        ensure_permanent!(body.t2 < body.t1, "spec v2 §6: T2 must be < T1");
+        ensure_permanent!(
             body.amount_a > 0 && body.amount_b > 0,
             "amounts must be positive"
         );
@@ -1600,21 +1727,24 @@ impl Engine {
         // is committed and eats the claimer's own output, so a malicious maker
         // could grief us. Bounds-check (don't clamp: both parties must use the
         // exact same value or the MuSig2 sighashes won't match).
-        ensure!(
+        ensure_permanent!(
             (1..=MAX_REDEEM_FEERATE).contains(&body.redeem_feerate_a)
                 && (1..=MAX_REDEEM_FEERATE).contains(&body.redeem_feerate_b),
             "init sets an invalid redeem feerate (must be 1..={MAX_REDEEM_FEERATE} sat/vB) — refusing (spec v2 §5)"
         );
-        ensure!(
+        ensure_permanent!(
             init.swap_id
-                == crate::keys::swap_id_v2(&parse_pubkey(&body.adaptor_point, "adaptor point")?),
+                == crate::keys::swap_id_v2(
+                    &parse_pubkey(&body.adaptor_point, "adaptor point").map_err(permanent_err)?
+                ),
             "swap_id does not match the adaptor point (spec v2 §3.3)"
         );
-        parse_pubkey(&body.alice_swap_a, "alice swap A")?;
-        parse_pubkey(&body.alice_swap_b, "alice swap B")?;
+        parse_pubkey(&body.alice_swap_a, "alice swap A").map_err(permanent_err)?;
+        parse_pubkey(&body.alice_swap_b, "alice swap B").map_err(permanent_err)?;
         body.alice_refund_a
             .parse::<bitcoin::XOnlyPublicKey>()
-            .context("alice refund A")?;
+            .context("alice refund A")
+            .map_err(permanent_err)?;
 
         // Carry Alice's leg-B sweep address through, and mint our own (Bob's)
         // fresh sweep address for the leg we redeem (A). Best-effort: empty →
@@ -1630,6 +1760,12 @@ impl Engine {
         // — the value the swap id itself derives from — instead of a local
         // counter. Parsing T here also validates it before we sign anything.
         let anchor = parse_pubkey(&body.adaptor_point, "adaptor point")?.serialize();
+        // OUR per-side depths (spec §7.3, local policy) — the initiator's
+        // body values are advisory (display only), never adopted.
+        let (n_a, n_b) = (
+            self.confirmations_for(&body.chain_a)?,
+            self.confirmations_for(&body.chain_b)?,
+        );
         let body_out = crate::messages::AcceptV2Body {
             wire: crate::WIRE_V2,
             bob_swap_a: seed
@@ -1642,18 +1778,22 @@ impl Engine {
                 .refund_xonly_pubkey_anchored(coin_of(&body.chain_b)?, &anchor)?
                 .to_string(),
             bob_sweep_a: bob_sweep_a.clone(),
+            n_a,
+            n_b,
         };
-        let (n_a, n_b) = (
-            self.confirmations_for(&body.chain_a)?,
-            self.confirmations_for(&body.chain_b)?,
-        );
         // SECURITY BOUNDARY (spec v2 §8 inherits v1 §7.3 / §8.3): the participant
         // holds real funds against an untrusted counterparty, so it MUST validate
         // the absolute t1/t2 in the received init against its own clock — above
         // all δ = T1−T2 ≥ 4h. Without this a hostile maker could send a normal T2
         // but a tiny δ; the participant would fund leg B and then be unable to
         // confirm its unbumpable leg-A redeem before T1 → loses leg B.
-        validate_profile(body.chain_a.network, body.t1, body.t2, n_a, n_b)?;
+        validate_profile(&body.chain_a, &body.chain_b, body.t1, body.t2, n_a, n_b)
+            .map_err(permanent_err)?;
+        // The initiator's advisory depths must sit in the §7.3 band too — an
+        // out-of-band value is a foreseeable liveness stall (they'd act far
+        // later than any honest profile allows), refused before state exists.
+        ensure_confs_in_bounds(&body.chain_a, body.n_a, "advisory N_A").map_err(permanent_err)?;
+        ensure_confs_in_bounds(&body.chain_b, body.n_b, "advisory N_B").map_err(permanent_err)?;
         let rec = AdaptorSwapRecord {
             swap_id: init.swap_id.clone(),
             role: Role::Participant,
@@ -1668,6 +1808,8 @@ impl Engine {
             t2: body.t2,
             n_a,
             n_b,
+            their_n_a: Some(body.n_a),
+            their_n_b: Some(body.n_b),
             adaptor_point: body.adaptor_point,
             alice_swap_a: body.alice_swap_a,
             alice_swap_b: body.alice_swap_b,
@@ -2068,6 +2210,13 @@ impl Engine {
                 b.bob_refund_b
                     .parse::<bitcoin::XOnlyPublicKey>()
                     .context("bob refund B")?;
+                // The participant's advisory depths (display: "waiting for
+                // them" shows the depth they actually act at). Out-of-band =
+                // foreseeable liveness stall, refused (spec §7.3 band).
+                ensure_confs_in_bounds(&rec.chain_a, b.n_a, "advisory N_A")?;
+                ensure_confs_in_bounds(&rec.chain_b, b.n_b, "advisory N_B")?;
+                rec.their_n_a = Some(b.n_a);
+                rec.their_n_b = Some(b.n_b);
                 rec.bob_swap_a = Some(b.bob_swap_a);
                 rec.bob_swap_b = Some(b.bob_swap_b);
                 rec.bob_refund_b = Some(b.bob_refund_b);
@@ -3396,6 +3545,12 @@ impl Engine {
                 );
                 parse_pubkey(&body.bob_redeem_pubkey_a, "bob redeem A")?;
                 parse_pubkey(&body.bob_refund_pubkey_b, "bob refund B")?;
+                // The taker's advisory depths (wire v2): display only, but an
+                // out-of-band value is a foreseeable liveness stall — refuse.
+                ensure_confs_in_bounds(&rec.chain_a, body.n_a, "advisory N_A")?;
+                ensure_confs_in_bounds(&rec.chain_b, body.n_b, "advisory N_B")?;
+                rec.their_n_a = Some(body.n_a);
+                rec.their_n_b = Some(body.n_b);
                 rec.bob_redeem_pubkey_a = Some(body.bob_redeem_pubkey_a);
                 rec.bob_refund_pubkey_b = Some(body.bob_refund_pubkey_b);
                 rec.state = State::Accepted;
@@ -4151,14 +4306,18 @@ impl Engine {
                         let confs_a = self
                             .lock_confs(&rec.chain_a, txid_a, rec.htlc_a_vout, htlc_spk(true))
                             .unwrap_or(0);
-                        if confs_a < rec.n_a {
+                        // The TAKER acts here, at THEIR n_a (per-side depths,
+                        // rc12 recut) — their advisory value makes the target
+                        // exact; own n_a is the pre-exchange fallback.
+                        let taker_n_a = rec.their_n_a.unwrap_or(rec.n_a);
+                        if confs_a < taker_n_a {
                             self.progress_confirming(
                                 &rec.swap_id,
                                 &rec.chain_a,
                                 txid_a.to_string(),
                                 rec.htlc_a_vout,
                                 htlc_spk(true),
-                                rec.n_a,
+                                taker_n_a,
                                 "our_lock",
                                 None,
                             )
@@ -4167,7 +4326,7 @@ impl Engine {
                                 &rec.swap_id,
                                 &rec.chain_b,
                                 "awaiting_lock",
-                                confs_a - rec.n_a,
+                                confs_a - taker_n_a,
                             )
                         }
                     }
@@ -4228,14 +4387,17 @@ impl Engine {
                         self.lock_confs(&rec.chain_b, txid, rec.htlc_b_vout, htlc_spk(false))
                     })
                     .unwrap_or(0);
-                if confs_b < rec.n_b {
+                // The MAKER reveals here, at THEIR n_b (per-side depths, rc12
+                // recut) — their advisory value makes the target exact.
+                let maker_n_b = rec.their_n_b.unwrap_or(rec.n_b);
+                if confs_b < maker_n_b {
                     self.progress_confirming(
                         &rec.swap_id,
                         &rec.chain_b,
                         rec.htlc_b_txid.clone()?,
                         rec.htlc_b_vout,
                         htlc_spk(false),
-                        rec.n_b,
+                        maker_n_b,
                         "our_lock",
                         None,
                     )
@@ -4244,7 +4406,7 @@ impl Engine {
                         &rec.swap_id,
                         &rec.chain_b,
                         "awaiting_claim",
-                        confs_b.saturating_sub(rec.n_b),
+                        confs_b.saturating_sub(maker_n_b),
                     )
                 }
             }
@@ -4329,7 +4491,11 @@ impl Engine {
                     self.lock_confs(&rec.chain_a, txid_a, rec.funding_a_vout, leg_spk(true))
                         .unwrap_or(0)
                 });
-                match maker_signed_phase(leg_b_seen, leg_a_confs, rec.n_a) {
+                // The TAKER broadcasts leg B once leg A is n_a-deep BY THEIR
+                // COUNT (per-side depths, rc12 recut) — their advisory value
+                // makes both the phase flip and the displayed target exact.
+                let taker_n_a = rec.their_n_a.unwrap_or(rec.n_a);
+                match maker_signed_phase(leg_b_seen, leg_a_confs, taker_n_a) {
                     MakerSignedPhase::TheirLockB => self.progress_confirming(
                         &rec.swap_id,
                         &rec.chain_b,
@@ -4346,7 +4512,7 @@ impl Engine {
                         rec.funding_a_txid.clone()?,
                         rec.funding_a_vout,
                         leg_spk(true),
-                        rec.n_a,
+                        taker_n_a,
                         "our_lock",
                         None,
                     ),
@@ -4356,7 +4522,7 @@ impl Engine {
                         &rec.swap_id,
                         &rec.chain_b,
                         "awaiting_lock",
-                        leg_a_confs.unwrap_or(rec.n_a).saturating_sub(rec.n_a),
+                        leg_a_confs.unwrap_or(taker_n_a).saturating_sub(taker_n_a),
                     ),
                     MakerSignedPhase::AwaitingLockUnanchored => {
                         self.progress_awaiting(&rec.swap_id, &rec.chain_b, "awaiting_lock", prev)
@@ -4388,14 +4554,18 @@ impl Engine {
                         let confs_b = self
                             .lock_confs(&rec.chain_b, txid_b, rec.funding_b_vout, leg_spk(false))
                             .unwrap_or(0);
-                        if confs_b < rec.n_b {
+                        // The MAKER reveals at THEIR n_b (per-side depths,
+                        // rc12 recut) — their advisory value is the exact
+                        // target we're waiting out.
+                        let maker_n_b = rec.their_n_b.unwrap_or(rec.n_b);
+                        if confs_b < maker_n_b {
                             self.progress_confirming(
                                 &rec.swap_id,
                                 &rec.chain_b,
                                 txid_b.clone(),
                                 rec.funding_b_vout,
                                 leg_spk(false),
-                                rec.n_b,
+                                maker_n_b,
                                 "our_lock",
                                 None,
                             )
@@ -4404,7 +4574,7 @@ impl Engine {
                                 &rec.swap_id,
                                 &rec.chain_b,
                                 "awaiting_claim",
-                                confs_b.saturating_sub(rec.n_b),
+                                confs_b.saturating_sub(maker_n_b),
                             )
                         }
                     } else {
@@ -4452,14 +4622,16 @@ impl Engine {
                     let confs_a = self
                         .lock_confs(&rec.chain_a, txid_a, rec.funding_a_vout, leg_spk(true))
                         .unwrap_or(0);
-                    if confs_a < rec.n_a {
+                    // The taker will act at THEIR n_a (per-side, rc12 recut).
+                    let taker_n_a = rec.their_n_a.unwrap_or(rec.n_a);
+                    if confs_a < taker_n_a {
                         self.progress_confirming(
                             &rec.swap_id,
                             &rec.chain_a,
                             txid_a.to_string(),
                             rec.funding_a_vout,
                             leg_spk(true),
-                            rec.n_a,
+                            taker_n_a,
                             "our_lock",
                             None,
                         )
@@ -4468,7 +4640,7 @@ impl Engine {
                             &rec.swap_id,
                             &rec.chain_b,
                             "awaiting_lock",
-                            confs_a - rec.n_a,
+                            confs_a - taker_n_a,
                         )
                     }
                 }
@@ -4685,13 +4857,27 @@ impl Engine {
             // pre-funding window — the abandoned handshake the timeout targets.
             if now.saturating_sub(created_at) >= PRE_FUNDING_TIMEOUT_SECS {
                 self.store.remove_pending_take(&offer_id)?;
-                events.push(TickEvent {
-                    swap_id: offer_id.clone(),
-                    action: "take-timeout".into(),
-                    detail: format!(
+                // Report the truth: if inits DID arrive but failed processing,
+                // say what failed instead of claiming "no init" (the misread
+                // that cost the 2026-07-08 incident hours of transport
+                // debugging). The last transient failure is recorded by the
+                // init path under `take_last_error:<offer_id>`.
+                let last_error_key = format!("take_last_error:{offer_id}");
+                let detail = match self.store.meta_get(&last_error_key)? {
+                    Some(err) => format!(
+                        "no usable init within {}s; abandoning pending take (last init failed: {err})",
+                        PRE_FUNDING_TIMEOUT_SECS
+                    ),
+                    None => format!(
                         "no init within {}s; abandoning pending take",
                         PRE_FUNDING_TIMEOUT_SECS
                     ),
+                };
+                let _ = self.store.meta_del(&last_error_key);
+                events.push(TickEvent {
+                    swap_id: offer_id.clone(),
+                    action: "take-timeout".into(),
+                    detail,
                 });
             }
         }
@@ -6020,11 +6206,15 @@ impl Engine {
         let mut out = Vec::new();
         for (offer_id, offer_json, created_at) in self.store.pending_takes_with_age()? {
             let offer: Envelope = serde_json::from_str(&offer_json)?;
+            let last_error = self
+                .store
+                .meta_get(&format!("take_last_error:{offer_id}"))?;
             out.push(PendingTakeInfo {
                 offer_id,
                 from: offer.from,
                 body: offer.body,
                 created_at,
+                last_error,
             });
         }
         Ok(out)
@@ -6270,6 +6460,18 @@ impl Engine {
                     match self.handle_relay_envelope(&envelope) {
                         Ok(Some(event)) => events.push(event),
                         Ok(None) => {}
+                        // Deterministic failure (validation/parse): retrying
+                        // the same envelope can never succeed — one clear
+                        // event, cursor advances, done. (The taker's init path
+                        // already turned its own permanent failures into
+                        // `take-failed` + a reasoned abort before this.)
+                        Err(err) if is_permanent(&err) => {
+                            events.push(TickEvent {
+                                swap_id: envelope.swap_id.clone(),
+                                action: "relay-error".into(),
+                                detail: format!("{err:#}"),
+                            });
+                        }
                         Err(err) => {
                             let retry_key = format!("relay_retry:{url}:{id}");
                             let attempts: u32 = self
@@ -6746,31 +6948,81 @@ impl Engine {
                 // identity match (correct whenever there is only one pending
                 // take with this maker).
                 let echoed_offer_id = envelope.body["offer_id"].as_str();
-                let (offer_id, offer) =
-                    self.match_pending_take(&envelope.from, echoed_offer_id)?
-                        .context("init from a maker we have no pending take with")?;
-                let body: crate::board::OfferBody = serde_json::from_value(offer.body.clone())?;
-                // The maker must honor their own advert. Compare against
-                // the same chain-aware "now" the maker used.
-                let chain_a: ChainRef = serde_json::from_value(envelope.body["chain_a"].clone())
-                    .context("init without chain_a")?;
-                let chain_b: ChainRef = serde_json::from_value(envelope.body["chain_b"].clone())
-                    .context("init without chain_b")?;
-                let now = self.coordination_now(&chain_a, &chain_b)?;
-                crate::board::init_matches_offer(&envelope.body, &body, now)?;
-                // Branch on the init protocol: v2 builds an adaptor accept.
-                let is_v2 =
-                    envelope.body["protocol"].as_str() == Some(crate::adaptor_swap::PROTOCOL_V2);
-                let (swap_id, accept) = if is_v2 {
-                    let (rec, accept) = self.adaptor_accept(envelope)?;
-                    (rec.swap_id, accept)
-                } else {
-                    let (rec, accept) = self.accept(envelope)?;
-                    (rec.swap_id, accept)
-                };
-                self.store.remove_pending_take(&offer_id)?;
-                self.relay_send_all(&envelope.from, &accept)?;
-                event(&swap_id, "init->accept", format!("offer {offer_id}"))
+                let (offer_id, offer) = self
+                    .match_pending_take(&envelope.from, echoed_offer_id)?
+                    .context("init from a maker we have no pending take with")
+                    .map_err(permanent_err)?;
+                // Build the accept; classify any failure. Deterministic
+                // (permanent-tagged) failures — wire mismatch, §7.3 violations,
+                // malformed bodies — can never succeed on retry: drop the
+                // pending take NOW, tell the maker WHY (reasoned abort, so
+                // their swap dies in seconds instead of at the 900s reaper),
+                // and surface one clear `take-failed` event. Transient
+                // failures (backend/seed access) record themselves for the
+                // take-timeout message and bubble into the retry loop.
+                let attempt = (|| -> Result<(String, Envelope)> {
+                    let body: crate::board::OfferBody = serde_json::from_value(offer.body.clone())
+                        .map_err(|e| {
+                            permanent_err(anyhow::Error::new(e).context("malformed offer body"))
+                        })?;
+                    // The maker must honor their own advert. Compare against
+                    // the same chain-aware "now" the maker used.
+                    let chain_a: ChainRef =
+                        serde_json::from_value(envelope.body["chain_a"].clone())
+                            .context("init without chain_a")
+                            .map_err(permanent_err)?;
+                    let chain_b: ChainRef =
+                        serde_json::from_value(envelope.body["chain_b"].clone())
+                            .context("init without chain_b")
+                            .map_err(permanent_err)?;
+                    let now = self.coordination_now(&chain_a, &chain_b)?;
+                    crate::board::init_matches_offer(&envelope.body, &body, now)
+                        .map_err(permanent_err)?;
+                    // Branch on the init protocol: v2 builds an adaptor accept.
+                    let is_v2 = envelope.body["protocol"].as_str()
+                        == Some(crate::adaptor_swap::PROTOCOL_V2);
+                    if is_v2 {
+                        let (rec, accept) = self.adaptor_accept(envelope)?;
+                        Ok((rec.swap_id, accept))
+                    } else {
+                        let (rec, accept) = self.accept(envelope)?;
+                        Ok((rec.swap_id, accept))
+                    }
+                })();
+                let last_error_key = format!("take_last_error:{offer_id}");
+                match attempt {
+                    Ok((swap_id, accept)) => {
+                        self.store.remove_pending_take(&offer_id)?;
+                        let _ = self.store.meta_del(&last_error_key);
+                        self.relay_send_all(&envelope.from, &accept)?;
+                        event(&swap_id, "init->accept", format!("offer {offer_id}"))
+                    }
+                    Err(err) if is_permanent(&err) => {
+                        self.store.remove_pending_take(&offer_id)?;
+                        let _ = self.store.meta_del(&last_error_key);
+                        let abort = self.signed_envelope(
+                            "abort",
+                            &envelope.swap_id,
+                            serde_json::json!({
+                                "reason": format!("take failed on the taker's side: {err:#}")
+                            }),
+                        )?;
+                        // Best-effort: even if the abort doesn't land, the
+                        // maker's C8 pre-funding reaper cleans up at 900s.
+                        let _ = self.relay_send_all(&envelope.from, &abort);
+                        event(
+                            &envelope.swap_id,
+                            "take-failed",
+                            format!("offer {offer_id}: {err:#}"),
+                        )
+                    }
+                    Err(err) => {
+                        // Transient: remember the cause so a later take-timeout
+                        // reports the truth, then let the relay loop retry.
+                        let _ = self.store.meta_set(&last_error_key, &format!("{err:#}"));
+                        Err(err)
+                    }
+                }
             }
             // Every abort — take rejections, counterparty cancels (by swap
             // id OR by offer id), v1 and v2 — routes through one resolver.
@@ -7269,6 +7521,9 @@ pub struct PendingTakeInfo {
     pub body: Value,
     /// Unix time (seconds) the take was recorded — drives the take-timeout.
     pub created_at: u64,
+    /// Why the maker's init last failed to process (transient failures only —
+    /// permanent ones drop the take immediately). `None` = no init seen yet.
+    pub last_error: Option<String>,
 }
 
 #[cfg(test)]
@@ -7422,12 +7677,12 @@ mod tests {
         // An explicit per-coin depth wins.
         engine.coin_confirmations.insert("btc".into(), 4);
         assert_eq!(engine.confirmations_for(&btc).unwrap(), 4);
-        // The view reports (effective, default) for the setup UI.
+        // The view reports (effective, default, min) for the setup UI.
         assert_eq!(
             engine
                 .coin_confirmations_view(Network::Regtest, "btc")
                 .unwrap(),
-            (4, 1)
+            (4, 1, 1)
         );
         // A bogus 0 is clamped up to a safe floor of 1 (never "act on 0 confs").
         engine.coin_confirmations.insert("btc".into(), 0);
@@ -7456,9 +7711,16 @@ mod tests {
             .unwrap();
         // chain_a = pocx (regtest default 1), chain_b = btc (Alice's override 5).
         assert_eq!((arec.n_a, arec.n_b), (1, 5));
-        let (brec, _accept) = bob.adaptor_accept(&init).unwrap();
+        let (brec, accept) = bob.adaptor_accept(&init).unwrap();
         // Bob resolves from his config: pocx override 7, btc default 1.
         assert_eq!((brec.n_a, brec.n_b), (7, 1));
+        // rc12 recut: the depths are also EXCHANGED as advisory display
+        // values — Bob's record knows Alice's, and once Alice processes the
+        // accept her record knows Bob's. Gates keep using own values.
+        assert_eq!((brec.their_n_a, brec.their_n_b), (Some(1), Some(5)));
+        let arec2 = alice.recv_adaptor(&accept).unwrap();
+        assert_eq!((arec2.n_a, arec2.n_b), (1, 5), "own gates unchanged");
+        assert_eq!((arec2.their_n_a, arec2.their_n_b), (Some(7), Some(1)));
 
         // No backward compat: record fields are required — a blob missing one
         // (e.g. a pre-depth record without n_a) no longer silently defaults, it
@@ -7472,6 +7734,132 @@ mod tests {
             "a record missing a required field must not deserialize"
         );
 
+        std::fs::remove_dir_all(&ad).ok();
+        std::fs::remove_dir_all(&bd).ok();
+    }
+
+    #[test]
+    fn confirmations_clamp_into_spec_band_on_mainnet() {
+        // rc12 recut: floor 2 / cap = chain default on mainnet — a config
+        // outside the band CLAMPS instead of poisoning every future
+        // handshake (the 2026-07-08 incident: btc=2 under the old ≥6 floor).
+        let (mut engine, dir) = engine_with("confs-band", None);
+        let btc = ChainRef {
+            coin_id: "btc".into(),
+            network: Network::Mainnet,
+        };
+        let btcx = ChainRef {
+            coin_id: "btcx".into(),
+            network: Network::Mainnet,
+        };
+        // In-band values stand as configured (2 is legal now).
+        engine.coin_confirmations.insert("btc".into(), 2);
+        assert_eq!(engine.confirmations_for(&btc).unwrap(), 2);
+        // Below the floor → raised to 2; above the default → capped at it.
+        engine.coin_confirmations.insert("btc".into(), 1);
+        assert_eq!(engine.confirmations_for(&btc).unwrap(), 2);
+        engine.coin_confirmations.insert("btc".into(), 50);
+        assert_eq!(engine.confirmations_for(&btc).unwrap(), 6);
+        engine.coin_confirmations.insert("btcx".into(), 50);
+        assert_eq!(engine.confirmations_for(&btcx).unwrap(), 10);
+        // The listcoins view exposes (effective, default==max, min).
+        assert_eq!(
+            engine
+                .coin_confirmations_view(Network::Mainnet, "btc")
+                .unwrap(),
+            (6, 6, 2)
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn out_of_band_advisory_depth_is_rejected_permanently() {
+        // A peer advertising a depth outside [2, default] is a foreseeable
+        // liveness stall — the participant refuses the init up-front, tagged
+        // permanent so the relay loop fails fast instead of retrying 10×.
+        let (alice, ad) = engine_with("v2-band-alice", None);
+        let (bob, bd) = engine_with("v2-band-bob", None);
+        let now = local_now() as u32;
+        // A valid mainnet profile: T2 = now+12h, T1 = now+24h.
+        let (t1, t2) = (now + 24 * 3600, now + 12 * 3600);
+        let (_arec, init) = alice
+            .adaptor_init(
+                Network::Mainnet,
+                ("btcx".into(), 50_000_000),
+                ("btc".into(), 100_000),
+                t1,
+                t2,
+            )
+            .unwrap();
+        // Sanity: the honest init passes.
+        assert!(bob.adaptor_accept(&init).is_ok());
+
+        // Tamper the advisory N_A to 50 (> btcx cap 10) and re-sign as Alice
+        // (the signature is over the body, so tampering must re-sign).
+        let mut evil = init.clone();
+        evil.body["n_a"] = serde_json::json!(50u32);
+        messages::sign(
+            &mut evil,
+            &alice.store.seed().unwrap().identity_keypair().unwrap(),
+        )
+        .unwrap();
+        let err = bob.adaptor_accept(&evil).unwrap_err();
+        assert!(is_permanent(&err), "band violation must be permanent");
+        assert!(
+            format!("{err:#}").contains("advisory N_A"),
+            "error names the offending value: {err:#}"
+        );
+
+        // A wire-epoch mismatch fails the same way — loud and permanent.
+        let mut old_peer = init.clone();
+        old_peer.body["wire"] = serde_json::json!(2u32);
+        messages::sign(
+            &mut old_peer,
+            &alice.store.seed().unwrap().identity_keypair().unwrap(),
+        )
+        .unwrap();
+        let err = bob.adaptor_accept(&old_peer).unwrap_err();
+        assert!(is_permanent(&err), "wire mismatch must be permanent");
+        assert!(
+            format!("{err:#}").contains("compatible releases"),
+            "error tells the user to update: {err:#}"
+        );
+
+        std::fs::remove_dir_all(&ad).ok();
+        std::fs::remove_dir_all(&bd).ok();
+    }
+
+    #[test]
+    fn v1_taker_derives_own_depths_and_stores_makers_as_advisory() {
+        // rc12 recut: the v1 taker no longer adopts the maker's n_a/n_b from
+        // the init body — it derives its own from local config (per-side
+        // ownership, matching v2) and keeps the maker's as display advisory.
+        let (alice, ad) = engine_with("v1-perside-alice", None);
+        let (mut bob, bd) = engine_with("v1-perside-bob", None);
+        bob.coin_confirmations.insert("btcx".into(), 4);
+        let now = local_now() as u32;
+        let (t1, t2) = (now + 40_000, now + 20_000);
+        let (arec, init) = alice
+            .offer(
+                Network::Regtest,
+                ("btcx".into(), 50_000_000),
+                ("btc".into(), 100_000),
+                t1,
+                t2,
+                None,
+                None,
+            )
+            .unwrap();
+        // Alice (regtest defaults): 1/1.
+        assert_eq!((arec.n_a, arec.n_b), (1, 1));
+        let (brec, accept) = bob.accept(&init).unwrap();
+        // Bob derives his OWN: btcx override 4, btc default 1 — NOT the
+        // maker's body values — and stores Alice's as advisory.
+        assert_eq!((brec.n_a, brec.n_b), (4, 1));
+        assert_eq!((brec.their_n_a, brec.their_n_b), (Some(1), Some(1)));
+        // Alice learns Bob's depths from the accept.
+        let arec2 = alice.recv(&accept).unwrap();
+        assert_eq!((arec2.their_n_a, arec2.their_n_b), (Some(4), Some(1)));
         std::fs::remove_dir_all(&ad).ok();
         std::fs::remove_dir_all(&bd).ok();
     }

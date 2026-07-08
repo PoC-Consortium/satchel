@@ -394,7 +394,8 @@ export const pl: Bundle = {
       "Wskaż Satchel swój własny węzeł {sym}. Nic nie jest zapisywane, dopóki węzeł nie przejdzie kontroli bloku genesis — Twoje środki dotykają wyłącznie prawdziwego łańcucha {sym}.",
     confirmationsLabel: "Potwierdzeń przed finalizacją",
     confirmationsHint:
-      "Jak głęboko finansowanie lub wykup na tym łańcuchu musi być, zanim swap na nim zadziała — margines bezpieczeństwa na reorg. Wyżej bezpieczniej, ale wolniej; pozostaw puste dla zalecanej wartości domyślnej ({default}).",
+      "Jak głęboko finansowanie lub wykup na tym łańcuchu musi być, zanim swap na nim zadziała — margines bezpieczeństwa na reorg. Dozwolony zakres {min}–{max}; pozostaw puste dla zalecanej wartości domyślnej ({default}), która jest też maksimum.",
+    confirmationsRange: "Potwierdzenia dla tej monety muszą mieścić się między {min} a {max}.",
     validateNode: "Zweryfikuj węzeł",
     checking: "Sprawdzanie węzła…",
     genesisOk: "Genesis zgodny — to właściwy łańcuch",

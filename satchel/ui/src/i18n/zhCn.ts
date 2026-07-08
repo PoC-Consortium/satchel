@@ -394,7 +394,8 @@ export const zhCn: Bundle = {
       "将 Satchel 指向你自己的 {sym} 节点。在节点通过创世区块检查之前不会保存任何内容 — 你的资金始终只会触及真正的 {sym} 链。",
     confirmationsLabel: "确认数（达到即视为最终）",
     confirmationsHint:
-      "在此链上，一笔注资或赎回需要达到多深才会被交换据以行动 — 即重组安全余量。越高越安全但越慢；留空则使用推荐的默认值（{default}）。",
+      "在此链上，一笔注资或赎回需要达到多深才会被交换据以行动 — 即重组安全余量。允许范围为 {min}–{max}；留空则使用推荐的默认值（{default}），该值同时也是最大值。",
+    confirmationsRange: "此币种的确认数必须在 {min} 到 {max} 之间。",
     validateNode: "验证节点",
     checking: "正在检查节点…",
     genesisOk: "创世区块匹配 — 这是正确的链",

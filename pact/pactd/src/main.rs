@@ -1000,13 +1000,15 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 } else {
                     ("unconfigured".to_string(), None)
                 };
-                // Effective + default confirmation depth (reorg-safety), so the
-                // setup UI can show the value in force and its default.
+                // Effective + default + minimum confirmation depth
+                // (reorg-safety), so the setup UI can show the value in
+                // force, its default (which is also the maximum), and the
+                // floor it must validate against.
                 let coin_id = def.id.to_string();
-                let (confirmations, default_confirmations) =
+                let (confirmations, default_confirmations, min_confirmations) =
                     blocking(app, move |e| e.coin_confirmations_view(net, &coin_id))
                         .await
-                        .unwrap_or((0, 0));
+                        .unwrap_or((0, 0, 0));
                 // The Core wallet this coin's RPC is scoped to (parsed from the
                 // configured URL); null when none is set (node default wallet).
                 let wid = def.id.to_string();
@@ -1059,6 +1061,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                     "bech32_hrp": params.bech32_hrp,
                     "confirmations": confirmations,
                     "default_confirmations": default_confirmations,
+                    "min_confirmations": min_confirmations,
                     "wallet": wallet,
                     "nodeless": nodeless,
                     "servers_total": servers.len(),
@@ -2073,7 +2076,17 @@ async fn main() -> Result<()> {
                     {
                         Ok(events) => {
                             for ev in events {
-                                tracing::info!(swap = %ev.swap_id, action = %ev.action, detail = %ev.detail, "scheduler");
+                                // Failures at WARN so a grep for warnings finds
+                                // them (the 2026-07-08 incident hid a permanent
+                                // handshake failure in INFO retry noise).
+                                match ev.action.as_str() {
+                                    "relay-error" | "take-failed" | "error" => {
+                                        tracing::warn!(swap = %ev.swap_id, action = %ev.action, detail = %ev.detail, "scheduler")
+                                    }
+                                    _ => {
+                                        tracing::info!(swap = %ev.swap_id, action = %ev.action, detail = %ev.detail, "scheduler")
+                                    }
+                                }
                             }
                         }
                         Err(err) => tracing::error!("scheduler pass failed: {err:#}"),

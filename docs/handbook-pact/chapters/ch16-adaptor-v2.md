@@ -117,17 +117,19 @@ Worst-case vsize: `KEYPATH_REDEEM_VSIZE = 111` (`taproot.rs:40`).
 > the non-replaceable `0xFFFFFFFE`, which makes rc10 a **v2 flag-day**: an
 > rc9 peer and an rc10 peer cannot open v2 swaps with each other. Since
 > rc10 this is gated **up-front by wire epochs**: every offer, take, init and
-> accept carries its protocol's wire-compatibility epoch (`wire`, v1 = 1,
-> v2 = 2; absent = 1, the pre-rc10 era), and a mismatch is refused with a
-> clear reason before any key material is exchanged — offers from an
-> incompatible release are already badged un-takeable on the Corkboard. A
+> accept carries its protocol's wire-compatibility epoch (`wire`; absent = 1,
+> the pre-rc10 era), and a mismatch is refused with a clear
+> "incompatible release — please update Satchel" reason before any key
+> material is exchanged — offers from an incompatible release are already
+> badged un-takeable on the Corkboard. rc10 spoke v1 = 1, v2 = 2; the rc12
+> recut's per-side confirmations amendment (below) bumped the current epochs
+> to **v1 = 2, v2 = 3** — another flag-day, for both protocols this time. A
 > pre-rc10 peer that never sends `wire` still fails partial-signature
 > verification at the handshake, a clean pre-funding abort with no funds at
 > risk (deliberately no compat shim). Future amendments bump the epoch
 > (`libswap::wire_epoch`) and gate the same way. In-flight v2
 > swaps that already exchanged partial signatures keep working on the version
-> that made them; **settle or abort live v2 swaps before upgrading**. v1 HTLC
-> swaps are unaffected.
+> that made them; **settle or abort live v2 swaps before upgrading**.
 
 ## Refund (script path)
 
@@ -179,6 +181,35 @@ recovers it from chain B the same way it would scan for a v1 preimage.
 > would invalidate the exchanged adaptor signatures. A stuck funding is
 > CPFP'd via its change output instead (v1 fundings and ordinary wallet sends
 > keep signalling). See the chapter "Fees, Fee-Bumping & Auto-Refund".
+
+## Per-side confirmation depth
+
+Confirmation depth is **per-side-owned** in both protocols (spec §7.3 as
+amended for the rc12 recut): each side derives its own `N_A`/`N_B` from its
+own per-coin config, clamped into the `[2, default_confirmations]` band (see
+the chapters "Coins, Pairs & Capabilities" and "Network Support, Reorgs &
+Safety").
+Nobody adopts the counterparty's values — previously a v1 taker adopted the
+maker's depths from the init body; that adoption is gone.
+
+What the handshake carries now is **advisory**: the v1 `init` body's
+`n_a`/`n_b` (already present, now display-only), and the same fields added to
+the v1 and v2 `accept` bodies and the v2 `init` body. Each side stores the
+counterparty's depths (`their_n_a`/`their_n_b`) for exactly one purpose —
+rendering a precise "waiting for them" confirmation counter (their lock at,
+say, 3 of the 5 *they* require, instead of guessing with local defaults).
+Safety gates — auto-redeem, completion, refund arming — consult only the
+side's **own** values.
+
+An advisory value outside the `[2, default]` band is **rejected fast** at the
+handshake: it foretells a liveness stall (a counterparty that will wait far
+longer, or far less, than the amended spec allows), so the handshake fails
+with a clear reason instead of stranding a funded swap later. More generally,
+deterministic handshake-processing failures (validation or parse errors) no
+longer retry ten times in silence — they fail fast, log the actual cause, drop
+the pending take, and send a reasoned abort so *both* sides see why; the
+pending-take timeout message now carries the last processing error rather
+than claiming no init arrived when inits arrived but failed validation.
 
 ## Nonce safety
 

@@ -394,7 +394,8 @@ export const ro: Bundle = {
       "Îndreaptă Satchel către propriul tău nod {sym}. Nimic nu este salvat până când nodul nu trece o verificare a blocului genesis — fondurile tale ating doar lanțul {sym} real.",
     confirmationsLabel: "Confirmări înainte de finalizare",
     confirmationsHint:
-      "Cât de adânc trebuie să fie o finanțare sau un redeem pe acest lanț înainte ca un swap să acționeze pe el — marja de siguranță împotriva reorg-urilor. Mai mare este mai sigur, dar mai lent; lasă gol pentru valoarea implicită recomandată ({default}).",
+      "Cât de adânc trebuie să fie o finanțare sau un redeem pe acest lanț înainte ca un swap să acționeze pe el — marja de siguranță împotriva reorg-urilor. Interval permis {min}–{max}; lasă gol pentru valoarea implicită recomandată ({default}), care este și maximul.",
+    confirmationsRange: "Confirmările trebuie să fie între {min} și {max} pentru această monedă.",
     validateNode: "Validează nodul",
     checking: "Se verifică nodul…",
     genesisOk: "Genesis se potrivește — acesta este lanțul corect",

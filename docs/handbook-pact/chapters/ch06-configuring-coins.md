@@ -192,8 +192,8 @@ per-coin special-casing.
 Each coin has a *confirmation depth* `N` — how many confirmations a funding or
 redeem needs before the engine treats it as final. This gates auto-redeem and
 swap completion in both v1 and v2, and it is your reorg-safety knob. Override it
-per coin with `--coin-confs id=N` (`N ≥ 1`); coins you don't override use a
-default heuristic based on the network and the chain's block spacing:
+per coin with `--coin-confs id=N`; coins you don't override use a default
+heuristic based on the network and the chain's block spacing:
 
 | Chain profile | Default `N` |
 |---|---|
@@ -201,10 +201,20 @@ default heuristic based on the network and the chain's block spacing:
 | Fast chain — block spacing under 5 minutes (e.g. BTCX, 120 s) | `10` |
 | Slow chain — block spacing 5 minutes or more (e.g. BTC, 600 s) | `6` |
 
+The default is also the **maximum** (spec §7.3 as amended for the rc12 recut):
+on mainnet and testnet the accepted range is **`2` up to the chain's default**,
+and the engine *clamps* values outside it — below `2` is raised to `2`, above
+the default is lowered to the default. On regtest the floor is `1` and there
+is no cap. The floor exists because 1-block reorgs and stale blocks are
+routine, so 0/1-conf trading is disallowed; the cap exists because a
+fat-fingered depth (say, 100) would stall every swap on that coin for hours.
+
 > **Note** — The fast-chain default is deliberately higher than the slow-chain
 > one: a faster chain produces more blocks in the same wall-clock reorg window,
-> so it needs more confirmations to reach comparable finality. Whatever you set,
-> the floor is `1`.
+> so it needs more confirmations to reach comparable finality. Your depth is
+> **yours alone**: it gates only your own side's actions, and is exchanged with
+> the counterparty purely so their UI can show your progress precisely — they
+> never adopt it, and you never adopt theirs.
 
 ## Capabilities and how pairs are derived
 

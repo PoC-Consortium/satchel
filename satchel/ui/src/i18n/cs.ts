@@ -394,7 +394,8 @@ export const cs: Bundle = {
       "Nasměrujte Satchel na svůj vlastní uzel {sym}. Nic se neuloží, dokud uzel neprojde kontrolou genesis bloku — vaše prostředky se vždy dotknou jen skutečného řetězce {sym}.",
     confirmationsLabel: "Potvrzení před finalizací",
     confirmationsHint:
-      "Jak hluboko musí být financování nebo výplata na tomto řetězci, než na ni swap zareaguje — rezerva pro bezpečnost při reorganizaci. Vyšší je bezpečnější, ale pomalejší; nechte prázdné pro doporučenou výchozí hodnotu ({default}).",
+      "Jak hluboko musí být financování nebo výplata na tomto řetězci, než na ni swap zareaguje — rezerva pro bezpečnost při reorganizaci. Povolený rozsah {min}–{max}; nechte prázdné pro doporučenou výchozí hodnotu ({default}), která je zároveň maximem.",
+    confirmationsRange: "Potvrzení musí být pro tuto minci mezi {min} a {max}.",
     validateNode: "Ověřit uzel",
     checking: "Kontrola uzlu…",
     genesisOk: "Genesis souhlasí — toto je správný řetězec",
