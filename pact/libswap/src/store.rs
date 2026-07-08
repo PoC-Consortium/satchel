@@ -504,6 +504,16 @@ impl Store {
         Ok(serde_json::from_str(&json)?)
     }
 
+    /// Delete a v1 swap record. Used ONLY to purge a *followed* (another
+    /// machine's) swap once it has reached deep terminal (§5 of
+    /// docs/MULTI_MACHINE_122.md) — own/adopted swaps go terminal and STAY as
+    /// ledger history, they are never deleted. Idempotent.
+    pub fn delete(&self, swap_id: &str) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM swaps WHERE swap_id = ?1", params![swap_id])?;
+        Ok(())
+    }
+
     pub fn list(&self) -> Result<Vec<SwapRecord>> {
         let mut stmt = self
             .conn
@@ -878,6 +888,16 @@ impl Store {
         Ok(serde_json::from_str(&json)?)
     }
 
+    /// Delete a v2 swap record — the v2 twin of [`Self::delete`], for purging a
+    /// followed swap on deep terminal (§5). Idempotent.
+    pub fn delete_adaptor(&self, swap_id: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM adaptor_swaps WHERE swap_id = ?1",
+            params![swap_id],
+        )?;
+        Ok(())
+    }
+
     pub fn list_adaptor(&self) -> Result<Vec<AdaptorSwapRecord>> {
         let mut stmt = self
             .conn
@@ -1210,6 +1230,13 @@ mod tests {
         assert_eq!(loaded.state, State::Accepted);
         assert_eq!(store.list().unwrap().len(), 1);
         assert!(store.get("nope").is_err());
+
+        // delete() removes a record (used only to purge a followed swap, §5);
+        // it is idempotent — deleting an absent id is a no-op.
+        store.delete("aabb").unwrap();
+        assert!(store.get("aabb").is_err(), "deleted record is gone");
+        assert_eq!(store.list().unwrap().len(), 0);
+        store.delete("aabb").unwrap(); // idempotent
         std::fs::remove_dir_all(&dir).ok();
     }
 

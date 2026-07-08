@@ -271,6 +271,15 @@ pub(crate) fn local_now() -> u64 {
 /// honour anyway.
 pub(crate) const PRE_FUNDING_TIMEOUT_SECS: u64 = 15 * 60;
 
+/// Meta-key prefix (§5): a followed swap we PURGED on deep terminal. Its shared
+/// relay snapshot may still linger (only the owner tombstones it), so this memo
+/// tells the rescue scan "already handled — do not re-import", preventing churn.
+const PURGED_FOREIGN_PREFIX: &str = "purged_foreign:";
+/// Meta-key prefix (§5): the chain tip height at which a followed swap was FIRST
+/// observed with both legs resolved (spent). The reorg-safe purge waits until
+/// the tip is ≥ finality-depth blocks past this before deleting the record.
+const FOREIGN_RESOLVED_AT_PREFIX: &str = "foreign_resolved_at:";
+
 /// Marker context for handshake errors that are DETERMINISTIC given the same
 /// envelope — validation and parse failures that can never succeed on retry.
 /// The relay loop gives up immediately on these (one clear event instead of
@@ -4338,11 +4347,20 @@ impl Engine {
         }
         for record in records {
             // §3/§5: drive only records this machine owns (own scope) or has
-            // taken over (adopted). A FOLLOWED record (another machine's swap)
-            // is never driven here — it is observed read-only via
-            // `refresh_progress` below (chain is the source of truth), and the
-            // broadcast belt is the lowest-layer backstop.
+            // taken over (adopted). A FOLLOWED record (another machine's swap) is
+            // never driven — the read-only `follow_one` evaluator observes it
+            // (and purges it on deep terminal); the broadcast belt is the
+            // lowest-layer backstop.
             if !self.drives(record.derive_scope, record.adopted) {
+                match self.follow_one(&record) {
+                    Ok(Some(event)) => events.push(event),
+                    Ok(None) => {}
+                    Err(err) => events.push(TickEvent {
+                        swap_id: record.swap_id.clone(),
+                        action: "error".into(),
+                        detail: format!("follow: {err:#}"),
+                    }),
+                }
                 continue;
             }
             match self.tick_one(&record) {
@@ -4358,7 +4376,17 @@ impl Engine {
         // v2 (pact-htlc-v2) adaptor swaps: same auto-redeem/auto-refund policy.
         for rec in adaptor_records {
             if !self.drives(rec.derive_scope, rec.adopted) {
-                continue; // followed — observe-only (§3/§5)
+                // followed — observe-only + purge-on-terminal (§3/§5)
+                match self.follow_adaptor_one(&rec) {
+                    Ok(Some(event)) => events.push(event),
+                    Ok(None) => {}
+                    Err(err) => events.push(TickEvent {
+                        swap_id: rec.swap_id.clone(),
+                        action: "error".into(),
+                        detail: format!("follow: {err:#}"),
+                    }),
+                }
+                continue;
             }
             match self.adaptor_tick_one(&rec) {
                 Ok(Some(event)) => events.push(event),
@@ -5055,6 +5083,207 @@ impl Engine {
             }
         }
         Ok(())
+    }
+
+    // ---- read-only follow evaluator for FOLLOWED swaps (§5) ---------------
+    //
+    // A followed record is another machine's swap (foreign scope, not adopted):
+    // observed here read-only, NEVER driven or broadcast (the tick routes these
+    // away from `tick_one`, and the broadcast belt is the backstop). The
+    // evaluator persists newly-seen funding pointers (status only) so the dock's
+    // progress line tracks the chain, and PURGES the record once the swap is
+    // deep terminal — otherwise a followed row would linger forever (its local
+    // state never advances). Everything is guarded: any chain error or ambiguity
+    // leaves the record untouched (a lingering row is harmless — we drive
+    // nothing), so a bug here can never delete a live swap's money.
+
+    /// Observe one leg of a followed swap by its derived spk. Returns:
+    /// `Some(true)` = RESOLVED (funding was seen and its output is now spent),
+    /// `Some(false)` = funded-but-live or not-yet-funded, `None` = unknown
+    /// (no backend / chain error → caller keeps the swap). A freshly-discovered
+    /// funding outpoint is written to `new_ptr` for the caller to persist.
+    fn follow_leg(
+        &self,
+        chain: &ChainRef,
+        spk: &ScriptBuf,
+        amount: u64,
+        ptr_txid: &Option<String>,
+        ptr_vout: Option<u32>,
+        new_ptr: &mut Option<(String, u32)>,
+    ) -> Option<bool> {
+        let backend = self.backend(chain).ok()?;
+        // Known funding pointer → still a UTXO (locked) or gone (spent)? We only
+        // ever record a pointer we saw as a live UTXO, so a later `None` on that
+        // exact outpoint is an unambiguous spend (redeem or refund).
+        if let (Some(txid), Some(vout)) = (ptr_txid.as_deref(), ptr_vout) {
+            let op = OutPoint {
+                txid: bitcoin::Txid::from_str(txid).ok()?,
+                vout,
+            };
+            return match backend.get_txout(&op, spk) {
+                Ok(Some(_)) => Some(false), // still locked
+                Ok(None) => Some(true),     // spent → resolved
+                Err(_) => None,
+            };
+        }
+        // No pointer yet → scan for the funding UTXO (amount-checked).
+        match backend.find_funding(spk) {
+            Ok(Some((op, info))) if info.value_sat == amount => {
+                *new_ptr = Some((op.txid.to_string(), op.vout));
+                Some(false) // just seen funded — not resolved yet
+            }
+            Ok(_) => Some(false), // not funded yet (or unrelated)
+            Err(_) => None,
+        }
+    }
+
+    /// Purge a followed swap once BOTH legs have been resolved (spent) and the
+    /// tip is ≥ finality-depth blocks past when we first saw that — the reorg
+    /// buffer. Resets the buffer if the legs are no longer both resolved.
+    fn purge_followed_if_deep(
+        &self,
+        swap_id: &str,
+        tip_chain: &ChainRef,
+        needed_confs: u32,
+        both_resolved: bool,
+        is_v2: bool,
+    ) -> Result<Option<TickEvent>> {
+        let memo = format!("{FOREIGN_RESOLVED_AT_PREFIX}{swap_id}");
+        if !both_resolved {
+            let _ = self.store.meta_del(&memo);
+            return Ok(None);
+        }
+        let tip = match self.backend(tip_chain).and_then(|b| b.tip_height()) {
+            Ok(t) => t,
+            Err(_) => return Ok(None),
+        };
+        let needed = u64::from(needed_confs.max(1));
+        match self
+            .store
+            .meta_get(&memo)?
+            .and_then(|s| s.parse::<u64>().ok())
+        {
+            None => {
+                // First both-resolved observation — start the reorg buffer.
+                let _ = self.store.meta_set(&memo, &tip.to_string());
+                Ok(None)
+            }
+            Some(seen) if tip.saturating_sub(seen) >= needed => {
+                if is_v2 {
+                    self.store.delete_adaptor(swap_id)?;
+                } else {
+                    self.store.delete(swap_id)?;
+                }
+                let _ = self.store.meta_del(&memo);
+                // Remember it so the lingering shared snapshot never re-imports.
+                self.store
+                    .meta_set(&format!("{PURGED_FOREIGN_PREFIX}{swap_id}"), "1")?;
+                Ok(Some(TickEvent {
+                    swap_id: swap_id.to_string(),
+                    action: "followed-purged".into(),
+                    detail: "another machine's swap reached deep terminal; removed from this machine's view".into(),
+                }))
+            }
+            Some(_) => Ok(None), // buffering — wait for depth
+        }
+    }
+
+    /// Read-only chain evaluator for a followed v1 record.
+    fn follow_one(&self, rec: &SwapRecord) -> Result<Option<TickEvent>> {
+        let params = match self.swap_params(rec) {
+            Ok(p) => p,
+            Err(_) => return Ok(None), // handshake incomplete → nothing to observe yet
+        };
+        let (spk_a, spk_b) = match (params.htlc_a(), params.htlc_b()) {
+            (Ok(a), Ok(b)) => (a.script_pubkey(), b.script_pubkey()),
+            _ => return Ok(None),
+        };
+        let mut new_a = None;
+        let mut new_b = None;
+        let res_a = self.follow_leg(
+            &rec.chain_a,
+            &spk_a,
+            rec.amount_a,
+            &rec.htlc_a_txid,
+            rec.htlc_a_vout,
+            &mut new_a,
+        );
+        let res_b = self.follow_leg(
+            &rec.chain_b,
+            &spk_b,
+            rec.amount_b,
+            &rec.htlc_b_txid,
+            rec.htlc_b_vout,
+            &mut new_b,
+        );
+        if new_a.is_some() || new_b.is_some() {
+            let mut updated = rec.clone();
+            if let Some((t, v)) = new_a {
+                updated.htlc_a_txid = Some(t);
+                updated.htlc_a_vout = Some(v);
+            }
+            if let Some((t, v)) = new_b {
+                updated.htlc_b_txid = Some(t);
+                updated.htlc_b_vout = Some(v);
+            }
+            let _ = self.store.put(&updated); // status-only write (never a tx)
+        }
+        let both = matches!((res_a, res_b), (Some(true), Some(true)));
+        self.purge_followed_if_deep(
+            &rec.swap_id,
+            &rec.chain_a,
+            rec.n_a.max(rec.n_b),
+            both,
+            false,
+        )
+    }
+
+    /// Read-only chain evaluator for a followed v2 (adaptor) record.
+    fn follow_adaptor_one(&self, rec: &AdaptorSwapRecord) -> Result<Option<TickEvent>> {
+        let secp = bitcoin::secp256k1::Secp256k1::new();
+        let p = match self.adaptor_params(rec) {
+            Ok(p) => p,
+            Err(_) => return Ok(None),
+        };
+        let (spk_a, spk_b) = match (
+            p.leg_a(&secp).and_then(|l| l.script_pubkey(&secp)),
+            p.leg_b(&secp).and_then(|l| l.script_pubkey(&secp)),
+        ) {
+            (Ok(a), Ok(b)) => (a, b),
+            _ => return Ok(None),
+        };
+        let mut new_a = None;
+        let mut new_b = None;
+        let res_a = self.follow_leg(
+            &rec.chain_a,
+            &spk_a,
+            rec.amount_a,
+            &rec.funding_a_txid,
+            rec.funding_a_vout,
+            &mut new_a,
+        );
+        let res_b = self.follow_leg(
+            &rec.chain_b,
+            &spk_b,
+            rec.amount_b,
+            &rec.funding_b_txid,
+            rec.funding_b_vout,
+            &mut new_b,
+        );
+        if new_a.is_some() || new_b.is_some() {
+            let mut updated = rec.clone();
+            if let Some((t, v)) = new_a {
+                updated.funding_a_txid = Some(t);
+                updated.funding_a_vout = Some(v);
+            }
+            if let Some((t, v)) = new_b {
+                updated.funding_b_txid = Some(t);
+                updated.funding_b_vout = Some(v);
+            }
+            let _ = self.store.put_adaptor(&updated);
+        }
+        let both = matches!((res_a, res_b), (Some(true), Some(true)));
+        self.purge_followed_if_deep(&rec.swap_id, &rec.chain_a, rec.n_a.max(rec.n_b), both, true)
     }
 
     fn tick_one(&self, rec: &SwapRecord) -> Result<Option<TickEvent>> {
@@ -6025,6 +6254,16 @@ impl Engine {
         }
         for r in self.store.list_adaptor()? {
             have.insert(r.swap_id);
+        }
+        // §5 already-purged memo: a followed swap we purged on deep terminal must
+        // NOT re-import from its lingering relay snapshot (the follower never
+        // tombstones the shared snapshot — only the owner does, or it harmlessly
+        // lingers). Treat purged ids as "already have" so rescue skips them,
+        // avoiding the import→evaluate→purge→re-import churn.
+        for (key, _) in self.store.meta_with_prefix(PURGED_FOREIGN_PREFIX)? {
+            if let Some(id) = key.strip_prefix(PURGED_FOREIGN_PREFIX) {
+                have.insert(id.to_string());
+            }
         }
         Ok((kp, me, have))
     }
@@ -7859,6 +8098,41 @@ mod tests {
         assert!(!b.drives(ra.derive_scope, ra.adopted));
         std::fs::remove_dir_all(&da).ok();
         std::fs::remove_dir_all(&db).ok();
+    }
+
+    #[test]
+    fn follow_evaluator_never_purges_without_backend() {
+        // Safety default of the §5 follow evaluator: a followed record must
+        // NEVER be purged (nor panic) when the chain can't be observed — a
+        // lingering row is harmless, a wrongly-deleted one is not. Here there is
+        // no backend configured, so the evaluator keeps the record.
+        let (mut engine, dir) = engine_with("follow-safe", None);
+        engine.machine_scope = crate::keys::DeriveScope(0xAAAA);
+        let (mut rec, _) = engine
+            .offer(
+                Network::Regtest,
+                ("btcx".into(), 100),
+                ("btc".into(), 100),
+                1_700_000_002,
+                1_700_000_001,
+                None,
+                None,
+            )
+            .unwrap();
+        // Re-stamp as ANOTHER machine's swap → this machine only follows it.
+        rec.derive_scope = 0xBBBB;
+        engine.store.put(&rec).unwrap();
+        assert!(
+            !engine.drives(rec.derive_scope, rec.adopted),
+            "record is foreign"
+        );
+        let ev = engine.follow_one(&rec).unwrap();
+        assert!(ev.is_none(), "no purge event without a backend");
+        assert!(
+            engine.store.get(&rec.swap_id).is_ok(),
+            "followed record survives an unobservable tick"
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     fn offer_on(engine: &Engine, network: Network, t1: u32, t2: u32) -> Result<()> {
