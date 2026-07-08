@@ -5813,6 +5813,34 @@ impl Engine {
         }
     }
 
+    /// Terminally revoke every live offer whose pair involves `coin_id` (either
+    /// leg). Called at reconfigure time when a coin is removed — those offers can
+    /// no longer be honored, so withdraw them explicitly (the relaunch's skip-of-
+    /// de-list leaves the SURVIVING offers listed). Returns the revoked offer ids.
+    /// Best-effort per offer: a board rejecting one revocation doesn't abort the
+    /// rest, so a removed coin never leaves a serveable-looking listing behind.
+    pub fn revoke_offers_for_coin(&self, coin_id: &str) -> Result<Vec<String>> {
+        let mut revoked = Vec::new();
+        for o in self.store.my_offers_live()? {
+            let Ok(env) = serde_json::from_str::<Envelope>(&o.envelope) else {
+                continue; // malformed local row — skip, don't block the removal
+            };
+            let Ok(body) = serde_json::from_value::<crate::board::OfferBody>(env.body) else {
+                continue;
+            };
+            if body.give_asset == coin_id || body.get_asset == coin_id {
+                if let Err(err) = self.revoke_board_offer(&o.offer_id) {
+                    eprintln!(
+                        "warning: revoke-on-coin-remove failed for {}: {err:#}",
+                        o.offer_id
+                    );
+                }
+                revoked.push(o.offer_id);
+            }
+        }
+        Ok(revoked)
+    }
+
     /// How often a live offer is re-published to roll its relay TTL forward.
     /// Must stay well under `pact_nostr::RELAY_TTL_SECS` (30 min) so a listing
     /// never lapses between refreshes while the maker is online.
@@ -7801,6 +7829,60 @@ mod tests {
         // the funds-gate headroom is respected even when the incr floor kicks in.
         let just_above = funding_bump_rate_kvb(old_kvb, old_kvb + 1, incr_kvb, ceiling_kvb, mult);
         assert!(just_above.unwrap() <= mult * old_kvb);
+    }
+
+    #[test]
+    fn revoke_offers_for_coin_hits_only_that_coins_pairs() {
+        // #97: removing a coin must terminally revoke every live offer whose pair
+        // involves it (either leg) — and nothing else.
+        let (engine, dir) = engine_with("revoke-coin", None);
+        let put = |id: &str, give: &str, get: &str| {
+            let body = serde_json::to_value(crate::board::OfferBody {
+                protocol: "pact-htlc-v1".into(),
+                wire: 1,
+                network: "regtest".into(),
+                give_asset: give.into(),
+                give_amount: 1,
+                get_asset: get.into(),
+                get_amount: 1,
+                t1_secs: 3600,
+                t2_secs: 1800,
+                ttl_secs: Some(3600),
+                created: 1_700_000_000,
+            })
+            .unwrap();
+            let env = engine.signed_envelope("offer", id, body).unwrap();
+            engine
+                .store
+                .my_offer_put(
+                    id,
+                    &serde_json::to_string(&env).unwrap(),
+                    1_700_000_000,
+                    0,
+                    1_700_000_000,
+                )
+                .unwrap();
+        };
+        put("o_btcx_btc", "btcx", "btc"); // btc on the GET leg
+        put("o_btc_ltc", "btc", "ltc"); // btc on the GIVE leg
+        put("o_pocx_ltc", "pocx", "ltc"); // no btc — must survive
+        assert_eq!(engine.store.my_offers_live().unwrap().len(), 3);
+
+        let revoked = engine.revoke_offers_for_coin("btc").unwrap();
+        assert_eq!(revoked.len(), 2, "both btc-pair offers revoked");
+        let live: Vec<String> = engine
+            .store
+            .my_offers_live()
+            .unwrap()
+            .into_iter()
+            .map(|o| o.offer_id)
+            .collect();
+        assert_eq!(
+            live,
+            vec!["o_pocx_ltc".to_string()],
+            "only the non-btc offer survives"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
