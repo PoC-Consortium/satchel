@@ -58,6 +58,21 @@ const PAIR_KEY = "satchel.corkboard.pair";
 const HIDE_BLOCKED_KEY = "satchel.corkboard.hideBlocked";
 const ALL_PAIRS_KEY = "satchel.corkboard.allPairs";
 
+// Board snapshots survive navigation so returning to the Corkboard paints the
+// last-known book INSTANTLY instead of blanking for a relay round-trip
+// (`boardlistoffers` fans out to the Nostr/HTTP board and can take a couple of
+// seconds). Module-level so it outlives the screen's unmount; keyed by identity
+// because the book is per-merchant (a switch starts fresh). Stale-never-blank:
+// the on-mount load and the 4s poll overwrite it immediately — the same
+// instant-cache pattern the Wallets screen uses (#91).
+interface BoardSnap {
+  offers: Offer[];
+  staged: string[];
+  available: string[];
+  boards: string;
+}
+const boardCache = new Map<string, BoardSnap>();
+
 // One row from pactd `listmyoffers` — the maker's own offers from the local
 // store (the `offer` envelope is Offer-shaped: swap_id / from / body).
 interface MyOfferRow {
@@ -85,13 +100,16 @@ export default function CorkboardScreen() {
   const navigate = useNavigate();
   const t = useT();
 
-  const [loaded, setLoaded] = useState(false);
+  // Seed from the cached snapshot for this merchant so navigating back to the
+  // board renders the last book at once, then the load below refreshes it.
+  const snap = identity ? boardCache.get(identity) : undefined;
+  const [loaded, setLoaded] = useState(!!snap);
   const [boardErr, setBoardErr] = useState<string | null>(null);
-  const [offers, setOffers] = useState<Offer[]>([]);
+  const [offers, setOffers] = useState<Offer[]>(() => snap?.offers ?? []);
   // Own offers shown optimistically but not yet seen back from a relay.
-  const [stagedIds, setStagedIds] = useState<Set<string>>(() => new Set());
-  const [available, setAvailable] = useState<Set<string>>(new Set());
-  const [savedBoards, setSavedBoards] = useState("");
+  const [stagedIds, setStagedIds] = useState<Set<string>>(() => new Set(snap?.staged ?? []));
+  const [available, setAvailable] = useState<Set<string>>(() => new Set(snap?.available ?? []));
+  const [savedBoards, setSavedBoards] = useState(() => snap?.boards ?? "");
   const [pairFilter, setPairFilter] = useState<string>(() => {
     try {
       return localStorage.getItem(PAIR_KEY) || "";
@@ -141,8 +159,10 @@ export default function CorkboardScreen() {
     }
     setAvailable(avail);
 
+    let boardsStr = savedBoards; // keep the last known if the read fails
     try {
-      setSavedBoards(((await listCoinConfig()).board_urls || []).join(","));
+      boardsStr = ((await listCoinConfig()).board_urls || []).join(",");
+      setSavedBoards(boardsStr);
     } catch {
       /* ok */
     }
@@ -180,7 +200,16 @@ export default function CorkboardScreen() {
     setStagedIds(staged);
     setOffers(list);
     setLoaded(true);
-  }, [boardSel]);
+    // Refresh the navigation cache so the next return paints instantly.
+    if (identity) {
+      boardCache.set(identity, {
+        offers: list,
+        staged: [...staged],
+        available: [...avail],
+        boards: boardsStr,
+      });
+    }
+  }, [boardSel, identity]);
 
   // Re-sync on mount, when the active merchant changes (login / switch — the
   // board is per-identity and pactd only starts its relay poll once a merchant
