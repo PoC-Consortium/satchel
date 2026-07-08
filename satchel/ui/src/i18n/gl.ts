@@ -357,6 +357,9 @@ export const gl: Bundle = {
     protocols: "Protocolos de intercambio",
     protocolsHint:
       "O que fala esta versión — as ofertas cunha versión distinta pódense ver pero non tomar. As dúas partes do intercambio deben coincidir.",
+    machine: "Esta máquina",
+    machineHint:
+      "O id desta instalación. Se executas a mesma semente en máis dunha máquina, cada unha xestiona os seus propios intercambios — as demais aparecen en modo só lectura como «Outra máquina» no panel de intercambios, e podes tomalas aquí se unha se detén. O uso multimáquina é para conmutación por erro e recuperación, non para negociar desde dúas máquinas á vez (comparten un único saldo).",
     trustModel: "Onde viven as túas claves",
     trustModelBody:
       "Os segredos viven no motor, nunca en Satchel. A semente do comerciante reside no cartafol de datos do motor (cifrada ou en texto plano — ti escolles); Satchel non garda ningunha semente nin frase de paso. A semente é en quente por deseño (só claves de tránsito) — barre os beneficios cuantiosos á túa propia carteira fría.",
@@ -656,6 +659,15 @@ export const gl: Bundle = {
     cancelReason: "cancelado en Satchel",
     cancelBody:
       "Isto abandona o intercambio antes de que financiaras. Aínda non se bloqueou nada teu, así que non perdes nada — simplemente a oferta non se completará.",
+    foreignGroup: "Outra máquina · {machine}",
+    takeover: "Tomar o control",
+    takeoverHint:
+      "Comeza a xestionar os intercambios desta máquina aquí. Fai isto só cando esa máquina estea detida.",
+    takeoverTitle: "Tomar o control dos intercambios de {machine}?",
+    takeoverBody:
+      "Só se {machine} está detida. Esta máquina comezará a xestionar todos os seus intercambios en curso. Se ambas as máquinas xestionan o mesmo intercambio á vez, poden facer un dobre gasto dos teus fondos e perder diñeiro.",
+    takeoverConfirm: "Esa máquina está detida — tomar o control",
+    takeoverCancel: "Cancelar",
     col: {
       swap: "intercambio",
       role: "rol",

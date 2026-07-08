@@ -77,6 +77,20 @@ pub fn load_or_create_scope(root: &Path) -> Result<DeriveScope> {
     write_scope(root, fresh_scope())
 }
 
+/// A short, stable, human-facing label for a machine scope (§5) — e.g.
+/// `"M-7f3a"`. A ONE-WAY tag (tagged hash of the scope, not the raw scope), so
+/// the UI can name and group machines — this machine in Settings, and each
+/// "Another machine" group of followed swaps — without ever exposing the
+/// derivation salt. Two machines get different labels with overwhelming
+/// probability; the legacy scope (0) shows as `"M-legacy"`.
+pub fn machine_label(scope: DeriveScope) -> String {
+    if scope.is_legacy() {
+        return "M-legacy".to_string();
+    }
+    let h = crate::keys::tagged_hash("pact/machine-label/v1", &scope.0.to_be_bytes());
+    format!("M-{:02x}{:02x}", h[0], h[1])
+}
+
 /// Rotate the install's scope to a fresh random value (the #120 copy-heal path).
 /// After a rotation this machine's *own* in-flight swaps carry the OLD scope, so
 /// they demote to followed and need an explicit take-over — deliberate: in a

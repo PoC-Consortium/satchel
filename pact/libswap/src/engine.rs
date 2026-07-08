@@ -7811,6 +7811,56 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    #[test]
+    fn two_machines_one_seed_partition_swaps() {
+        // The core §1 property end-to-end: the SAME seed on two "machines"
+        // (distinct scopes) building the SAME offer yields DISTINCT
+        // swap_id / hash_h — so preimage/H, keys and relay coordinates never
+        // collide — and each machine drives only its own, treating the other's
+        // as foreign (followed, never driven).
+        const MNEMONIC: &str =
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let mk = |tag: &str, scope: u64| {
+            let dir = std::env::temp_dir().join(format!("libswap-mm-{tag}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            let mut e = Engine::open(&dir, None, BTreeMap::new()).unwrap();
+            e.store.import_seed(MNEMONIC, None).unwrap();
+            e.machine_scope = crate::keys::DeriveScope(scope);
+            (e, dir)
+        };
+        let (a, da) = mk("a", 0x1111_2222);
+        let (b, db) = mk("b", 0x3333_4444);
+        let mkoffer = |e: &Engine| {
+            e.offer(
+                Network::Regtest,
+                ("btcx".into(), 100),
+                ("btc".into(), 100),
+                1_700_000_002,
+                1_700_000_001,
+                None,
+                None,
+            )
+            .unwrap()
+            .0
+        };
+        let ra = mkoffer(&a);
+        let rb = mkoffer(&b);
+        assert_ne!(ra.swap_id, rb.swap_id, "distinct swap_id per machine");
+        assert_ne!(ra.hash_h, rb.hash_h, "distinct preimage/H per machine");
+        assert_eq!(ra.derive_scope, 0x1111_2222);
+        // Each machine drives its OWN swap, follows the other's.
+        assert!(a.drives(ra.derive_scope, ra.adopted));
+        assert!(
+            !a.drives(rb.derive_scope, rb.adopted),
+            "other machine's swap = followed"
+        );
+        assert!(b.drives(rb.derive_scope, rb.adopted));
+        assert!(!b.drives(ra.derive_scope, ra.adopted));
+        std::fs::remove_dir_all(&da).ok();
+        std::fs::remove_dir_all(&db).ok();
+    }
+
     fn offer_on(engine: &Engine, network: Network, t1: u32, t2: u32) -> Result<()> {
         engine
             .offer(

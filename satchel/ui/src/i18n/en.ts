@@ -372,6 +372,9 @@ export const en = {
     protocols: "Swap protocols",
     protocolsHint:
       "What this build speaks — offers whose version differs can be browsed but not taken. Both sides of a swap must match.",
+    machine: "This machine",
+    machineHint:
+      "This install's id. If you run the same seed on more than one machine, each drives its own swaps — the others show up read-only as \"Another machine\" in the swaps dock, and you can take them over here if one stops. Multi-machine use is for failover and recovery, not trading from two machines at once (they share one balance).",
     trustModel: "Where your keys live",
     trustModelBody:
       "Secrets live in the engine, never in Satchel. The merchant seed sits in the engine's data folder (encrypted or plaintext — your choice); Satchel stores no seed or passphrase. The seed is hot by design (transit keys only) — sweep sizable proceeds to your own cold wallet.",
@@ -686,6 +689,17 @@ export const en = {
     cancelReason: "cancelled in Satchel",
     cancelBody:
       "This abandons the swap before you've funded. Nothing of yours is locked yet, so you lose nothing — the offer just won't complete.",
+    // Multi-machine (#122): swaps driven by ANOTHER machine on the same seed
+    // show read-only, grouped per machine, with one "Take over" to adopt them.
+    foreignGroup: "Another machine · {machine}",
+    takeover: "Take over",
+    takeoverHint:
+      "Start driving this machine's swaps here. Only do this once that machine is stopped.",
+    takeoverTitle: "Take over {machine}'s swaps?",
+    takeoverBody:
+      "Only if {machine} is stopped. This machine will start driving all of its in-flight swaps. If both machines drive the same swap at once they can double-spend your funds and lose money.",
+    takeoverConfirm: "That machine is stopped — take over",
+    takeoverCancel: "Cancel",
     col: {
       swap: "swap",
       role: "role",

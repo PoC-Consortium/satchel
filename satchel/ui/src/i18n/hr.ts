@@ -357,6 +357,9 @@ export const hr: Bundle = {
     protocols: "Protokoli zamjene",
     protocolsHint:
       "Što ova verzija govori — ponude s drugom verzijom mogu se pregledavati, ali ne i preuzeti. Obje strane zamjene moraju se podudarati.",
+    machine: "Ovo računalo",
+    machineHint:
+      "Id ove instalacije. Ako isti seed pokrećete na više od jednog računala, svako upravlja vlastitim swapovima — ostala se u docku swapova prikazuju samo za čitanje kao „Drugo računalo”, a ovdje ih možete preuzeti ako se jedno zaustavi. Višeračunalna uporaba služi za prebacivanje i oporavak, a ne za trgovanje s dva računala istovremeno (dijele jedno stanje).",
     trustModel: "Gdje žive vaši ključevi",
     trustModelBody:
       "Tajne žive u engineu, nikad u Satchelu. Seed trgovca nalazi se u podatkovnoj mapi enginea (šifriran ili u čistom tekstu — vaš izbor); Satchel ne pohranjuje nikakav seed ni zaporku. Seed je vruć po dizajnu (samo tranzitni ključevi) — prebacite veću dobit u vlastiti hladni novčanik.",
@@ -658,6 +661,15 @@ export const hr: Bundle = {
     cancelReason: "otkazano u Satchelu",
     cancelBody:
       "Ovo napušta swap prije nego što ste financirali. Ništa vaše još nije zaključano, pa ne gubite ništa — ponuda se jednostavno neće dovršiti.",
+    foreignGroup: "Drugo računalo · {machine}",
+    takeover: "Preuzmi",
+    takeoverHint:
+      "Ovdje počnite upravljati swapovima ovog računala. Učinite to tek kad je to računalo zaustavljeno.",
+    takeoverTitle: "Preuzeti swapove računala {machine}?",
+    takeoverBody:
+      "Samo ako je {machine} zaustavljeno. Ovo će računalo početi upravljati svim njegovim swapovima u tijeku. Ako oba računala istovremeno upravljaju istim swapom, mogu dvostruko potrošiti vaša sredstva i uzrokovati gubitak.",
+    takeoverConfirm: "To je računalo zaustavljeno — preuzmi",
+    takeoverCancel: "Odustani",
     col: {
       swap: "swap",
       role: "uloga",

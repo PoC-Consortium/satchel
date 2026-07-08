@@ -357,6 +357,9 @@ export const fi: Bundle = {
     protocols: "Swap-protokollat",
     protocolsHint:
       "Mitä tämä versio puhuu — eri versiota käyttäviä tarjouksia voi selata mutta ei ottaa. Swapin molempien osapuolten on täsmättävä.",
+    machine: "Tämä kone",
+    machineHint:
+      "Tämän asennuksen tunnus. Jos ajat samaa seediä useammalla kuin yhdellä koneella, kukin ohjaa omia swapejaan — muut näkyvät vain luku -tilassa nimellä \"Toinen kone\" swap-dockissa, ja voit ottaa ne haltuun täällä, jos jokin pysähtyy. Monikoneen käyttö on vikasietoisuutta ja palautumista varten, ei kahdelta koneelta yhtä aikaa tapahtuvaa kaupankäyntiä varten (ne jakavat yhden saldon).",
     trustModel: "Missä avaimesi sijaitsevat",
     trustModelBody:
       "Salaisuudet sijaitsevat moottorissa, ei koskaan Satchelissa. Kauppiaan seed sijaitsee moottorin datakansiossa (salattuna tai selkokielisenä — sinun valintasi); Satchel ei tallenna seediä tai salasanaa. Seed on suunnittelultaan kuuma (vain siirtoavaimet) — pyyhkäise huomattavat tuotot omaan kylmälompakkoosi.",
@@ -661,6 +664,15 @@ export const fi: Bundle = {
     cancelReason: "peruutettu Satchelissa",
     cancelBody:
       "Tämä hylkää swapin ennen kuin olet rahoittanut. Mitään sinun ei ole vielä lukittu, joten et menetä mitään — tarjous ei vain valmistu.",
+    foreignGroup: "Toinen kone · {machine}",
+    takeover: "Ota haltuun",
+    takeoverHint:
+      "Aloita tämän koneen swapien ohjaaminen täällä. Tee tämä vain, kun kyseinen kone on pysäytetty.",
+    takeoverTitle: "Otetaanko {machine}:n swapit haltuun?",
+    takeoverBody:
+      "Vain jos {machine} on pysäytetty. Tämä kone alkaa ohjata kaikkia sen käynnissä olevia swapeja. Jos molemmat koneet ohjaavat samaa swapia yhtä aikaa, ne voivat käyttää varasi kahteen kertaan ja menettää rahaa.",
+    takeoverConfirm: "Kyseinen kone on pysäytetty — ota haltuun",
+    takeoverCancel: "Peruuta",
     col: {
       swap: "swap",
       role: "rooli",

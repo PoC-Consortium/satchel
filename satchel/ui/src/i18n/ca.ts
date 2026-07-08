@@ -357,6 +357,9 @@ export const ca: Bundle = {
     protocols: "Protocols d'intercanvi",
     protocolsHint:
       "El que parla aquesta versió — les ofertes amb una versió diferent es poden consultar però no acceptar. Les dues parts de l'intercanvi han de coincidir.",
+    machine: "Aquesta màquina",
+    machineHint:
+      "L'id d'aquesta instal·lació. Si executes la mateixa llavor en més d'una màquina, cadascuna condueix els seus propis intercanvis — les altres apareixen només de lectura com a \"Una altra màquina\" al plafó d'intercanvis, i les pots assumir des d'aquí si alguna s'atura. L'ús de múltiples màquines és per a la commutació per error i la recuperació, no per operar des de dues màquines alhora (comparteixen un sol saldo).",
     trustModel: "On viuen les teves claus",
     trustModelBody:
       "Els secrets viuen al motor, mai a Satchel. La llavor del comerciant es troba a la carpeta de dades del motor (xifrada o en text pla — tu tries); Satchel no emmagatzema cap llavor ni contrasenya. La llavor és calenta per disseny (només claus de trànsit) — escombra els guanys considerables a la teva pròpia cartera freda.",
@@ -660,6 +663,15 @@ export const ca: Bundle = {
     cancelReason: "cancel·lat a Satchel",
     cancelBody:
       "Això abandona l'intercanvi abans que hagis finançat. Encara no es bloqueja res teu, així que no perds res — simplement l'oferta no es completarà.",
+    foreignGroup: "Una altra màquina · {machine}",
+    takeover: "Assumeix",
+    takeoverHint:
+      "Comença a conduir els intercanvis d'aquesta màquina aquí. Fes-ho només quan aquella màquina estigui aturada.",
+    takeoverTitle: "Vols assumir els intercanvis de {machine}?",
+    takeoverBody:
+      "Només si {machine} està aturada. Aquesta màquina començarà a conduir tots els seus intercanvis en curs. Si dues màquines condueixen el mateix intercanvi alhora, poden gastar dues vegades els teus fons i perdre diners.",
+    takeoverConfirm: "Aquella màquina està aturada — assumeix",
+    takeoverCancel: "Cancel·la",
     col: {
       swap: "intercanvi",
       role: "rol",

@@ -357,6 +357,9 @@ export const id: Bundle = {
     protocols: "Protokol swap",
     protocolsHint:
       "Apa yang didukung build ini — penawaran dengan versi berbeda bisa dilihat tetapi tidak bisa diambil. Kedua sisi swap harus cocok.",
+    machine: "Mesin ini",
+    machineHint:
+      "Id instalasi ini. Jika Anda menjalankan seed yang sama di lebih dari satu mesin, masing-masing menggerakkan swap-nya sendiri — yang lain muncul hanya-baca sebagai \"Mesin lain\" di dok swap, dan Anda bisa mengambil alihnya di sini jika salah satu berhenti. Penggunaan multi-mesin ditujukan untuk failover dan pemulihan, bukan untuk berdagang dari dua mesin sekaligus (keduanya berbagi satu saldo).",
     trustModel: "Di mana kunci Anda tersimpan",
     trustModelBody:
       "Rahasia berada di engine, tidak pernah di Satchel. Seed merchant duduk di folder data engine (terenkripsi atau teks biasa — pilihan Anda); Satchel tidak menyimpan seed atau frasa sandi. Seed bersifat panas secara desain (hanya kunci transit) — sapu hasil yang besar ke dompet dingin Anda sendiri.",
@@ -658,6 +661,15 @@ export const id: Bundle = {
     cancelReason: "dibatalkan di Satchel",
     cancelBody:
       "Ini meninggalkan swap sebelum Anda mendanai. Tidak ada milik Anda yang dikunci, jadi Anda tidak kehilangan apa pun — penawaran hanya tidak akan selesai.",
+    foreignGroup: "Mesin lain · {machine}",
+    takeover: "Ambil alih",
+    takeoverHint:
+      "Mulai menggerakkan swap mesin ini di sini. Lakukan ini hanya setelah mesin itu berhenti.",
+    takeoverTitle: "Ambil alih swap {machine}?",
+    takeoverBody:
+      "Hanya jika {machine} berhenti. Mesin ini akan mulai menggerakkan semua swap-nya yang sedang berjalan. Jika kedua mesin menggerakkan swap yang sama sekaligus, keduanya bisa membelanjakan ganda dana Anda dan menyebabkan kerugian.",
+    takeoverConfirm: "Mesin itu berhenti — ambil alih",
+    takeoverCancel: "Batal",
     col: {
       swap: "swap",
       role: "peran",

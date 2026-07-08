@@ -445,6 +445,36 @@ fn fee_policy_json(p: &libswap::FeeBumpPolicy) -> Value {
     })
 }
 
+/// Serialize a swap record and stamp its multi-machine fields (§4 of
+/// docs/MULTI_MACHINE_122.md): `source` = `"local"` (driven by this machine —
+/// own scope or taken over) or `"foreign"` (another machine's swap we only
+/// follow read-only), and `machine_label` = the short one-way tag of the swap's
+/// originating machine, so the UI can GROUP followed swaps per machine. Both are
+/// computed server-side from the drive rule + scope, so the UI never sees (nor
+/// can act on) the raw `derive_scope`.
+fn with_source<T: serde::Serialize>(
+    engine: &Engine,
+    derive_scope: u64,
+    adopted: bool,
+    rec: &T,
+) -> Value {
+    let mut v = serde_json::to_value(rec).unwrap_or(Value::Null);
+    if let Some(obj) = v.as_object_mut() {
+        let driven = engine.drives(derive_scope, adopted);
+        obj.insert(
+            "source".to_string(),
+            json!(if driven { "local" } else { "foreign" }),
+        );
+        obj.insert(
+            "machine_label".to_string(),
+            json!(libswap::machine::machine_label(libswap::keys::DeriveScope(
+                derive_scope
+            ))),
+        );
+    }
+    v
+}
+
 /// Validate a coin id against the shipped registry, returning its canonical
 /// (lowercase) id.
 fn parse_coin(name: &str) -> Result<String> {
@@ -973,7 +1003,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             // Tolerate a missing/locked seed: a fresh merchant (first run) or
             // a locked encrypted one has no identity to show yet. The UI uses
             // seed_exists/locked to drive the wizard / unlock prompt.
-            let (status, identity, coins) = blocking(app, |e| {
+            let (status, identity, coins, machine_label) = blocking(app, |e| {
                 let status = e.store.wallet_status()?;
                 let identity = if status.seed_exists && !status.locked {
                     e.store
@@ -984,7 +1014,10 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 } else {
                     None
                 };
-                Ok((status, identity, e.configured_coins()))
+                // Short one-way label of THIS machine's scope (§5) — the UI shows
+                // it in Settings so a user can tell their machines apart.
+                let machine_label = libswap::machine::machine_label(e.machine_scope);
+                Ok((status, identity, e.configured_coins(), machine_label))
             })
             .await?;
             Ok(json!({
@@ -1004,6 +1037,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 "encrypted": status.encrypted,
                 "locked": status.locked,
                 "coins": coins,
+                "machine_label": machine_label,
             }))
         }
         "walletstatus" => {
@@ -1269,13 +1303,29 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             app.shutdown.notify_one();
             Ok(json!("pactd stopping"))
         }
-        "listswaps" => Ok(serde_json::to_value(
-            blocking(app, |e| e.store.list()).await?,
-        )?),
+        "listswaps" => {
+            let swaps = blocking(app, |e| {
+                Ok(e.store
+                    .list()?
+                    .into_iter()
+                    .map(|r| with_source(e, r.derive_scope, r.adopted, &r))
+                    .collect::<Vec<Value>>())
+            })
+            .await?;
+            Ok(json!(swaps))
+        }
         // v2 (pact-htlc-v2) adaptor swaps live in their own table.
-        "listadaptorswaps" => Ok(serde_json::to_value(
-            blocking(app, |e| e.store.list_adaptor()).await?,
-        )?),
+        "listadaptorswaps" => {
+            let swaps = blocking(app, |e| {
+                Ok(e.store
+                    .list_adaptor()?
+                    .into_iter()
+                    .map(|r| with_source(e, r.derive_scope, r.adopted, &r))
+                    .collect::<Vec<Value>>())
+            })
+            .await?;
+            Ok(json!(swaps))
+        }
         // Live per-swap progress (observability): confirmation depth + the latest
         // scheduler action, refreshed each tick and served from memory (no node
         // call per poll). The UI merges it into its swap rows by `swap_id`.
@@ -2358,6 +2408,30 @@ mod tests {
         assert!(reg.ends_with("regtest"));
         assert!(reg.starts_with(&main));
         assert!(default_data_dir("testnet").unwrap().ends_with("testnet"));
+    }
+
+    #[test]
+    fn data_dir_lock_is_exclusive() {
+        // §0: one pactd per data dir. A second acquire on the SAME dir is
+        // refused while the first holds it; a different dir is independent; and
+        // releasing (drop → OS close) frees it for a later acquire.
+        let dir = std::env::temp_dir().join(format!("pactd-lock-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let held = acquire_data_dir_lock(&dir).expect("first lock acquires");
+        assert!(
+            acquire_data_dir_lock(&dir).is_err(),
+            "a second pactd on the same data dir must be refused"
+        );
+        let other = std::env::temp_dir().join(format!("pactd-lock2-{}", std::process::id()));
+        std::fs::create_dir_all(&other).unwrap();
+        assert!(
+            acquire_data_dir_lock(&other).is_ok(),
+            "a different data dir locks independently"
+        );
+        drop(held);
+        acquire_data_dir_lock(&dir).expect("re-locks after the first is released");
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::remove_dir_all(&other).ok();
     }
 
     #[test]

@@ -357,6 +357,9 @@ export const de: Bundle = {
     protocols: "Swap-Protokolle",
     protocolsHint:
       "Was diese Version spricht — Angebote mit abweichender Version lassen sich ansehen, aber nicht annehmen. Beide Seiten eines Swaps müssen übereinstimmen.",
+    machine: "Dieser Rechner",
+    machineHint:
+      "Die ID dieser Installation. Wenn du dasselbe Seed auf mehr als einem Rechner betreibst, steuert jeder seine eigenen Swaps — die anderen erscheinen schreibgeschützt als \"Anderer Rechner\" im Swap-Dock, und du kannst sie hier übernehmen, falls einer ausfällt. Der Mehr-Rechner-Betrieb dient dem Failover und der Wiederherstellung, nicht dem Handeln von zwei Rechnern gleichzeitig (sie teilen sich ein Guthaben).",
     trustModel: "Wo deine Schlüssel liegen",
     trustModelBody:
       "Geheimnisse liegen in der Engine, nie in Satchel. Das Merchant-Seed liegt im Datenordner der Engine (verschlüsselt oder im Klartext — deine Wahl); Satchel speichert weder Seed noch Passphrase. Das Seed ist von Natur aus heiß (nur Transit-Schlüssel) — überweise nennenswerte Erlöse auf deine eigene Cold-Wallet.",
@@ -661,6 +664,15 @@ export const de: Bundle = {
     cancelReason: "in Satchel abgebrochen",
     cancelBody:
       "Dies bricht den Swap ab, bevor du finanziert hast. Noch ist nichts von dir gesperrt, du verlierst also nichts — das Angebot wird nur nicht abgeschlossen.",
+    foreignGroup: "Anderer Rechner · {machine}",
+    takeover: "Übernehmen",
+    takeoverHint:
+      "Beginne hier, die Swaps dieses Rechners zu steuern. Tu das nur, wenn jener Rechner gestoppt ist.",
+    takeoverTitle: "Swaps von {machine} übernehmen?",
+    takeoverBody:
+      "Nur wenn {machine} gestoppt ist. Dieser Rechner beginnt, alle seine laufenden Swaps zu steuern. Wenn zwei Rechner denselben Swap gleichzeitig steuern, können sie deine Gelder doppelt ausgeben und Geld verlieren.",
+    takeoverConfirm: "Jener Rechner ist gestoppt — übernehmen",
+    takeoverCancel: "Abbrechen",
     col: {
       swap: "Swap",
       role: "Rolle",

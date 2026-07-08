@@ -357,6 +357,9 @@ export const es: Bundle = {
     protocols: "Protocolos de swap",
     protocolsHint:
       "Lo que habla esta versión: las ofertas con una versión distinta se pueden ver pero no tomar. Ambas partes del swap deben coincidir.",
+    machine: "Esta máquina",
+    machineHint:
+      "El id de esta instalación. Si ejecutas la misma semilla en más de una máquina, cada una gestiona sus propios swaps — las demás aparecen de solo lectura como \"Otra máquina\" en el panel de swaps, y puedes tomarlas aquí si una se detiene. El uso multimáquina es para conmutación por error y recuperación, no para operar desde dos máquinas a la vez (comparten un único saldo).",
     trustModel: "Dónde viven tus claves",
     trustModelBody:
       "Los secretos viven en el motor, nunca en Satchel. La semilla del merchant reside en la carpeta de datos del motor (cifrada o en texto plano — tú decides); Satchel no almacena ninguna semilla ni frase de contraseña. La semilla es caliente por diseño (solo claves de tránsito) — barre los ingresos cuantiosos a tu propia cartera fría.",
@@ -660,6 +663,15 @@ export const es: Bundle = {
     cancelReason: "cancelado en Satchel",
     cancelBody:
       "Esto abandona el swap antes de que hayas financiado. Nada tuyo está bloqueado todavía, así que no pierdes nada — la oferta simplemente no se completará.",
+    foreignGroup: "Otra máquina · {machine}",
+    takeover: "Tomar el control",
+    takeoverHint:
+      "Empieza a gestionar los swaps de esta máquina aquí. Hazlo solo una vez que esa máquina esté detenida.",
+    takeoverTitle: "¿Tomar el control de los swaps de {machine}?",
+    takeoverBody:
+      "Solo si {machine} está detenida. Esta máquina empezará a gestionar todos sus swaps en curso. Si ambas máquinas gestionan el mismo swap a la vez, pueden hacer un doble gasto de tus fondos y perder dinero.",
+    takeoverConfirm: "Esa máquina está detenida — tomar el control",
+    takeoverCancel: "Cancelar",
     col: {
       swap: "swap",
       role: "rol",
