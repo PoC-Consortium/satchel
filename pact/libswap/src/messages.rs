@@ -39,6 +39,12 @@ pub struct InitBody {
     pub hash_h: String,
     pub t1: u32,
     pub t2: u32,
+    /// The maker's OWN confirmation depths — ADVISORY since wire v2 (rc12
+    /// recut): the taker no longer adopts them (each side derives its own
+    /// from local config, spec §7.3 per-side ownership); they exist so the
+    /// taker's "waiting for them" display can show the depth the maker will
+    /// actually act at. Out-of-band values are rejected as a foreseeable
+    /// liveness stall.
     pub n_a: u32,
     pub n_b: u32,
     pub alice_refund_pubkey_a: String,
@@ -61,6 +67,15 @@ pub struct AcceptBody {
     pub wire: u32,
     pub bob_redeem_pubkey_a: String,
     pub bob_refund_pubkey_b: String,
+    /// The taker's OWN confirmation depths, advisory (wire v2, rc12 recut) —
+    /// lets the maker's "waiting for them" display show the depth the taker
+    /// will actually act at. `#[serde(default)]` only so a same-epoch body
+    /// missing them fails the bounds check (not deserialization) with a
+    /// readable error; the wire gate rejects old peers before this parses.
+    #[serde(default)]
+    pub n_a: u32,
+    #[serde(default)]
+    pub n_b: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -123,6 +138,16 @@ pub struct InitV2Body {
     /// bounds-checks 1..=500 sat/vB).
     pub redeem_feerate_a: u64,
     pub redeem_feerate_b: u64,
+    /// The initiator's OWN confirmation depths, advisory (wire v3, rc12
+    /// recut): v2 depths were always per-side-local; these are exchanged so
+    /// the participant's "waiting for them" display can show the depth the
+    /// initiator will actually act at. `#[serde(default)]` so a same-epoch
+    /// body missing them fails the bounds check with a readable error rather
+    /// than a deserialization error; the wire gate rejects old peers first.
+    #[serde(default)]
+    pub n_a: u32,
+    #[serde(default)]
+    pub n_b: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub offer_id: Option<String>,
 }
@@ -141,6 +166,12 @@ pub struct AcceptV2Body {
     /// Bob's fresh core-wallet sweep address on chain A (where he redeems leg
     /// A). See [`InitV2Body::alice_sweep_b`]. Empty = deterministic fallback.
     pub bob_sweep_a: String,
+    /// The participant's OWN confirmation depths, advisory (wire v3, rc12
+    /// recut) — see [`InitV2Body::n_a`].
+    #[serde(default)]
+    pub n_a: u32,
+    #[serde(default)]
+    pub n_b: u32,
 }
 
 /// `funding_ready` (each → other): the funding output, built but not yet

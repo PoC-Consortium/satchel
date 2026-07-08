@@ -394,7 +394,8 @@ export const nl: Bundle = {
       "Wijs Satchel naar je eigen {sym}-node. Er wordt niets opgeslagen tot de node een genesis-block-controle doorstaat — je fondsen raken alleen ooit de echte {sym}-keten.",
     confirmationsLabel: "Bevestigingen voor definitief",
     confirmationsHint:
-      "Hoe diep een funding of redeem op deze keten moet zijn voordat een swap erop reageert — de reorg-veiligheidsmarge. Hoger is veiliger maar trager; laat leeg voor de aanbevolen standaard ({default}).",
+      "Hoe diep een funding of redeem op deze keten moet zijn voordat een swap erop reageert — de reorg-veiligheidsmarge. Toegestaan bereik {min}–{max}; laat leeg voor de aanbevolen standaard ({default}), die tevens het maximum is.",
+    confirmationsRange: "Bevestigingen moeten voor deze munt tussen {min} en {max} liggen.",
     validateNode: "Node valideren",
     checking: "De node controleren…",
     genesisOk: "Genesis komt overeen — dit is de juiste keten",

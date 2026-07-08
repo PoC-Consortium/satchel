@@ -100,7 +100,11 @@ waiting for, you'll see one of:
   confirming**, never before.)
 - **Their lock confirming · 3/6** — their funding is burying toward the depth you
   need before you act. The numbers are *confirmations so far / confirmations
-  needed*.
+  needed*. Each side picks its own confirmation depth in coin setup, and the two
+  of you exchange those choices at the start of the swap purely for display — so
+  the target in a "your lock" count is the depth *they* chose to wait for, and
+  the target in a "their lock" count is *yours*. The exchange only makes the
+  counters precise; what each side actually waits for is always its own setting.
 - **Securing your BTC · 2/6** — your own claim — a redeem *or* a refund — is
   burying toward final. When it reaches the needed depth the swap flips to
   **Completed** (or **Refunded**).

@@ -52,12 +52,17 @@ pub use pact_proto::PROTOCOL_VERSION;
 // handshakes reject cleanly) instead of failing deep inside the handshake.
 // A missing `wire` field on the wire parses as 1 — the pre-rc10 era.
 
-/// v1 (classic HTLC) wire epoch — unchanged since the first release.
-pub const WIRE_V1: u32 = 1;
-/// v2 (Taproot/MuSig2 adaptor) wire epoch — bumped 1→2 in rc10: the
-/// co-signed redeem's input sequence (part of the shared MuSig2 sighash)
-/// became non-replaceable, see `taproot::build_keypath_redeem`.
-pub const WIRE_V2: u32 = 2;
+/// v1 (classic HTLC) wire epoch — bumped 1→2 in the rc12 recut: confirmation
+/// depths became per-side (the taker no longer adopts the maker's `n_a`/`n_b`
+/// from the init; each side derives its own from local config and the accept
+/// gained advisory `n_a`/`n_b` fields for the display exchange).
+pub const WIRE_V1: u32 = 2;
+/// v2 (Taproot/MuSig2 adaptor) wire epoch — bumped 1→2 in rc10 (the
+/// co-signed redeem's input sequence, part of the shared MuSig2 sighash,
+/// became non-replaceable, see `taproot::build_keypath_redeem`); bumped 2→3
+/// in the rc12 recut (init/accept exchange advisory per-side `n_a`/`n_b` so
+/// the confirmation-wait display is exact; the depths themselves stay local).
+pub const WIRE_V2: u32 = 3;
 
 /// The wire epoch THIS build speaks for `protocol`. Unknown protocol names
 /// map to 1 — every path that consumes an offer/handshake validates the

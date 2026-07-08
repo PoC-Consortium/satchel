@@ -281,7 +281,9 @@ mod wire_tests {
             crate::wire_epoch(crate::adaptor_swap::PROTOCOL_V2),
             crate::WIRE_V2
         );
-        assert_eq!(crate::WIRE_V1, 1);
-        assert_eq!(crate::WIRE_V2, 2);
+        // rc12 recut: v1 1→2 (per-side confirmation depths), v2 2→3
+        // (advisory n_a/n_b exchange). Bump these when the epochs move.
+        assert_eq!(crate::WIRE_V1, 2);
+        assert_eq!(crate::WIRE_V2, 3);
     }
 }

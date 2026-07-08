@@ -394,7 +394,8 @@ export const gl: Bundle = {
       "Apunta Satchel ao teu propio nodo {sym}. Non se garda nada ata que o nodo pase a comprobación do bloque xénese — os teus fondos só tocan sempre a cadea real de {sym}.",
     confirmationsLabel: "Confirmacións antes de finalizar",
     confirmationsHint:
-      "Cantas confirmacións debe ter un financiamento ou unha redención nesta cadea antes de que un intercambio actúe sobre el — a marxe de seguranza fronte a reorganizacións. Maior é máis seguro pero máis lento; déixao en branco para o predeterminado recomendado ({default}).",
+      "Cantas confirmacións debe ter un financiamento ou unha redención nesta cadea antes de que un intercambio actúe sobre el — a marxe de seguranza fronte a reorganizacións. Intervalo permitido {min}–{max}; déixao en branco para o predeterminado recomendado ({default}), que tamén é o máximo.",
+    confirmationsRange: "As confirmacións deben estar entre {min} e {max} para esta moeda.",
     validateNode: "Validar nodo",
     checking: "Comprobando o nodo…",
     genesisOk: "Xénese coincidente — esta é a cadea correcta",

@@ -394,7 +394,8 @@ export const hr: Bundle = {
       "Usmjerite Satchel na vlastiti {sym} čvor. Ništa se ne sprema dok čvor ne prođe provjeru genesis bloka — vaša sredstva ikad dodiruju samo stvarni {sym} lanac.",
     confirmationsLabel: "Potvrde prije konačnog",
     confirmationsHint:
-      "Koliko duboko financiranje ili otkup na ovom lancu mora biti prije nego što swap reagira — margina sigurnosti od reorga. Više je sigurnije, ali sporije; ostavite prazno za preporučenu zadanu vrijednost ({default}).",
+      "Koliko duboko financiranje ili otkup na ovom lancu mora biti prije nego što swap reagira — margina sigurnosti od reorga. Dopušteni raspon {min}–{max}; ostavite prazno za preporučenu zadanu vrijednost ({default}), koja je ujedno i maksimum.",
+    confirmationsRange: "Potvrde za ovu kovanicu moraju biti između {min} i {max}.",
     validateNode: "Provjeri čvor",
     checking: "Provjera čvora…",
     genesisOk: "Genesis se podudara — ovo je pravi lanac",

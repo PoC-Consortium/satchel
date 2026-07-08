@@ -17,8 +17,10 @@ merchant* error) are covered in the chapter "JSON-RPC Conventions".
 
 - `getinfo` — `name` is always `"pactd"`; `version` is the crate version;
   `protocol` is the swap protocol version; `wire_epochs` maps each protocol
-  family to the wire-compatibility epoch this build speaks (rc10:
-  `{ "pact-htlc-v1": 1, "pact-htlc-v2": 2 }`) — a UI badges offers whose
+  family to the wire-compatibility epoch this build speaks (current, after the
+  rc12-recut per-side-confirmations bump:
+  `{ "pact-htlc-v1": 2, "pact-htlc-v2": 3 }`; rc10 spoke `1`/`2`) — a UI
+  badges offers whose
   signed `wire` differs as un-takeable; `network` is the lowercased network
   name (`regtest`/`testnet`/`mainnet`); `coins` is the list of configured coin
   ids. Tolerates a missing or locked seed — `identity` is `null` until a seed is

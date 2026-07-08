@@ -394,7 +394,8 @@ export const ca: Bundle = {
       "Apunta Satchel al teu propi node {sym}. No es desa res fins que el node passa una comprovació del bloc gènesi — els teus fons només toquen mai la cadena {sym} real.",
     confirmationsLabel: "Confirmacions abans de final",
     confirmationsHint:
-      "Com de profund ha de ser un finançament o bescanvi en aquesta cadena abans que un intercanvi hi actuï — el marge de seguretat davant reorganitzacions. Més alt és més segur però més lent; deixa-ho en blanc per al valor per defecte recomanat ({default}).",
+      "Com de profund ha de ser un finançament o bescanvi en aquesta cadena abans que un intercanvi hi actuï — el marge de seguretat davant reorganitzacions. Interval permès {min}–{max}; deixa-ho en blanc per al valor per defecte recomanat ({default}), que també és el màxim.",
+    confirmationsRange: "Les confirmacions han d'estar entre {min} i {max} per a aquesta moneda.",
     validateNode: "Valida el node",
     checking: "Comprovant el node…",
     genesisOk: "Gènesi coincident — aquesta és la cadena correcta",

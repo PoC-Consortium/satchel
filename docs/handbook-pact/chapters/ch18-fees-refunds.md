@@ -321,7 +321,10 @@ the per-coin reorg-finality knob (`default_confirmations`,
 | Slow chain (≥ 5-min spacing; BTC ≈ 600s) | 6 |
 
 Override per coin via `Engine.coin_confirmations` (`satchel.json` →
-`--coin-confs`), floored at `≥ 1`. Deeper confirmations mean stronger reorg
+`--coin-confs`). On mainnet and testnet the value is clamped into the
+`[2, default]` band — the heuristic default is also the maximum (spec §7.3 as
+amended for the rc12 recut); regtest floors at 1, uncapped. Within the band,
+deeper confirmations mean stronger reorg
 protection at the cost of a slower swap; this is the dial an operator turns to
 trade finality against speed. See the chapter "Network Gating, Reorgs &
 Safety".

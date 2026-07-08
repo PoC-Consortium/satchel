@@ -43,12 +43,24 @@ use tight timelocks.
 | `T2 ≥ now + 3h` | yes | Bob's leg must give at least 3h before its refund |
 | `T1 − T2 ≥ 4h` | yes | at least a 4h gap between the two refund deadlines |
 | `T1 ≤ now + 48h` | yes | the whole swap must conclude within 48h |
-| `N_A ≥ 6` | yes | leg A needs ≥ 6 confirmations |
-| `N_B ≥ 1` | yes | leg B needs ≥ 1 confirmation |
+| `2 ≤ N_A ≤ default` | yes | leg A's confirmation depth sits in the `[2, default]` band |
+| `2 ≤ N_B ≤ default` | yes | leg B's confirmation depth sits in the `[2, default]` band |
 
 The `4h` gap (`T1 − T2`) is the core safety window: it is the time Bob has to
 redeem leg A after Alice reveals the secret, before Alice's refund could
 race him.
+
+The confirmation-depth rows are spec §7.3 **as amended for the rc12 recut**:
+both legs floor at `N ≥ 2` (1-block reorgs and stale blocks are routine on
+both chains, while depth-2 reorgs are rare even on a 2-minute-spacing chain —
+so 0/1-conf trading is disallowed, but two consenting users may trade at 2),
+and both cap at the chain's `default_confirmations` heuristic, which is now
+the *maximum* as well as the default (regtest keeps its floor of 1, uncapped).
+Crucially, the depths are **per-side-owned**: each side derives its own
+`N_A`/`N_B` from its own per-coin config, and the values the counterparty
+sends in the handshake are advisory — used only to display their progress —
+never adopted into this side's safety gates. See the chapter "Network Support,
+Reorgs & Safety".
 
 ## The §7.4 action-deadline margins
 

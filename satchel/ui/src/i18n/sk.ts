@@ -394,7 +394,8 @@ export const sk: Bundle = {
       "Nasmerujte Satchel na svoj vlastný {sym} uzol. Nič sa neuloží, kým uzol neprejde kontrolou genesis bloku — vaše prostriedky sa kedykoľvek dotknú len skutočného reťazca {sym}.",
     confirmationsLabel: "Potvrdení pred finalizáciou",
     confirmationsHint:
-      "Ako hlboko musí byť financovanie alebo redeem na tomto reťazci, než na ňom swap zareaguje — bezpečnostná rezerva proti reorgu. Vyššia je bezpečnejšia, ale pomalšia; nechajte prázdne pre odporúčanú predvolenú hodnotu ({default}).",
+      "Ako hlboko musí byť financovanie alebo redeem na tomto reťazci, než na ňom swap zareaguje — bezpečnostná rezerva proti reorgu. Povolený rozsah {min}–{max}; nechajte prázdne pre odporúčanú predvolenú hodnotu ({default}), ktorá je zároveň maximom.",
+    confirmationsRange: "Potvrdenia musia byť pre túto mincu medzi {min} a {max}.",
     validateNode: "Overiť uzol",
     checking: "Kontrola uzla…",
     genesisOk: "Genesis sa zhoduje — toto je správny reťazec",

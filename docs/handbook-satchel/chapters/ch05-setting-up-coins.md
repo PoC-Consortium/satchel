@@ -128,8 +128,12 @@ The fields, in order:
 
 - **Confirmations before final** *(optional)* — how many blocks deep a payment
   on this chain must be before Satchel treats it as settled. Leave it blank to
-  use the recommended default for the coin. Higher numbers are a little safer
-  against rare blockchain reshuffles, but make swaps slower.
+  use the recommended default for the coin. If you do set a number, the allowed
+  range runs from **2** up to that recommended default — the default is also
+  the maximum, and the form checks the range. Higher numbers within the range
+  are a little safer against rare blockchain reshuffles, but make swaps slower.
+  This setting is yours alone: your trading partner picks their own, and each
+  side simply shows the other's choice while waiting.
 
 ![The coin connection form, set to read login from the node's cookie file.](images/processed/ch05-coin-setup.png){width=80%}
 

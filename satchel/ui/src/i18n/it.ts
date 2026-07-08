@@ -394,7 +394,8 @@ export const it: Bundle = {
       "Punta Satchel al tuo nodo {sym}. Nulla viene salvato finché il nodo non supera una verifica del blocco genesis — i tuoi fondi toccano solo la vera chain {sym}.",
     confirmationsLabel: "Conferme prima del definitivo",
     confirmationsHint:
-      "Quanto in profondità un funding o un redeem su questa chain deve essere prima che uno swap agisca su di esso — il margine di sicurezza contro i reorg. Più alto è più sicuro ma più lento; lascia vuoto per il predefinito consigliato ({default}).",
+      "Quanto in profondità un funding o un redeem su questa chain deve essere prima che uno swap agisca su di esso — il margine di sicurezza contro i reorg. Intervallo consentito {min}–{max}; lascia vuoto per il predefinito consigliato ({default}), che è anche il massimo.",
+    confirmationsRange: "Le conferme devono essere comprese tra {min} e {max} per questa coin.",
     validateNode: "Valida nodo",
     checking: "Verifica del nodo…",
     genesisOk: "Genesis corrispondente — questa è la chain corretta",

@@ -81,8 +81,18 @@ pub struct SwapRecord {
     pub hash_h: String,
     pub t1: u32,
     pub t2: u32,
+    /// OUR confirmation depths for leg A / leg B, resolved from the local
+    /// per-coin setting (spec §7.3 per-side ownership, rc12 recut) — the
+    /// values our own gates act on.
     pub n_a: u32,
     pub n_b: u32,
+    /// The COUNTERPARTY's advisory depths from their init/accept (wire v2) —
+    /// display only ("waiting for them" shows the depth they act at, exactly).
+    /// `None` on records from before the exchange existed.
+    #[serde(default)]
+    pub their_n_a: Option<u32>,
+    #[serde(default)]
+    pub their_n_b: Option<u32>,
     pub alice_refund_pubkey_a: String,
     pub alice_redeem_pubkey_b: String,
     pub bob_redeem_pubkey_a: Option<String>,
@@ -144,6 +154,13 @@ pub struct AdaptorSwapRecord {
     /// these from its own config.
     pub n_a: u32,
     pub n_b: u32,
+    /// The COUNTERPARTY's advisory depths from their init/accept (wire v3,
+    /// rc12 recut) — display only ("waiting for them" shows the depth they
+    /// act at, exactly). `None` on records from before the exchange existed.
+    #[serde(default)]
+    pub their_n_a: Option<u32>,
+    #[serde(default)]
+    pub their_n_b: Option<u32>,
     /// Adaptor point `T` (compressed hex). The secret `t` is seed-derived by
     /// the initiator and never stored.
     pub adaptor_point: String,
@@ -1324,6 +1341,8 @@ mod tests {
             t2: 1_700_000_000,
             n_a: 1,
             n_b: 1,
+            their_n_a: None,
+            their_n_b: None,
             alice_refund_pubkey_a: String::new(),
             alice_redeem_pubkey_b: String::new(),
             bob_redeem_pubkey_a: None,

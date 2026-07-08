@@ -60,12 +60,15 @@ chooses one transport rather than merging.
 > `min(now + 1800s, created + ttl_secs)`. It is refreshed as the offer is
 > republished, not pinned to `ttl_secs` from creation.
 
-> **Note** — **Wire epochs (rc10):** the signed offer body and the `take`
-> envelope both carry `wire` — the protocol family's wire-compatibility epoch
-> (v1 = 1, v2 = 2; **absent parses as 1**, the pre-rc10 era). The taker
+> **Note** — **Wire epochs (since rc10):** the signed offer body and the `take`
+> envelope both carry `wire` — the protocol family's wire-compatibility epoch.
+> The current epochs are **v1 = 2, v2 = 3**, bumped by the rc12 recut's
+> per-side-confirmations amendment (rc10 spoke v1 = 1, v2 = 2; **absent parses
+> as 1**, the pre-rc10 era). The taker
 > refuses an offer whose `wire` differs from what its build speaks
 > (`boardtake` errors up-front), and the maker refuses a mismatched take with
-> a `take-rejected` reason ("incompatible release") while the offer stays
+> a `take-rejected` reason ("incompatible release — please update Satchel")
+> while the offer stays
 > live. Handshake bodies (`init`/`accept`, both protocols) carry and validate
 > the same field. Bump the epoch for any wire-breaking protocol amendment —
 > mixed-epoch peers then gate cleanly instead of failing mid-handshake.

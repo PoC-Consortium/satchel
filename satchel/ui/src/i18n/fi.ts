@@ -394,7 +394,8 @@ export const fi: Bundle = {
       "Osoita Satchel omaan {sym}-solmuusi. Mitään ei tallenneta ennen kuin solmu läpäisee genesis-lohkon tarkistuksen — varasi koskettavat vain oikeaa {sym}-ketjua.",
     confirmationsLabel: "Vahvistuksia ennen lopullisuutta",
     confirmationsHint:
-      "Kuinka syvällä rahoituksen tai lunastuksen tässä ketjussa on oltava ennen kuin swap toimii sen perusteella — reorg-turvamarginaali. Korkeampi on turvallisempi mutta hitaampi; jätä tyhjäksi suositellulle oletukselle ({default}).",
+      "Kuinka syvällä rahoituksen tai lunastuksen tässä ketjussa on oltava ennen kuin swap toimii sen perusteella — reorg-turvamarginaali. Sallittu väli {min}–{max}; jätä tyhjäksi suositellulle oletukselle ({default}), joka on myös enimmäismäärä.",
+    confirmationsRange: "Vahvistusten on oltava tämän kolikon kohdalla välillä {min}–{max}.",
     validateNode: "Vahvista solmu",
     checking: "Tarkistetaan solmua…",
     genesisOk: "Genesis täsmäsi — tämä on oikea ketju",

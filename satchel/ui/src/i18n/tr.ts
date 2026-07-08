@@ -394,7 +394,8 @@ export const tr: Bundle = {
       "Satchel'ı kendi {sym} düğümünüze yönlendirin. Düğüm bir genesis-bloğu kontrolünden geçene kadar hiçbir şey kaydedilmez — fonlarınız yalnızca gerçek {sym} zincirine dokunur.",
     confirmationsLabel: "Kesinleşmeden önceki onay sayısı",
     confirmationsHint:
-      "Bu zincirdeki bir fonlama veya geri almanın, bir takas ona göre hareket etmeden önce ne kadar derin olması gerektiği — reorg güvenlik payı. Yüksek olması daha güvenli ama daha yavaştır; önerilen varsayılan ({default}) için boş bırakın.",
+      "Bu zincirdeki bir fonlama veya geri almanın, bir takas ona göre hareket etmeden önce ne kadar derin olması gerektiği — reorg güvenlik payı. İzin verilen aralık {min}–{max}; önerilen varsayılan ({default}) için boş bırakın — bu aynı zamanda en yüksek değerdir.",
+    confirmationsRange: "Bu coin için onaylar {min} ile {max} arasında olmalıdır.",
     validateNode: "Düğümü doğrula",
     checking: "Düğüm kontrol ediliyor…",
     genesisOk: "Genesis eşleşti — bu doğru zincir",

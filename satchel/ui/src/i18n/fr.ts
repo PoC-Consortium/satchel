@@ -394,7 +394,8 @@ export const fr: Bundle = {
       "Pointez Satchel vers votre propre nœud {sym}. Rien n'est enregistré tant que le nœud n'a pas passé un contrôle de bloc genesis — vos fonds ne touchent jamais que la vraie chaîne {sym}.",
     confirmationsLabel: "Confirmations avant finalisation",
     confirmationsHint:
-      "À quelle profondeur un financement ou un redeem sur cette chaîne doit se trouver avant qu'un swap n'agisse dessus — la marge de sécurité contre les réorgs. Plus élevé est plus sûr mais plus lent ; laissez vide pour la valeur par défaut recommandée ({default}).",
+      "À quelle profondeur un financement ou un redeem sur cette chaîne doit se trouver avant qu'un swap n'agisse dessus — la marge de sécurité contre les réorgs. Plage autorisée {min}–{max} ; laissez vide pour la valeur par défaut recommandée ({default}), qui est aussi le maximum.",
+    confirmationsRange: "Les confirmations doivent être comprises entre {min} et {max} pour ce coin.",
     validateNode: "Valider le nœud",
     checking: "Vérification du nœud…",
     genesisOk: "Genesis correspond — c'est la bonne chaîne",

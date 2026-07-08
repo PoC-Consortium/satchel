@@ -408,7 +408,8 @@ export const en = {
       "Point Satchel at your own {sym} node. Nothing is saved until the node passes a genesis-block check — your funds only ever touch the real {sym} chain.",
     confirmationsLabel: "Confirmations before final",
     confirmationsHint:
-      "How deep a funding or redeem on this chain must be before a swap acts on it — the reorg-safety margin. Higher is safer but slower; leave blank for the recommended default ({default}).",
+      "How deep a funding or redeem on this chain must be before a swap acts on it — the reorg-safety margin. Allowed range {min}–{max}; leave blank for the recommended default ({default}), which is also the maximum.",
+    confirmationsRange: "Confirmations must be between {min} and {max} for this coin.",
     validateNode: "Validate node",
     checking: "Checking the node…",
     genesisOk: "Genesis matched — this is the right chain",
