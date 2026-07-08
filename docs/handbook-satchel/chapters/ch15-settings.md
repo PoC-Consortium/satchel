@@ -115,11 +115,15 @@ A couple of things to know before you change anything:
 
 The two knobs are:
 
-- **Max feerate (sat/vB)** — the ceiling for every fee bump, so a runaway fee
-  market can never drain you. Range 1–500; **default 500** (also the hard system
-  maximum).
-- **Funding bump reservation (×)** — how much extra balance the funds check sets
-  aside as headroom for a possible future bump. Range 1–100; **default 3**.
+- **Max feerate (sat/vB)** — the ceiling on **funding** fee bumps, so a runaway
+  fee market can never drain you. Redeem and refund bumps deliberately ignore it —
+  near a timelock they pay whatever it takes (capped only by the value at stake),
+  so a leg is never lost to a fee cap. Range 1–500; **default 500** (also the hard
+  system maximum).
+- **Funding bump reservation (×)** — applies to funding bumps only, and serves two
+  roles: how much extra balance the funds check sets aside as headroom for a
+  possible future bump, *and* the cap on that bump (this multiple of the funding's
+  original feerate). Range 1–100; **default 3**.
 
 Press **Save** to apply your changes — they take effect **live, with no restart** —
 or **Reset to defaults** to put both back the way they came.

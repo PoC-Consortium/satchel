@@ -55,6 +55,13 @@ Here's what the passphrase does and doesn't do:
 - **It is not your recovery phrase, and it is not a backup.** The passphrase only
   guards the local copy. Your recovery phrase is still what restores your funds
   anywhere.
+- **Even without a passphrase, your seed isn't left as plain text.** On Windows
+  and macOS, Satchel locks the on-disk copy with a key held in your operating
+  system's secure store, so the file is useless if copied off your machine. That
+  key stays on this computer, so it doesn't stop someone already logged in as you
+  — a passphrase is what adds that extra lock. (On Linux the no-passphrase seed is
+  only lightly scrambled; treat it as unencrypted and use a passphrase if the
+  machine isn't solely yours.)
 
 > **Warning** — If you forget your passphrase, **Satchel cannot reset or recover
 > it** — there's no "forgot password" link, by design. You would need to restore

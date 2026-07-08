@@ -59,13 +59,12 @@ below.
 ## The connection form
 
 The first choice in the form is the **connection type** — where this coin's
-chain data and wallet should live:
+chain data and wallet should live. A **new** coin starts on **Electrum**, the
+quick no-node default; the two choices are:
 
-- **Your own node** — Core RPC. The node's wallet funds swaps; maximum
-  sovereignty. The rest of this section describes its fields.
-- **Electrum** — no node at all. Chain data comes from Electrum servers and
-  the wallet lives on **your Pact seed** (the servers never see your keys). The
-  form becomes a single list of server URLs, one per line
+- **Electrum** *(the default)* — no node at all. Chain data comes from Electrum
+  servers and the wallet lives on **your Pact seed** (the servers never see your
+  keys). The form becomes a single list of server URLs, one per line
   (`tcp://host:port` or `ssl://host:port`), pre-filled with the defaults
   shipped for the coin. On **mainnet at least two independent servers** are
   required — they cross-check each other's view of the chain. *Validate
@@ -73,6 +72,8 @@ chain data and wallet should live:
   handshake (protocol version; pruned servers are refused). This is the
   quick path for a coin whose node you don't want to sync — say, Bitcoin,
   when you already run a BTCX node.
+- **Your own node** — Core RPC. The node's wallet funds swaps; maximum
+  sovereignty. The rest of this section describes its fields.
 
 You can change a coin's connection type later — but one direction deserves a
 heads-up. Satchel keeps **one wallet per coin, never mixed**: an Electrum coin's

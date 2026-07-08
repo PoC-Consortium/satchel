@@ -18,9 +18,20 @@ established, by one of these routes:
 - `PACT_PASSPHRASE` — supplies the passphrase to *open an encrypted seed* at
   boot; it does not create one.
 
-Once established, the seed is either **plaintext** (the regtest intent) or
-**encrypted** — created with a passphrase, in which case it lands *locked* and
-stays unusable until you `unlock` it (or supply `PACT_PASSPHRASE` at boot).
+Once established, the seed is **never written in plaintext**. It lands in one of
+three at-rest states:
+
+- **Passphrase-encrypted** (`PACTSEEDv1`) — created with a passphrase, in which
+  case it lands *locked* and stays unusable until you `unlock` it (or supply
+  `PACT_PASSPHRASE` at boot).
+- **Machine-key encrypted** (`PACTSEEDv2-keyring`, Windows/macOS) — a
+  no-passphrase seed wrapped under a random key held in the OS keystore. It
+  *auto-unlocks* from the keystore, so it is encrypted-but-never-*locked*: the
+  daemon keeps signing across restarts with nothing to type.
+- **Obfuscated** (`PACTSEEDv2-obfs`, Linux and anywhere no keystore is
+  compiled or available) — a no-passphrase seed wrapped under a constant key
+  that ships in the binary. This only lifts the file off plaintext ASCII; it is
+  treated as **unencrypted** everywhere trust is decided.
 
 The daemon reports exactly where it stands through `WalletStatus`:
 
@@ -28,32 +39,49 @@ The daemon reports exactly where it stands through `WalletStatus`:
 { "seed_exists": true, "encrypted": true, "locked": false }
 ```
 
-`locked` is true precisely when the seed is `encrypted` *and* the passphrase is
-not currently held in memory. `unlock` verifies a passphrase by trial-decryption
-and then holds it in memory for the process lifetime; `walletstatus` and
-`getinfo` both surface these three flags.
+`locked` is true precisely when the seed is **passphrase-encrypted**
+(`PACTSEEDv1`) *and* the passphrase is not currently held in memory. A machine-key
+(`PACTSEEDv2-keyring`) seed reports `encrypted: true` but is never `locked` — it
+auto-unlocks from the OS keystore — while an obfuscated seed reports
+`encrypted: false`. `unlock` verifies a passphrase by trial-decryption and then
+holds it in memory for the process lifetime; `walletstatus` and `getinfo` both
+surface these three flags.
 
-> **Note** — A plaintext seed is appropriate for regtest and disposable test
-> setups. For testnet or mainnet, create the seed with a passphrase so it is
-> encrypted at rest, and supply `PACT_PASSPHRASE` (or call `unlock`) to open it.
+> **Note** — A no-passphrase seed is convenient (auto-unlock, refunds survive a
+> reboot with nothing to type) and, on Windows/macOS, is encrypted at rest under
+> an OS-keystore machine key. But that key lives on the same machine, so it
+> protects the file at rest — not against an attacker logged in as the same OS
+> user, who can read it just as the daemon does. On Linux the no-passphrase seed
+> is only *obfuscated* (a constant built-in key) and is treated as unencrypted.
+> For real protection on testnet or mainnet, create the seed **with a
+> passphrase** and supply `PACT_PASSPHRASE` (or call `unlock`) to open it.
 
 ## The encrypted seed format
 
-The seed file is `seed.mnemonic`. In plaintext form it holds the BIP39 mnemonic
-directly. Encrypted, it is a single line:
+The seed file is `seed.mnemonic`, always a single line in one of three wrapped
+forms:
 
 ```text
-PACTSEEDv1:<salt>:<nonce>:<ciphertext>
+PACTSEEDv1:<salt>:<nonce>:<ciphertext>          # passphrase (scrypt + ChaCha20)
+PACTSEEDv2-keyring:<key_id>:<nonce>:<ciphertext>  # OS-keystore machine key (Win/macOS)
+PACTSEEDv2-obfs:<nonce>:<ciphertext>            # built-in obfuscation key (Linux / no keystore)
 ```
 
-The mnemonic is encrypted with **ChaCha20-Poly1305** under a key derived by
-**scrypt** (`N = 2^15`, `r = 8`, `p = 1`) from the passphrase and per-file salt.
+For `PACTSEEDv1` the mnemonic is encrypted with **ChaCha20-Poly1305** under a key
+derived by **scrypt** (`N = 2^15`, `r = 8`, `p = 1`) from the passphrase and
+per-file salt. Both `PACTSEEDv2` wraps also use **ChaCha20-Poly1305**: the
+`-keyring` form under a random 32-byte key stored in the OS keystore under
+`<key_id>` (the entry survives a same-machine folder move but not a copy to
+another machine — by design); the `-obfs` form under a constant key that ships in
+the binary, so it is *not* a secret and counts as unencrypted.
 
 > **Warning** — Seed installation is non-overwriting and atomic: `install_seed`
-> **refuses to overwrite** an existing seed, and writes via a temp file with
-> fsync and rename so a crash mid-write cannot corrupt or truncate the seed. To
-> replace a seed you must remove the data directory's seed deliberately — the
-> engine will never clobber it for you.
+> **refuses to overwrite** a seed it can still read, and writes via a temp file
+> with fsync and rename so a crash mid-write cannot corrupt or truncate the seed.
+> The one exception is recovery: a `PACTSEEDv2-keyring` seed whose OS-keystore
+> key has vanished (moved to a new machine, reset keychain) is unreadable, so
+> re-importing the *same* recovery phrase re-provisions it under a fresh machine
+> key. A seed the engine can still read is never clobbered for you.
 
 ## The merchant model
 
@@ -88,7 +116,7 @@ mode):
 | File | Contents |
 |---|---|
 | `pact.sqlite` | All swap, offer, nonce, and Nostr state (see below). |
-| `seed.mnemonic` | The BIP39 seed — plaintext, or `PACTSEEDv1:…` if encrypted. |
+| `seed.mnemonic` | The BIP39 seed — never plaintext: `PACTSEEDv1:…` (passphrase), `PACTSEEDv2-keyring:…` (OS-keystore machine key), or `PACTSEEDv2-obfs:…` (obfuscated fallback). |
 | `.cookie` | The per-run RPC cookie (data-dir root only). |
 | `pact.conf` | Optional `rpcuser` / `rpcpassword` for RPC auth. |
 | `merchants.json` | The merchant manifest (parent data dir, nested mode only). |
