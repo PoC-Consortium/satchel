@@ -361,7 +361,7 @@ export const hr: Bundle = {
     about: "O aplikaciji",
     version: "Verzija {version}",
     updateUpToDate: "Ažurirano",
-    updateCheckPlaceholder: "Provjera nadogradnji stiže u kasnijem izdanju.",
+    checkUpdate: "Provjeri ažuriranja",
     protocols: "Protokoli zamjene",
     protocolsHint:
       "Što ova verzija govori — ponude s drugom verzijom mogu se pregledavati, ali ne i preuzeti. Obje strane zamjene moraju se podudarati.",

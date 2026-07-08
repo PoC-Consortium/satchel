@@ -376,7 +376,7 @@ export const en = {
     about: "About",
     version: "Version {version}",
     updateUpToDate: "Up to date",
-    updateCheckPlaceholder: "Update check arrives in a later release.",
+    checkUpdate: "Check for updates",
     protocols: "Swap protocols",
     protocolsHint:
       "What this build speaks — offers whose version differs can be browsed but not taken. Both sides of a swap must match.",

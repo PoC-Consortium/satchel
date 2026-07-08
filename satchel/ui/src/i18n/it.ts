@@ -361,7 +361,7 @@ export const it: Bundle = {
     about: "Informazioni",
     version: "Versione {version}",
     updateUpToDate: "Aggiornato",
-    updateCheckPlaceholder: "Il controllo degli aggiornamenti arriverà in un rilascio successivo.",
+    checkUpdate: "Controlla aggiornamenti",
     protocols: "Protocolli di swap",
     protocolsHint:
       "Ciò che parla questa versione — le offerte con una versione diversa si possono sfogliare ma non prendere. Le due parti dello swap devono coincidere.",

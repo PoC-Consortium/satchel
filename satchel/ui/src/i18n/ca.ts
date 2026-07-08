@@ -361,7 +361,7 @@ export const ca: Bundle = {
     about: "Quant a",
     version: "Versió {version}",
     updateUpToDate: "Al dia",
-    updateCheckPlaceholder: "La comprovació d'actualitzacions arribarà en una versió posterior.",
+    checkUpdate: "Comprova si hi ha actualitzacions",
     protocols: "Protocols d'intercanvi",
     protocolsHint:
       "El que parla aquesta versió — les ofertes amb una versió diferent es poden consultar però no acceptar. Les dues parts de l'intercanvi han de coincidir.",

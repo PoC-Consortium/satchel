@@ -361,7 +361,7 @@ export const nl: Bundle = {
     about: "Over",
     version: "Versie {version}",
     updateUpToDate: "Up-to-date",
-    updateCheckPlaceholder: "Updatecontrole komt in een latere release.",
+    checkUpdate: "Controleren op updates",
     protocols: "Swap-protocollen",
     protocolsHint:
       "Wat deze versie spreekt — aanbiedingen met een andere versie zijn zichtbaar maar niet te nemen. Beide kanten van een swap moeten overeenkomen.",

@@ -361,7 +361,7 @@ export const hi: Bundle = {
     about: "बारे में",
     version: "संस्करण {version}",
     updateUpToDate: "अप-टू-डेट",
-    updateCheckPlaceholder: "अपडेट जाँच बाद की रिलीज़ में आएगी।",
+    checkUpdate: "अपडेट जाँचें",
     protocols: "स्वैप प्रोटोकॉल",
     protocolsHint:
       "यह बिल्ड क्या बोलता है — अलग संस्करण वाले offer देखे जा सकते हैं पर लिए नहीं जा सकते। स्वैप के दोनों पक्षों का मेल ज़रूरी है।",

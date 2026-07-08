@@ -361,7 +361,7 @@ export const ro: Bundle = {
     about: "Despre",
     version: "Versiunea {version}",
     updateUpToDate: "La zi",
-    updateCheckPlaceholder: "Verificarea actualizărilor sosește într-o lansare ulterioară.",
+    checkUpdate: "Verifică actualizări",
     protocols: "Protocoale de swap",
     protocolsHint:
       "Ce vorbește această versiune — ofertele cu o versiune diferită pot fi văzute, dar nu preluate. Ambele părți ale swapului trebuie să se potrivească.",

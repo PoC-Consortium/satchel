@@ -361,7 +361,7 @@ export const lt: Bundle = {
     about: "Apie",
     version: "Versija {version}",
     updateUpToDate: "Naujausia versija",
-    updateCheckPlaceholder: "Atnaujinimų tikrinimas atsiras vėlesniame leidime.",
+    checkUpdate: "Tikrinti naujinimus",
     protocols: "Mainų protokolai",
     protocolsHint:
       "Ką palaiko ši versija — kitos versijos pasiūlymus galima peržiūrėti, bet ne priimti. Abi mainų pusės turi sutapti.",

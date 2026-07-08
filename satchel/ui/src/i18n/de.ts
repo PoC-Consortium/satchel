@@ -361,7 +361,7 @@ export const de: Bundle = {
     about: "Über",
     version: "Version {version}",
     updateUpToDate: "Aktuell",
-    updateCheckPlaceholder: "Die Update-Prüfung kommt in einer späteren Version.",
+    checkUpdate: "Nach Updates suchen",
     protocols: "Swap-Protokolle",
     protocolsHint:
       "Was diese Version spricht — Angebote mit abweichender Version lassen sich ansehen, aber nicht annehmen. Beide Seiten eines Swaps müssen übereinstimmen.",
