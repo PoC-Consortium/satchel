@@ -156,20 +156,16 @@ export const tr: Bundle = {
     signet: "Signet",
     notRealFunds: "Gerçek fon değil — bu {network} ağıdır",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Yalnızca izleme",
-    badgeTip:
-      "Yalnızca izleme modu — panoya göz atabilir ve kendi tekliflerinizi geri çekebilirsiniz, ancak yayınlayamaz, alamaz veya fonlayamazsınız. İşlem yapmak için Ayarlar'dan coin'leri kurun.",
-    coinWizardButton: "Yalnızca izleme modunda göz at",
-    coinWizardHint:
-      "Coin kurulumunu atlayıp yalnızca panoya göz atın (salt okunur). Yine de kendi tekliflerinizi geri çekebilirsiniz — başka bir oturumun bıraktığı teklifleri kaldırmak için kullanışlıdır. İstediğiniz zaman Ayarlar'dan kapatabilirsiniz.",
-    postBlockedTitle: "Yalnızca izleme modu",
-    postBlockedBody:
-      "Bu yalnızca izleme oturumudur, bu yüzden teklif yayınlayamaz. İşlem yapmak için Ayarlar → Coin'ler bölümünden en az iki coin kurun.",
-    takeBlockedBody: "Yalnızca izleme modu — bu teklifi gözden geçirebilirsiniz, ancak almak için coin kurulumu gerekir.",
-    takeBlockedTip: "Yalnızca izleme modu — teklif almak için Ayarlar'dan coin'leri kurun.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "İşlem yapmak için iki coin kurun",
+    tradeBody:
+      "Bir takas yayınlamak, almak ve fonlamak iki bağlı coin gerektirir. Bunları Ayarlar → Coin'ler bölümünden ekleyin.",
+    tradeCta: "Coin'leri kur",
+    takeNeedsCoins:
+      "Bu teklifi gözden geçirebilirsiniz, ancak almak için her iki coin'inin de bağlı ve canlı olması gerekir.",
   },
   merchants: {
     title: "Satıcılarınız",
@@ -320,10 +316,6 @@ export const tr: Bundle = {
     themeHint: "Satchel'ın görünümünü seçin. Sistem, işletim sisteminizin ayarını izler.",
     language: "Dil",
     languageHint: "Çeviriler katkıda bulundukça daha fazla dil eklenecek.",
-    mode: "Mod",
-    watchOnly: "Yalnızca izleme modu",
-    watchOnlyHint:
-      "Coin kurmadan panoya göz atın. Yine de kendi tekliflerinizi geri çekebilirsiniz, ancak yayınlayamaz, alamaz veya fonlayamazsınız. İşlem yapmak için kapatın (en az iki coin bağlı olması gerekir).",
     network: "Ağ",
     boards: "Corkboard'lar",
     boardsDesc:
@@ -457,15 +449,6 @@ export const tr: Bundle = {
     unsupportedByEngineTip:
       "Bu coin coins.toml içinde tanımlı ancak motorun bu sürümünde yerleşik değil, bu yüzden işlem yapılamaz.",
   },
-  coinWizard: {
-    title: "Coin'lerinizi bağlayın",
-    intro:
-      "En az iki coin seçin ve her birini kendi düğümünüze yönlendirin. Bir takas iki zincire ihtiyaç duyar, bu yüzden iki düğüm bağlanıp canlı olduğunda işlem yapma açılır. Daha sonra Ayarlar'dan coin ekleyebilir veya değiştirebilirsiniz.",
-    progress: "{min} coin'den {count} tanesi bağlı",
-    continue: "Devam et",
-    live: "Canlı",
-    nodeDown: "Düğüm çalışmıyor",
-  },
   wallets: {
     degraded: "kısıtlı",
     degradedWalletTip: "Cüzdan sunucusuna erişilemiyor — bakiye eski olabilir, gönderimler yedek sunuculara geçer.",
@@ -479,9 +462,6 @@ export const tr: Bundle = {
     noCoins: "Henüz coin kurulmadı",
     noCoinsBody: "Ayarlar → Coin'ler bölümünden bir coin bağlayın, cüzdanı burada görünür.",
     goToCoins: "Coin'lere git",
-    watchOnlyTitle: "Yalnızca izleme modunda cüzdan yok",
-    watchOnlyBody:
-      "Bu, bağlı coin'i olmayan yalnızca izleme oturumudur, bu yüzden gösterilecek cüzdan yok. Ayarlar'dan yalnızca izlemeyi kapatın ve takasları fonlamak için bir coin bağlayın.",
     walletName: "cüzdan · {wallet}",
     walletScopedHint: "Bu coin için her RPC, bu düğüm cüzdanına kapsamlandırılmıştır.",
     walletDefault: "varsayılan cüzdan (kapsamlandırılmamış)",
@@ -722,7 +702,6 @@ export const tr: Bundle = {
     notConnected: "bağlı değil: {err}",
     connected: "pactd {version} öğesine bağlandı ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "yalnızca izleme: {err}",
     switchedMerchant: "{id} satıcısına geçildi",
     renamedMerchant: "satıcı {name} olarak yeniden adlandırıldı",
     renameMerchantError: "satıcıyı yeniden adlandır: {err}",

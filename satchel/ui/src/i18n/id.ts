@@ -156,20 +156,16 @@ export const id: Bundle = {
     signet: "Signet",
     notRealFunds: "Bukan dana sungguhan — ini jaringan {network}",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Hanya pantau",
-    badgeTip:
-      "Mode hanya-pantau — jelajahi board dan tarik penawaran Anda sendiri, tapi Anda tidak bisa memasang, mengambil, atau mendanai. Atur koin di Pengaturan untuk berdagang.",
-    coinWizardButton: "Jelajahi dalam mode hanya-pantau",
-    coinWizardHint:
-      "Lewati pengaturan koin dan cukup jelajahi board (hanya-baca). Anda tetap bisa menarik penawaran Anda sendiri — berguna untuk menarik penawaran yang ditinggalkan sesi lain. Matikan kapan saja di Pengaturan.",
-    postBlockedTitle: "Mode hanya-pantau",
-    postBlockedBody:
-      "Ini sesi hanya-pantau, jadi tidak bisa memasang penawaran. Atur setidaknya dua koin di Pengaturan → Koin untuk berdagang.",
-    takeBlockedBody: "Mode hanya-pantau — Anda bisa meninjau penawaran ini, tapi mengambilnya membutuhkan koin yang sudah diatur.",
-    takeBlockedTip: "Mode hanya-pantau — atur koin di Pengaturan untuk mengambil penawaran.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Atur dua koin untuk berdagang",
+    tradeBody:
+      "Memasang, mengambil, dan mendanai swap membutuhkan dua koin terhubung. Tambahkan di Pengaturan → Koin.",
+    tradeCta: "Atur koin",
+    takeNeedsCoins:
+      "Anda bisa meninjau slip ini, tapi mengambilnya membutuhkan kedua koinnya terhubung dan aktif.",
   },
   merchants: {
     title: "Merchant Anda",
@@ -320,10 +316,6 @@ export const id: Bundle = {
     themeHint: "Pilih tampilan Satchel. Sistem mengikuti pengaturan OS Anda.",
     language: "Bahasa",
     languageHint: "Bahasa lain akan hadir seiring kontribusi terjemahan.",
-    mode: "Mode",
-    watchOnly: "Mode hanya-pantau",
-    watchOnlyHint:
-      "Jelajahi board tanpa mengatur koin. Anda tetap bisa menarik penawaran Anda sendiri, tapi tidak bisa memasang, mengambil, atau mendanai. Matikan untuk berdagang (Anda perlu setidaknya dua koin terhubung).",
     network: "Jaringan",
     boards: "Corkboard",
     boardsDesc:
@@ -457,15 +449,6 @@ export const id: Bundle = {
     unsupportedByEngineTip:
       "Koin ini didefinisikan di coins.toml tapi tidak dibangun ke dalam versi engine ini, jadi tidak bisa diperdagangkan.",
   },
-  coinWizard: {
-    title: "Hubungkan koin Anda",
-    intro:
-      "Pilih setidaknya dua koin dan arahkan masing-masing ke node Anda sendiri. Swap membutuhkan dua chain, jadi perdagangan terbuka begitu dua node terhubung dan aktif. Anda bisa menambah atau mengubah koin nanti di Pengaturan.",
-    progress: "{count} dari {min} koin terhubung",
-    continue: "Lanjutkan",
-    live: "Aktif",
-    nodeDown: "Node mati",
-  },
   wallets: {
     degraded: "menurun",
     degradedWalletTip: "Server dompet tidak terjangkau — saldo mungkin usang dan pengiriman beralih ke server cadangan.",
@@ -479,9 +462,6 @@ export const id: Bundle = {
     noCoins: "Belum ada koin yang diatur",
     noCoinsBody: "Hubungkan koin di Pengaturan → Koin dan dompetnya akan muncul di sini.",
     goToCoins: "Ke Koin",
-    watchOnlyTitle: "Tidak ada dompet dalam mode hanya-pantau",
-    watchOnlyBody:
-      "Ini sesi hanya-pantau tanpa koin terhubung, jadi tidak ada dompet untuk ditampilkan. Matikan hanya-pantau di Pengaturan dan hubungkan koin untuk mendanai swap.",
     walletName: "dompet · {wallet}",
     walletScopedHint: "Setiap RPC untuk koin ini dicakupkan ke dompet node ini.",
     walletDefault: "dompet bawaan (tidak dicakup)",
@@ -722,7 +702,6 @@ export const id: Bundle = {
     notConnected: "tidak terhubung: {err}",
     connected: "terhubung ke pactd {version} ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "hanya-pantau: {err}",
     switchedMerchant: "beralih ke merchant {id}",
     renamedMerchant: "merchant diganti namanya menjadi {name}",
     renameMerchantError: "ganti nama merchant: {err}",

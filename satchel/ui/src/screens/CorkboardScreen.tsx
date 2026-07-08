@@ -67,7 +67,7 @@ interface MyOfferRow {
 }
 
 export default function CorkboardScreen() {
-  const { identity, swaps, symOf, log, refreshSwaps, coins, watchOnly, info } = useApp();
+  const { identity, swaps, symOf, log, refreshSwaps, coins, info } = useApp();
   // A leg is tradeable only when its coin has a live ("ok") node. Used to gate
   // the Take button so you can't start a swap against a down chain (the engine
   // refuses too — this is the friendly up-front block).
@@ -109,9 +109,9 @@ export default function CorkboardScreen() {
     }
   });
   // Browse EVERY pair on the board (rc10 review), not just the configured
-  // ones — the watch-only viewer's view, as an opt-in toggle for a normal
-  // merchant. Offers on unconfigured/down coins stay un-takeable (the
-  // existing legDown gate); this only widens what is SHOWN.
+  // ones — an opt-in toggle for a normal merchant. Offers on unconfigured/down
+  // coins stay un-takeable (the existing legDown gate); this only widens what
+  // is SHOWN.
   const [allPairs, setAllPairs] = useState<boolean>(() => {
     try {
       return localStorage.getItem(ALL_PAIRS_KEY) === "1";
@@ -199,23 +199,28 @@ export default function CorkboardScreen() {
     if (!boardSel && boards.length) setBoardSel(boards[0]);
   }, [boards, boardSel]);
 
+  // Browse EVERY pair on the board when the user opts in (the All-pairs toggle)
+  // OR when no pairs are configured yet — a fresh / low-coin merchant still gets
+  // a browsable board, no coins required (#119, replacing the old watch-only
+  // viewer). Offers on unconfigured/down coins stay un-takeable (legDown gate).
+  const browseAll = allPairs || available.size === 0;
+
   // Supported pairs (from listpairs capabilities) → the pair selector options;
-  // no "all" — the default pair is the first in the list. In watch-only there
-  // are no configured pairs, so derive the selector from the pairs actually
-  // present on the board — the whole point of the mode is to browse everything.
+  // no "all" — the default pair is the first in the list. When browsing
+  // everything there are no configured pairs to filter against, so derive the
+  // selector from the pairs actually present on the board.
   const pairOptions = useMemo(() => {
-    // Browsing everything (watch-only, or the All-pairs toggle): the union of
-    // the pairs actually on the board and the configured ones, so a quiet
-    // configured pair still shows in the selector.
-    const keys =
-      watchOnly || allPairs
-        ? [
-            ...new Set([
-              ...offers.map((o) => pairKey(o.body.give_asset, o.body.get_asset)),
-              ...available,
-            ]),
-          ]
-        : [...available];
+    // Browsing everything (no configured pairs, or the All-pairs toggle): the
+    // union of the pairs actually on the board and the configured ones, so a
+    // quiet configured pair still shows in the selector.
+    const keys = browseAll
+      ? [
+          ...new Set([
+            ...offers.map((o) => pairKey(o.body.give_asset, o.body.get_asset)),
+            ...available,
+          ]),
+        ]
+      : [...available];
     return keys
       .map((key) => {
         // Label base/quote (order-book convention) so the selector reads the same
@@ -227,7 +232,7 @@ export default function CorkboardScreen() {
         return { key, label: `${symOf(base)}/${symOf(quote)}` };
       })
       .sort((x, y) => x.label.localeCompare(y.label));
-  }, [watchOnly, allPairs, offers, available, symOf]);
+  }, [browseAll, offers, available, symOf]);
   // Default to the first pair when none is chosen, and fall back to it if a
   // persisted pair is no longer available (capabilities changed).
   useEffect(() => {
@@ -312,14 +317,13 @@ export default function CorkboardScreen() {
     );
   }
 
-  // Watch-only shows the whole board (no configured pairs to filter against);
-  // otherwise only offers for pairs whose coins are connected are takeable.
+  // When browsing everything, show the whole board (no configured pairs to
+  // filter against); otherwise only offers for pairs whose coins are connected.
   // Offers for unconnected pairs are simply not shown — it's understood the
   // board reflects what you've set up.
-  const supported =
-    watchOnly || allPairs
-      ? offers
-      : offers.filter((o) => available.has(pairKey(o.body.give_asset, o.body.get_asset)));
+  const supported = browseAll
+    ? offers
+    : offers.filter((o) => available.has(pairKey(o.body.give_asset, o.body.get_asset)));
 
   const inFilter = (o: Offer) =>
     !effectivePair || pairKey(o.body.give_asset, o.body.get_asset) === effectivePair;
@@ -439,9 +443,10 @@ export default function CorkboardScreen() {
           <ToggleButton value="mine">{t("corkboard.filterMine")}</ToggleButton>
         </ToggleButtonGroup>
 
-        {/* Browse every pair on the board (view-only for unconfigured coins);
-            redundant in the watch-only viewer, which always shows everything. */}
-        {!watchOnly && (
+        {/* Browse every pair on the board (view-only for unconfigured coins).
+            Hidden when no pairs are configured — the board already shows
+            everything then, so the toggle would be a redundant no-op. */}
+        {available.size > 0 && (
           <Tooltip title={t("corkboard.allPairsTip")}>
             <ToggleButton
               size="small"
@@ -646,7 +651,6 @@ export default function CorkboardScreen() {
                         state={offerState(o, mySwapIds)}
                         legDown={!coinLive(o.body.give_asset) || !coinLive(o.body.get_asset)}
                         wireOff={wireMismatch(o)}
-                        watchOnly={watchOnly}
                         fmtLeg={fmtLeg}
                         onTake={() => void take(o)}
                         onRevoke={() => void revoke(o)}
@@ -987,7 +991,6 @@ function OfferRow({
   state,
   legDown,
   wireOff,
-  watchOnly,
   fmtLeg,
   onTake,
   onRevoke,
@@ -1002,8 +1005,6 @@ function OfferRow({
   /** Wire-epoch mismatch (rc10): the maker runs an incompatible release —
    *  view-only, the engine would refuse the take. */
   wireOff?: boolean;
-  /** Watch-only viewer: taking is disabled (withdrawing our own still works). */
-  watchOnly?: boolean;
   fmtLeg: Leg;
   onTake: () => void;
   onRevoke: () => void;
@@ -1015,7 +1016,7 @@ function OfferRow({
   const expiry = b.created ? b.created + (b.ttl_secs || 24 * 3600) : 0;
   const f = freshness(b.created || 0, expiry);
   const freshColor = f.cls === "expiring" ? C.bad : C.dim;
-  const takeable = !mine && state === "open" && !legDown && !watchOnly && !wireOff;
+  const takeable = !mine && state === "open" && !legDown && !wireOff;
 
   // Copy the full offer id to the clipboard — handy for naming an offer in chat.
   const copyId = async () => {
@@ -1153,14 +1154,6 @@ function OfferRow({
           <Button size="small" variant="outlined" color="inherit" onClick={onRevoke}>
             {t("corkboard.withdraw")}
           </Button>
-        </Tooltip>
-      ) : watchOnly && state === "open" ? (
-        <Tooltip title={t("watchOnly.takeBlockedTip")}>
-          <span>
-            <Button size="small" variant="contained" startIcon={<AddIcon />} disabled>
-              {t("corkboard.take")}
-            </Button>
-          </span>
         </Tooltip>
       ) : wireOff && state === "open" ? (
         <Tooltip title={t("corkboard.wireMismatchTip")}>

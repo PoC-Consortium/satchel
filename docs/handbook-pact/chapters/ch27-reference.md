@@ -31,13 +31,13 @@ board)".
 
 ## RPC method index
 
-All methods are JSON-RPC over `POST /` — **64 public methods**, grouped by
+All methods are JSON-RPC over `POST /` — **63 public methods**, grouped by
 area; see the named chapter for params and return shapes. The daemon prints
 the same catalog live: `help` (by category, plain text) and `listmethods`
 (a name array).
 
 **Node / info** (*"API: Node, Seed, Merchants, Coins"*): `getinfo`,
-`walletstatus`, `setwatchonly`, `help`, `listmethods`, `stop`, `getfeepolicy`,
+`walletstatus`, `help`, `listmethods`, `stop`, `getfeepolicy`,
 `setfeepolicy`.
 
 **Seed-only rescue** (same chapter; full mechanics in "Seeds, Wallets &

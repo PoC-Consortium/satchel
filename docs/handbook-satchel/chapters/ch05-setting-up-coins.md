@@ -1,21 +1,25 @@
 # Setting Up Your Coins
 
 A swap always involves **two** blockchains — you give one coin and receive
-another. So before Satchel will let you trade, it needs **at least two coins
+another. So before Satchel will let you *trade*, it needs **at least two coins
 connected and live**. This chapter walks you through connecting them.
 
-If this is your first launch, Satchel brings you here automatically with a
-**"Connect your coins"** wizard. You can also reach the same setup any time from
-**Settings → Coins**.
+You don't have to set anything up just to look around, though. Satchel drops you
+straight into the app after you unlock, and you can **browse the Corkboard** with
+zero coins configured — the board shows every pair on offer. Coin setup is what
+turns browsing into trading. Reach it any time from **Settings → Coins**.
 
 > **Note** — *Live* means a coin is connected **and** its node is up and
-> answering. The wizard shows a running count — "1 of 2 coins connected" — and the
-> **Continue** button stays disabled until two coins are live. That's the safety
-> gate: no trading until you genuinely have two working chains.
+> answering. Trading is gated **per action**, not by an app-wide wall: with fewer
+> than two live coins the **Post an offer** and **Create slip** screens show a soft
+> "Set up two coins to trade" prompt, and a board offer's **Take** button stays
+> disabled until both of its coins are live. That's the safety gate: no trading
+> until you genuinely have two working chains — but you can look around freely
+> until then.
 
 ## The coins screen
 
-Whether from the first-run wizard or **Settings → Coins**, you'll see a card for
+Open **Settings → Coins** and you'll see a card for
 each coin Satchel knows about. The first pair is **BTCX** (Bitcoin-PoCX) and
 **BTC** (Bitcoin). Each card shows:
 
@@ -37,24 +41,20 @@ To connect a coin, click **Set up** on its card.
 
 ![The Coins screen, with one coin connected and one still to set up.](images/processed/ch05-coins-screen.png){width=85%}
 
-## Just want to look? Watch-only mode
+## Just want to look?
 
 Maybe you're not ready to connect nodes yet — you'd just like to see what's
-trading before you commit. The wizard has an escape hatch for exactly that: a
-**"Browse in watch-only mode"** button. Click it and Satchel skips coin setup
-entirely and drops you straight onto the board.
+trading before you commit. You don't have to do anything special: with no coins
+configured, Satchel still opens on the **Corkboard** and shows you the whole live
+board, every pair on offer. Browse all you like.
 
-In watch-only mode you can **browse the Corkboard** and look around, and you can
-still **withdraw your own offers** if you have any. What you *can't* do is
-**post** a new offer, **take** someone else's, or **fund** a swap — anything that
-moves money is off the table until you connect coins. When you're ready to trade
-for real, leave watch-only mode (there's a toggle under **Settings → General**)
-and connect two coins as below.
-
-> **Note** — Watch-only mode is **browse-only**. Trading needs **two live coins**,
-> so to post, take, or fund a swap you must leave watch-only and finish connecting
-> your pair. While you're in it, a **"Watch only"** badge sits in the header to
-> remind you.
+What you *can't* do until you connect coins is **post** a new offer, **take**
+someone else's, or **fund** a swap — anything that moves money needs **two live
+coins**. Those actions guide you back here rather than blocking the app: the
+**Post an offer** and **Create slip** screens show a soft "Set up two coins to
+trade" prompt, and a board offer's **Take** button stays disabled until both of
+its coins are live. When you're ready to trade for real, connect two coins as
+below.
 
 ## The connection form
 
@@ -202,6 +202,6 @@ does that go?
 > screen. Connections are shared across all your merchants, so you set each coin
 > up once.
 
-With two coins live and your pair reading **Ready to trade**, the first-run
-wizard's **Continue** button lights up. Click it, and you arrive at the
-**Corkboard**, ready for your first trade — which is exactly where Part 2 begins.
+With two coins live and your pair reading **Ready to trade**, you're set: head to
+the **Corkboard**, ready for your first trade — which is exactly where Part 2
+begins.

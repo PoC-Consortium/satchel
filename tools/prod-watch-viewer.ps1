@@ -1,9 +1,8 @@
 <#
 .SYNOPSIS
   A second, ISOLATED mainnet Satchel viewer for debugging the board against your
-  REAL prod session -- same Nostr relays, SAME KEY (you import it), watch-only.
-  Unlike playground-watchonly.ps1 this dir PERSISTS, so your imported seed +
-  setup survive restarts.
+  REAL prod session -- same Nostr relays, SAME KEY (you import it). Unlike
+  playground-viewer.ps1 this dir PERSISTS, so your imported seed survives restarts.
 
 .DESCRIPTION
   Runs a second Satchel entirely beside your production install, so it can never
@@ -16,9 +15,9 @@
       subscribes to the six default relays (the same set your prod uses). It
       does NOT connect to your pocx/btc nodes at all.
 
-  You set it up once (import your prod mnemonic = same identity, then "Browse in
-  watch-only mode"), and it stays set up. Then you drive your PROD session
-  (post / revoke) and watch what this viewer shows.
+  You set it up once (import your prod mnemonic = same identity), and it stays
+  set up. A zero-coin session browses the whole board out of the box, so you can
+  drive your PROD session (post / revoke) and watch what this viewer shows.
 
   Blocks on the Satchel window; close it to tear the viewer down. -Down
   force-tears a stale run.
@@ -34,8 +33,12 @@
   SAFETY: teardown is PID/PORT-ONLY, scoped to THIS viewer's ports (:9747 pactd,
   :5173 Vite). It NEVER touches :9737 (your prod pactd), never Stop-Process by
   name, and never your live MAINNET pocx-bitcoind. Only -Reset removes the dir.
-  Watch-only is enforced by the engine: this viewer cannot post, take or fund --
-  even though it holds your key, it can only browse and withdraw your own offers.
+
+  With no coins connected, this viewer can't post/take/fund (each is gated on
+  having the pair's two coins set up). BUT it holds your PROD key, so it shares
+  your identity: on close its exit gate may list your prod board offers and offer
+  to withdraw them. Choose "Keep running" or Cancel there -- never "Withdraw &
+  exit" -- or you'd revoke your REAL offers from this debug window.
 #>
 param([switch]$Down, [switch]$Reset)
 
@@ -102,7 +105,7 @@ if ($LASTEXITCODE -ne 0) { throw "cargo build (pactd/pact-cli) failed" }
 $pactdPath = (Join-Path $Repo "pact\target\debug\pactd.exe") -replace '\\', '/'
 
 # Write satchel.json ONLY if absent, so your setup persists across runs.
-#   * coins [] + no nodes  -> watch-only board over Nostr (the same six default
+#   * coins [] + no nodes  -> board-only viewer over Nostr (the same six default
 #     relays your prod uses; omitting nostr_relays falls back to them).
 #   * listen :9747         -> never the prod :9737.
 $cfgPath = Join-Path $ViewerDir "satchel.json"
@@ -148,7 +151,7 @@ Set-Content -Path $PidFile -Value $sat.Id
 
 Write-Host ""
 Write-Host "======================================================================"
-Write-Host "  SATCHEL VIEWER IS UP  (mainnet, isolated, watch-only board)"
+Write-Host "  SATCHEL VIEWER IS UP  (mainnet, isolated, board viewer)"
 Write-Host ""
 Write-Host "  Config dir: $ViewerDir   (PERSISTS; your prod install is untouched)"
 Write-Host "  pactd :9747  |  no nodes, no coins  |  six default Nostr relays"
@@ -156,14 +159,16 @@ Write-Host ""
 Write-Host "  FIRST RUN -- set it up once:"
 Write-Host "    1. Wizard -> Create a merchant (any name)."
 Write-Host "    2. Seed -> *** IMPORT *** -> paste your PROD mnemonic (= same key)."
-Write-Host "    3. Coins step -> 'Browse in watch-only mode' (bottom)."
-Write-Host "    4. Corkboard opens watch-only on the live board (Post/Take blocked)."
+Write-Host "    3. You land straight in the app on the Corkboard, browsing the"
+Write-Host "       live board. With no coins, Post/Take nudge you to set coins up."
 Write-Host "  After that the seed persists -- rerun this script to reopen the viewer."
 Write-Host ""
 Write-Host "  TEST: in your PROD Satchel, post then revoke an offer; watch whether"
 Write-Host "        it clears here. (Re-tag the script -Reset to start clean.)"
 Write-Host ""
 Write-Host "  CLOSE THE SATCHEL WINDOW to tear the viewer down (PID/port only)."
+Write-Host "  On close, if asked about YOUR offers, choose Keep running / Cancel"
+Write-Host "  -- never Withdraw (this shares your prod identity)."
 Write-Host "  Logs: $LogDir"
 Write-Host "======================================================================"
 

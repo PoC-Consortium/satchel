@@ -1,14 +1,14 @@
 <#
 .SYNOPSIS
-  One-shot Satchel WATCH-ONLY playground: a mainnet viewer on the default Nostr
+  One-shot Satchel BOARD-VIEWER playground: a mainnet viewer on the default Nostr
   board, in an ISOLATED throwaway config dir. cleanup -> setup -> run.
 
 .DESCRIPTION
-  Watch-only is a viewer session with NO coins: browse the board (and withdraw
-  your own offers), but never post, take or fund. To watch a REAL, populated
-  book it must run on mainnet against the default Nostr relays (offers are
-  network-filtered client-side, so a regtest viewer on the public relays would
-  see an empty board).
+  A zero-coin session browses the WHOLE live board out of the box (trading —
+  post/take/fund — stays gated per-action until you connect two coins), so this
+  is a read-only viewer of the live book. To watch a REAL, populated book it must
+  run on mainnet against the default Nostr relays (offers are network-filtered
+  client-side, so a regtest viewer on the public relays would see an empty board).
 
   To keep your real mainnet Satchel untouched, this launches Satchel against an
   isolated config dir via SATCHEL_DATA_DIR:
@@ -22,8 +22,8 @@
       collide with a real mainnet Satchel you may have running.
 
   No coins, no funds, no bitcoind: this viewer only subscribes to the public
-  relays read-only. The Corkboard shows the WHOLE live mainnet book in
-  watch-only and blocks Post/Take.
+  relays read-only. The Corkboard shows the WHOLE live mainnet book; Post/Take
+  are gated (they nudge you to set up two coins) until you connect them.
 
   The script BLOCKS on the Satchel window: close it and the playground tears
   itself down. -Down force-tears a stale run.
@@ -88,7 +88,7 @@ if ($Down) {
 }
 
 # --- cleanup (this playground only) --------------------------------------
-Write-Host "[watch-pg] cleaning up any prior watch-only run ..."
+Write-Host "[watch-pg] cleaning up any prior viewer run ..."
 Stop-Playground
 # Factory-new the throwaway dir so we always start fresh on the default relays.
 if (Test-Path $WatchDir) { Remove-Item -Recurse -Force $WatchDir }
@@ -103,7 +103,7 @@ Write-Host "[watch-pg] building pactd + pact-cli (debug) ..."
 if ($LASTEXITCODE -ne 0) { throw "cargo build (pactd/pact-cli) failed" }
 
 $pactdPath = (Join-Path $Repo "pact\target\debug\pactd.exe") -replace '\\', '/'
-# NO coins (watch-only) and NO nostr_relays key: the container-level
+# NO coins (a pure board viewer) and NO nostr_relays key: the container-level
 # #[serde(default)] fills the omitted field from Config::default -> the six
 # RECOMMENDED_NOSTR_RELAYS. board_urls empty (corkboard off; Nostr only).
 # listen :9747 keeps us off a real mainnet Satchel's :9737.
@@ -135,7 +135,7 @@ Copy-Item (Join-Path $Repo "pact\target\debug\pact-cli.exe") (Join-Path $bin "pa
 $env:SATCHEL_NETWORK  = "mainnet"
 $env:SATCHEL_DATA_DIR = $WatchDir
 
-Write-Host "[watch-pg] launching Satchel (mainnet watch-only, isolated config) ..."
+Write-Host "[watch-pg] launching Satchel (mainnet board viewer, isolated config) ..."
 $sat = Start-Process -FilePath "cargo" -ArgumentList "tauri", "dev" `
     -WorkingDirectory (Join-Path $Repo "satchel") `
     -RedirectStandardOutput (Join-Path $LogDir "watch-satchel.out.log") `
@@ -145,7 +145,7 @@ Set-Content -Path $PidFile -Value $sat.Id
 
 Write-Host ""
 Write-Host "======================================================================"
-Write-Host "  SATCHEL WATCH-ONLY PLAYGROUND IS UP  (mainnet, default Nostr board)"
+Write-Host "  SATCHEL BOARD-VIEWER PLAYGROUND IS UP  (mainnet, default Nostr board)"
 Write-Host ""
 Write-Host "  Isolated config: $WatchDir"
 Write-Host "  Your real mainnet Satchel config is UNTOUCHED. pactd on :9747."
@@ -155,11 +155,10 @@ Write-Host "  In the window:"
 Write-Host "    1. Wizard -> Create a merchant (any name)."
 Write-Host "    2. Seed -> 'Create new' -> ack -> confirm the 3 words (mainnet"
 Write-Host "       does NOT skip verify) -> 'No passphrase' -> Done."
-Write-Host "       (Throwaway seed: it never holds funds in watch-only.)"
-Write-Host "    3. Coins step -> click 'Browse in watch-only mode' (bottom)."
-Write-Host "    4. Corkboard opens in WATCH-ONLY on the live public board; the"
-Write-Host "       header relay dot shows x/6 connected + a 'Watch only' badge."
-Write-Host "    5. Read-only: Post an offer and Take an offer are both blocked."
+Write-Host "       (Throwaway seed: with no coins it never holds funds.)"
+Write-Host "    3. You land straight in the app on the Corkboard, browsing the"
+Write-Host "       WHOLE live public board; the header relay dot shows x/6 connected."
+Write-Host "    4. With no coins set up, Post/Take nudge you to connect two coins."
 Write-Host ""
 Write-Host "  CLOSE THE SATCHEL WINDOW to tear the playground down."
 Write-Host "  Logs:  $LogDir"

@@ -14,7 +14,7 @@ import { useTakeConfirm } from "../hooks/useTakeConfirm";
 import { decodeSlipForDisplay, looksLikeSlip } from "../format-slip";
 
 export default function PrivateReceiveScreen() {
-  const { log, watchOnly, symOf } = useApp();
+  const { log, coins, symOf } = useApp();
   const t = useT();
   const confirmTake = useTakeConfirm();
   const [slip, setSlip] = useState("");
@@ -23,9 +23,13 @@ export default function PrivateReceiveScreen() {
   const [done, setDone] = useState(false);
 
   const valid = looksLikeSlip(slip);
-  // Decode for DISPLAY only (no signature check) — lets a watch-only viewer
-  // inspect a slip's terms even though taking it is blocked.
+  // Decode for DISPLAY only (no signature check) — lets anyone inspect a slip's
+  // terms even before (or without) taking it.
   const preview = useMemo(() => (valid ? decodeSlipForDisplay(slip) : null), [valid, slip]);
+  // Per-action gate (#119): both legs of the pasted slip must be connected + live
+  // to take it (the engine enforces too; this is the friendly up-front block).
+  const coinLive = (id?: string) => !!coins.find((c) => c.id === id && c.status === "ok");
+  const pairReady = !!preview && coinLive(preview.body.give_asset) && coinLive(preview.body.get_asset);
 
   async function submit() {
     setErr(null);
@@ -94,11 +98,11 @@ export default function PrivateReceiveScreen() {
             <Typography sx={{ color: "error.main", fontSize: 13, whiteSpace: "pre-wrap" }}>{err}</Typography>
           )}
           {done && <Typography sx={{ color: "primary.main", fontSize: 13 }}>{t("private.received")}</Typography>}
-          {watchOnly && (
-            <Typography sx={{ color: "text.secondary", fontSize: 13 }}>{t("watchOnly.takeBlockedBody")}</Typography>
+          {preview && !pairReady && (
+            <Typography sx={{ color: "text.secondary", fontSize: 13 }}>{t("setup.takeNeedsCoins")}</Typography>
           )}
           <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-            <Button variant="contained" disabled={!valid || busy || watchOnly} onClick={() => void submit()}>
+            <Button variant="contained" disabled={!valid || busy || !pairReady} onClick={() => void submit()}>
               {t("takeSlip.take")}
             </Button>
           </Box>

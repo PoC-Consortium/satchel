@@ -24,8 +24,9 @@ price you want and take it yourself.
   on the board**, including coins you haven't set up, so you can window-shop the
   whole market. Offers on a pair you haven't connected are **view-only** — the
   **Take offer** button stays disabled until you set the coin up in **Settings →
-  Coins**. Your choice is remembered. (In watch-only mode this toggle doesn't
-  appear — watch-only already shows everything.)
+  Coins**. Your choice is remembered. (The toggle appears once you have configured
+  pairs to narrow the view against; with **no** coins set up the board already
+  shows every pair, so there's nothing to widen.)
 - **Denomination toggle** — switches the display unit for the quote coin, so you
   can read prices in whichever unit you think in.
 - **Board selector** — if you've connected more than one noticeboard, this picks

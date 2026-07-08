@@ -156,20 +156,16 @@ export const ja: Bundle = {
     signet: "Signet",
     notRealFunds: "実際の資金ではありません — これは {network} ネットワークです",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "閲覧のみ",
-    badgeTip:
-      "閲覧のみモード — ボードを閲覧して自分のオファーを取り下げられますが、投稿・取得・資金の投入はできません。取引するには設定でコインを設定してください。",
-    coinWizardButton: "閲覧のみモードで閲覧する",
-    coinWizardHint:
-      "コインの設定をスキップして、ボードを閲覧（読み取り専用）するだけです。自分のオファーは取り下げられるので、別のセッションが残したオファーを引き上げるのに便利です。設定でいつでもオフにできます。",
-    postBlockedTitle: "閲覧のみモード",
-    postBlockedBody:
-      "これは閲覧のみのセッションのため、オファーを投稿できません。取引するには設定 → コインで少なくとも 2 つのコインを設定してください。",
-    takeBlockedBody: "閲覧のみモード — このオファーは確認できますが、取得にはコインの設定が必要です。",
-    takeBlockedTip: "閲覧のみモード — オファーを取得するには設定でコインを設定してください。",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "取引するには 2 つのコインを設定",
+    tradeBody:
+      "オファーの投稿・取得・資金の投入には 2 つの接続済みコインが必要です。設定 → コインで追加してください。",
+    tradeCta: "コインを設定",
+    takeNeedsCoins:
+      "このスリップは確認できますが、取得するにはその両方のコインが接続され稼働している必要があります。",
   },
   merchants: {
     title: "マーチャント一覧",
@@ -320,10 +316,6 @@ export const ja: Bundle = {
     themeHint: "Satchel の見た目を選択します。システムは OS の設定に従います。",
     language: "言語",
     languageHint: "翻訳が寄せられるにつれて、対応言語が増えていきます。",
-    mode: "モード",
-    watchOnly: "閲覧のみモード",
-    watchOnlyHint:
-      "コインを設定せずにボードを閲覧します。自分のオファーは取り下げられますが、投稿・取得・資金の投入はできません。取引するにはオフにしてください（少なくとも 2 つのコインの接続が必要です）。",
     network: "ネットワーク",
     boards: "Corkboard",
     boardsDesc:
@@ -457,15 +449,6 @@ export const ja: Bundle = {
     unsupportedByEngineTip:
       "このコインは coins.toml で定義されていますが、このバージョンのエンジンには組み込まれていないため、取引できません。",
   },
-  coinWizard: {
-    title: "コインを接続",
-    intro:
-      "少なくとも 2 つのコインを選び、それぞれをご自身のノードに向けます。スワップには 2 つのチェーンが必要なので、2 つのノードが接続されて稼働すると取引が解放されます。コインは後から設定で追加・変更できます。",
-    progress: "{count} / {min} 個のコインを接続済み",
-    continue: "続ける",
-    live: "稼働中",
-    nodeDown: "ノード停止",
-  },
   wallets: {
     degraded: "劣化",
     degradedWalletTip: "ウォレットサーバーに到達できません — 残高が古い可能性があり、送金はバックアップサーバーへフォールバックします。",
@@ -479,9 +462,6 @@ export const ja: Bundle = {
     noCoins: "コインがまだ設定されていません",
     noCoinsBody: "設定 → コインでコインを接続すると、そのウォレットがここに表示されます。",
     goToCoins: "コインへ移動",
-    watchOnlyTitle: "閲覧のみモードではウォレットはありません",
-    watchOnlyBody:
-      "これはコインが接続されていない閲覧のみのセッションのため、表示するウォレットがありません。設定で閲覧のみをオフにし、コインを接続してスワップに資金を入れてください。",
     walletName: "ウォレット · {wallet}",
     walletScopedHint: "このコインのすべての RPC は、このノードウォレットにスコープされます。",
     walletDefault: "デフォルトウォレット（未スコープ）",
@@ -722,7 +702,6 @@ export const ja: Bundle = {
     notConnected: "未接続: {err}",
     connected: "pactd {version} に接続しました（{protocol}）",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "閲覧のみ: {err}",
     switchedMerchant: "マーチャント {id} に切り替えました",
     renamedMerchant: "マーチャント名を {name} に変更しました",
     renameMerchantError: "マーチャント名の変更: {err}",

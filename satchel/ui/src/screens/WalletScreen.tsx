@@ -20,7 +20,7 @@ import type { CoinInfo } from "../api/types";
 // mount-time refreshes update statuses and numbers in place; only a coin
 // that has never reported a balance shows a skeleton slot.
 export default function WalletScreen() {
-  const { coins, refreshCoins, balances, refreshBalances, connOk, watchOnly } = useApp();
+  const { coins, refreshCoins, balances, refreshBalances, connOk } = useApp();
   const navigate = useNavigate();
   const t = useT();
 
@@ -56,13 +56,11 @@ export default function WalletScreen() {
 
       {!connOk ? (
         <EmptyState title={t("wallets.notConnected")}>{t("wallets.notConnectedBody")}</EmptyState>
-      ) : configured.length === 0 && watchOnly ? (
-        <EmptyState title={t("wallets.watchOnlyTitle")}>{t("wallets.watchOnlyBody")}</EmptyState>
       ) : configured.length === 0 ? (
         <EmptyState
           title={t("wallets.noCoins")}
           action={
-            <Button variant="contained" onClick={() => navigate("settings")}>
+            <Button variant="contained" onClick={() => navigate("settings", "coins")}>
               {t("wallets.goToCoins")}
             </Button>
           }

@@ -9,7 +9,7 @@ No platform fees — `platform_fee_sat` is hard-wired to 0. You pay only the on-
 You do. The engine holds your seed and keys locally, signs everything itself, and auto-refunds via a timelock if the counterparty walks. No board, relay, or counterparty ever custodies your funds. See [Security Model](Security-Model).
 
 **Can I just look at the board without setting up coins?**
-Yes — pick **Browse in watch-only mode** on first run (or **Settings → Mode** later). You can read the whole board and withdraw offers you already own, but posting, taking, and funding stay blocked until you connect **two live coins**. See [Configuring Coins](Configuring-Coins). In normal mode there's a lighter option too: the Corkboard's **All pairs** toggle shows every pair on the board, including coins you haven't set up — view-only until you connect them.
+Yes — with **zero coins configured** you land straight in the app and the Corkboard shows the whole live board (every pair automatically). Posting, taking, and funding stay gated until you connect **two live coins**: the post/slip screens prompt you to set up two coins, and a **Take** button is disabled until both of that pair's coins are live. See [Configuring Coins](Configuring-Coins). Once you have coins connected, the Corkboard's **All pairs** toggle widens the view to every pair on the board, including coins you haven't set up — view-only until you connect them.
 
 **What languages does Satchel support?**
 26 — switch any time from the globe-icon picker in the header, including during first-run onboarding.

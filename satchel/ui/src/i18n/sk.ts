@@ -156,20 +156,16 @@ export const sk: Bundle = {
     signet: "Signet",
     notRealFunds: "Nie sú to skutočné prostriedky — toto je sieť {network}",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Iba sledovanie",
-    badgeTip:
-      "Režim iba na sledovanie — prehliadajte nástenku a stiahnite vlastné ponuky, ale nemôžete zverejňovať, prijímať ani podfinancovať. Nastavte mince v Nastaveniach, aby ste mohli obchodovať.",
-    coinWizardButton: "Prehliadať v režime iba na sledovanie",
-    coinWizardHint:
-      "Preskočte nastavenie mincí a len prehliadajte nástenku (iba na čítanie). Stále môžete stiahnuť vlastné ponuky — užitočné na stiahnutie ponúk ponechaných inou reláciou. Kedykoľvek to vypnite v Nastaveniach.",
-    postBlockedTitle: "Režim iba na sledovanie",
-    postBlockedBody:
-      "Toto je relácia iba na sledovanie, takže nemôže zverejňovať ponuky. Nastavte aspoň dve mince v Nastavenia → Mince, aby ste mohli obchodovať.",
-    takeBlockedBody: "Režim iba na sledovanie — túto ponuku si môžete prezrieť, ale na jej prijatie je potrebné nastaviť mince.",
-    takeBlockedTip: "Režim iba na sledovanie — nastavte mince v Nastaveniach, aby ste mohli prijímať ponuky.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Nastavte dve mince na obchodovanie",
+    tradeBody:
+      "Zverejnenie, prijatie a financovanie swapu vyžadujú dve pripojené mince. Pridajte ich v Nastavenia → Mince.",
+    tradeCta: "Nastaviť mince",
+    takeNeedsCoins:
+      "Túto ponuku si môžete prezrieť, ale na jej prijatie musia byť obe jej mince pripojené a aktívne.",
   },
   merchants: {
     title: "Vaši obchodníci",
@@ -320,10 +316,6 @@ export const sk: Bundle = {
     themeHint: "Vyberte, ako Satchel vyzerá. Systémová sa riadi nastavením vášho OS.",
     language: "Jazyk",
     languageHint: "Ďalšie jazyky pribudnú, keď budú prispené preklady.",
-    mode: "Režim",
-    watchOnly: "Režim iba na sledovanie",
-    watchOnlyHint:
-      "Prehliadajte nástenku bez nastavenia mincí. Stále môžete stiahnuť vlastné ponuky, ale nemôžete zverejňovať, prijímať ani podfinancovať. Vypnite, aby ste mohli obchodovať (budete potrebovať aspoň dve pripojené mince).",
     network: "Sieť",
     boards: "Corkboards",
     boardsDesc:
@@ -457,15 +449,6 @@ export const sk: Bundle = {
     unsupportedByEngineTip:
       "Táto minca je definovaná v coins.toml, ale nie je zabudovaná do tejto verzie enginu, takže sa s ňou nedá obchodovať.",
   },
-  coinWizard: {
-    title: "Pripojte svoje mince",
-    intro:
-      "Vyberte aspoň dve mince a každú nasmerujte na svoj vlastný uzol. Swap potrebuje dva reťazce, takže obchodovanie sa odomkne, keď sú pripojené a aktívne dva uzly. Mince môžete pridať alebo zmeniť neskôr v Nastaveniach.",
-    progress: "Pripojených {count} z {min} mincí",
-    continue: "Pokračovať",
-    live: "Aktívne",
-    nodeDown: "Uzol mimo prevádzky",
-  },
   wallets: {
     degraded: "obmedzené",
     degradedWalletTip: "Server peňaženky je nedostupný — zostatok môže byť zastaraný a odosielanie prechádza na záložné servery.",
@@ -479,9 +462,6 @@ export const sk: Bundle = {
     noCoins: "Zatiaľ žiadne nastavené mince",
     noCoinsBody: "Pripojte mincu v Nastavenia → Mince a jej peňaženka sa zobrazí tu.",
     goToCoins: "Prejsť na Mince",
-    watchOnlyTitle: "V režime iba na sledovanie nie sú žiadne peňaženky",
-    watchOnlyBody:
-      "Toto je relácia iba na sledovanie bez pripojených mincí, takže nie sú žiadne peňaženky na zobrazenie. Vypnite režim iba na sledovanie v Nastaveniach a pripojte mincu, aby ste mohli financovať swapy.",
     walletName: "peňaženka · {wallet}",
     walletScopedHint: "Každé RPC pre túto mincu je obmedzené na túto peňaženku uzla.",
     walletDefault: "predvolená peňaženka (neobmedzená)",
@@ -722,7 +702,6 @@ export const sk: Bundle = {
     notConnected: "nepripojené: {err}",
     connected: "pripojené k pactd {version} ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "iba sledovanie: {err}",
     switchedMerchant: "prepnuté na obchodníka {id}",
     renamedMerchant: "obchodník premenovaný na {name}",
     renameMerchantError: "premenovanie obchodníka: {err}",

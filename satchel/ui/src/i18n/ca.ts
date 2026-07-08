@@ -156,20 +156,16 @@ export const ca: Bundle = {
     signet: "Signet",
     notRealFunds: "No són fons reals — això és la xarxa {network}",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Només visualització",
-    badgeTip:
-      "Mode només visualització — navega pel tauler i retira les teves pròpies ofertes, però no pots publicar, acceptar ni finançar. Configura monedes a Configuració per negociar.",
-    coinWizardButton: "Navega en mode només visualització",
-    coinWizardHint:
-      "Omet la configuració de monedes i simplement navega pel tauler (només lectura). Encara pots retirar les teves pròpies ofertes — pràctic per retirar ofertes deixades per una altra sessió. Desactiva-ho quan vulguis a Configuració.",
-    postBlockedTitle: "Mode només visualització",
-    postBlockedBody:
-      "Aquesta és una sessió només de visualització, per tant no pot publicar ofertes. Configura almenys dues monedes a Configuració → Monedes per negociar.",
-    takeBlockedBody: "Mode només visualització — pots revisar aquesta oferta, però per acceptar-la cal tenir monedes configurades.",
-    takeBlockedTip: "Mode només visualització — configura monedes a Configuració per acceptar ofertes.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Configura dues monedes per negociar",
+    tradeBody:
+      "Publicar, acceptar i finançar un intercanvi necessita dues monedes connectades. Afegeix-les a Configuració → Monedes.",
+    tradeCta: "Configura monedes",
+    takeNeedsCoins:
+      "Pots revisar aquesta oferta, però per acceptar-la cal tenir les dues monedes connectades i actives.",
   },
   merchants: {
     title: "Els teus comerciants",
@@ -320,10 +316,6 @@ export const ca: Bundle = {
     themeHint: "Tria com es veu Satchel. Sistema segueix la configuració del teu SO.",
     language: "Idioma",
     languageHint: "S'afegeixen més idiomes a mesura que es contribueixen traduccions.",
-    mode: "Mode",
-    watchOnly: "Mode només visualització",
-    watchOnlyHint:
-      "Navega pel tauler sense configurar monedes. Encara pots retirar les teves pròpies ofertes, però no pots publicar, acceptar ni finançar. Desactiva'l per negociar (necessitaràs almenys dues monedes connectades).",
     network: "Xarxa",
     boards: "Corkboards",
     boardsDesc:
@@ -456,15 +448,6 @@ export const ca: Bundle = {
     unsupportedByEngineTip:
       "Aquesta moneda està definida a coins.toml però no està integrada en aquesta versió del motor, per tant no es pot negociar.",
   },
-  coinWizard: {
-    title: "Connecta les teves monedes",
-    intro:
-      "Tria almenys dues monedes i apunta cadascuna al teu propi node. Un intercanvi necessita dues cadenes, així que la negociació es desbloqueja quan dos nodes estan connectats i actius. Pots afegir o canviar monedes més tard a Configuració.",
-    progress: "{count} de {min} monedes connectades",
-    continue: "Continua",
-    live: "Actiu",
-    nodeDown: "Node caigut",
-  },
   wallets: {
     degraded: "degradat",
     degradedWalletTip: "El servidor del moneder és inaccessible — el saldo pot ser antic i els enviaments passen als servidors de reserva.",
@@ -478,9 +461,6 @@ export const ca: Bundle = {
     noCoins: "Encara no hi ha monedes configurades",
     noCoinsBody: "Connecta una moneda a Configuració → Monedes i la seva cartera apareixerà aquí.",
     goToCoins: "Vés a Monedes",
-    watchOnlyTitle: "No hi ha carteres en mode només visualització",
-    watchOnlyBody:
-      "Aquesta és una sessió només de visualització sense monedes connectades, per tant no hi ha cap cartera per mostrar. Desactiva el mode només visualització a Configuració i connecta una moneda per finançar intercanvis.",
     walletName: "cartera · {wallet}",
     walletScopedHint: "Cada RPC d'aquesta moneda està limitat a aquesta cartera del node.",
     walletDefault: "cartera per defecte (sense àmbit)",
@@ -724,7 +704,6 @@ export const ca: Bundle = {
     notConnected: "no connectat: {err}",
     connected: "connectat a pactd {version} ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "només visualització: {err}",
     switchedMerchant: "canviat al comerciant {id}",
     renamedMerchant: "comerciant reanomenat a {name}",
     renameMerchantError: "reanomena comerciant: {err}",

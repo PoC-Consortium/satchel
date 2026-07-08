@@ -9,9 +9,8 @@ merchant* error) are covered in the chapter "JSON-RPC Conventions".
 
 | Method | Params | Returns | Mutates |
 |---|---|---|---|
-| `getinfo` | — | `{ name, version, protocol, wire_epochs, network, identity?, seed_exists, encrypted, locked, coins, watch_only }` | no |
+| `getinfo` | — | `{ name, version, protocol, wire_epochs, network, identity?, seed_exists, encrypted, locked, coins }` | no |
 | `walletstatus` | — | `{ seed_exists, encrypted, locked }` | no |
-| `setwatchonly` | `on` | `{ watch_only }` | yes (live + persisted) |
 | `help` | `method?` | plain-text catalog (string) | no |
 | `listmethods` | — | `[name, …]` | no |
 | `stop` | — | `"pactd stopping"` | yes (lifecycle) |
@@ -22,18 +21,10 @@ merchant* error) are covered in the chapter "JSON-RPC Conventions".
   `{ "pact-htlc-v1": 1, "pact-htlc-v2": 2 }`) — a UI badges offers whose
   signed `wire` differs as un-takeable; `network` is the lowercased network
   name (`regtest`/`testnet`/`mainnet`); `coins` is the list of configured coin
-  ids; `watch_only` is the active merchant's watch-only flag (see below).
-  Tolerates a missing or locked seed — `identity` is `null` until a seed is
+  ids. Tolerates a missing or locked seed — `identity` is `null` until a seed is
   present **and** unlocked.
 - `walletstatus` — the seed state triple. `locked` is true only when the seed
   is encrypted **and** its passphrase is not held in memory.
-- `setwatchonly` — enters (`on: true`) or leaves (`on: false`) **watch-only
-  mode** for the active merchant. A watch-only session may browse the board and
-  withdraw its own offers, but the engine **blocks** posting, taking, and
-  funding (and no-ops offer-liveness management for another session). The flag
-  is persisted per-merchant in pactd's store and applied live (no relaunch);
-  `getinfo.watch_only` reports it, letting a UI skip the ≥ 2-coin first-run
-  gate. Returns the new value.
 - `help` — with no param, the daemon's full method catalog grouped by
   category, rendered as plain text (the CLI prints string results raw, so it
   reads like a man page); with a `method` name, that one method's arguments

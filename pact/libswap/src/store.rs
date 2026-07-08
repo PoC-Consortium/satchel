@@ -587,19 +587,6 @@ impl Store {
         self.meta_set("fee_policy", &serde_json::to_string(policy)?)
     }
 
-    /// Watch-only mode for this merchant: a viewer session (typically with no
-    /// coins) that browses the board and may withdraw its OWN offers, but never
-    /// posts/takes/funds and never touches offer liveness on behalf of another
-    /// session (no readvertise-on-boot, no delist-on-close). Persisted so the
-    /// engine boots straight into the mode.
-    pub fn watch_only(&self) -> Result<bool> {
-        Ok(self.meta_get("watch_only")?.as_deref() == Some("1"))
-    }
-
-    pub fn set_watch_only(&self, on: bool) -> Result<()> {
-        self.meta_set("watch_only", if on { "1" } else { "0" })
-    }
-
     // ---- Nostr transport buffers (spec/protocol.md §8.8) ----
     // NostrBoard (sync) and the relay service (async) communicate only
     // through these; neither calls the other directly.

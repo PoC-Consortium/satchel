@@ -53,9 +53,7 @@ Each coin has a confirmation depth for reorg finality (`N≥1`), which gates aut
 
 `listcoins` reports each coin's **capabilities** — **CLTV**, **SegWit v0**, and **Taproot**. Pairs are **derived, not curated**: `listpairs` walks live coins and reports which protocols a pair supports (v1 HTLC needs CLTV+SegWit; v2 adaptor needs Taproot). A pair only shows as ready when both coins are configured and live. The first supported pair is **BTCX ↔ BTC**.
 
-> **Note** — in Satchel, the **first-run ≥2-live-coins gate** means you must have at least two coins with status `ok` before you can reach the trading screens. See [Satchel User Guide](Satchel-User-Guide).
-
-> **Watch-only escape hatch** — you can skip coin setup entirely and **browse the board with zero coins configured** via watch-only mode. You can read offers and withdraw any you already own, but trading (post/take/fund) still requires two live coins. See [Satchel User Guide](Satchel-User-Guide).
+> **Note** — in Satchel, browsing the board never requires coins: with **zero coins configured** the Corkboard shows every pair automatically. Trading is gated **per action** and server-side (`ensure_chains_live`) rather than at app entry — you need at least two coins with status `ok` to post an offer or create a slip, and both of a pair's coins live to take one. See [Satchel User Guide](Satchel-User-Guide).
 
 ## See also
 

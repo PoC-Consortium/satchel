@@ -16,7 +16,7 @@ import { C } from "../theme";
 import { EmptyState } from "../components/StatusViews";
 
 export default function PrivateCreateScreen() {
-  const { log, watchOnly } = useApp();
+  const { log, coins } = useApp();
   const navigate = useNavigate();
   const t = useT();
   const [busy, setBusy] = useState(false);
@@ -58,9 +58,20 @@ export default function PrivateCreateScreen() {
     }
   }
 
-  if (watchOnly) {
+  // Per-action gate (#119): drafting a slip needs two connected coins for the
+  // pair. Soft nudge instead of a hard app-wide wall (the engine also refuses).
+  if (coins.filter((c) => c.configured).length < 2) {
     return (
-      <EmptyState title={t("watchOnly.postBlockedTitle")}>{t("watchOnly.postBlockedBody")}</EmptyState>
+      <EmptyState
+        title={t("setup.tradeTitle")}
+        action={
+          <Button variant="contained" onClick={() => navigate("settings", "coins")}>
+            {t("setup.tradeCta")}
+          </Button>
+        }
+      >
+        {t("setup.tradeBody")}
+      </EmptyState>
     );
   }
 

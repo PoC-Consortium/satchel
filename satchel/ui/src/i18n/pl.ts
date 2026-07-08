@@ -156,20 +156,16 @@ export const pl: Bundle = {
     signet: "Signet",
     notRealFunds: "To nie są prawdziwe środki — to sieć {network}",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Tylko podgląd",
-    badgeTip:
-      "Tryb tylko do podglądu — przeglądaj tablicę i wycofuj własne oferty, ale nie możesz wystawiać, przyjmować ani wnosić środków. Skonfiguruj monety w Ustawieniach, aby handlować.",
-    coinWizardButton: "Przeglądaj w trybie tylko do podglądu",
-    coinWizardHint:
-      "Pomiń konfigurację monet i po prostu przeglądaj tablicę (tylko do odczytu). Nadal możesz wycofywać własne oferty — przydatne do ściągania ofert pozostawionych przez inną sesję. Wyłącz w dowolnej chwili w Ustawieniach.",
-    postBlockedTitle: "Tryb tylko do podglądu",
-    postBlockedBody:
-      "To sesja tylko do podglądu, więc nie można wystawiać ofert. Skonfiguruj co najmniej dwie monety w Ustawienia → Monety, aby handlować.",
-    takeBlockedBody: "Tryb tylko do podglądu — możesz sprawdzić tę ofertę, ale jej przyjęcie wymaga skonfigurowanych monet.",
-    takeBlockedTip: "Tryb tylko do podglądu — skonfiguruj monety w Ustawieniach, aby przyjmować oferty.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Skonfiguruj dwie monety, aby handlować",
+    tradeBody:
+      "Wystawianie, przyjmowanie i finansowanie swapu wymagają dwóch połączonych monet. Dodaj je w Ustawienia → Monety.",
+    tradeCta: "Skonfiguruj monety",
+    takeNeedsCoins:
+      "Możesz sprawdzić ten slip, ale jego przyjęcie wymaga obu monet połączonych i aktywnych.",
   },
   merchants: {
     title: "Twoi sprzedawcy",
@@ -320,10 +316,6 @@ export const pl: Bundle = {
     themeHint: "Wybierz, jak wygląda Satchel. Systemowy podąża za ustawieniem Twojego systemu operacyjnego.",
     language: "Język",
     languageHint: "Kolejne języki pojawiają się w miarę dodawania tłumaczeń.",
-    mode: "Tryb",
-    watchOnly: "Tryb tylko do podglądu",
-    watchOnlyHint:
-      "Przeglądaj tablicę bez konfigurowania monet. Nadal możesz wycofywać własne oferty, ale nie możesz wystawiać, przyjmować ani wnosić środków. Wyłącz, aby handlować (potrzebne będą co najmniej dwie połączone monety).",
     network: "Sieć",
     boards: "Corkboardy",
     boardsDesc:
@@ -457,15 +449,6 @@ export const pl: Bundle = {
     unsupportedByEngineTip:
       "Ta moneta jest zdefiniowana w coins.toml, ale nie wbudowana w tę wersję silnika, więc nie można nią handlować.",
   },
-  coinWizard: {
-    title: "Połącz swoje monety",
-    intro:
-      "Wybierz co najmniej dwie monety i wskaż każdej własny węzeł. Swap potrzebuje dwóch łańcuchów, więc handel odblokowuje się, gdy dwa węzły są połączone i aktywne. Możesz później dodać lub zmienić monety w Ustawieniach.",
-    progress: "{count} z {min} połączonych monet",
-    continue: "Kontynuuj",
-    live: "Aktywny",
-    nodeDown: "Węzeł niedostępny",
-  },
   wallets: {
     degraded: "ograniczony",
     degradedWalletTip: "Serwer portfela jest nieosiągalny — saldo może być nieaktualne, a wysyłki przechodzą na serwery zapasowe.",
@@ -479,9 +462,6 @@ export const pl: Bundle = {
     noCoins: "Nie skonfigurowano jeszcze monet",
     noCoinsBody: "Połącz monetę w Ustawienia → Monety, a jej portfel pojawi się tutaj.",
     goToCoins: "Przejdź do Monet",
-    watchOnlyTitle: "Brak portfeli w trybie tylko do podglądu",
-    watchOnlyBody:
-      "To sesja tylko do podglądu bez połączonych monet, więc nie ma portfeli do pokazania. Wyłącz tryb tylko do podglądu w Ustawieniach i połącz monetę, aby finansować swapy.",
     walletName: "portfel · {wallet}",
     walletScopedHint: "Każde RPC dla tej monety jest ograniczone do tego portfela węzła.",
     walletDefault: "domyślny portfel (bez zakresu)",
@@ -722,7 +702,6 @@ export const pl: Bundle = {
     notConnected: "brak połączenia: {err}",
     connected: "połączono z pactd {version} ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "tylko podgląd: {err}",
     switchedMerchant: "przełączono na sprzedawcę {id}",
     renamedMerchant: "zmieniono nazwę sprzedawcy na {name}",
     renameMerchantError: "zmiana nazwy sprzedawcy: {err}",

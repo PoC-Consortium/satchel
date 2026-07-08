@@ -156,20 +156,16 @@ export const fi: Bundle = {
     signet: "Signet",
     notRealFunds: "Ei oikeita varoja — tämä on {network}-verkko",
   },
-  // Watch-only mode: a viewer session with no coins. Browse the board and
-  // withdraw your own offers, but no posting / taking / funding.
-  watchOnly: {
-    badge: "Vain katselu",
-    badgeTip:
-      "Vain katselu -tila — selaa taulua ja vedä pois omat tarjouksesi, mutta et voi julkaista, ottaa tai rahoittaa. Määritä kolikot Asetuksissa kaupankäyntiä varten.",
-    coinWizardButton: "Selaa vain katselu -tilassa",
-    coinWizardHint:
-      "Ohita kolikoiden määritys ja selaa vain taulua (vain luku). Voit silti vetää pois omat tarjouksesi — kätevää toisen istunnon jättämien tarjousten poistamiseen. Kytke se pois milloin tahansa Asetuksissa.",
-    postBlockedTitle: "Vain katselu -tila",
-    postBlockedBody:
-      "Tämä on vain katselu -istunto, joten se ei voi julkaista tarjouksia. Määritä vähintään kaksi kolikkoa kohdassa Asetukset → Kolikot kaupankäyntiä varten.",
-    takeBlockedBody: "Vain katselu -tila — voit tarkistaa tämän tarjouksen, mutta sen ottaminen vaatii määritetyt kolikot.",
-    takeBlockedTip: "Vain katselu -tila — määritä kolikot Asetuksissa ottaaksesi tarjouksia.",
+  // Per-action coin-setup nudges (#119): browsing is always available, but
+  // posting / taking / funding a swap need two connected coins for the pair.
+  // These replace the old app-wide watch-only wall with soft, in-place prompts.
+  setup: {
+    tradeTitle: "Määritä kaksi kolikkoa kaupankäyntiä varten",
+    tradeBody:
+      "Tarjouksen julkaiseminen, ottaminen ja rahoittaminen vaativat kaksi yhdistettyä kolikkoa. Lisää ne kohdassa Asetukset → Kolikot.",
+    tradeCta: "Määritä kolikot",
+    takeNeedsCoins:
+      "Voit tarkistaa tämän tarjouksen, mutta sen ottaminen vaatii, että sen molemmat kolikot ovat yhdistetty ja toiminnassa.",
   },
   merchants: {
     title: "Kauppiaasi",
@@ -320,10 +316,6 @@ export const fi: Bundle = {
     themeHint: "Valitse, miltä Satchel näyttää. Järjestelmä seuraa käyttöjärjestelmäsi asetusta.",
     language: "Kieli",
     languageHint: "Lisää kieliä saapuu, kun käännöksiä lahjoitetaan.",
-    mode: "Tila",
-    watchOnly: "Vain katselu -tila",
-    watchOnlyHint:
-      "Selaa taulua määrittämättä kolikoita. Voit silti vetää pois omat tarjouksesi, mutta et voi julkaista, ottaa tai rahoittaa. Kytke pois käydäksesi kauppaa (tarvitset vähintään kaksi yhdistettyä kolikkoa).",
     network: "Verkko",
     boards: "Corkboardit",
     boardsDesc:
@@ -457,15 +449,6 @@ export const fi: Bundle = {
     unsupportedByEngineTip:
       "Tämä kolikko on määritelty coins.toml-tiedostossa, mutta sitä ei ole sisäänrakennettu tähän moottorin versioon, joten sillä ei voi käydä kauppaa.",
   },
-  coinWizard: {
-    title: "Yhdistä kolikkosi",
-    intro:
-      "Valitse vähintään kaksi kolikkoa ja osoita kukin omaan solmuusi. Swap tarvitsee kaksi ketjua, joten kaupankäynti avautuu, kun kaksi solmua on yhdistetty ja toiminnassa. Voit lisätä tai muuttaa kolikoita myöhemmin Asetuksissa.",
-    progress: "{count} / {min} kolikkoa yhdistetty",
-    continue: "Jatka",
-    live: "Toiminnassa",
-    nodeDown: "Solmu alhaalla",
-  },
   wallets: {
     degraded: "heikentynyt",
     degradedWalletTip: "Lompakon palvelin ei vastaa — saldo voi olla vanhentunut ja lähetykset siirtyvät varapalvelimille.",
@@ -479,9 +462,6 @@ export const fi: Bundle = {
     noCoins: "Ei vielä määritettyjä kolikoita",
     noCoinsBody: "Yhdistä kolikko kohdassa Asetukset → Kolikot ja sen lompakko ilmestyy tähän.",
     goToCoins: "Siirry Kolikoihin",
-    watchOnlyTitle: "Ei lompakoita vain katselu -tilassa",
-    watchOnlyBody:
-      "Tämä on vain katselu -istunto ilman yhdistettyjä kolikoita, joten näytettäviä lompakoita ei ole. Kytke vain katselu pois Asetuksissa ja yhdistä kolikko rahoittaaksesi swapeja.",
     walletName: "lompakko · {wallet}",
     walletScopedHint: "Jokainen tämän kolikon RPC on rajattu tähän solmun lompakkoon.",
     walletDefault: "oletuslompakko (ei rajattu)",
@@ -725,7 +705,6 @@ export const fi: Bundle = {
     notConnected: "ei yhdistetty: {err}",
     connected: "yhdistetty pactd {version} ({protocol})",
     listcoinsError: "listcoins: {err}",
-    watchOnlyError: "vain katselu: {err}",
     switchedMerchant: "vaihdettu kauppiaaseen {id}",
     renamedMerchant: "kauppias nimetty uudelleen: {name}",
     renameMerchantError: "nimeä kauppias uudelleen: {err}",

@@ -38,9 +38,11 @@ import CoinsScreen from "./CoinsScreen";
 // functionality is preserved; it is only reorganised behind tabs.
 type SettingsTab = "general" | "coins" | "network" | "fees" | "notifications" | "about";
 
-export default function SettingsScreen() {
+export default function SettingsScreen({ initialTab }: { initialTab?: string }) {
   const t = useT();
-  const [tab, setTab] = useState<SettingsTab>("general");
+  // Deep-link support: an empty-state CTA can open Settings straight on the
+  // Coins tab (navigate("settings", "coins")). Falls back to General.
+  const [tab, setTab] = useState<SettingsTab>((initialTab as SettingsTab) || "general");
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
@@ -80,29 +82,15 @@ export default function SettingsScreen() {
 
 function GeneralTab() {
   const t = useT();
-  const { watchOnly, setWatchOnly } = useApp();
   return (
-    <>
-      <Section title={t("settings.appearance")}>
-        <Row label={t("settings.theme")} hint={t("settings.themeHint")}>
-          <ThemeToggle />
-        </Row>
-        <Row label={t("settings.language")} hint={t("settings.languageHint")}>
-          <LanguageSelect />
-        </Row>
-      </Section>
-      <Box sx={{ mt: 2.5 }}>
-        <Section title={t("settings.mode")}>
-          <Row label={t("settings.watchOnly")} hint={t("settings.watchOnlyHint")}>
-            <Switch
-              checked={watchOnly}
-              onChange={(_, on) => void setWatchOnly(on)}
-              inputProps={{ "aria-label": t("settings.watchOnly") }}
-            />
-          </Row>
-        </Section>
-      </Box>
-    </>
+    <Section title={t("settings.appearance")}>
+      <Row label={t("settings.theme")} hint={t("settings.themeHint")}>
+        <ThemeToggle />
+      </Row>
+      <Row label={t("settings.language")} hint={t("settings.languageHint")}>
+        <LanguageSelect />
+      </Row>
+    </Section>
   );
 }
 

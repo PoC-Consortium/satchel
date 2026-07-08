@@ -1,6 +1,6 @@
 # JSON-RPC API
 
-[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 64 methods, grouped below by area with a one-line purpose each. This is an index; the daemon itself serves the authoritative catalog via the `help` method (`pact-cli help`). For full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
+[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 63 methods, grouped below by area with a one-line purpose each. This is an index; the daemon itself serves the authoritative catalog via the `help` method (`pact-cli help`). For full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
 
 ## Conventions
 
@@ -15,11 +15,10 @@
 
 | Method | Purpose |
 |---|---|
-| `getinfo` | Daemon name/version/protocol/network, identity, seed status, coin ids, and a `watch_only` boolean. |
+| `getinfo` | Daemon name/version/protocol/network, identity, seed status, and coin ids. |
 | `help` | Plain-text method catalog by category; `help <method>` explains one method. |
 | `listmethods` | Machine-readable array of every method name. |
 | `walletstatus` | `{ seed_exists, encrypted, locked }`. |
-| `setwatchonly` | Toggle watch-only mode for the active merchant (`on: bool`); persisted, no relaunch. In watch-only you can browse the board and withdraw your own offers but cannot post/take/fund. |
 | `getfeepolicy` | Active merchant's fee-bump policy `{ max_feerate_sat_vb, reservation_mult }`. |
 | `setfeepolicy` | Update the fee-bump policy — positional, all optional `[max_feerate_sat_vb?, reservation_mult?]`; returns the updated policy; persisted per-merchant. The fee-bump itself is automatic market-tracking (no manual step knob). |
 | `stop` | Trigger graceful shutdown. |

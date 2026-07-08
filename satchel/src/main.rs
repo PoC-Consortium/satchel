@@ -322,7 +322,7 @@ fn net_config_dir(base: &Path) -> PathBuf {
 
 /// Base config dir, with an opt-in override: when `SATCHEL_DATA_DIR` is set it
 /// replaces the OS app-data location entirely. This isolates throwaway
-/// instances — e.g. the watch-only playground (tools/playground-watchonly.ps1)
+/// instances — e.g. the board-viewer playground (tools/playground-viewer.ps1)
 /// runs a mainnet viewer in its own dir so it never touches the real install's
 /// seed, merchants or config. Unset → the normal app-local-data dir.
 fn base_data_dir(default: PathBuf) -> PathBuf {
