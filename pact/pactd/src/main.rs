@@ -865,6 +865,12 @@ const METHODS: &[(&str, &str, &str, &str)] = &[
         "<no args — read the warning first>",
         "Adopt in-flight swaps from our encrypted relay snapshots (seed-only rescue). ONLY once the machine that ran them is retired — two live drivers can double-fund a swap.",
     ),
+    (
+        "rescue",
+        "takeover",
+        "<swap_id>",
+        "Start driving a followed swap (another machine's, or one recovered after re-import). ONLY once that machine is stopped — two live drivers can double-fund a swap.",
+    ),
 ];
 
 /// Typed marker for JSON-RPC -32601 (method not found) — the one place the
@@ -1574,6 +1580,14 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 "seen": seen,
                 "warning": if pending > 0 { Some(RESCUE_PENDING_WARNING) } else { None },
             }))
+        }
+        // Take over a followed swap (§4/§5): set `adopted` so this machine drives
+        // it. Confirm-gated at the UI ("the other machine is stopped") — the RPC
+        // trusts the caller made that call, per the design's safety model.
+        "takeover" => {
+            let swap_id = p.str(0, "swap_id")?;
+            blocking(app, move |e| e.take_over_swap(&swap_id)).await?;
+            Ok(json!({ "taken_over": true, "swap_id": p.str(0, "swap_id")? }))
         }
         "boardpostoffer" => {
             let give = parse_coin_amount(&p.str(0, "give")?)?;

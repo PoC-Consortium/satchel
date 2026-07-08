@@ -691,6 +691,33 @@ impl RescuedRecord {
             ),
         }
     }
+
+    /// The scope this snapshot's swap was derived under (§1).
+    fn derive_scope(&self) -> u64 {
+        match self {
+            Self::V1(r) => r.derive_scope,
+            Self::V2(r) => r.derive_scope,
+        }
+    }
+
+    /// Force `adopted = false` on import (§1 invariant — must NEVER travel): an
+    /// adopter re-publishes snapshots as it drives, so an imported snapshot may
+    /// carry `adopted = true`; honoring it would let a third machine drive with
+    /// no confirm. Whether *we* drive an imported record is decided locally
+    /// (own scope → yes; foreign → follow until an explicit take-over sets
+    /// `adopted`), never by the snapshot.
+    fn with_adopted_cleared(self) -> Self {
+        match self {
+            Self::V1(mut r) => {
+                r.adopted = false;
+                Self::V1(r)
+            }
+            Self::V2(mut r) => {
+                r.adopted = false;
+                Self::V2(r)
+            }
+        }
+    }
 }
 
 impl Engine {
@@ -728,6 +755,32 @@ impl Engine {
     /// record (foreign scope AND not adopted) is observed-only, never driven.
     pub fn drives(&self, derive_scope: u64, adopted: bool) -> bool {
         self.machine_scope.is_legacy() || adopted || derive_scope == self.machine_scope.0
+    }
+
+    /// The single choke point every swap-tx broadcast funnels through (§3/§5 of
+    /// docs/MULTI_MACHINE_122.md). A **followed** record (foreign scope AND not
+    /// adopted) must never sign or broadcast — it is another machine's swap that
+    /// we only observe; broadcasting for it would double-drive. Keyed on the
+    /// drive decision, so an *adopted* foreign-scope swap (taken over behind the
+    /// confirm) still broadcasts. Routing already keeps followed records out of
+    /// `tick_one`, but putting the refusal at this lowest layer means no bug in
+    /// any of the ~12 scattered redeem/refund/bump/nurse/rescue broadcast sites
+    /// can let a follower broadcast. (Funding uses `wallet_send`, gated
+    /// separately at its own site — see `fund`/`adaptor_fund`.)
+    fn broadcast_swap_tx(
+        &self,
+        derive_scope: u64,
+        adopted: bool,
+        swap_id: &str,
+        backend: &MultiBackend,
+        tx: &bitcoin::Transaction,
+    ) -> Result<bitcoin::Txid> {
+        ensure!(
+            self.drives(derive_scope, adopted),
+            "refusing to broadcast for swap {swap_id}: it belongs to another machine \
+             (followed, not driven) — take it over first if that machine is stopped"
+        );
+        backend.broadcast(tx)
     }
 
     /// Update the live fee-bump policy and persist it for this merchant (pactd
@@ -2572,7 +2625,13 @@ impl Engine {
                     &mut tx,
                     crate::adaptor_swap::lifted_to_bitcoin(&final_b)?,
                 );
-                let txid = self.backend(&rec.chain_b)?.broadcast(&tx)?;
+                let txid = self.broadcast_swap_tx(
+                    rec.derive_scope,
+                    rec.adopted,
+                    &rec.swap_id,
+                    &self.backend(&rec.chain_b)?,
+                    &tx,
+                )?;
                 rec.final_txid_b = Some(txid.to_string());
                 rec.final_tx_b_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
                 rec.state = AdaptorState::RedeemedB;
@@ -2632,7 +2691,13 @@ impl Engine {
                     &mut tx,
                     crate::adaptor_swap::lifted_to_bitcoin(&final_a)?,
                 );
-                let txid = self.backend(&rec.chain_a)?.broadcast(&tx)?;
+                let txid = self.broadcast_swap_tx(
+                    rec.derive_scope,
+                    rec.adopted,
+                    &rec.swap_id,
+                    &self.backend(&rec.chain_a)?,
+                    &tx,
+                )?;
                 rec.final_txid_a = Some(txid.to_string());
                 rec.final_tx_a_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
                 rec.state = AdaptorState::Completed;
@@ -2696,7 +2761,8 @@ impl Engine {
         );
         let tx =
             crate::taproot::build_refund_tx(&secp, &leg, outpoint, amount, dest, fee, &refund_kp)?;
-        let txid = backend.broadcast(&tx)?;
+        let txid =
+            self.broadcast_swap_tx(rec.derive_scope, rec.adopted, &rec.swap_id, &backend, &tx)?;
         let hex = bitcoin::consensus::encode::serialize_hex(&tx);
         match rec.role {
             // The refund spends our own funded leg: Alice's is leg A, Bob's leg B.
@@ -3071,7 +3137,13 @@ impl Engine {
                         let tx: bitcoin::Transaction =
                             bitcoin::consensus::encode::deserialize(&hex::decode(hex)?)
                                 .context("corrupt funding_b_tx_hex")?;
-                        let txid = self.backend(&rec.chain_b)?.broadcast(&tx)?;
+                        let txid = self.broadcast_swap_tx(
+                            rec.derive_scope,
+                            rec.adopted,
+                            &rec.swap_id,
+                            &self.backend(&rec.chain_b)?,
+                            &tx,
+                        )?;
                         let mut updated = rec.clone();
                         updated.funding_b_broadcast = true;
                         self.store.put_adaptor(&updated)?;
@@ -3217,7 +3289,7 @@ impl Engine {
         // (CPFP returns None) or a self-rejecting same-fee replacement.
         let parent_txid = tx.compute_txid().to_string();
         if !backend.is_in_mempool(&parent_txid)? {
-            backend.broadcast(&tx)?;
+            self.broadcast_swap_tx(rec.derive_scope, rec.adopted, &rec.swap_id, &backend, &tx)?;
         }
         let amount = if chain.coin_id == rec.chain_b.coin_id {
             rec.amount_b
@@ -3531,7 +3603,13 @@ impl Engine {
             if backend.is_in_mempool(&old_txid)? {
                 return Ok(None);
             }
-            let txid = backend.broadcast(&old_tx)?;
+            let txid = self.broadcast_swap_tx(
+                rec.derive_scope,
+                rec.adopted,
+                &rec.swap_id,
+                backend,
+                &old_tx,
+            )?;
             return Ok(Some(TickEvent {
                 swap_id: rec.swap_id.clone(),
                 action: "adaptor-rebroadcast".into(),
@@ -3549,7 +3627,13 @@ impl Engine {
             new_fee,
             &refund_kp,
         )?;
-        let txid = backend.broadcast(&new_tx)?;
+        let txid = self.broadcast_swap_tx(
+            rec.derive_scope,
+            rec.adopted,
+            &rec.swap_id,
+            backend,
+            &new_tx,
+        )?;
         let hex = bitcoin::consensus::encode::serialize_hex(&new_tx);
         let mut updated = rec.clone();
         match updated.role {
@@ -3914,7 +3998,13 @@ impl Engine {
                     &preimage,
                     &key,
                 )?;
-                let txid = backend.broadcast(&tx)?;
+                let txid = self.broadcast_swap_tx(
+                    rec.derive_scope,
+                    rec.adopted,
+                    &rec.swap_id,
+                    &backend,
+                    &tx,
+                )?;
                 rec.preimage = Some(hex::encode(preimage));
                 rec.final_txid = Some(txid.to_string());
                 rec.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
@@ -3992,7 +4082,13 @@ impl Engine {
                     &preimage,
                     &key,
                 )?;
-                let txid = backend_a.broadcast(&tx)?;
+                let txid = self.broadcast_swap_tx(
+                    rec.derive_scope,
+                    rec.adopted,
+                    &rec.swap_id,
+                    &backend_a,
+                    &tx,
+                )?;
                 rec.preimage = Some(hex::encode(preimage));
                 rec.final_txid = Some(txid.to_string());
                 rec.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
@@ -4093,7 +4189,8 @@ impl Engine {
                 build_refund_tx(&htlc, outpoint, amount, destination, fee, &key)?
             }
         };
-        let txid = backend.broadcast(&tx)?;
+        let txid =
+            self.broadcast_swap_tx(rec.derive_scope, rec.adopted, &rec.swap_id, &backend, &tx)?;
         rec.final_txid = Some(txid.to_string());
         rec.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
         rec.state = State::Refunded;
@@ -4240,6 +4337,14 @@ impl Engine {
             }
         }
         for record in records {
+            // §3/§5: drive only records this machine owns (own scope) or has
+            // taken over (adopted). A FOLLOWED record (another machine's swap)
+            // is never driven here — it is observed read-only via
+            // `refresh_progress` below (chain is the source of truth), and the
+            // broadcast belt is the lowest-layer backstop.
+            if !self.drives(record.derive_scope, record.adopted) {
+                continue;
+            }
             match self.tick_one(&record) {
                 Ok(Some(event)) => events.push(event),
                 Ok(None) => {}
@@ -4252,6 +4357,9 @@ impl Engine {
         }
         // v2 (pact-htlc-v2) adaptor swaps: same auto-redeem/auto-refund policy.
         for rec in adaptor_records {
+            if !self.drives(rec.derive_scope, rec.adopted) {
+                continue; // followed — observe-only (§3/§5)
+            }
             match self.adaptor_tick_one(&rec) {
                 Ok(Some(event)) => events.push(event),
                 Ok(None) => {}
@@ -5463,7 +5571,13 @@ impl Engine {
         } else {
             build_refund_tx(&htlc, outpoint, amount, destination, new_fee, &key)?
         };
-        let txid = backend.broadcast(&new_tx)?;
+        let txid = self.broadcast_swap_tx(
+            rec.derive_scope,
+            rec.adopted,
+            &rec.swap_id,
+            backend,
+            &new_tx,
+        )?;
         let mut updated = rec.clone();
         updated.final_txid = Some(txid.to_string());
         updated.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&new_tx));
@@ -5494,7 +5608,8 @@ impl Engine {
         if backend.is_in_mempool(old_txid)? {
             return Ok(None); // present → nothing to do
         }
-        let txid = backend.broadcast(old_tx)?;
+        let txid =
+            self.broadcast_swap_tx(rec.derive_scope, rec.adopted, &rec.swap_id, backend, old_tx)?;
         Ok(Some(TickEvent {
             swap_id: rec.swap_id.clone(),
             action: "rebroadcast".into(),
@@ -5819,11 +5934,22 @@ impl Engine {
         for blob in blobs {
             match self.rescue_decode(&kp, &me, blob) {
                 Ok((rec, next_index)) => {
-                    hi = hi.max(next_index);
+                    // Only raise OUR counter from an OWN-scope snapshot (§3): a
+                    // foreign swap's index lives in another machine's counter
+                    // space under a different scope, so it can never collide with
+                    // ours — raising from it would just waste indices. Legacy
+                    // (scope 0) snapshots are foreign to a real machine.
+                    if self.drives(rec.derive_scope(), false) {
+                        hi = hi.max(next_index);
+                    }
                     if !have.contains(rec.swap_id()) && !rec.terminal() {
-                        match &rec {
-                            RescuedRecord::V1(r) => self.store.put(r)?,
-                            RescuedRecord::V2(r) => self.store.put_adaptor(r)?,
+                        // §1 invariant: clear `adopted` on import (must never
+                        // travel). An own-scope record then drives via the drive
+                        // rule; a foreign-scope one stays FOLLOWED until an
+                        // explicit, confirm-gated take-over sets `adopted`.
+                        match rec.with_adopted_cleared() {
+                            RescuedRecord::V1(r) => self.store.put(&r)?,
+                            RescuedRecord::V2(r) => self.store.put_adaptor(&r)?,
                         }
                         restored += 1;
                     }
@@ -5833,6 +5959,33 @@ impl Engine {
         }
         self.store.set_next_swap_index_at_least(hi)?;
         Ok((restored, blobs.len()))
+    }
+
+    /// Take over a **followed** swap so THIS machine starts driving it (§4/§5 of
+    /// docs/MULTI_MACHINE_122.md): set the mutable `adopted` flag on the local
+    /// record — the `derive_scope` (immutable salt) is never touched, so the
+    /// swap keeps re-deriving its keys from the ORIGINATING machine's scope. From
+    /// the next tick the drive rule (`drives`) returns true and the swap graduates
+    /// from observe-only to full `tick_one` driving in place; the broadcast belt
+    /// then permits its redeems/refunds.
+    ///
+    /// SAFETY: this is the one deliberate door through the partition wall. The
+    /// caller MUST have confirmed the originating machine is stopped (the UI's
+    /// "the other machine is stopped" / "recovered after re-import" dialog) —
+    /// that confirmation IS the safety model. Two live machines both driving one
+    /// swap can double-fund it. Idempotent; errors only if no such swap exists.
+    pub fn take_over_swap(&self, swap_id: &str) -> Result<()> {
+        if let Ok(mut rec) = self.store.get(swap_id) {
+            rec.adopted = true;
+            self.store.put(&rec)?;
+            return Ok(());
+        }
+        if let Ok(mut rec) = self.store.get_adaptor(swap_id) {
+            rec.adopted = true;
+            self.store.put_adaptor(&rec)?;
+            return Ok(());
+        }
+        bail!("unknown swap {swap_id} — nothing to take over");
     }
 
     /// Read-only twin of [`Engine::rescue_from_blobs`]: count the snapshots
@@ -7634,6 +7787,28 @@ mod tests {
             Engine::open(&dir, passphrase, BTreeMap::new()).unwrap(),
             dir,
         )
+    }
+
+    #[test]
+    fn drive_rule_partitions_by_scope() {
+        let (mut engine, dir) = engine_with("drive-rule", None);
+        // A bare Engine::open is LEGACY (no machine.json) → drives everything,
+        // so the unpartitioned single-machine path is unchanged.
+        assert!(engine.machine_scope.is_legacy());
+        assert!(engine.drives(0, false));
+        assert!(engine.drives(0x1234_5678, false));
+        // With a real machine scope: own-scope and adopted are driven; a foreign
+        // scope (another machine's swap) is followed; a legacy (0) record is
+        // foreign to a real machine.
+        engine.machine_scope = crate::keys::DeriveScope(0xABCD);
+        assert!(engine.drives(0xABCD, false), "own scope → driven");
+        assert!(!engine.drives(0x1234, false), "foreign scope → followed");
+        assert!(engine.drives(0x1234, true), "foreign but adopted → driven");
+        assert!(
+            !engine.drives(0, false),
+            "legacy record on a real machine is foreign"
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     fn offer_on(engine: &Engine, network: Network, t1: u32, t2: u32) -> Result<()> {
