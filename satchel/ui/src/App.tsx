@@ -29,6 +29,7 @@ import ContactsScreen from "./screens/ContactsScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import Wizard from "./dialogs/Wizard";
 import SeedProvision from "./dialogs/SeedProvision";
+import CoinWizard from "./dialogs/CoinWizard";
 import Unlock from "./dialogs/Unlock";
 import MerchantManager from "./dialogs/MerchantManager";
 import ExitGate from "./components/ExitGate";
@@ -38,7 +39,7 @@ type Modal = { kind: "merchants" } | { kind: "wizard"; mode: "create" | "import"
 export default function App() {
   const app = useApp();
   const t = useT();
-  const { prefs, update } = usePrefs();
+  const { prefs, loaded: prefsLoaded, update } = usePrefs();
   const [route, setRoute] = useState<Route>("board");
   // Deep-link target for the Settings tabs: an empty-state CTA ("set up coins")
   // navigates to Settings AND opens the Coins tab. Passed to SettingsScreen as
@@ -76,6 +77,13 @@ export default function App() {
   const showFirstRun = app.phase === "wizard" && modal === null;
   const showSeedGate = app.phase === "seed" && modal === null;
   const showUnlockGate = app.phase === "unlock" && modal === null;
+  // First-run coin setup (#119): once the merchant + seed are ready, offer the
+  // coin-setup dialog exactly once (the persisted `onboarded` flag), then never
+  // again. It is a nudge, not a wall — "Later" proceeds with zero coins and
+  // trading is gated per-action. Gated on prefsLoaded so it doesn't flash before
+  // the persisted flag is read.
+  const showCoinSetup =
+    app.phase === "ready" && prefsLoaded && !prefs.onboarded && modal === null;
 
   function screen() {
     if (app.phase === "no-tauri") return <NoTauri />;
@@ -152,6 +160,7 @@ export default function App() {
             />
           )}
           {showUnlockGate && <Unlock onDone={app.boot} onSwitch={openers.openMerchants} />}
+          {showCoinSetup && <CoinWizard onDone={() => update({ onboarded: true })} />}
 
           {/* User-triggered dialogs. */}
           {modal?.kind === "merchants" && (

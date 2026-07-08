@@ -448,6 +448,15 @@ export const es: Bundle = {
     unsupportedByEngineTip:
       "Esta moneda está definida en coins.toml pero no está integrada en esta versión del motor, así que no se puede operar.",
   },
+  coinWizard: {
+    title: "Conecta tus monedas",
+    intro:
+      "Elige al menos dos monedas y apunta cada una a tu propio nodo. Un swap necesita dos cadenas, así que el trading se desbloquea una vez que dos nodos están conectados y activos. Puedes añadir o cambiar monedas más adelante en Ajustes.",
+    progress: "{count} de {min} monedas conectadas",
+    continue: "Continuar",
+    live: "Activo",
+    nodeDown: "Nodo caído",
+  },
   wallets: {
     degraded: "degradado",
     degradedWalletTip: "El servidor de la cartera no responde — el saldo puede estar desactualizado y los envíos usan los servidores de respaldo.",

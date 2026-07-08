@@ -179,6 +179,11 @@ struct UiPrefs {
     language: String,
     /// Whether the collapsible left nav is expanded.
     nav_open: bool,
+    /// One-time first-run flag: set true once the user has been through (or
+    /// skipped) the first-run coin-setup dialog, so it never shows again. False
+    /// on a fresh install / missing field (serde default), so first run offers
+    /// coin setup once.
+    onboarded: bool,
     /// Desktop-notification switches (issue #55). Satchel only persists them;
     /// the webview decides when to fire (it owns the swap poll + i18n).
     notify: NotifyPrefs,
@@ -190,6 +195,7 @@ impl Default for UiPrefs {
             theme: "system".into(),
             language: "en".into(),
             nav_open: true,
+            onboarded: false,
             notify: NotifyPrefs::default(),
         }
     }
@@ -627,13 +633,15 @@ fn get_ui_prefs(state: tauri::State<AppState>) -> serde_json::Value {
 }
 
 /// Write the per-install UI preferences (UI-1). Each field is optional so the
-/// UI can patch just the one that changed (theme / language / nav_open).
+/// UI can patch just the one that changed (theme / language / nav_open /
+/// onboarded).
 #[tauri::command]
 fn set_ui_prefs(
     state: tauri::State<AppState>,
     theme: Option<String>,
     language: Option<String>,
     nav_open: Option<bool>,
+    onboarded: Option<bool>,
     notify: Option<NotifyPrefs>,
 ) -> Result<(), String> {
     let mut cfg = state.config.lock().unwrap();
@@ -645,6 +653,9 @@ fn set_ui_prefs(
     }
     if let Some(nav_open) = nav_open {
         cfg.ui.nav_open = nav_open;
+    }
+    if let Some(onboarded) = onboarded {
+        cfg.ui.onboarded = onboarded;
     }
     if let Some(notify) = notify {
         cfg.ui.notify = notify;

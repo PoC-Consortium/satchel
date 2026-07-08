@@ -65,6 +65,7 @@ export const setUiPrefs = (patch: Partial<UiPrefs>) =>
     theme: patch.theme ?? null,
     language: patch.language ?? null,
     navOpen: patch.nav_open ?? null,
+    onboarded: patch.onboarded ?? null,
     notify: patch.notify ?? null,
   }) as Promise<void>;
 

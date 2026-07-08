@@ -465,6 +465,15 @@ export const en = {
     unsupportedByEngineTip:
       "This coin is defined in coins.toml but not built into this version of the engine, so it can't be traded.",
   },
+  coinWizard: {
+    title: "Connect your coins",
+    intro:
+      "Pick at least two coins and point each at your own node. A swap needs two chains, so trading unlocks once two nodes are connected and live. You can add or change coins later in Settings.",
+    progress: "{count} of {min} coins connected",
+    continue: "Continue",
+    live: "Live",
+    nodeDown: "Node down",
+  },
   wallets: {
     // Degraded, not dead (issues #98/#100): a minority of the coin's
     // Electrum fleet — possibly the wallet-home server — is down while

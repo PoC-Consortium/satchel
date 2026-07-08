@@ -448,6 +448,15 @@ export const gl: Bundle = {
     unsupportedByEngineTip:
       "Esta moeda está definida en coins.toml pero non está incorporada nesta versión do motor, polo que non se pode negociar.",
   },
+  coinWizard: {
+    title: "Conecta as túas moedas",
+    intro:
+      "Escolle polo menos dúas moedas e apunta cada unha ao teu propio nodo. Un intercambio precisa dúas cadeas, así que a negociación desbloquéase unha vez que dous nodos estean conectados e activos. Podes engadir ou cambiar moedas máis tarde en Axustes.",
+    progress: "{count} de {min} moedas conectadas",
+    continue: "Continuar",
+    live: "Activa",
+    nodeDown: "Nodo caído",
+  },
   wallets: {
     degraded: "degradado",
     degradedWalletTip: "O servidor da carteira está inaccesible — o saldo pode estar desactualizado e os envíos pasan aos servidores de reserva.",

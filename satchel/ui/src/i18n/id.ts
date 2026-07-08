@@ -449,6 +449,15 @@ export const id: Bundle = {
     unsupportedByEngineTip:
       "Koin ini didefinisikan di coins.toml tapi tidak dibangun ke dalam versi engine ini, jadi tidak bisa diperdagangkan.",
   },
+  coinWizard: {
+    title: "Hubungkan koin Anda",
+    intro:
+      "Pilih setidaknya dua koin dan arahkan masing-masing ke node Anda sendiri. Swap membutuhkan dua chain, jadi perdagangan terbuka begitu dua node terhubung dan aktif. Anda bisa menambah atau mengubah koin nanti di Pengaturan.",
+    progress: "{count} dari {min} koin terhubung",
+    continue: "Lanjutkan",
+    live: "Aktif",
+    nodeDown: "Node mati",
+  },
   wallets: {
     degraded: "menurun",
     degradedWalletTip: "Server dompet tidak terjangkau — saldo mungkin usang dan pengiriman beralih ke server cadangan.",

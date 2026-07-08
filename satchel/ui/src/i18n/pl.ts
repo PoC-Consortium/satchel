@@ -449,6 +449,15 @@ export const pl: Bundle = {
     unsupportedByEngineTip:
       "Ta moneta jest zdefiniowana w coins.toml, ale nie wbudowana w tę wersję silnika, więc nie można nią handlować.",
   },
+  coinWizard: {
+    title: "Połącz swoje monety",
+    intro:
+      "Wybierz co najmniej dwie monety i wskaż każdej własny węzeł. Swap potrzebuje dwóch łańcuchów, więc handel odblokowuje się, gdy dwa węzły są połączone i aktywne. Możesz później dodać lub zmienić monety w Ustawieniach.",
+    progress: "{count} z {min} połączonych monet",
+    continue: "Kontynuuj",
+    live: "Aktywny",
+    nodeDown: "Węzeł niedostępny",
+  },
   wallets: {
     degraded: "ograniczony",
     degradedWalletTip: "Serwer portfela jest nieosiągalny — saldo może być nieaktualne, a wysyłki przechodzą na serwery zapasowe.",

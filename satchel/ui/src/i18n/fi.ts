@@ -449,6 +449,15 @@ export const fi: Bundle = {
     unsupportedByEngineTip:
       "Tämä kolikko on määritelty coins.toml-tiedostossa, mutta sitä ei ole sisäänrakennettu tähän moottorin versioon, joten sillä ei voi käydä kauppaa.",
   },
+  coinWizard: {
+    title: "Yhdistä kolikkosi",
+    intro:
+      "Valitse vähintään kaksi kolikkoa ja osoita kukin omaan solmuusi. Swap tarvitsee kaksi ketjua, joten kaupankäynti avautuu, kun kaksi solmua on yhdistetty ja toiminnassa. Voit lisätä tai muuttaa kolikoita myöhemmin Asetuksissa.",
+    progress: "{count} / {min} kolikkoa yhdistetty",
+    continue: "Jatka",
+    live: "Toiminnassa",
+    nodeDown: "Solmu alhaalla",
+  },
   wallets: {
     degraded: "heikentynyt",
     degradedWalletTip: "Lompakon palvelin ei vastaa — saldo voi olla vanhentunut ja lähetykset siirtyvät varapalvelimille.",

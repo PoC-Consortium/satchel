@@ -449,6 +449,15 @@ export const tr: Bundle = {
     unsupportedByEngineTip:
       "Bu coin coins.toml içinde tanımlı ancak motorun bu sürümünde yerleşik değil, bu yüzden işlem yapılamaz.",
   },
+  coinWizard: {
+    title: "Coin'lerinizi bağlayın",
+    intro:
+      "En az iki coin seçin ve her birini kendi düğümünüze yönlendirin. Bir takas iki zincire ihtiyaç duyar, bu yüzden iki düğüm bağlanıp canlı olduğunda işlem yapma açılır. Daha sonra Ayarlar'dan coin ekleyebilir veya değiştirebilirsiniz.",
+    progress: "{min} coin'den {count} tanesi bağlı",
+    continue: "Devam et",
+    live: "Canlı",
+    nodeDown: "Düğüm çalışmıyor",
+  },
   wallets: {
     degraded: "kısıtlı",
     degradedWalletTip: "Cüzdan sunucusuna erişilemiyor — bakiye eski olabilir, gönderimler yedek sunuculara geçer.",
