@@ -243,8 +243,8 @@ pub fn build_refund_tx(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::keys::{PactSeed, COIN_BTC, COIN_POCX};
-    use crate::params::{BTC_REGTEST, POCX_REGTEST};
+    use crate::keys::{PactSeed, COIN_BTC, COIN_BTCX};
+    use crate::params::{BTCX_REGTEST, BTC_REGTEST};
     use std::str::FromStr;
 
     fn test_params() -> (SwapParams, PactSeed, PactSeed, [u8; 32]) {
@@ -252,7 +252,7 @@ mod tests {
         let bob = PactSeed::from_seed(&[2u8; 64]).unwrap();
         let s = alice.preimage(0).unwrap();
         let params = SwapParams {
-            chain_a: &POCX_REGTEST,
+            chain_a: &BTCX_REGTEST,
             chain_b: &BTC_REGTEST,
             amount_a: 50_0000_0000,
             amount_b: 10_0000,
@@ -261,9 +261,9 @@ mod tests {
             t2: 1_780_021_600,
             n_a: 1,
             n_b: 1,
-            alice_refund_pubkey_a: alice.swap_pubkey(COIN_POCX, 0).unwrap(),
+            alice_refund_pubkey_a: alice.swap_pubkey(COIN_BTCX, 0).unwrap(),
             alice_redeem_pubkey_b: alice.swap_pubkey(COIN_BTC, 0).unwrap(),
-            bob_redeem_pubkey_a: bob.swap_pubkey(COIN_POCX, 0).unwrap(),
+            bob_redeem_pubkey_a: bob.swap_pubkey(COIN_BTCX, 0).unwrap(),
             bob_refund_pubkey_b: bob.swap_pubkey(COIN_BTC, 0).unwrap(),
         };
         (params, alice, bob, s)

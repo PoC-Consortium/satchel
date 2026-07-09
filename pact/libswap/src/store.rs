@@ -5,23 +5,19 @@
 //! are stored as JSON blobs in SQLite (one row per swap) plus a counter
 //! for the next BIP32 swap index.
 //!
-//! Seed storage (#120): a user passphrase encrypts the BIP39 mnemonic with
-//! scrypt + ChaCha20-Poly1305 (`PACTSEEDv1`). With NO passphrase the seed is
-//! still never written plaintext — it is ChaCha20-Poly1305'd under a machine key
-//! held in the OS keystore (`PACTSEEDv2-keyring`, Windows/macOS only), or, where
-//! no keystore is compiled/available (all Linux — see the Cargo target gate),
-//! under a built-in obfuscation key (`PACTSEEDv2-obfs`). The obfuscation key
-//! ships in the binary, so an obfs seed is treated as UNENCRYPTED wherever trust
-//! is decided (mainnet gate, `walletstatus`); it only lifts the file off
-//! plaintext ASCII. The machine key auto-unlocks, so the daemon keeps signing
-//! across restarts; only a passphrase seed can be `locked`.
+//! Seed storage (#120) lives in the extracted `seedstore` crate
+//! ([`SeedStore`]): a user passphrase encrypts the BIP39 mnemonic with
+//! scrypt + ChaCha20-Poly1305 (`PACTSEEDv1`); with NO passphrase the seed is
+//! still never written plaintext (OS-keystore wrap `PACTSEEDv2-keyring` on
+//! Windows/macOS, obfuscation `PACTSEEDv2-obfs` elsewhere — treated as
+//! UNENCRYPTED wherever trust is decided). The [`Store`] embeds a
+//! [`SeedStore`] for the same data dir and exposes the seed as a
+//! [`PactSeed`].
 
 use anyhow::{bail, Context, Result};
-use chacha20poly1305::aead::Aead;
-use chacha20poly1305::{ChaCha20Poly1305, KeyInit};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
 use crate::adaptor_swap::AdaptorState;
@@ -31,32 +27,14 @@ pub type NostrOutboxRow = (i64, String, Option<String>, String);
 use crate::keys::PactSeed;
 use crate::messages::ChainRef;
 use crate::swap::{Role, State};
+use seedstore::SeedStore;
 
-pub const SEED_FILE: &str = "seed.mnemonic";
+// Seed-at-rest formats + status live in the extracted crate; re-exported so
+// `crate::store::{SEED_FILE, WalletStatus, is_encrypted_seed_file}` callers
+// are unchanged.
+pub use seedstore::{is_encrypted_seed_file, WalletStatus, SEED_FILE};
+
 pub const DB_FILE: &str = "pact.sqlite";
-const SEED_MAGIC: &str = "PACTSEEDv1";
-/// scrypt cost: N=2^15, r=8, p=1 (~30 MB, tens of ms) — interactive-grade.
-const SCRYPT_LOG_N: u8 = 15;
-/// The two *unattended* at-rest wraps (#120), used when no passphrase is set.
-/// `-keyring`: `MAGIC:key_id:nonce:ct`, key held in the OS keystore under
-/// `key_id`. `-obfs`: `MAGIC:nonce:ct`, the fallback constant key.
-const SEED_V2_KEYRING: &str = "PACTSEEDv2-keyring";
-const SEED_V2_OBFS: &str = "PACTSEEDv2-obfs";
-/// OS-keystore service name; the per-seed account is the random `key_id` stored
-/// in the seed line itself (so the entry survives a same-machine folder move,
-/// but not a copy to a different machine — which is the point). Only referenced
-/// by the Windows/macOS keystore path, so it's gated to avoid an unused-const
-/// warning on Linux (where the seed always takes the obfuscation wrap).
-#[cfg(any(windows, target_os = "macos"))]
-const KEYRING_SERVICE: &str = "pactd-seed";
-/// The obfuscation fallback key. This is NOT a secret — it ships in the
-/// open-source binary. It only raises a no-keystore seed from plaintext ASCII to
-/// a binary blob (Bitcoin-Core-unencrypted parity) and is always treated as
-/// UNENCRYPTED for trust. Bytes spell "PACT-seed-obfs-v2-do-not-trust!!".
-const OBFUSCATION_KEY: [u8; 32] = [
-    0x50, 0x41, 0x43, 0x54, 0x2d, 0x73, 0x65, 0x65, 0x64, 0x2d, 0x6f, 0x62, 0x66, 0x73, 0x2d, 0x76,
-    0x32, 0x2d, 0x64, 0x6f, 0x2d, 0x6e, 0x6f, 0x74, 0x2d, 0x74, 0x72, 0x75, 0x73, 0x74, 0x21, 0x21,
-];
 
 /// One party's durable view of one swap. Hex fields use lowercase hex;
 /// txids are big-endian display order.
@@ -231,20 +209,9 @@ pub struct AdaptorSwapRecord {
 
 pub struct Store {
     conn: Connection,
-    data_dir: PathBuf,
-    passphrase: Option<String>,
-}
-
-/// Seed-lifecycle status for the `walletstatus` RPC and the Satchel wizard.
-///
-/// A merchant with no seed yet is in first-run state (`seed_exists=false`).
-/// An `encrypted` seed with no passphrase loaded is `locked`: the daemon is
-/// up but cannot sign until an `unlock` (or a restart with PACT_PASSPHRASE).
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct WalletStatus {
-    pub seed_exists: bool,
-    pub encrypted: bool,
-    pub locked: bool,
+    /// The seed file of this data dir (extracted `seedstore` crate) — one
+    /// merchant = one seed = one dir, exactly as before.
+    seed_store: SeedStore,
 }
 
 /// A maker's own posted offer (the `my_offers` registry row). `valid_for` is
@@ -348,104 +315,19 @@ impl Store {
                  state        TEXT NOT NULL DEFAULT 'live'
              );",
         )?;
+        // SeedStore::open runs the #120 at-rest migration (best-effort) —
+        // exactly what Store::open did before the extraction.
         let store = Self {
             conn,
-            data_dir: data_dir.to_path_buf(),
-            passphrase: passphrase.map(str::to_string),
+            seed_store: SeedStore::open(data_dir, passphrase)?,
         };
-        // #120: bring any pre-existing plaintext seed up to the never-plaintext
-        // bar in place. Best-effort — a keystore/disk hiccup must never block
-        // startup; the next boot retries. Only touches plaintext (see below).
-        if let Err(e) = store.migrate_seed_at_rest() {
-            eprintln!("seed: at-rest migration skipped ({e:#})");
-        }
         Ok(store)
-    }
-
-    /// #120: re-wrap an existing *plaintext* seed in place (OS-keystore key, or
-    /// obfuscation + warning) so a legacy seed stops sitting on disk as ASCII.
-    /// Only ever touches a plaintext file — passphrase (`PACTSEEDv1`) and
-    /// already-wrapped (`PACTSEEDv2-*`) seeds are left exactly as they are, so
-    /// this can never *downgrade* a stronger wrap (guardrail 2).
-    fn migrate_seed_at_rest(&self) -> Result<()> {
-        let seed_path = self.data_dir.join(SEED_FILE);
-        let Ok(contents) = std::fs::read_to_string(&seed_path) else {
-            return Ok(()); // no seed yet
-        };
-        let line = contents.trim();
-        if line.is_empty()
-            || line.starts_with(SEED_MAGIC)
-            || line.starts_with(SEED_V2_KEYRING)
-            || line.starts_with(SEED_V2_OBFS)
-        {
-            return Ok(()); // already wrapped (or empty) — nothing to migrate
-        }
-        let wrapped = wrap_unattended(line)?;
-        write_seed_atomic(&seed_path, &wrapped)?;
-        eprintln!(
-            "seed: migrated a plaintext seed to encrypted-at-rest ({})",
-            seed_path.display()
-        );
-        Ok(())
     }
 
     /// Seed-lifecycle snapshot — drives `walletstatus`, the first-run wizard,
     /// and the lock/unlock UX. Cheap: no scrypt, just a file probe.
     pub fn wallet_status(&self) -> Result<WalletStatus> {
-        let path = self.data_dir.join(SEED_FILE);
-        if !path.exists() {
-            return Ok(WalletStatus {
-                seed_exists: false,
-                encrypted: false,
-                locked: false,
-            });
-        }
-        let contents = std::fs::read_to_string(&path)
-            .with_context(|| format!("reading seed at {}", path.display()))?;
-        let encrypted = is_encrypted_seed_file(&contents);
-        // Only a passphrase seed can be *locked*: it needs an in-memory
-        // passphrase to read. Keyring seeds auto-unlock from the OS keystore, so
-        // they are encrypted-but-never-locked (a keyring seed the machine can no
-        // longer decrypt surfaces at read time as a reconfirm-with-mnemonic
-        // error, #120 guardrail 2 — not as a lock). We only ever hold a
-        // passphrase that has actually decrypted the seed, so "held" ⇒ "usable".
-        let locked = is_passphrase_seed_file(&contents) && self.passphrase.is_none();
-        Ok(WalletStatus {
-            seed_exists: true,
-            encrypted,
-            locked,
-        })
-    }
-
-    /// Write a mnemonic to disk and adopt it as this Store's live seed. A
-    /// non-empty passphrase encrypts it (`PACTSEEDv1`); otherwise it is wrapped
-    /// unattended (#120: OS-keystore key, or obfuscation) — never plaintext.
-    /// Refuses to clobber a seed we can still read.
-    fn install_seed(&mut self, phrase: &str, passphrase: Option<&str>) -> Result<()> {
-        let seed_path = self.data_dir.join(SEED_FILE);
-        if seed_path.exists() {
-            // The one clobber we allow is the reconfirm-with-mnemonic recovery
-            // (#120 guardrail 2): a `PACTSEEDv2-keyring` seed whose OS-keystore
-            // key has vanished (moved to a new machine / reset keychain) is
-            // unreadable, so re-importing the mnemonic re-provisions it under a
-            // fresh machine key. A seed we can still read is never overwritten.
-            let existing = std::fs::read_to_string(&seed_path).unwrap_or_default();
-            let unreadable_keyring =
-                existing.trim().starts_with(SEED_V2_KEYRING) && self.seed().is_err();
-            anyhow::ensure!(
-                unreadable_keyring,
-                "{} already exists — refusing to overwrite a seed",
-                seed_path.display()
-            );
-        }
-        let pass = passphrase.filter(|p| !p.is_empty());
-        let contents = match pass {
-            Some(pass) => encrypt_seed(phrase, pass)?,
-            None => wrap_unattended(phrase)?,
-        };
-        write_seed_atomic(&seed_path, &contents)?;
-        self.passphrase = pass.map(str::to_string);
-        Ok(())
+        self.seed_store.wallet_status()
     }
 
     /// Generate a new random BIP39 seed and return the mnemonic **once** for
@@ -455,9 +337,7 @@ impl Store {
     /// storage, and 128 bits already matches secp256k1's security level — 24
     /// (256-bit) for those who want the longer phrase.
     pub fn create_seed(&mut self, passphrase: Option<&str>, words: usize) -> Result<String> {
-        let phrase = self.generate_mnemonic(words)?;
-        self.install_seed(&phrase, passphrase)?;
-        Ok(phrase)
+        self.seed_store.create_seed(passphrase, words)
     }
 
     /// Generate a fresh random BIP39 mnemonic **without persisting it** — for an
@@ -465,93 +345,33 @@ impl Store {
     /// mnemonic is only written once it's passed back to [`Self::import_seed`].
     /// `words`: 12 or 24, see [`Self::create_seed`].
     pub fn generate_mnemonic(&self, words: usize) -> Result<String> {
-        let bytes = match words {
-            12 => 16,
-            24 => 32,
-            n => bail!("seed length must be 12 or 24 words, not {n}"),
-        };
-        let mut entropy = [0u8; 32];
-        use bitcoin::secp256k1::rand::RngCore;
-        bitcoin::secp256k1::rand::thread_rng().fill_bytes(&mut entropy[..bytes]);
-        Ok(bip39::Mnemonic::from_entropy(&entropy[..bytes])?.to_string())
+        self.seed_store.generate_mnemonic(words)
     }
 
     /// Import a user-supplied BIP39 mnemonic (validated). Returns the
     /// normalized phrase. Encrypted when a passphrase is supplied.
     pub fn import_seed(&mut self, mnemonic: &str, passphrase: Option<&str>) -> Result<String> {
-        let parsed = bip39::Mnemonic::parse_normalized(mnemonic.trim())
-            .context("not a valid BIP39 mnemonic")?;
-        let phrase = parsed.to_string();
-        self.install_seed(&phrase, passphrase)?;
-        Ok(phrase)
+        self.seed_store.import_seed(mnemonic, passphrase)
     }
 
     /// Supply the passphrase for an existing encrypted seed, verifying it by
     /// trial decryption before holding it in memory (`lncli unlock`-style).
     /// Idempotent on an already-unlocked store; a no-op error on plaintext.
     pub fn unlock(&mut self, passphrase: &str) -> Result<()> {
-        let path = self.data_dir.join(SEED_FILE);
-        let contents =
-            std::fs::read_to_string(&path).context("no seed yet — create or import one first")?;
-        // Only a passphrase seed needs unlocking; keyring/obfs auto-read.
-        anyhow::ensure!(
-            is_passphrase_seed_file(&contents),
-            "seed is not passphrase-encrypted — no unlock needed"
-        );
-        // Errors (wrong passphrase) before we adopt anything.
-        decrypt_seed(contents.trim(), passphrase)?;
-        self.passphrase = Some(passphrase.to_string());
-        Ok(())
+        self.seed_store.unlock(passphrase)
     }
 
     /// Whether the on-disk seed is *encrypted* — the file is useless without an
     /// external secret (a passphrase, or the OS-keystore key). Obfuscation and
     /// plaintext are NOT encrypted. Callers gate networks on this (#120).
     pub fn seed_is_encrypted(&self) -> Result<bool> {
-        let path = self.data_dir.join(SEED_FILE);
-        let contents = std::fs::read_to_string(&path)
-            .with_context(|| format!("no seed at {} — run `pact init` first", path.display()))?;
-        Ok(is_encrypted_seed_file(&contents))
+        self.seed_store.seed_is_encrypted()
     }
 
+    /// The live [`PactSeed`], derived from the stored mnemonic (the
+    /// `SeedStore` holds the mnemonic string; the Pact tree wraps it).
     pub fn seed(&self) -> Result<PactSeed> {
-        let path = self.data_dir.join(SEED_FILE);
-        let contents = std::fs::read_to_string(&path)
-            .with_context(|| format!("no seed at {} — run `pact init` first", path.display()))?;
-        let mnemonic = self.decrypt_contents(contents.trim())?;
-        PactSeed::from_mnemonic(&mnemonic, "")
-    }
-
-    /// Decrypt on-disk seed contents to the raw mnemonic, dispatching on the
-    /// wrap: passphrase (`PACTSEEDv1`, needs the in-memory passphrase), keyring
-    /// (`PACTSEEDv2-keyring`, key from the OS keystore), obfuscation
-    /// (`PACTSEEDv2-obfs`), or legacy plaintext (pre-#120, not yet migrated).
-    fn decrypt_contents(&self, line: &str) -> Result<String> {
-        if line.starts_with(SEED_MAGIC) {
-            let pass = self
-                .passphrase
-                .as_deref()
-                .context("seed is encrypted — set PACT_PASSPHRASE or run `unlock`")?;
-            decrypt_seed(line, pass)
-        } else if let Some(rest) = line.strip_prefix(&format!("{SEED_V2_KEYRING}:")) {
-            let mut parts = rest.split(':');
-            let key_id = parts.next().context("malformed keyring seed")?;
-            let nonce = parts.next().context("malformed keyring seed")?;
-            let ct = parts.next().context("malformed keyring seed")?;
-            let key = keyring_get(key_id).context(
-                "this machine can no longer unlock the seed (OS-keystore key missing) — \
-                 re-import your recovery phrase to continue",
-            )?;
-            decrypt_v2(nonce, ct, &key)
-        } else if let Some(rest) = line.strip_prefix(&format!("{SEED_V2_OBFS}:")) {
-            let mut parts = rest.split(':');
-            let nonce = parts.next().context("malformed obfs seed")?;
-            let ct = parts.next().context("malformed obfs seed")?;
-            decrypt_v2(nonce, ct, &OBFUSCATION_KEY)
-        } else {
-            // Legacy plaintext (migrated to a wrap on the next `Store::open`).
-            Ok(line.to_string())
-        }
+        PactSeed::from_mnemonic(&self.seed_store.mnemonic()?, "")
     }
 
     /// Allocate the next BIP32 swap index (monotonic, never reused —
@@ -1138,186 +958,11 @@ pub struct NonceSession {
     pub partial_sig: Option<Vec<u8>>,
 }
 
-/// Whether an on-disk seed file is *encrypted* — useless without an external
-/// secret (a passphrase, or the OS-keystore key). Obfuscation-wrapped and
-/// plaintext seeds are NOT encrypted. Shared with the merchant registry so the
-/// format magics live in one place (#120).
-pub fn is_encrypted_seed_file(contents: &str) -> bool {
-    let line = contents.trim_start();
-    line.starts_with(SEED_MAGIC) || line.starts_with(SEED_V2_KEYRING)
-}
-
-/// Whether the seed is passphrase-encrypted (`PACTSEEDv1`) — the only wrap that
-/// needs an `unlock` before it can be read.
-fn is_passphrase_seed_file(contents: &str) -> bool {
-    contents.trim_start().starts_with(SEED_MAGIC)
-}
-
-/// Whether to use the OS keystore. Compiled to `true`-capable only on
-/// Windows/macOS (native, unattended-friendly, no C deps); on Linux and others
-/// it is a const `false`, so those always take the obfuscation wrap and the
-/// `keyring` crate is never linked (see libswap's Cargo target gate). Also off
-/// under the crate's own unit tests (so they never touch the developer's real
-/// keychain) and when `PACT_DISABLE_KEYRING` is set (e2e/CI determinism).
-#[cfg(any(windows, target_os = "macos"))]
-fn keyring_enabled() -> bool {
-    !cfg!(test) && std::env::var_os("PACT_DISABLE_KEYRING").is_none()
-}
-#[cfg(not(any(windows, target_os = "macos")))]
-fn keyring_enabled() -> bool {
-    false
-}
-
-fn random_bytes<const N: usize>() -> [u8; N] {
-    use bitcoin::secp256k1::rand::RngCore;
-    let mut b = [0u8; N];
-    bitcoin::secp256k1::rand::thread_rng().fill_bytes(&mut b);
-    b
-}
-
-/// Encrypt a mnemonic with a raw 32-byte key into `MAGIC[:key_id]:nonce:ct`.
-fn encrypt_v2(magic: &str, key_id: Option<&str>, key: &[u8; 32], mnemonic: &str) -> Result<String> {
-    let nonce = random_bytes::<12>();
-    let cipher = ChaCha20Poly1305::new(key.into());
-    let ct = cipher
-        .encrypt((&nonce).into(), mnemonic.as_bytes())
-        .map_err(|_| anyhow::anyhow!("seed encryption failed"))?;
-    Ok(match key_id {
-        Some(id) => format!("{magic}:{id}:{}:{}\n", hex::encode(nonce), hex::encode(ct)),
-        None => format!("{magic}:{}:{}\n", hex::encode(nonce), hex::encode(ct)),
-    })
-}
-
-fn decrypt_v2(nonce_hex: &str, ct_hex: &str, key: &[u8; 32]) -> Result<String> {
-    let cipher = ChaCha20Poly1305::new(key.into());
-    let nonce = hex::decode(nonce_hex)?;
-    let pt = cipher
-        .decrypt(nonce.as_slice().into(), hex::decode(ct_hex)?.as_slice())
-        .map_err(|_| anyhow::anyhow!("seed decryption failed"))?;
-    String::from_utf8(pt).context("decrypted seed is not UTF-8")
-}
-
-/// Store a fresh random seed-key in the OS keystore, returning `(key_id, key)`.
-#[cfg(any(windows, target_os = "macos"))]
-fn keyring_put_new() -> Result<(String, [u8; 32])> {
-    let key_id = hex::encode(random_bytes::<8>());
-    let key = random_bytes::<32>();
-    let entry =
-        keyring::Entry::new(KEYRING_SERVICE, &key_id).context("opening OS keystore entry")?;
-    entry
-        .set_password(&hex::encode(key))
-        .context("writing seed key to OS keystore")?;
-    Ok((key_id, key))
-}
-#[cfg(not(any(windows, target_os = "macos")))]
-fn keyring_put_new() -> Result<(String, [u8; 32])> {
-    anyhow::bail!("no OS keystore on this platform")
-}
-
-/// Fetch a seed-key from the OS keystore by `key_id`. Errors (→ reconfirm) when
-/// the entry is missing (new machine / reset keychain), or on a platform with no
-/// keystore (a keyring seed copied from Windows/macOS to Linux).
-#[cfg(any(windows, target_os = "macos"))]
-fn keyring_get(key_id: &str) -> Result<[u8; 32]> {
-    let entry =
-        keyring::Entry::new(KEYRING_SERVICE, key_id).context("opening OS keystore entry")?;
-    let hexkey = entry
-        .get_password()
-        .context("reading seed key from OS keystore")?;
-    let bytes = hex::decode(hexkey.trim()).context("bad keystore key encoding")?;
-    <[u8; 32]>::try_from(bytes.as_slice())
-        .map_err(|_| anyhow::anyhow!("keystore key has wrong length"))
-}
-#[cfg(not(any(windows, target_os = "macos")))]
-fn keyring_get(_key_id: &str) -> Result<[u8; 32]> {
-    anyhow::bail!("this build has no OS keystore — re-import your recovery phrase to continue")
-}
-
-/// The *unattended* at-rest wrap (#120) for a seed created/migrated without a
-/// passphrase: OS-keystore key when available, else the obfuscation key (with a
-/// warning). Never fails — the obfuscation path always succeeds.
-fn wrap_unattended(mnemonic: &str) -> Result<String> {
-    if keyring_enabled() {
-        match keyring_put_new() {
-            Ok((key_id, key)) => return encrypt_v2(SEED_V2_KEYRING, Some(&key_id), &key, mnemonic),
-            Err(e) => eprintln!(
-                "warning: no OS keystore available ({e:#}); storing the seed with obfuscation \
-                 only — treat it as UNENCRYPTED. Set a passphrase for real at-rest encryption."
-            ),
-        }
-    }
-    encrypt_v2(SEED_V2_OBFS, None, &OBFUSCATION_KEY, mnemonic)
-}
-
-/// Atomically write seed-file `contents` (temp file + fsync + rename): a plain
-/// truncating write can leave a corrupt/partial seed on a crash and there is no
-/// backup copy, so the file is only ever observed fully written or not at all.
-fn write_seed_atomic(seed_path: &Path, contents: &str) -> Result<()> {
-    let tmp_path = seed_path.with_extension("seed.tmp");
-    {
-        use std::io::Write;
-        let mut f = std::fs::File::create(&tmp_path)
-            .with_context(|| format!("creating {}", tmp_path.display()))?;
-        f.write_all(contents.as_bytes())?;
-        f.sync_all()?; // flush to disk before the rename
-    }
-    std::fs::rename(&tmp_path, seed_path)
-        .with_context(|| format!("installing seed at {}", seed_path.display()))
-}
-
-fn derive_key(passphrase: &str, salt: &[u8]) -> Result<[u8; 32]> {
-    let mut key = [0u8; 32];
-    let params = scrypt::Params::new(SCRYPT_LOG_N, 8, 1, 32)
-        .map_err(|e| anyhow::anyhow!("scrypt params: {e}"))?;
-    scrypt::scrypt(passphrase.as_bytes(), salt, &params, &mut key)
-        .map_err(|e| anyhow::anyhow!("scrypt key derivation: {e}"))?;
-    Ok(key)
-}
-
-fn encrypt_seed(mnemonic: &str, passphrase: &str) -> Result<String> {
-    let mut salt = [0u8; 16];
-    let mut nonce = [0u8; 12];
-    use bitcoin::secp256k1::rand::RngCore;
-    let mut rng = bitcoin::secp256k1::rand::thread_rng();
-    rng.fill_bytes(&mut salt);
-    rng.fill_bytes(&mut nonce);
-    let key = derive_key(passphrase, &salt)?;
-    let cipher = ChaCha20Poly1305::new((&key).into());
-    let ciphertext = cipher
-        .encrypt((&nonce).into(), mnemonic.as_bytes())
-        .map_err(|_| anyhow::anyhow!("seed encryption failed"))?;
-    Ok(format!(
-        "{SEED_MAGIC}:{}:{}:{}\n",
-        hex::encode(salt),
-        hex::encode(nonce),
-        hex::encode(ciphertext)
-    ))
-}
-
-fn decrypt_seed(line: &str, passphrase: &str) -> Result<String> {
-    let mut parts = line.split(':');
-    let (magic, salt, nonce, ciphertext) = (
-        parts.next().unwrap_or_default(),
-        parts.next().context("malformed seed file")?,
-        parts.next().context("malformed seed file")?,
-        parts.next().context("malformed seed file")?,
-    );
-    if magic != SEED_MAGIC {
-        bail!("unknown seed file format {magic:?}");
-    }
-    let key = derive_key(passphrase, &hex::decode(salt)?)?;
-    let cipher = ChaCha20Poly1305::new((&key).into());
-    let nonce = hex::decode(nonce)?;
-    let plaintext = cipher
-        .decrypt(nonce.as_slice().into(), hex::decode(ciphertext)?.as_slice())
-        .map_err(|_| anyhow::anyhow!("seed decryption failed — wrong passphrase?"))?;
-    String::from_utf8(plaintext).context("decrypted seed is not UTF-8")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::params::Network;
+    use std::path::PathBuf;
 
     fn record(id: &str) -> SwapRecord {
         SwapRecord {
@@ -1362,6 +1007,10 @@ mod tests {
     }
 
     fn temp_dir(tag: &str) -> PathBuf {
+        // seedstore's own cfg!(test) guard cannot see libswap's test builds,
+        // so disable the OS keyring explicitly — tests must never write into
+        // the developer's real keystore (same idiom as pactd's tests).
+        std::env::set_var("PACT_DISABLE_KEYRING", "1");
         let dir = std::env::temp_dir().join(format!("libswap-store-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
@@ -1475,161 +1124,6 @@ mod tests {
         assert_eq!(store.list().unwrap().len(), 1);
         assert!(store.get("nope").is_err());
         std::fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn encrypted_seed_roundtrip() {
-        let dir = temp_dir("enc");
-        let store = Store::init(&dir, Some("correct horse")).unwrap();
-        assert!(store.seed_is_encrypted().unwrap());
-        let identity = store.seed().unwrap().identity_pubkey().unwrap();
-
-        // Reopen with the right passphrase: same seed.
-        let reopened = Store::open(&dir, Some("correct horse")).unwrap();
-        assert_eq!(
-            reopened.seed().unwrap().identity_pubkey().unwrap(),
-            identity
-        );
-
-        // Wrong or missing passphrase must fail, not yield a different seed.
-        assert!(Store::open(&dir, Some("wrong")).unwrap().seed().is_err());
-        assert!(Store::open(&dir, None).unwrap().seed().is_err());
-        std::fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn unattended_seed_is_never_plaintext_and_roundtrips() {
-        // #120: a no-passphrase seed is wrapped, not written as ASCII. Under the
-        // crate's own tests the keyring is disabled, so it takes the obfuscation
-        // wrap — which is "not plaintext" but is treated as UNENCRYPTED.
-        let dir = temp_dir("unattended");
-        let store = Store::init(&dir, None).unwrap();
-        let on_disk = std::fs::read_to_string(dir.join(SEED_FILE)).unwrap();
-        assert!(
-            on_disk.starts_with(SEED_V2_OBFS),
-            "no-passphrase seed must be wrapped, got: {on_disk}"
-        );
-        assert!(
-            !is_encrypted_seed_file(&on_disk),
-            "obfs counts as unencrypted"
-        );
-        let status = store.wallet_status().unwrap();
-        assert!(status.seed_exists && !status.encrypted && !status.locked);
-        // Readable now and after reopen (auto-unlock, no passphrase).
-        let id = store.seed().unwrap().identity_pubkey().unwrap();
-        let reopened = Store::open(&dir, None).unwrap();
-        assert_eq!(reopened.seed().unwrap().identity_pubkey().unwrap(), id);
-        std::fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn migrates_legacy_plaintext_seed_on_open() {
-        // A pre-#120 seed sits on disk as the raw mnemonic. Opening the store
-        // must re-wrap it in place (never-plaintext), preserving the same seed.
-        let dir = temp_dir("migrate");
-        std::fs::create_dir_all(&dir).unwrap();
-        let phrase = "abandon abandon abandon abandon abandon abandon \
-                      abandon abandon abandon abandon abandon about";
-        std::fs::write(dir.join(SEED_FILE), format!("{phrase}\n")).unwrap();
-        assert!(!is_encrypted_seed_file(phrase), "precondition: plaintext");
-
-        let store = Store::open(&dir, None).unwrap();
-        let migrated = std::fs::read_to_string(dir.join(SEED_FILE)).unwrap();
-        assert!(
-            migrated.starts_with(SEED_V2_OBFS),
-            "plaintext seed re-wrapped on open, got: {migrated}"
-        );
-        // Same seed, still readable.
-        let want = PactSeed::from_mnemonic(phrase, "")
-            .unwrap()
-            .identity_pubkey()
-            .unwrap();
-        assert_eq!(store.seed().unwrap().identity_pubkey().unwrap(), want);
-        std::fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn create_seed_roundtrip_unencrypted() {
-        let dir = temp_dir("create-plain");
-        let mut store = Store::open(&dir, None).unwrap();
-        assert!(!store.wallet_status().unwrap().seed_exists);
-
-        let mnemonic = store.create_seed(None, 12).unwrap();
-        assert_eq!(mnemonic.split_whitespace().count(), 12);
-        let status = store.wallet_status().unwrap();
-        assert!(status.seed_exists && !status.encrypted && !status.locked);
-        // The seed is usable immediately and matches the returned mnemonic.
-        let identity = store.seed().unwrap().identity_pubkey().unwrap();
-        let from_mnemonic = PactSeed::from_mnemonic(&mnemonic, "")
-            .unwrap()
-            .identity_pubkey()
-            .unwrap();
-        assert_eq!(identity, from_mnemonic);
-
-        // Never overwrite an existing seed.
-        assert!(store.create_seed(None, 12).is_err());
-        std::fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn create_seed_roundtrip_encrypted_and_unlock() {
-        let dir = temp_dir("create-enc");
-        let mut store = Store::open(&dir, None).unwrap();
-        store.create_seed(Some("hunter2"), 12).unwrap();
-        let status = store.wallet_status().unwrap();
-        assert!(
-            status.encrypted && !status.locked,
-            "creator holds the passphrase: {status:?}"
-        );
-        let identity = store.seed().unwrap().identity_pubkey().unwrap();
-
-        // A fresh open with no passphrase is locked; seed() refuses.
-        let mut reopened = Store::open(&dir, None).unwrap();
-        let st = reopened.wallet_status().unwrap();
-        assert!(st.encrypted && st.locked, "reopen must be locked: {st:?}");
-        assert!(
-            reopened.seed().is_err(),
-            "locked store must not yield a seed"
-        );
-
-        // Wrong passphrase fails and leaves it locked.
-        assert!(reopened.unlock("wrong").is_err());
-        assert!(reopened.wallet_status().unwrap().locked);
-
-        // Right passphrase unlocks; same identity as the creator saw.
-        reopened.unlock("hunter2").unwrap();
-        assert!(!reopened.wallet_status().unwrap().locked);
-        assert_eq!(
-            reopened.seed().unwrap().identity_pubkey().unwrap(),
-            identity
-        );
-        std::fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn import_seed_roundtrip_and_validation() {
-        const PHRASE: &str =
-            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-        let dir = temp_dir("import");
-        let mut store = Store::open(&dir, None).unwrap();
-        assert!(store.import_seed("not a real mnemonic", None).is_err());
-        let returned = store.import_seed(PHRASE, None).unwrap();
-        assert_eq!(returned, PHRASE);
-        let expected = PactSeed::from_mnemonic(PHRASE, "")
-            .unwrap()
-            .identity_pubkey()
-            .unwrap();
-        assert_eq!(store.seed().unwrap().identity_pubkey().unwrap(), expected);
-
-        // Importing the same phrase encrypted into a *second* merchant dir
-        // yields the same identity — the data dir is the only difference.
-        let dir2 = temp_dir("import2");
-        let mut store2 = Store::open(&dir2, None).unwrap();
-        store2.import_seed(PHRASE, Some("pw")).unwrap();
-        assert!(store2.wallet_status().unwrap().encrypted);
-        assert_eq!(store2.seed().unwrap().identity_pubkey().unwrap(), expected);
-        std::fs::remove_dir_all(&dir).ok();
-        std::fs::remove_dir_all(&dir2).ok();
     }
 
     #[test]

@@ -7,8 +7,8 @@
 //! last word. Both are PUBLIC test seeds — never fund them outside regtest.
 
 use libswap::htlc::Htlc;
-use libswap::keys::{hash_preimage, swap_id, PactSeed, COIN_BTC, COIN_POCX};
-use libswap::params::{BTC_REGTEST, POCX_REGTEST};
+use libswap::keys::{hash_preimage, swap_id, PactSeed, COIN_BTC, COIN_BTCX};
+use libswap::params::{BTCX_REGTEST, BTC_REGTEST};
 use serde_json::json;
 
 const ALICE_MNEMONIC: &str =
@@ -25,9 +25,9 @@ fn main() -> anyhow::Result<()> {
     let s = alice.preimage(SWAP_INDEX)?;
     let h = hash_preimage(&s);
 
-    let alice_refund_a = alice.swap_pubkey(COIN_POCX, SWAP_INDEX)?;
+    let alice_refund_a = alice.swap_pubkey(COIN_BTCX, SWAP_INDEX)?;
     let alice_redeem_b = alice.swap_pubkey(COIN_BTC, SWAP_INDEX)?;
-    let bob_redeem_a = bob.swap_pubkey(COIN_POCX, SWAP_INDEX)?;
+    let bob_redeem_a = bob.swap_pubkey(COIN_BTCX, SWAP_INDEX)?;
     let bob_refund_b = bob.swap_pubkey(COIN_BTC, SWAP_INDEX)?;
 
     let htlc_a = Htlc::new(h, bob_redeem_a, alice_refund_a, T1)?;
@@ -42,7 +42,7 @@ fn main() -> anyhow::Result<()> {
         "derivation": {
             "purpose": 7228,
             "coin_btc": COIN_BTC,
-            "coin_pocx": COIN_POCX,
+            "coin_pocx": COIN_BTCX,
             "alice_identity_xonly": alice.identity_pubkey()?.to_string(),
             "bob_identity_xonly": bob.identity_pubkey()?.to_string(),
             "alice_refund_pubkey_a": alice_refund_a.to_string(),
@@ -59,7 +59,7 @@ fn main() -> anyhow::Result<()> {
         "htlc_a_pocx_regtest": {
             "witness_script": hex::encode(htlc_a.witness_script().as_bytes()),
             "script_pubkey": hex::encode(htlc_a.script_pubkey().as_bytes()),
-            "address": htlc_a.address(&POCX_REGTEST)?,
+            "address": htlc_a.address(&BTCX_REGTEST)?,
         },
         "htlc_b_btc_regtest": {
             "witness_script": hex::encode(htlc_b.witness_script().as_bytes()),

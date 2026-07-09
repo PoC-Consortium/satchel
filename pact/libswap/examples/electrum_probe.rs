@@ -17,7 +17,6 @@
 //       configured server fails, so it can gate scripts.
 use std::time::Instant;
 
-use libswap::chain::ChainBackend;
 use libswap::params::{ChainParams, Network};
 
 /// `true` iff the server passed.

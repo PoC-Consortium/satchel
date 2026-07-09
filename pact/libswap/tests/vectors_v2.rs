@@ -5,8 +5,8 @@
 
 use bitcoin::secp256k1::Secp256k1;
 use libswap::adaptor_swap::AdaptorSwapParams;
-use libswap::keys::{PactSeed, COIN_BTC, COIN_POCX};
-use libswap::params::{BTC_REGTEST, POCX_REGTEST};
+use libswap::keys::{PactSeed, COIN_BTC, COIN_BTCX};
+use libswap::params::{BTCX_REGTEST, BTC_REGTEST};
 use serde_json::Value;
 
 #[test]
@@ -40,11 +40,11 @@ fn committed_v2_vectors_reproduce() {
         amount_b: v["amounts"]["amount_b"].as_u64().unwrap(),
         t1,
         t2,
-        alice_swap_a: alice.swap_pubkey(COIN_POCX, i).unwrap(),
+        alice_swap_a: alice.swap_pubkey(COIN_BTCX, i).unwrap(),
         alice_swap_b: alice.swap_pubkey(COIN_BTC, i).unwrap(),
-        bob_swap_a: bob.swap_pubkey(COIN_POCX, i).unwrap(),
+        bob_swap_a: bob.swap_pubkey(COIN_BTCX, i).unwrap(),
         bob_swap_b: bob.swap_pubkey(COIN_BTC, i).unwrap(),
-        alice_refund_a: alice.refund_xonly_pubkey(COIN_POCX, i).unwrap(),
+        alice_refund_a: alice.refund_xonly_pubkey(COIN_BTCX, i).unwrap(),
         bob_refund_b: bob.refund_xonly_pubkey(COIN_BTC, i).unwrap(),
         adaptor_point: alice.adaptor_point(i).unwrap(),
     };
@@ -94,7 +94,7 @@ fn committed_v2_vectors_reproduce() {
         a["refund_script"].as_str().unwrap()
     );
     assert_eq!(
-        leg_a.address(&secp, &POCX_REGTEST).unwrap(),
+        leg_a.address(&secp, &BTCX_REGTEST).unwrap(),
         a["address"].as_str().unwrap()
     );
 
