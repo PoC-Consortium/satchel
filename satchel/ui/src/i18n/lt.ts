@@ -357,6 +357,9 @@ export const lt: Bundle = {
     protocols: "Mainų protokolai",
     protocolsHint:
       "Ką palaiko ši versija — kitos versijos pasiūlymus galima peržiūrėti, bet ne priimti. Abi mainų pusės turi sutapti.",
+    machine: "Šis įrenginys",
+    machineHint:
+      "Šio įdiegimo id. Jei tą pačią sėklą paleidžiate daugiau nei viename įrenginyje, kiekvienas valdo savo mainus — kiti rodomi tik skaitymui kaip „Kitas įrenginys“ mainų doke, ir jei vienas sustotų, galite juos perimti čia. Kelių įrenginių naudojimas skirtas atsarginiam perėmimui ir atkūrimui, o ne prekybai iš dviejų įrenginių vienu metu (jie dalijasi vienu likučiu).",
     trustModel: "Kur saugomi jūsų raktai",
     trustModelBody:
       "Paslaptys laikomos variklyje, niekada Satchel programoje. Prekiautojo sėkla yra variklio duomenų aplanke (užšifruota arba atviru tekstu — jūsų pasirinkimas); Satchel nesaugo nei sėklos, nei slaptafrazės. Sėkla yra karšta pagal sumanymą (tik tranzito raktai) — didesnes pajamas perveskite į savo pačių šaltą piniginę.",
@@ -658,6 +661,15 @@ export const lt: Bundle = {
     cancelReason: "atšaukta Satchel programoje",
     cancelBody:
       "Tai atsisako mainų prieš jums finansuojant. Niekas jūsų dar neužrakinta, todėl nieko neprarandate — pasiūlymas tiesiog nebus įvykdytas.",
+    foreignGroup: "Kitas įrenginys · {machine}",
+    takeover: "Perimti",
+    takeoverHint:
+      "Pradėkite valdyti šio įrenginio mainus čia. Darykite tai tik tada, kai tas įrenginys sustabdytas.",
+    takeoverTitle: "Perimti {machine} mainus?",
+    takeoverBody:
+      "Tik jei {machine} yra sustabdytas. Šis įrenginys pradės valdyti visus jo vykstančius mainus. Jei abu įrenginiai vienu metu valdo tuos pačius mainus, jie gali dukart išleisti jūsų lėšas ir prarasti pinigų.",
+    takeoverConfirm: "Tas įrenginys sustabdytas — perimti",
+    takeoverCancel: "Atšaukti",
     col: {
       swap: "mainai",
       role: "vaidmuo",

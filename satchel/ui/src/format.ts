@@ -513,6 +513,9 @@ export function adaptorToSwap(r: AdaptorSwapRecord): Swap {
     final_txid: mySettle ?? null,
     protocol: "pact-htlc-v2",
     counterparty_identity: r.counterparty_identity ?? null,
+    // Multi-machine ownership (#122) — carried through from pactd.
+    source: r.source,
+    machine_label: r.machine_label,
   };
 }
 

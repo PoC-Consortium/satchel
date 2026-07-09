@@ -357,6 +357,9 @@ export const cs: Bundle = {
     protocols: "Swapové protokoly",
     protocolsHint:
       "Co tato verze podporuje — nabídky s jinou verzí lze procházet, ale ne přijmout. Obě strany swapu se musí shodovat.",
+    machine: "Tento stroj",
+    machineHint:
+      "Id této instalace. Pokud používáte stejný seed na více než jednom stroji, každý řídí své vlastní swapy — ostatní se zobrazují jen ke čtení jako \"Jiný stroj\" v doku swapů a můžete je odsud převzít, pokud se některý zastaví. Použití na více strojích slouží k převzetí při selhání a obnově, ne k obchodování ze dvou strojů najednou (sdílejí jeden zůstatek).",
     trustModel: "Kde žijí vaše klíče",
     trustModelBody:
       "Tajemství žijí v enginu, nikdy v Satchelu. Seed merchanta sídlí v datové složce enginu (šifrovaný, nebo v prostém textu — vaše volba); Satchel neukládá žádný seed ani přístupovou frázi. Seed je z principu horký (jen tranzitní klíče) — přesuňte výrazné výnosy do své vlastní studené peněženky.",
@@ -661,6 +664,15 @@ export const cs: Bundle = {
     cancelReason: "zrušeno v Satchelu",
     cancelBody:
       "Toto opouští swap dříve, než jste poslali financování. Nic z vašeho ještě není uzamčeno, takže nic neztrácíte — nabídka se jen nedokončí.",
+    foreignGroup: "Jiný stroj · {machine}",
+    takeover: "Převzít",
+    takeoverHint:
+      "Začněte odsud řídit swapy tohoto stroje. Udělejte to jen tehdy, když je onen stroj zastavený.",
+    takeoverTitle: "Převzít swapy stroje {machine}?",
+    takeoverBody:
+      "Jen pokud je {machine} zastavený. Tento stroj začne řídit všechny jeho probíhající swapy. Pokud dva stroje řídí stejný swap najednou, mohou dvakrát utratit vaše prostředky a přijít o peníze.",
+    takeoverConfirm: "Onen stroj je zastavený — převzít",
+    takeoverCancel: "Zrušit",
     col: {
       swap: "swap",
       role: "role",

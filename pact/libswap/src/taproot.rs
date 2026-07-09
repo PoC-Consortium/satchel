@@ -258,7 +258,7 @@ pub fn build_refund_tx<C: Signing + Verification>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::keys::{PactSeed, COIN_BTC};
+    use crate::keys::{DeriveScope, PactSeed, COIN_BTC};
     use crate::musig;
     use crate::params::BTC_REGTEST;
     use bitcoin::key::TapTweak;
@@ -274,10 +274,12 @@ mod tests {
         let secp = Secp256k1::new();
         let alice = PactSeed::from_mnemonic(MNEMONIC, "").unwrap();
         let bob = PactSeed::from_mnemonic(MNEMONIC, "deviation").unwrap();
-        let pk_a: PublicKey = alice.swap_pubkey(COIN_BTC, 0).unwrap();
-        let pk_b: PublicKey = bob.swap_pubkey(COIN_BTC, 0).unwrap();
+        let pk_a: PublicKey = alice.swap_pubkey(COIN_BTC, DeriveScope::LEGACY, 0).unwrap();
+        let pk_b: PublicKey = bob.swap_pubkey(COIN_BTC, DeriveScope::LEGACY, 0).unwrap();
         let (_, agg_xonly) = musig::aggregate_2of2(&pk_a, &pk_b).unwrap();
-        let refund = alice.refund_xonly_pubkey(COIN_BTC, 0).unwrap();
+        let refund = alice
+            .refund_xonly_pubkey(COIN_BTC, DeriveScope::LEGACY, 0)
+            .unwrap();
         (TaprootLeg::new(agg_xonly, refund, T_LEG).unwrap(), secp)
     }
 
@@ -316,7 +318,10 @@ mod tests {
     fn refund_tx_is_signed_and_verifies() {
         let (leg, secp) = sample_leg();
         let alice = PactSeed::from_mnemonic(MNEMONIC, "").unwrap();
-        let refund_kp = alice.refund_secret_key(COIN_BTC, 0).unwrap().keypair(&secp);
+        let refund_kp = alice
+            .refund_secret_key(COIN_BTC, DeriveScope::LEGACY, 0)
+            .unwrap()
+            .keypair(&secp);
         let value = 100_000u64;
         let fee = 1_000u64;
 
@@ -372,7 +377,7 @@ mod tests {
         let internal_xonly = internal_kp.x_only_public_key().0;
         let refund = PactSeed::from_mnemonic(MNEMONIC, "")
             .unwrap()
-            .refund_xonly_pubkey(COIN_BTC, 0)
+            .refund_xonly_pubkey(COIN_BTC, DeriveScope::LEGACY, 0)
             .unwrap();
         let leg = TaprootLeg::new(internal_xonly, refund, T_LEG).unwrap();
         let value = 100_000u64;

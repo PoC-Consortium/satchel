@@ -39,6 +39,41 @@ use tokio::sync::Notify;
 
 const COOKIE_FILE: &str = ".cookie";
 const CONF_FILE: &str = "pact.conf";
+/// Exclusive per-data-dir lock file (§0). bitcoind uses this exact name+idea.
+const LOCK_FILE: &str = ".lock";
+
+/// Take an exclusive advisory OS lock on `<data-dir>/.lock` so at most one pactd
+/// runs per data dir (§0 of docs/MULTI_MACHINE_122.md). This is the guard the
+/// whole seed-scope partition rests on: two pactd on one data dir would share
+/// `machine.json` → identical derive_scope → initiator secret reuse, and two
+/// writers would race the same SQLite/bdk store. Mirrors Bitcoin Core's data-dir
+/// `.lock` (`fs2` = pure-Rust `flock`/`LockFileEx`). The lock is advisory and
+/// held for the process lifetime by the returned `File`; the OS releases it on
+/// exit, so a crash never strands it (no stale-PID detection needed). `keep_alive`
+/// the returned handle for as long as the daemon serves.
+fn acquire_data_dir_lock(data_dir: &Path) -> Result<std::fs::File> {
+    use fs2::FileExt;
+    let path = data_dir.join(LOCK_FILE);
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        // Never truncate — the lock file's contents are irrelevant (we only hold
+        // an advisory OS lock on it); truncating would just be needless IO.
+        .truncate(false)
+        .open(&path)
+        .with_context(|| format!("opening data-dir lock {}", path.display()))?;
+    file.try_lock_exclusive().map_err(|e| {
+        // Contended lock (another live pactd) vs a real IO error — same class of
+        // message bitcoind prints ("Cannot obtain a lock on data directory").
+        anyhow!(
+            "cannot obtain a lock on data directory {} — another pactd is already \
+             running on it (only one daemon may use a data dir at a time): {e}",
+            data_dir.display()
+        )
+    })?;
+    Ok(file)
+}
 
 /// Initialise tracing to BOTH stdout and a rolling daily file under
 /// `<data_dir>/logs/pactd.log` (RC2: managed Satchel discards stdout, so a file
@@ -219,6 +254,23 @@ where
     .map_err(|e| anyhow!("task panicked: {e}"))?
 }
 
+/// Rotate the install's machine scope (§0/§1) when a seed (re)import took the
+/// #120 copy-heal branch. Best-effort logging; the rotation itself must succeed
+/// (a failed `machine.json` write would leave a stale scope). No-op when `false`.
+async fn maybe_rotate_scope(app: &App, rotate: bool) -> Result<()> {
+    if !rotate {
+        return Ok(());
+    }
+    let scope = blocking_registry(app, |r| r.rotate_machine_scope()).await?;
+    tracing::warn!(
+        "machine scope rotated after seed re-import (copy-heal, #120) — this \
+         machine's own in-flight swaps are now recovered-after-re-import and \
+         need a confirm-gated take-over; new scope 0x{:x}",
+        scope.0
+    );
+    Ok(())
+}
+
 /// One Nostr relay round for the active merchant: read identity + outbox +
 /// cursors under the lock (A), publish/fetch lock-free (B), write results
 /// back under the lock (C). Keeps the engine lock off the relay round-trip.
@@ -391,6 +443,36 @@ fn fee_policy_json(p: &libswap::FeeBumpPolicy) -> Value {
         "max_feerate_sat_vb": p.max_feerate_sat_vb,
         "reservation_mult": p.funding.reservation_mult,
     })
+}
+
+/// Serialize a swap record and stamp its multi-machine fields (§4 of
+/// docs/MULTI_MACHINE_122.md): `source` = `"local"` (driven by this machine —
+/// own scope or taken over) or `"foreign"` (another machine's swap we only
+/// follow read-only), and `machine_label` = the short one-way tag of the swap's
+/// originating machine, so the UI can GROUP followed swaps per machine. Both are
+/// computed server-side from the drive rule + scope, so the UI never sees (nor
+/// can act on) the raw `derive_scope`.
+fn with_source<T: serde::Serialize>(
+    engine: &Engine,
+    derive_scope: u64,
+    adopted: bool,
+    rec: &T,
+) -> Value {
+    let mut v = serde_json::to_value(rec).unwrap_or(Value::Null);
+    if let Some(obj) = v.as_object_mut() {
+        let driven = engine.drives(derive_scope, adopted);
+        obj.insert(
+            "source".to_string(),
+            json!(if driven { "local" } else { "foreign" }),
+        );
+        obj.insert(
+            "machine_label".to_string(),
+            json!(libswap::machine::machine_label(libswap::keys::DeriveScope(
+                derive_scope
+            ))),
+        );
+    }
+    v
 }
 
 /// Validate a coin id against the shipped registry, returning its canonical
@@ -813,6 +895,12 @@ const METHODS: &[(&str, &str, &str, &str)] = &[
         "<no args — read the warning first>",
         "Adopt in-flight swaps from our encrypted relay snapshots (seed-only rescue). ONLY once the machine that ran them is retired — two live drivers can double-fund a swap.",
     ),
+    (
+        "rescue",
+        "takeover",
+        "<swap_id>",
+        "Start driving a followed swap (another machine's, or one recovered after re-import). ONLY once that machine is stopped — two live drivers can double-fund a swap.",
+    ),
 ];
 
 /// Typed marker for JSON-RPC -32601 (method not found) — the one place the
@@ -915,7 +1003,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             // Tolerate a missing/locked seed: a fresh merchant (first run) or
             // a locked encrypted one has no identity to show yet. The UI uses
             // seed_exists/locked to drive the wizard / unlock prompt.
-            let (status, identity, coins) = blocking(app, |e| {
+            let (status, identity, coins, machine_label) = blocking(app, |e| {
                 let status = e.store.wallet_status()?;
                 let identity = if status.seed_exists && !status.locked {
                     e.store
@@ -926,7 +1014,10 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 } else {
                     None
                 };
-                Ok((status, identity, e.configured_coins()))
+                // Short one-way label of THIS machine's scope (§5) — the UI shows
+                // it in Settings so a user can tell their machines apart.
+                let machine_label = libswap::machine::machine_label(e.machine_scope);
+                Ok((status, identity, e.configured_coins(), machine_label))
             })
             .await?;
             Ok(json!({
@@ -946,6 +1037,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 "encrypted": status.encrypted,
                 "locked": status.locked,
                 "coins": coins,
+                "machine_label": machine_label,
             }))
         }
         "walletstatus" => {
@@ -1115,10 +1207,14 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             let passphrase = p.opt_str(0, "passphrase").filter(|s| !s.is_empty());
             // Optional word count (12 default | 24) — phoenix parity.
             let words = p.opt_u64(1, "words").unwrap_or(12) as usize;
-            let mnemonic = blocking_mut(app, move |e| {
-                e.store.create_seed(passphrase.as_deref(), words)
+            let (mnemonic, rotate) = blocking_mut(app, move |e| {
+                let m = e.store.create_seed(passphrase.as_deref(), words)?;
+                Ok((m, e.store.take_pending_scope_rotation()))
             })
             .await?;
+            // A fresh seed created over an undecryptable keyring seed is also a
+            // new-machine event → rotate the scope (§0/§1), same as importseed.
+            maybe_rotate_scope(app, rotate).await?;
             // Report the actual at-rest status (#120): a no-passphrase seed is
             // now keyring-encrypted where a keystore exists, obfuscation (=
             // unencrypted) where it doesn't — not simply `passphrase.is_some()`.
@@ -1138,10 +1234,16 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         "importseed" => {
             let mnemonic = p.str(0, "mnemonic")?;
             let passphrase = p.opt_str(1, "passphrase").filter(|s| !s.is_empty());
-            let phrase = blocking_mut(app, move |e| {
-                e.store.import_seed(&mnemonic, passphrase.as_deref())
+            let (phrase, rotate) = blocking_mut(app, move |e| {
+                let phrase = e.store.import_seed(&mnemonic, passphrase.as_deref())?;
+                Ok((phrase, e.store.take_pending_scope_rotation()))
             })
             .await?;
+            // Copy-heal (§0/§1): a re-import over an undecryptable keyring seed
+            // rotates the install's machine scope so a data-dir copy to a new
+            // machine self-partitions. Demotes this machine's own in-flight
+            // swaps to "recovered after re-import" (confirm-gated take-over).
+            maybe_rotate_scope(app, rotate).await?;
             // Actual at-rest status (#120), see `createseed`.
             let (identity, encrypted) = blocking(app, |e| {
                 Ok((
@@ -1201,13 +1303,29 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             app.shutdown.notify_one();
             Ok(json!("pactd stopping"))
         }
-        "listswaps" => Ok(serde_json::to_value(
-            blocking(app, |e| e.store.list()).await?,
-        )?),
+        "listswaps" => {
+            let swaps = blocking(app, |e| {
+                Ok(e.store
+                    .list()?
+                    .into_iter()
+                    .map(|r| with_source(e, r.derive_scope, r.adopted, &r))
+                    .collect::<Vec<Value>>())
+            })
+            .await?;
+            Ok(json!(swaps))
+        }
         // v2 (pact-htlc-v2) adaptor swaps live in their own table.
-        "listadaptorswaps" => Ok(serde_json::to_value(
-            blocking(app, |e| e.store.list_adaptor()).await?,
-        )?),
+        "listadaptorswaps" => {
+            let swaps = blocking(app, |e| {
+                Ok(e.store
+                    .list_adaptor()?
+                    .into_iter()
+                    .map(|r| with_source(e, r.derive_scope, r.adopted, &r))
+                    .collect::<Vec<Value>>())
+            })
+            .await?;
+            Ok(json!(swaps))
+        }
         // Live per-swap progress (observability): confirmation depth + the latest
         // scheduler action, refreshed each tick and served from memory (no node
         // call per poll). The UI merges it into its swap rows by `swap_id`.
@@ -1512,6 +1630,14 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 "seen": seen,
                 "warning": if pending > 0 { Some(RESCUE_PENDING_WARNING) } else { None },
             }))
+        }
+        // Take over a followed swap (§4/§5): set `adopted` so this machine drives
+        // it. Confirm-gated at the UI ("the other machine is stopped") — the RPC
+        // trusts the caller made that call, per the design's safety model.
+        "takeover" => {
+            let swap_id = p.str(0, "swap_id")?;
+            blocking(app, move |e| e.take_over_swap(&swap_id)).await?;
+            Ok(json!({ "taken_over": true, "swap_id": p.str(0, "swap_id")? }))
         }
         "boardpostoffer" => {
             let give = parse_coin_amount(&p.str(0, "give")?)?;
@@ -1897,6 +2023,11 @@ async fn main() -> Result<()> {
     };
     std::fs::create_dir_all(&data_dir)
         .with_context(|| format!("creating data dir {}", data_dir.display()))?;
+    // §0: take the exclusive data-dir lock BEFORE anything opens the store — one
+    // pactd per data dir. Held for the whole process by `_data_dir_lock` (the OS
+    // releases it on exit). Refusing here is the guard the seed-scope partition
+    // rests on; do it first so a second daemon fails fast with a clear message.
+    let _data_dir_lock = acquire_data_dir_lock(&data_dir)?;
     // Keep the file-writer guard alive for the whole process (flushes on drop).
     let _log_guard = init_logging(&data_dir);
     let passphrase = std::env::var("PACT_PASSPHRASE").ok();
@@ -2277,6 +2408,30 @@ mod tests {
         assert!(reg.ends_with("regtest"));
         assert!(reg.starts_with(&main));
         assert!(default_data_dir("testnet").unwrap().ends_with("testnet"));
+    }
+
+    #[test]
+    fn data_dir_lock_is_exclusive() {
+        // §0: one pactd per data dir. A second acquire on the SAME dir is
+        // refused while the first holds it; a different dir is independent; and
+        // releasing (drop → OS close) frees it for a later acquire.
+        let dir = std::env::temp_dir().join(format!("pactd-lock-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let held = acquire_data_dir_lock(&dir).expect("first lock acquires");
+        assert!(
+            acquire_data_dir_lock(&dir).is_err(),
+            "a second pactd on the same data dir must be refused"
+        );
+        let other = std::env::temp_dir().join(format!("pactd-lock2-{}", std::process::id()));
+        std::fs::create_dir_all(&other).unwrap();
+        assert!(
+            acquire_data_dir_lock(&other).is_ok(),
+            "a different data dir locks independently"
+        );
+        drop(held);
+        acquire_data_dir_lock(&dir).expect("re-locks after the first is released");
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::remove_dir_all(&other).ok();
     }
 
     #[test]

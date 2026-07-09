@@ -47,8 +47,12 @@ export default function SwapsScreen() {
   const { swaps } = useApp();
   const t = useT();
 
-  const active = swaps.filter(isActive).slice().sort(byNewest);
-  const history = swaps.filter(isTerminal).slice().sort(byNewest);
+  // Multi-machine (#122): the ledger is THIS machine's own history — swaps
+  // another machine drives (followed, read-only) live only in the ActiveSwaps
+  // dock, never the ledger. A taken-over swap reads as local again and returns.
+  const native = swaps.filter((s) => s.source !== "foreign");
+  const active = native.filter(isActive).slice().sort(byNewest);
+  const history = native.filter(isTerminal).slice().sort(byNewest);
 
   const empty = active.length === 0 && history.length === 0;
 

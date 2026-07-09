@@ -357,6 +357,9 @@ export const pl: Bundle = {
     protocols: "Protokoły swapów",
     protocolsHint:
       "Co obsługuje ta wersja — oferty z inną wersją można przeglądać, ale nie brać. Obie strony swapu muszą się zgadzać.",
+    machine: "To urządzenie",
+    machineHint:
+      "Id tej instalacji. Jeśli uruchamiasz ten sam seed na więcej niż jednym urządzeniu, każde prowadzi własne swapy — pozostałe pojawiają się tylko do odczytu jako „Inne urządzenie” w doku swapów, a jeśli któreś się zatrzyma, możesz je tutaj przejąć. Praca na wielu urządzeniach służy do przełączania awaryjnego i odzyskiwania, a nie do handlu z dwóch urządzeń naraz (współdzielą jedno saldo).",
     trustModel: "Gdzie są Twoje klucze",
     trustModelBody:
       "Sekrety są w silniku, nigdy w Satchel. Seed sprzedawcy znajduje się w folderze danych silnika (zaszyfrowany lub jawny — Twój wybór); Satchel nie przechowuje żadnego seeda ani hasła. Seed jest gorący z założenia (tylko klucze tranzytowe) — przelej znaczące zyski do własnego zimnego portfela.",
@@ -658,6 +661,15 @@ export const pl: Bundle = {
     cancelReason: "anulowano w Satchel",
     cancelBody:
       "To porzuca swap, zanim wniosłeś środki. Nic Twojego nie jest jeszcze zablokowane, więc nic nie tracisz — oferta po prostu się nie sfinalizuje.",
+    foreignGroup: "Inne urządzenie · {machine}",
+    takeover: "Przejmij",
+    takeoverHint:
+      "Zacznij tutaj prowadzić swapy tego urządzenia. Zrób to dopiero, gdy tamto urządzenie jest zatrzymane.",
+    takeoverTitle: "Przejąć swapy urządzenia {machine}?",
+    takeoverBody:
+      "Tylko jeśli {machine} jest zatrzymane. To urządzenie zacznie prowadzić wszystkie jego swapy w toku. Jeśli oba urządzenia prowadzą ten sam swap naraz, mogą podwójnie wydać Twoje środki i stracić pieniądze.",
+    takeoverConfirm: "Tamto urządzenie jest zatrzymane — przejmij",
+    takeoverCancel: "Anuluj",
     col: {
       swap: "swap",
       role: "rola",

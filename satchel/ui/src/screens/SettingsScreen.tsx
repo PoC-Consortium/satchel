@@ -544,6 +544,17 @@ function AboutTab() {
           {protoLine}
         </Typography>
       </Row>
+      {/* Multi-machine id (#122): the short label of this install. If the same
+          seed runs on another machine, swaps it drives appear as "Another
+          machine" in the dock, tagged with ITS label — this is how you tell
+          your machines apart and know which to take over. */}
+      {info?.machine_label && (
+        <Row label={t("settings.machine")} hint={t("settings.machineHint")}>
+          <Typography sx={{ fontSize: 13, color: "text.secondary", fontFamily: C.mono }}>
+            {info.machine_label}
+          </Typography>
+        </Row>
+      )}
       <Box sx={{ mt: 1 }}>
         <Typography sx={{ fontWeight: 600, fontSize: 13, mb: 0.5 }}>
           {t("settings.trustModel")}

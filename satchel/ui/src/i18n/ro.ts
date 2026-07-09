@@ -357,6 +357,9 @@ export const ro: Bundle = {
     protocols: "Protocoale de swap",
     protocolsHint:
       "Ce vorbește această versiune — ofertele cu o versiune diferită pot fi văzute, dar nu preluate. Ambele părți ale swapului trebuie să se potrivească.",
+    machine: "Această mașină",
+    machineHint:
+      "Id-ul acestei instalări. Dacă rulezi același seed pe mai mult de o mașină, fiecare își conduce propriile swap-uri — celelalte apar doar pentru citire ca „Altă mașină” în dock-ul de swap-uri, iar dacă una se oprește le poți prelua aici. Utilizarea pe mai multe mașini este pentru failover și recuperare, nu pentru a tranzacționa de pe două mașini deodată (împart un singur sold).",
     trustModel: "Unde stau cheile tale",
     trustModelBody:
       "Secretele stau în engine, niciodată în Satchel. Seed-ul merchant-ului stă în folderul de date al engine-ului (criptat sau în text simplu — alegerea ta); Satchel nu stochează niciun seed sau parolă. Seed-ul este fierbinte prin design (doar chei de tranzit) — mută câștigurile considerabile în propriul tău portofel rece.",
@@ -658,6 +661,15 @@ export const ro: Bundle = {
     cancelReason: "anulat în Satchel",
     cancelBody:
       "Aceasta abandonează swap-ul înainte să fi finanțat. Nimic de-al tău nu este blocat încă, deci nu pierzi nimic — doar că oferta nu se va finaliza.",
+    foreignGroup: "Altă mașină · {machine}",
+    takeover: "Preia",
+    takeoverHint:
+      "Începe să conduci swap-urile acestei mașini aici. Fă asta doar după ce mașina respectivă este oprită.",
+    takeoverTitle: "Preiei swap-urile mașinii {machine}?",
+    takeoverBody:
+      "Doar dacă {machine} este oprită. Această mașină va începe să conducă toate swap-urile ei în desfășurare. Dacă ambele mașini conduc același swap în același timp, pot cheltui de două ori fondurile tale și pot pierde bani.",
+    takeoverConfirm: "Mașina respectivă este oprită — preia",
+    takeoverCancel: "Anulează",
     col: {
       swap: "swap",
       role: "rol",

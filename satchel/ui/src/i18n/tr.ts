@@ -357,6 +357,9 @@ export const tr: Bundle = {
     protocols: "Takas protokolleri",
     protocolsHint:
       "Bu sürümün konuştuğu şey — farklı sürümdeki teklifler görüntülenebilir ama alınamaz. Takasın iki tarafı da eşleşmelidir.",
+    machine: "Bu makine",
+    machineHint:
+      "Bu kurulumun kimliği. Aynı seed'i birden fazla makinede çalıştırırsanız, her biri kendi takaslarını yürütür — diğerleri takas panelinde salt okunur olarak \"Başka makine\" şeklinde görünür ve biri durursa onları buradan devralabilirsiniz. Birden fazla makine kullanımı, yük devretme ve kurtarma içindir, aynı anda iki makineden işlem yapmak için değil (tek bir bakiyeyi paylaşırlar).",
     trustModel: "Anahtarlarınız nerede yaşar",
     trustModelBody:
       "Gizli bilgiler motorda yaşar, asla Satchel'da değil. Satıcı seed'i, motorun veri klasöründe durur (şifreli veya düz metin — seçim sizin); Satchel hiçbir seed veya parola saklamaz. Seed tasarım gereği sıcaktır (yalnızca transit anahtarları) — kayda değer gelirleri kendi soğuk cüzdanınıza süpürün.",
@@ -658,6 +661,15 @@ export const tr: Bundle = {
     cancelReason: "Satchel'da iptal edildi",
     cancelBody:
       "Bu, siz fonlamadan önce takası terk eder. Henüz size ait hiçbir şey kilitli değil, bu yüzden hiçbir şey kaybetmezsiniz — teklif yalnızca tamamlanmaz.",
+    foreignGroup: "Başka makine · {machine}",
+    takeover: "Devral",
+    takeoverHint:
+      "Bu makinenin takaslarını burada yürütmeye başlayın. Bunu yalnızca o makine durduktan sonra yapın.",
+    takeoverTitle: "{machine} makinesinin takasları devralınsın mı?",
+    takeoverBody:
+      "Yalnızca {machine} durdurulmuşsa. Bu makine, onun yürürlükteki tüm takaslarını yürütmeye başlar. İki makine aynı takası aynı anda yürütürse, fonlarınızı iki kez harcayıp para kaybedebilirsiniz.",
+    takeoverConfirm: "O makine durduruldu — devral",
+    takeoverCancel: "İptal",
     col: {
       swap: "takas",
       role: "rol",

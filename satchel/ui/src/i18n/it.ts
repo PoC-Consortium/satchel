@@ -357,6 +357,9 @@ export const it: Bundle = {
     protocols: "Protocolli di swap",
     protocolsHint:
       "Ciò che parla questa versione — le offerte con una versione diversa si possono sfogliare ma non prendere. Le due parti dello swap devono coincidere.",
+    machine: "Questa macchina",
+    machineHint:
+      "L'id di questa installazione. Se esegui lo stesso seed su più di una macchina, ciascuna gestisce i propri swap — le altre compaiono in sola lettura come \"Un'altra macchina\" nel dock degli swap, e puoi rilevarle qui se una si ferma. L'uso multi-macchina serve per failover e recupero, non per fare trading da due macchine contemporaneamente (condividono un unico saldo).",
     trustModel: "Dove risiedono le tue chiavi",
     trustModelBody:
       "I segreti risiedono nell'engine, mai in Satchel. Il seed del merchant si trova nella cartella dati dell'engine (cifrato o in chiaro — a tua scelta); Satchel non memorizza alcun seed o passphrase. Il seed è caldo per design (solo chiavi di transito) — trasferisci proventi consistenti al tuo cold wallet.",
@@ -656,6 +659,15 @@ export const it: Bundle = {
     cancelReason: "annullato in Satchel",
     cancelBody:
       "Questo abbandona lo swap prima che tu abbia effettuato il funding. Nulla di tuo è ancora bloccato, quindi non perdi nulla — l'offerta semplicemente non si completerà.",
+    foreignGroup: "Un'altra macchina · {machine}",
+    takeover: "Rileva",
+    takeoverHint:
+      "Inizia a gestire qui gli swap di questa macchina. Fallo solo una volta che quella macchina è ferma.",
+    takeoverTitle: "Rilevare gli swap di {machine}?",
+    takeoverBody:
+      "Solo se {machine} è ferma. Questa macchina inizierà a gestire tutti i suoi swap in corso. Se entrambe le macchine gestiscono lo stesso swap contemporaneamente, possono fare doppia spesa dei tuoi fondi e farti perdere denaro.",
+    takeoverConfirm: "Quella macchina è ferma — rileva",
+    takeoverCancel: "Annulla",
     col: {
       swap: "swap",
       role: "ruolo",

@@ -30,6 +30,7 @@ pub mod engine;
 pub mod fee_policy;
 pub mod htlc;
 pub mod keys;
+pub mod machine;
 pub mod messages;
 pub mod musig;
 pub mod nostr_board;

@@ -23,7 +23,7 @@ use std::sync::Mutex;
 use crate::adaptor_swap::AdaptorState;
 use crate::chain::{ChainBackend, MultiBackend, SendFee};
 use crate::htlc::extract_preimage;
-use crate::keys::{hash_preimage, swap_id, PactSeed};
+use crate::keys::{hash_preimage, swap_id, DeriveScope, PactSeed};
 use crate::messages::{self, AbortBody, AcceptBody, ChainRef, Envelope, FundedBody, InitBody};
 use crate::params::{ChainParams, Network};
 use crate::registry;
@@ -90,6 +90,16 @@ pub struct Engine {
     /// reads, promoted only when an active slot frees up — so a 10+-server
     /// list adds backup depth, never latency.
     server_set: crate::server_health::ServerSet,
+    /// This install's per-machine seed-derivation scope (§1 of
+    /// docs/MULTI_MACHINE_122.md) — stamped into every NEW swap record and used
+    /// as the derivation salt for its initiator keys/preimage, and as the drive
+    /// discriminator (`rec.derive_scope == machine_scope || adopted`). Loaded
+    /// from the pactd data-dir root's `machine.json` and injected by the merchant
+    /// registry so all merchants on one install share it. Defaults to
+    /// [`DeriveScope::LEGACY`] for a bare `Engine::open` (harness/CLI/tests) —
+    /// legacy means "no partition": new swaps derive on the pre-scope path and
+    /// this machine drives every record, exactly as before scopes existed.
+    pub machine_scope: crate::keys::DeriveScope,
 }
 
 fn chain_params(chain: &ChainRef) -> Result<&'static ChainParams> {
@@ -260,6 +270,15 @@ pub(crate) fn local_now() -> u64 {
 /// tolerance, so a take that times out here is one the maker could no longer
 /// honour anyway.
 pub(crate) const PRE_FUNDING_TIMEOUT_SECS: u64 = 15 * 60;
+
+/// Meta-key prefix (§5): a followed swap we PURGED on deep terminal. Its shared
+/// relay snapshot may still linger (only the owner tombstones it), so this memo
+/// tells the rescue scan "already handled — do not re-import", preventing churn.
+const PURGED_FOREIGN_PREFIX: &str = "purged_foreign:";
+/// Meta-key prefix (§5): the chain tip height at which a followed swap was FIRST
+/// observed with both legs resolved (spent). The reorg-safe purge waits until
+/// the tip is ≥ finality-depth blocks past this before deleting the record.
+const FOREIGN_RESOLVED_AT_PREFIX: &str = "foreign_resolved_at:";
 
 /// Marker context for handshake errors that are DETERMINISTIC given the same
 /// envelope — validation and parse failures that can never succeed on retry.
@@ -628,7 +647,9 @@ fn parse_hash(hex_hash: &str) -> Result<[u8; 32]> {
 /// collide across machines sharing the seed.
 fn v1_swap_key(seed: &PactSeed, rec: &SwapRecord, coin: u32) -> Result<SecretKey> {
     match rec.swap_index {
-        Some(i) => seed.swap_secret_key(coin, i),
+        // Re-derive under the swap's ORIGINATING scope (immutable salt, §1), so
+        // an adopted foreign swap re-derives the same keys the maker did.
+        Some(i) => seed.swap_secret_key(coin, DeriveScope(rec.derive_scope), i),
         None => seed.swap_secret_key_anchored(coin, &parse_hash(&rec.hash_h)?),
     }
 }
@@ -642,7 +663,7 @@ fn v2_anchor(rec: &AdaptorSwapRecord) -> Result<[u8; 33]> {
 /// Swap (MuSig2 signer) key for a v2 record — the v2 analog of [`v1_swap_key`].
 fn v2_swap_key(seed: &PactSeed, rec: &AdaptorSwapRecord, coin: u32) -> Result<SecretKey> {
     match rec.swap_index {
-        Some(i) => seed.swap_secret_key(coin, i),
+        Some(i) => seed.swap_secret_key(coin, DeriveScope(rec.derive_scope), i),
         None => seed.swap_secret_key_anchored(coin, &v2_anchor(rec)?),
     }
 }
@@ -650,7 +671,7 @@ fn v2_swap_key(seed: &PactSeed, rec: &AdaptorSwapRecord, coin: u32) -> Result<Se
 /// Refund (CLTV tapleaf) key for a v2 record — same counter/anchored split.
 fn v2_refund_key(seed: &PactSeed, rec: &AdaptorSwapRecord, coin: u32) -> Result<SecretKey> {
     match rec.swap_index {
-        Some(i) => seed.refund_secret_key(coin, i),
+        Some(i) => seed.refund_secret_key(coin, DeriveScope(rec.derive_scope), i),
         None => seed.refund_secret_key_anchored(coin, &v2_anchor(rec)?),
     }
 }
@@ -679,6 +700,33 @@ impl RescuedRecord {
             ),
         }
     }
+
+    /// The scope this snapshot's swap was derived under (§1).
+    fn derive_scope(&self) -> u64 {
+        match self {
+            Self::V1(r) => r.derive_scope,
+            Self::V2(r) => r.derive_scope,
+        }
+    }
+
+    /// Force `adopted = false` on import (§1 invariant — must NEVER travel): an
+    /// adopter re-publishes snapshots as it drives, so an imported snapshot may
+    /// carry `adopted = true`; honoring it would let a third machine drive with
+    /// no confirm. Whether *we* drive an imported record is decided locally
+    /// (own scope → yes; foreign → follow until an explicit take-over sets
+    /// `adopted`), never by the snapshot.
+    fn with_adopted_cleared(self) -> Self {
+        match self {
+            Self::V1(mut r) => {
+                r.adopted = false;
+                Self::V1(r)
+            }
+            Self::V2(mut r) => {
+                r.adopted = false;
+                Self::V2(r)
+            }
+        }
+    }
 }
 
 impl Engine {
@@ -702,7 +750,46 @@ impl Engine {
             wallet_manager: crate::wallet_bdk::WalletManager::new(data_dir),
             electrum_pool: crate::chain::ElectrumPool::new(),
             server_set: crate::server_health::ServerSet::new(),
+            // Bare open = no partition (legacy scope). pactd's registry injects
+            // the install's real machine.json scope after construction.
+            machine_scope: crate::keys::DeriveScope::LEGACY,
         })
+    }
+
+    /// Whether THIS machine drives `(derive_scope, adopted)` — the drive rule of
+    /// §1/§5 (docs/MULTI_MACHINE_122.md): a record is driven when its scope is
+    /// ours OR it has been explicitly adopted. A LEGACY machine scope (bare
+    /// `Engine::open` — harness/CLI, no `machine.json`) drives everything, so the
+    /// unpartitioned single-machine path behaves exactly as before. A followed
+    /// record (foreign scope AND not adopted) is observed-only, never driven.
+    pub fn drives(&self, derive_scope: u64, adopted: bool) -> bool {
+        self.machine_scope.is_legacy() || adopted || derive_scope == self.machine_scope.0
+    }
+
+    /// The single choke point every swap-tx broadcast funnels through (§3/§5 of
+    /// docs/MULTI_MACHINE_122.md). A **followed** record (foreign scope AND not
+    /// adopted) must never sign or broadcast — it is another machine's swap that
+    /// we only observe; broadcasting for it would double-drive. Keyed on the
+    /// drive decision, so an *adopted* foreign-scope swap (taken over behind the
+    /// confirm) still broadcasts. Routing already keeps followed records out of
+    /// `tick_one`, but putting the refusal at this lowest layer means no bug in
+    /// any of the ~12 scattered redeem/refund/bump/nurse/rescue broadcast sites
+    /// can let a follower broadcast. (Funding uses `wallet_send`, gated
+    /// separately at its own site — see `fund`/`adaptor_fund`.)
+    fn broadcast_swap_tx(
+        &self,
+        derive_scope: u64,
+        adopted: bool,
+        swap_id: &str,
+        backend: &MultiBackend,
+        tx: &bitcoin::Transaction,
+    ) -> Result<bitcoin::Txid> {
+        ensure!(
+            self.drives(derive_scope, adopted),
+            "refusing to broadcast for swap {swap_id}: it belongs to another machine \
+             (followed, not driven) — take it over first if that machine is stopped"
+        );
+        backend.broadcast(tx)
     }
 
     /// Update the live fee-bump policy and persist it for this merchant (pactd
@@ -1365,12 +1452,19 @@ impl Engine {
 
         let seed = self.store.seed()?;
         let index = self.store.next_swap_index()?;
-        let preimage = seed.preimage(index)?;
+        // Every new initiator secret is scoped to THIS machine (§1) so two
+        // machines on one seed never collide on preimage/H/swap-id at index `i`.
+        let scope = self.machine_scope;
+        let preimage = seed.preimage(scope, index)?;
         let hash_h = hash_preimage(&preimage);
         let id = swap_id(&hash_h);
 
-        let alice_refund_pubkey_a = seed.swap_pubkey(coin_of(&chain_a)?, index)?.to_string();
-        let alice_redeem_pubkey_b = seed.swap_pubkey(coin_of(&chain_b)?, index)?.to_string();
+        let alice_refund_pubkey_a = seed
+            .swap_pubkey(coin_of(&chain_a)?, scope, index)?
+            .to_string();
+        let alice_redeem_pubkey_b = seed
+            .swap_pubkey(coin_of(&chain_b)?, scope, index)?
+            .to_string();
 
         let body = InitBody {
             protocol: crate::PROTOCOL_VERSION.into(),
@@ -1423,6 +1517,10 @@ impl Engine {
             final_txid: None,
             final_tx_hex: None,
             last_action_height: 0,
+            // Stamp the machine scope the keys were derived under (immutable) and
+            // mark it locally driven (own scope ⇒ not adopted).
+            derive_scope: scope.0,
+            adopted: false,
         };
         // Structural check on our own offer before anything is persisted.
         ensure!(t2 < t1, "spec §7.1: T2 must be < T1");
@@ -1539,6 +1637,10 @@ impl Engine {
             final_txid: None,
             final_tx_hex: None,
             last_action_height: 0,
+            // Participant keys are anchored, so scope is only a machine tag here
+            // — but stamp OUR scope so the drive rule recognizes this as ours.
+            derive_scope: self.machine_scope.0,
+            adopted: false,
         };
         self.store.put(&record)?;
         let _ = self.snapshot_v1(&record); // rescue snapshot at accept (#54)
@@ -1584,7 +1686,9 @@ impl Engine {
 
         let seed = self.store.seed()?;
         let index = self.store.next_swap_index()?;
-        let adaptor_point = seed.adaptor_point(index)?;
+        // Scope this v2 initiator's adaptor secret/point to THIS machine (§1).
+        let scope = self.machine_scope;
+        let adaptor_point = seed.adaptor_point(scope, index)?;
         // Fresh core-wallet sweep address for the leg Alice will redeem (B),
         // communicated so both parties co-sign the identical redeem tx and the
         // proceeds land in a spendable core wallet. Best-effort: empty (→ the
@@ -1614,10 +1718,14 @@ impl Engine {
             amount_b,
             t1,
             t2,
-            alice_swap_a: seed.swap_pubkey(coin_of(&chain_a)?, index)?.to_string(),
-            alice_swap_b: seed.swap_pubkey(coin_of(&chain_b)?, index)?.to_string(),
+            alice_swap_a: seed
+                .swap_pubkey(coin_of(&chain_a)?, scope, index)?
+                .to_string(),
+            alice_swap_b: seed
+                .swap_pubkey(coin_of(&chain_b)?, scope, index)?
+                .to_string(),
             alice_refund_a: seed
-                .refund_xonly_pubkey(coin_of(&chain_a)?, index)?
+                .refund_xonly_pubkey(coin_of(&chain_a)?, scope, index)?
                 .to_string(),
             adaptor_point: adaptor_point.to_string(),
             alice_sweep_b: alice_sweep_b.clone(),
@@ -1678,6 +1786,9 @@ impl Engine {
             last_action_height: 0,
             funding_b_tx_hex: None,
             funding_b_broadcast: false,
+            // Scope the keys were derived under (immutable); locally driven.
+            derive_scope: scope.0,
+            adopted: false,
         };
         self.store.put_adaptor(&rec)?;
         let envelope = self.signed_envelope("init", &id, serde_json::to_value(&body)?)?;
@@ -1849,6 +1960,10 @@ impl Engine {
             last_action_height: 0,
             funding_b_tx_hex: None,
             funding_b_broadcast: false,
+            // Participant keys are anchored; stamp OUR scope as the machine tag
+            // so the drive rule treats this taken swap as ours to drive.
+            derive_scope: self.machine_scope.0,
+            adopted: false,
         };
         self.store.put_adaptor(&rec)?;
         let _ = self.snapshot_v2(&rec); // rescue snapshot at accept (#54)
@@ -2501,6 +2616,7 @@ impl Engine {
                 }
                 let t = crate::musig::seckey_to_scalar(
                     &seed.adaptor_secret(
+                        DeriveScope(rec.derive_scope),
                         rec.swap_index
                             .context("initiator record missing its swap index")?,
                     )?,
@@ -2518,7 +2634,13 @@ impl Engine {
                     &mut tx,
                     crate::adaptor_swap::lifted_to_bitcoin(&final_b)?,
                 );
-                let txid = self.backend(&rec.chain_b)?.broadcast(&tx)?;
+                let txid = self.broadcast_swap_tx(
+                    rec.derive_scope,
+                    rec.adopted,
+                    &rec.swap_id,
+                    &self.backend(&rec.chain_b)?,
+                    &tx,
+                )?;
                 rec.final_txid_b = Some(txid.to_string());
                 rec.final_tx_b_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
                 rec.state = AdaptorState::RedeemedB;
@@ -2578,7 +2700,13 @@ impl Engine {
                     &mut tx,
                     crate::adaptor_swap::lifted_to_bitcoin(&final_a)?,
                 );
-                let txid = self.backend(&rec.chain_a)?.broadcast(&tx)?;
+                let txid = self.broadcast_swap_tx(
+                    rec.derive_scope,
+                    rec.adopted,
+                    &rec.swap_id,
+                    &self.backend(&rec.chain_a)?,
+                    &tx,
+                )?;
                 rec.final_txid_a = Some(txid.to_string());
                 rec.final_tx_a_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
                 rec.state = AdaptorState::Completed;
@@ -2642,7 +2770,8 @@ impl Engine {
         );
         let tx =
             crate::taproot::build_refund_tx(&secp, &leg, outpoint, amount, dest, fee, &refund_kp)?;
-        let txid = backend.broadcast(&tx)?;
+        let txid =
+            self.broadcast_swap_tx(rec.derive_scope, rec.adopted, &rec.swap_id, &backend, &tx)?;
         let hex = bitcoin::consensus::encode::serialize_hex(&tx);
         match rec.role {
             // The refund spends our own funded leg: Alice's is leg A, Bob's leg B.
@@ -3017,7 +3146,13 @@ impl Engine {
                         let tx: bitcoin::Transaction =
                             bitcoin::consensus::encode::deserialize(&hex::decode(hex)?)
                                 .context("corrupt funding_b_tx_hex")?;
-                        let txid = self.backend(&rec.chain_b)?.broadcast(&tx)?;
+                        let txid = self.broadcast_swap_tx(
+                            rec.derive_scope,
+                            rec.adopted,
+                            &rec.swap_id,
+                            &self.backend(&rec.chain_b)?,
+                            &tx,
+                        )?;
                         let mut updated = rec.clone();
                         updated.funding_b_broadcast = true;
                         self.store.put_adaptor(&updated)?;
@@ -3163,7 +3298,7 @@ impl Engine {
         // (CPFP returns None) or a self-rejecting same-fee replacement.
         let parent_txid = tx.compute_txid().to_string();
         if !backend.is_in_mempool(&parent_txid)? {
-            backend.broadcast(&tx)?;
+            self.broadcast_swap_tx(rec.derive_scope, rec.adopted, &rec.swap_id, &backend, &tx)?;
         }
         let amount = if chain.coin_id == rec.chain_b.coin_id {
             rec.amount_b
@@ -3477,7 +3612,13 @@ impl Engine {
             if backend.is_in_mempool(&old_txid)? {
                 return Ok(None);
             }
-            let txid = backend.broadcast(&old_tx)?;
+            let txid = self.broadcast_swap_tx(
+                rec.derive_scope,
+                rec.adopted,
+                &rec.swap_id,
+                backend,
+                &old_tx,
+            )?;
             return Ok(Some(TickEvent {
                 swap_id: rec.swap_id.clone(),
                 action: "adaptor-rebroadcast".into(),
@@ -3495,7 +3636,13 @@ impl Engine {
             new_fee,
             &refund_kp,
         )?;
-        let txid = backend.broadcast(&new_tx)?;
+        let txid = self.broadcast_swap_tx(
+            rec.derive_scope,
+            rec.adopted,
+            &rec.swap_id,
+            backend,
+            &new_tx,
+        )?;
         let hex = bitcoin::consensus::encode::serialize_hex(&new_tx);
         let mut updated = rec.clone();
         match updated.role {
@@ -3834,6 +3981,7 @@ impl Engine {
                 );
 
                 let preimage = seed.preimage(
+                    DeriveScope(rec.derive_scope),
                     rec.swap_index
                         .context("initiator record missing its swap index")?,
                 )?;
@@ -3859,7 +4007,13 @@ impl Engine {
                     &preimage,
                     &key,
                 )?;
-                let txid = backend.broadcast(&tx)?;
+                let txid = self.broadcast_swap_tx(
+                    rec.derive_scope,
+                    rec.adopted,
+                    &rec.swap_id,
+                    &backend,
+                    &tx,
+                )?;
                 rec.preimage = Some(hex::encode(preimage));
                 rec.final_txid = Some(txid.to_string());
                 rec.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
@@ -3937,7 +4091,13 @@ impl Engine {
                     &preimage,
                     &key,
                 )?;
-                let txid = backend_a.broadcast(&tx)?;
+                let txid = self.broadcast_swap_tx(
+                    rec.derive_scope,
+                    rec.adopted,
+                    &rec.swap_id,
+                    &backend_a,
+                    &tx,
+                )?;
                 rec.preimage = Some(hex::encode(preimage));
                 rec.final_txid = Some(txid.to_string());
                 rec.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
@@ -4038,7 +4198,8 @@ impl Engine {
                 build_refund_tx(&htlc, outpoint, amount, destination, fee, &key)?
             }
         };
-        let txid = backend.broadcast(&tx)?;
+        let txid =
+            self.broadcast_swap_tx(rec.derive_scope, rec.adopted, &rec.swap_id, &backend, &tx)?;
         rec.final_txid = Some(txid.to_string());
         rec.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
         rec.state = State::Refunded;
@@ -4185,6 +4346,23 @@ impl Engine {
             }
         }
         for record in records {
+            // §3/§5: drive only records this machine owns (own scope) or has
+            // taken over (adopted). A FOLLOWED record (another machine's swap) is
+            // never driven — the read-only `follow_one` evaluator observes it
+            // (and purges it on deep terminal); the broadcast belt is the
+            // lowest-layer backstop.
+            if !self.drives(record.derive_scope, record.adopted) {
+                match self.follow_one(&record) {
+                    Ok(Some(event)) => events.push(event),
+                    Ok(None) => {}
+                    Err(err) => events.push(TickEvent {
+                        swap_id: record.swap_id.clone(),
+                        action: "error".into(),
+                        detail: format!("follow: {err:#}"),
+                    }),
+                }
+                continue;
+            }
             match self.tick_one(&record) {
                 Ok(Some(event)) => events.push(event),
                 Ok(None) => {}
@@ -4197,6 +4375,19 @@ impl Engine {
         }
         // v2 (pact-htlc-v2) adaptor swaps: same auto-redeem/auto-refund policy.
         for rec in adaptor_records {
+            if !self.drives(rec.derive_scope, rec.adopted) {
+                // followed — observe-only + purge-on-terminal (§3/§5)
+                match self.follow_adaptor_one(&rec) {
+                    Ok(Some(event)) => events.push(event),
+                    Ok(None) => {}
+                    Err(err) => events.push(TickEvent {
+                        swap_id: rec.swap_id.clone(),
+                        action: "error".into(),
+                        detail: format!("follow: {err:#}"),
+                    }),
+                }
+                continue;
+            }
             match self.adaptor_tick_one(&rec) {
                 Ok(Some(event)) => events.push(event),
                 Ok(None) => {}
@@ -4894,6 +5085,207 @@ impl Engine {
         Ok(())
     }
 
+    // ---- read-only follow evaluator for FOLLOWED swaps (§5) ---------------
+    //
+    // A followed record is another machine's swap (foreign scope, not adopted):
+    // observed here read-only, NEVER driven or broadcast (the tick routes these
+    // away from `tick_one`, and the broadcast belt is the backstop). The
+    // evaluator persists newly-seen funding pointers (status only) so the dock's
+    // progress line tracks the chain, and PURGES the record once the swap is
+    // deep terminal — otherwise a followed row would linger forever (its local
+    // state never advances). Everything is guarded: any chain error or ambiguity
+    // leaves the record untouched (a lingering row is harmless — we drive
+    // nothing), so a bug here can never delete a live swap's money.
+
+    /// Observe one leg of a followed swap by its derived spk. Returns:
+    /// `Some(true)` = RESOLVED (funding was seen and its output is now spent),
+    /// `Some(false)` = funded-but-live or not-yet-funded, `None` = unknown
+    /// (no backend / chain error → caller keeps the swap). A freshly-discovered
+    /// funding outpoint is written to `new_ptr` for the caller to persist.
+    fn follow_leg(
+        &self,
+        chain: &ChainRef,
+        spk: &ScriptBuf,
+        amount: u64,
+        ptr_txid: &Option<String>,
+        ptr_vout: Option<u32>,
+        new_ptr: &mut Option<(String, u32)>,
+    ) -> Option<bool> {
+        let backend = self.backend(chain).ok()?;
+        // Known funding pointer → still a UTXO (locked) or gone (spent)? We only
+        // ever record a pointer we saw as a live UTXO, so a later `None` on that
+        // exact outpoint is an unambiguous spend (redeem or refund).
+        if let (Some(txid), Some(vout)) = (ptr_txid.as_deref(), ptr_vout) {
+            let op = OutPoint {
+                txid: bitcoin::Txid::from_str(txid).ok()?,
+                vout,
+            };
+            return match backend.get_txout(&op, spk) {
+                Ok(Some(_)) => Some(false), // still locked
+                Ok(None) => Some(true),     // spent → resolved
+                Err(_) => None,
+            };
+        }
+        // No pointer yet → scan for the funding UTXO (amount-checked).
+        match backend.find_funding(spk) {
+            Ok(Some((op, info))) if info.value_sat == amount => {
+                *new_ptr = Some((op.txid.to_string(), op.vout));
+                Some(false) // just seen funded — not resolved yet
+            }
+            Ok(_) => Some(false), // not funded yet (or unrelated)
+            Err(_) => None,
+        }
+    }
+
+    /// Purge a followed swap once BOTH legs have been resolved (spent) and the
+    /// tip is ≥ finality-depth blocks past when we first saw that — the reorg
+    /// buffer. Resets the buffer if the legs are no longer both resolved.
+    fn purge_followed_if_deep(
+        &self,
+        swap_id: &str,
+        tip_chain: &ChainRef,
+        needed_confs: u32,
+        both_resolved: bool,
+        is_v2: bool,
+    ) -> Result<Option<TickEvent>> {
+        let memo = format!("{FOREIGN_RESOLVED_AT_PREFIX}{swap_id}");
+        if !both_resolved {
+            let _ = self.store.meta_del(&memo);
+            return Ok(None);
+        }
+        let tip = match self.backend(tip_chain).and_then(|b| b.tip_height()) {
+            Ok(t) => t,
+            Err(_) => return Ok(None),
+        };
+        let needed = u64::from(needed_confs.max(1));
+        match self
+            .store
+            .meta_get(&memo)?
+            .and_then(|s| s.parse::<u64>().ok())
+        {
+            None => {
+                // First both-resolved observation — start the reorg buffer.
+                let _ = self.store.meta_set(&memo, &tip.to_string());
+                Ok(None)
+            }
+            Some(seen) if tip.saturating_sub(seen) >= needed => {
+                if is_v2 {
+                    self.store.delete_adaptor(swap_id)?;
+                } else {
+                    self.store.delete(swap_id)?;
+                }
+                let _ = self.store.meta_del(&memo);
+                // Remember it so the lingering shared snapshot never re-imports.
+                self.store
+                    .meta_set(&format!("{PURGED_FOREIGN_PREFIX}{swap_id}"), "1")?;
+                Ok(Some(TickEvent {
+                    swap_id: swap_id.to_string(),
+                    action: "followed-purged".into(),
+                    detail: "another machine's swap reached deep terminal; removed from this machine's view".into(),
+                }))
+            }
+            Some(_) => Ok(None), // buffering — wait for depth
+        }
+    }
+
+    /// Read-only chain evaluator for a followed v1 record.
+    fn follow_one(&self, rec: &SwapRecord) -> Result<Option<TickEvent>> {
+        let params = match self.swap_params(rec) {
+            Ok(p) => p,
+            Err(_) => return Ok(None), // handshake incomplete → nothing to observe yet
+        };
+        let (spk_a, spk_b) = match (params.htlc_a(), params.htlc_b()) {
+            (Ok(a), Ok(b)) => (a.script_pubkey(), b.script_pubkey()),
+            _ => return Ok(None),
+        };
+        let mut new_a = None;
+        let mut new_b = None;
+        let res_a = self.follow_leg(
+            &rec.chain_a,
+            &spk_a,
+            rec.amount_a,
+            &rec.htlc_a_txid,
+            rec.htlc_a_vout,
+            &mut new_a,
+        );
+        let res_b = self.follow_leg(
+            &rec.chain_b,
+            &spk_b,
+            rec.amount_b,
+            &rec.htlc_b_txid,
+            rec.htlc_b_vout,
+            &mut new_b,
+        );
+        if new_a.is_some() || new_b.is_some() {
+            let mut updated = rec.clone();
+            if let Some((t, v)) = new_a {
+                updated.htlc_a_txid = Some(t);
+                updated.htlc_a_vout = Some(v);
+            }
+            if let Some((t, v)) = new_b {
+                updated.htlc_b_txid = Some(t);
+                updated.htlc_b_vout = Some(v);
+            }
+            let _ = self.store.put(&updated); // status-only write (never a tx)
+        }
+        let both = matches!((res_a, res_b), (Some(true), Some(true)));
+        self.purge_followed_if_deep(
+            &rec.swap_id,
+            &rec.chain_a,
+            rec.n_a.max(rec.n_b),
+            both,
+            false,
+        )
+    }
+
+    /// Read-only chain evaluator for a followed v2 (adaptor) record.
+    fn follow_adaptor_one(&self, rec: &AdaptorSwapRecord) -> Result<Option<TickEvent>> {
+        let secp = bitcoin::secp256k1::Secp256k1::new();
+        let p = match self.adaptor_params(rec) {
+            Ok(p) => p,
+            Err(_) => return Ok(None),
+        };
+        let (spk_a, spk_b) = match (
+            p.leg_a(&secp).and_then(|l| l.script_pubkey(&secp)),
+            p.leg_b(&secp).and_then(|l| l.script_pubkey(&secp)),
+        ) {
+            (Ok(a), Ok(b)) => (a, b),
+            _ => return Ok(None),
+        };
+        let mut new_a = None;
+        let mut new_b = None;
+        let res_a = self.follow_leg(
+            &rec.chain_a,
+            &spk_a,
+            rec.amount_a,
+            &rec.funding_a_txid,
+            rec.funding_a_vout,
+            &mut new_a,
+        );
+        let res_b = self.follow_leg(
+            &rec.chain_b,
+            &spk_b,
+            rec.amount_b,
+            &rec.funding_b_txid,
+            rec.funding_b_vout,
+            &mut new_b,
+        );
+        if new_a.is_some() || new_b.is_some() {
+            let mut updated = rec.clone();
+            if let Some((t, v)) = new_a {
+                updated.funding_a_txid = Some(t);
+                updated.funding_a_vout = Some(v);
+            }
+            if let Some((t, v)) = new_b {
+                updated.funding_b_txid = Some(t);
+                updated.funding_b_vout = Some(v);
+            }
+            let _ = self.store.put_adaptor(&updated);
+        }
+        let both = matches!((res_a, res_b), (Some(true), Some(true)));
+        self.purge_followed_if_deep(&rec.swap_id, &rec.chain_a, rec.n_a.max(rec.n_b), both, true)
+    }
+
     fn tick_one(&self, rec: &SwapRecord) -> Result<Option<TickEvent>> {
         let event = |action: &str, detail: String| {
             Ok(Some(TickEvent {
@@ -5408,7 +5800,13 @@ impl Engine {
         } else {
             build_refund_tx(&htlc, outpoint, amount, destination, new_fee, &key)?
         };
-        let txid = backend.broadcast(&new_tx)?;
+        let txid = self.broadcast_swap_tx(
+            rec.derive_scope,
+            rec.adopted,
+            &rec.swap_id,
+            backend,
+            &new_tx,
+        )?;
         let mut updated = rec.clone();
         updated.final_txid = Some(txid.to_string());
         updated.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&new_tx));
@@ -5439,7 +5837,8 @@ impl Engine {
         if backend.is_in_mempool(old_txid)? {
             return Ok(None); // present → nothing to do
         }
-        let txid = backend.broadcast(old_tx)?;
+        let txid =
+            self.broadcast_swap_tx(rec.derive_scope, rec.adopted, &rec.swap_id, backend, old_tx)?;
         Ok(Some(TickEvent {
             swap_id: rec.swap_id.clone(),
             action: "rebroadcast".into(),
@@ -5764,11 +6163,22 @@ impl Engine {
         for blob in blobs {
             match self.rescue_decode(&kp, &me, blob) {
                 Ok((rec, next_index)) => {
-                    hi = hi.max(next_index);
+                    // Only raise OUR counter from an OWN-scope snapshot (§3): a
+                    // foreign swap's index lives in another machine's counter
+                    // space under a different scope, so it can never collide with
+                    // ours — raising from it would just waste indices. Legacy
+                    // (scope 0) snapshots are foreign to a real machine.
+                    if self.drives(rec.derive_scope(), false) {
+                        hi = hi.max(next_index);
+                    }
                     if !have.contains(rec.swap_id()) && !rec.terminal() {
-                        match &rec {
-                            RescuedRecord::V1(r) => self.store.put(r)?,
-                            RescuedRecord::V2(r) => self.store.put_adaptor(r)?,
+                        // §1 invariant: clear `adopted` on import (must never
+                        // travel). An own-scope record then drives via the drive
+                        // rule; a foreign-scope one stays FOLLOWED until an
+                        // explicit, confirm-gated take-over sets `adopted`.
+                        match rec.with_adopted_cleared() {
+                            RescuedRecord::V1(r) => self.store.put(&r)?,
+                            RescuedRecord::V2(r) => self.store.put_adaptor(&r)?,
                         }
                         restored += 1;
                     }
@@ -5778,6 +6188,33 @@ impl Engine {
         }
         self.store.set_next_swap_index_at_least(hi)?;
         Ok((restored, blobs.len()))
+    }
+
+    /// Take over a **followed** swap so THIS machine starts driving it (§4/§5 of
+    /// docs/MULTI_MACHINE_122.md): set the mutable `adopted` flag on the local
+    /// record — the `derive_scope` (immutable salt) is never touched, so the
+    /// swap keeps re-deriving its keys from the ORIGINATING machine's scope. From
+    /// the next tick the drive rule (`drives`) returns true and the swap graduates
+    /// from observe-only to full `tick_one` driving in place; the broadcast belt
+    /// then permits its redeems/refunds.
+    ///
+    /// SAFETY: this is the one deliberate door through the partition wall. The
+    /// caller MUST have confirmed the originating machine is stopped (the UI's
+    /// "the other machine is stopped" / "recovered after re-import" dialog) —
+    /// that confirmation IS the safety model. Two live machines both driving one
+    /// swap can double-fund it. Idempotent; errors only if no such swap exists.
+    pub fn take_over_swap(&self, swap_id: &str) -> Result<()> {
+        if let Ok(mut rec) = self.store.get(swap_id) {
+            rec.adopted = true;
+            self.store.put(&rec)?;
+            return Ok(());
+        }
+        if let Ok(mut rec) = self.store.get_adaptor(swap_id) {
+            rec.adopted = true;
+            self.store.put_adaptor(&rec)?;
+            return Ok(());
+        }
+        bail!("unknown swap {swap_id} — nothing to take over");
     }
 
     /// Read-only twin of [`Engine::rescue_from_blobs`]: count the snapshots
@@ -5817,6 +6254,16 @@ impl Engine {
         }
         for r in self.store.list_adaptor()? {
             have.insert(r.swap_id);
+        }
+        // §5 already-purged memo: a followed swap we purged on deep terminal must
+        // NOT re-import from its lingering relay snapshot (the follower never
+        // tombstones the shared snapshot — only the owner does, or it harmlessly
+        // lingers). Treat purged ids as "already have" so rescue skips them,
+        // avoiding the import→evaluate→purge→re-import churn.
+        for (key, _) in self.store.meta_with_prefix(PURGED_FOREIGN_PREFIX)? {
+            if let Some(id) = key.strip_prefix(PURGED_FOREIGN_PREFIX) {
+                have.insert(id.to_string());
+            }
         }
         Ok((kp, me, have))
     }
@@ -6817,6 +7264,34 @@ impl Engine {
             "take" => {
                 let me = self.identity()?;
                 let (offer, body) = crate::board::offer_from_take(envelope, &me)?;
+                // §2 (docs/MULTI_MACHINE_122.md): serve a take ONLY if THIS
+                // machine holds the originating offer — keyed on ownership
+                // *existence*, not liveness. `offer_from_take` only checks
+                // `offer.from == our identity`, which BOTH machines on a shared
+                // seed pass; the take arm is the one inbound path that
+                // auto-instantiates a driven swap, so this is the single gate
+                // that stops two machines double-serving one take. A foreign
+                // machine's offers are scope-distinct (§1), so it holds no such
+                // row and drops the take SILENTLY (no reject — the real owner
+                // answers; a second reject would just be noise). We hold an
+                // offer if it's in our board `my_offers` registry OR our local
+                // `private_offer:<id>` store (private slips never hit
+                // `my_offers`). Existence not liveness: after a legit serve the
+                // board row flips to taken/revoked, and a liveness gate would
+                // then wrongly refuse the owner's own retry — idempotency stays
+                // with the `offer_served`/staleness checks below.
+                let we_own_offer = self.store.my_offer_get(&offer.swap_id)?.is_some()
+                    || self
+                        .store
+                        .meta_get(&format!("private_offer:{}", offer.swap_id))?
+                        .is_some();
+                if !we_own_offer {
+                    return event(
+                        &offer.swap_id,
+                        "take-ignored",
+                        "take for an offer this machine does not own — ignored".into(),
+                    );
+                }
                 // Staleness gate FIRST, before ANY side effect (serving,
                 // revoking, record creation): a take older than the taker's
                 // own pending-take prune window is a handshake the taker has
@@ -7551,6 +8026,113 @@ mod tests {
             Engine::open(&dir, passphrase, BTreeMap::new()).unwrap(),
             dir,
         )
+    }
+
+    #[test]
+    fn drive_rule_partitions_by_scope() {
+        let (mut engine, dir) = engine_with("drive-rule", None);
+        // A bare Engine::open is LEGACY (no machine.json) → drives everything,
+        // so the unpartitioned single-machine path is unchanged.
+        assert!(engine.machine_scope.is_legacy());
+        assert!(engine.drives(0, false));
+        assert!(engine.drives(0x1234_5678, false));
+        // With a real machine scope: own-scope and adopted are driven; a foreign
+        // scope (another machine's swap) is followed; a legacy (0) record is
+        // foreign to a real machine.
+        engine.machine_scope = crate::keys::DeriveScope(0xABCD);
+        assert!(engine.drives(0xABCD, false), "own scope → driven");
+        assert!(!engine.drives(0x1234, false), "foreign scope → followed");
+        assert!(engine.drives(0x1234, true), "foreign but adopted → driven");
+        assert!(
+            !engine.drives(0, false),
+            "legacy record on a real machine is foreign"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn two_machines_one_seed_partition_swaps() {
+        // The core §1 property end-to-end: the SAME seed on two "machines"
+        // (distinct scopes) building the SAME offer yields DISTINCT
+        // swap_id / hash_h — so preimage/H, keys and relay coordinates never
+        // collide — and each machine drives only its own, treating the other's
+        // as foreign (followed, never driven).
+        const MNEMONIC: &str =
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let mk = |tag: &str, scope: u64| {
+            let dir = std::env::temp_dir().join(format!("libswap-mm-{tag}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            let mut e = Engine::open(&dir, None, BTreeMap::new()).unwrap();
+            e.store.import_seed(MNEMONIC, None).unwrap();
+            e.machine_scope = crate::keys::DeriveScope(scope);
+            (e, dir)
+        };
+        let (a, da) = mk("a", 0x1111_2222);
+        let (b, db) = mk("b", 0x3333_4444);
+        let mkoffer = |e: &Engine| {
+            e.offer(
+                Network::Regtest,
+                ("btcx".into(), 100),
+                ("btc".into(), 100),
+                1_700_000_002,
+                1_700_000_001,
+                None,
+                None,
+            )
+            .unwrap()
+            .0
+        };
+        let ra = mkoffer(&a);
+        let rb = mkoffer(&b);
+        assert_ne!(ra.swap_id, rb.swap_id, "distinct swap_id per machine");
+        assert_ne!(ra.hash_h, rb.hash_h, "distinct preimage/H per machine");
+        assert_eq!(ra.derive_scope, 0x1111_2222);
+        // Each machine drives its OWN swap, follows the other's.
+        assert!(a.drives(ra.derive_scope, ra.adopted));
+        assert!(
+            !a.drives(rb.derive_scope, rb.adopted),
+            "other machine's swap = followed"
+        );
+        assert!(b.drives(rb.derive_scope, rb.adopted));
+        assert!(!b.drives(ra.derive_scope, ra.adopted));
+        std::fs::remove_dir_all(&da).ok();
+        std::fs::remove_dir_all(&db).ok();
+    }
+
+    #[test]
+    fn follow_evaluator_never_purges_without_backend() {
+        // Safety default of the §5 follow evaluator: a followed record must
+        // NEVER be purged (nor panic) when the chain can't be observed — a
+        // lingering row is harmless, a wrongly-deleted one is not. Here there is
+        // no backend configured, so the evaluator keeps the record.
+        let (mut engine, dir) = engine_with("follow-safe", None);
+        engine.machine_scope = crate::keys::DeriveScope(0xAAAA);
+        let (mut rec, _) = engine
+            .offer(
+                Network::Regtest,
+                ("btcx".into(), 100),
+                ("btc".into(), 100),
+                1_700_000_002,
+                1_700_000_001,
+                None,
+                None,
+            )
+            .unwrap();
+        // Re-stamp as ANOTHER machine's swap → this machine only follows it.
+        rec.derive_scope = 0xBBBB;
+        engine.store.put(&rec).unwrap();
+        assert!(
+            !engine.drives(rec.derive_scope, rec.adopted),
+            "record is foreign"
+        );
+        let ev = engine.follow_one(&rec).unwrap();
+        assert!(ev.is_none(), "no purge event without a backend");
+        assert!(
+            engine.store.get(&rec.swap_id).is_ok(),
+            "followed record survives an unobservable tick"
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     fn offer_on(engine: &Engine, network: Network, t1: u32, t2: u32) -> Result<()> {

@@ -1,6 +1,6 @@
 //! v2 daemon swap driver (pact-htlc-v2): the reusable steps a pactd engine
 //! runs to drive an adaptor swap, wired to the same abstractions the daemon
-//! uses — the [`ChainBackend`](crate::chain::ChainBackend) trait, the
+//! uses â€” the [`ChainBackend`](crate::chain::ChainBackend) trait, the
 //! use-once nonce [`Store`], the functional MuSig2 adaptor API, and the
 //! [`crate::taproot`] tx builders.
 //!
@@ -26,7 +26,7 @@ use musig2::{
 use crate::store::Store;
 
 /// Load-or-create this party's **use-once** MuSig2 secret nonce for a signing
-/// session (spec v2 §3.2). The secret nonce is persisted write-ahead, before
+/// session (spec v2 Â§3.2). The secret nonce is persisted write-ahead, before
 /// its public nonce is released; on resume the persisted nonce is reused, so
 /// a replay can never produce a second signature under a fresh nonce.
 pub fn session_nonce(
@@ -87,8 +87,8 @@ pub fn aggregate_adaptor(
 }
 
 /// Recover the adaptor secret `t` from an adaptor signature plus the final
-/// on-chain (64-byte BIP340) signature that was broadcast — the cross-leg
-/// link (spec v2 §6): once Alice's leg-B redeem is on-chain, Bob extracts `t`.
+/// on-chain (64-byte BIP340) signature that was broadcast â€” the cross-leg
+/// link (spec v2 Â§6): once Alice's leg-B redeem is on-chain, Bob extracts `t`.
 pub fn reveal_from_onchain(
     adaptor_sig: &AdaptorSignature,
     final_sig_64: &[u8],
@@ -132,7 +132,7 @@ mod tests {
     use super::*;
     use crate::adaptor_swap::{tweaked_ctx_for_leg, AdaptorSwapParams};
     use crate::chain::{ChainBackend, TxOutInfo};
-    use crate::keys::{PactSeed, COIN_BTC, COIN_BTCX};
+    use crate::keys::{DeriveScope, PactSeed, COIN_BTC, COIN_BTCX};
     use crate::musig;
     use crate::params::{ChainParams, BTCX_REGTEST, BTC_REGTEST};
     use crate::taproot::{attach_keypath_signature, build_keypath_redeem, build_refund_tx};
@@ -148,7 +148,7 @@ mod tests {
     const T1: u32 = 1_790_000_000;
     const T2: u32 = 1_789_978_400;
 
-    /// Minimal in-memory [`ChainBackend`] — enough to fund outputs, broadcast
+    /// Minimal in-memory [`ChainBackend`] â€” enough to fund outputs, broadcast
     /// spends, and read back the witness of a spend (for secret reveal).
     struct MockBackend {
         params: &'static ChainParams,
@@ -297,13 +297,19 @@ mod tests {
             amount_b: 100_000,
             t1: T1,
             t2: T2,
-            alice_swap_a: alice.swap_pubkey(COIN_BTCX, i).unwrap(),
-            alice_swap_b: alice.swap_pubkey(COIN_BTC, i).unwrap(),
-            bob_swap_a: bob.swap_pubkey(COIN_BTCX, i).unwrap(),
-            bob_swap_b: bob.swap_pubkey(COIN_BTC, i).unwrap(),
-            alice_refund_a: alice.refund_xonly_pubkey(COIN_BTCX, i).unwrap(),
-            bob_refund_b: bob.refund_xonly_pubkey(COIN_BTC, i).unwrap(),
-            adaptor_point: alice.adaptor_point(i).unwrap(),
+            alice_swap_a: alice
+                .swap_pubkey(COIN_BTCX, DeriveScope::LEGACY, i)
+                .unwrap(),
+            alice_swap_b: alice.swap_pubkey(COIN_BTC, DeriveScope::LEGACY, i).unwrap(),
+            bob_swap_a: bob.swap_pubkey(COIN_BTCX, DeriveScope::LEGACY, i).unwrap(),
+            bob_swap_b: bob.swap_pubkey(COIN_BTC, DeriveScope::LEGACY, i).unwrap(),
+            alice_refund_a: alice
+                .refund_xonly_pubkey(COIN_BTCX, DeriveScope::LEGACY, i)
+                .unwrap(),
+            bob_refund_b: bob
+                .refund_xonly_pubkey(COIN_BTC, DeriveScope::LEGACY, i)
+                .unwrap(),
+            adaptor_point: alice.adaptor_point(DeriveScope::LEGACY, i).unwrap(),
         };
         params.validate_structure().unwrap();
         let leg_a = params.leg_a(&secp).unwrap();
@@ -328,7 +334,9 @@ mod tests {
             .unwrap()
             .is_some());
 
-        let t_scalar = musig::seckey_to_scalar(&alice.adaptor_secret(i).unwrap()).unwrap();
+        let t_scalar =
+            musig::seckey_to_scalar(&alice.adaptor_secret(DeriveScope::LEGACY, i).unwrap())
+                .unwrap();
         let t_point = musig::pubkey_to_point(&params.adaptor_point).unwrap();
 
         // ---- Leg B redeem session (Alice claims B; funder=Bob idx0) ----
@@ -364,7 +372,11 @@ mod tests {
             swap_id,
             "redeem_b",
             &ctx_b,
-            musig::seckey_to_scalar(&bob.swap_secret_key(COIN_BTC, i).unwrap()).unwrap(),
+            musig::seckey_to_scalar(
+                &bob.swap_secret_key(COIN_BTC, DeriveScope::LEGACY, i)
+                    .unwrap(),
+            )
+            .unwrap(),
             b_sn,
             &aggnonce_b,
             t_point,
@@ -376,7 +388,12 @@ mod tests {
             swap_id,
             "redeem_b",
             &ctx_b,
-            musig::seckey_to_scalar(&alice.swap_secret_key(COIN_BTC, i).unwrap()).unwrap(),
+            musig::seckey_to_scalar(
+                &alice
+                    .swap_secret_key(COIN_BTC, DeriveScope::LEGACY, i)
+                    .unwrap(),
+            )
+            .unwrap(),
             a_sn,
             &aggnonce_b,
             t_point,
@@ -409,7 +426,12 @@ mod tests {
             swap_id,
             "redeem_a",
             &ctx_a,
-            musig::seckey_to_scalar(&alice.swap_secret_key(COIN_BTCX, i).unwrap()).unwrap(),
+            musig::seckey_to_scalar(
+                &alice
+                    .swap_secret_key(COIN_BTCX, DeriveScope::LEGACY, i)
+                    .unwrap(),
+            )
+            .unwrap(),
             a_sn_a,
             &aggnonce_a,
             t_point,
@@ -421,7 +443,11 @@ mod tests {
             swap_id,
             "redeem_a",
             &ctx_a,
-            musig::seckey_to_scalar(&bob.swap_secret_key(COIN_BTCX, i).unwrap()).unwrap(),
+            musig::seckey_to_scalar(
+                &bob.swap_secret_key(COIN_BTCX, DeriveScope::LEGACY, i)
+                    .unwrap(),
+            )
+            .unwrap(),
             b_sn_a,
             &aggnonce_a,
             t_point,
@@ -470,7 +496,7 @@ mod tests {
 
         // ---- Refund path is independently broadcastable (single-key) ----
         let refund_kp = alice
-            .refund_secret_key(COIN_BTCX, i)
+            .refund_secret_key(COIN_BTCX, DeriveScope::LEGACY, i)
             .unwrap()
             .keypair(&secp);
         let refund = build_refund_tx(

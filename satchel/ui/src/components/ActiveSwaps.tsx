@@ -35,6 +35,18 @@ export default function ActiveSwaps() {
   const confirm = useConfirm();
   const t = useT();
   const active = swaps.filter(isActive);
+  // Multi-machine (#122): swaps this machine drives vs. ones another machine on
+  // the same seed drives (we only follow those read-only). Foreign swaps group
+  // per originating machine so one "Take over" adopts all of that machine's work.
+  const local = active.filter((s) => s.source !== "foreign");
+  const foreign = active.filter((s) => s.source === "foreign");
+  const foreignGroups = new Map<string, Swap[]>();
+  for (const s of foreign) {
+    const key = s.machine_label ?? "?";
+    const g = foreignGroups.get(key);
+    if (g) g.push(s);
+    else foreignGroups.set(key, [s]);
+  }
 
   async function act(action: string, id: string) {
     try {
@@ -55,6 +67,30 @@ export default function ActiveSwaps() {
       cancelLabel: t("swaps.cancelKeep"),
     });
     if (ok) void act("abort", id);
+  }
+
+  // Take over EVERY in-flight swap of one stopped machine (§4). One confirm
+  // asserts "that machine is stopped" — the whole safety model — then each swap
+  // is adopted (pactd `takeover`) and starts being driven here. Never do this
+  // while the other machine is alive: two drivers can double-spend.
+  async function takeover(group: Swap[], machine: string) {
+    const ok = await confirm({
+      title: t("swaps.takeoverTitle"),
+      body: t("swaps.takeoverBody", { machine }),
+      confirmLabel: t("swaps.takeoverConfirm"),
+      cancelLabel: t("swaps.takeoverCancel"),
+      danger: true,
+    });
+    if (!ok) return;
+    for (const s of group) {
+      try {
+        await rpc("takeover", [s.swap_id]);
+        log(t("log.actionOk", { action: "takeover", id: s.swap_id }));
+      } catch (e) {
+        log(t("log.actionError", { action: "takeover", id: s.swap_id, err: errMsg(e) }));
+      }
+    }
+    void refreshSwaps();
   }
 
   // RC2 #3b: copy a secret-free diagnostics bundle (record + log lines) for this
@@ -106,7 +142,7 @@ export default function ActiveSwaps() {
       </Box>
 
       <Box>
-        {active.map((s, i) => (
+        {local.map((s, i) => (
           <ActiveSwapRow
             key={s.swap_id}
             s={s}
@@ -116,6 +152,45 @@ export default function ActiveSwaps() {
           />
         ))}
       </Box>
+
+      {/* Foreign swaps: one read-only group per other machine on this seed, with
+          a single "Take over" that adopts all of that machine's in-flight work. */}
+      {[...foreignGroups.entries()].map(([machine, rows]) => (
+        <Box key={machine}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              px: 2,
+              py: 0.5,
+              borderTop: `1px solid ${C.line}`,
+              bgcolor: "action.hover",
+            }}
+          >
+            <Typography
+              sx={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "text.secondary" }}
+            >
+              {t("swaps.foreignGroup", { machine })}
+            </Typography>
+            <Typography sx={{ fontSize: 11, color: "text.disabled" }}>{rows.length}</Typography>
+            <Box sx={{ flex: 1 }} />
+            <Tooltip title={t("swaps.takeoverHint")}>
+              <Button
+                size="small"
+                variant="outlined"
+                color="warning"
+                onClick={() => void takeover(rows, machine)}
+              >
+                {t("swaps.takeover")}
+              </Button>
+            </Tooltip>
+          </Box>
+          {rows.map((s, i) => (
+            <ActiveSwapRow key={s.swap_id} s={s} first={i === 0} readOnly onDump={() => void dump(s.swap_id)} />
+          ))}
+        </Box>
+      ))}
     </Box>
   );
 }
@@ -125,11 +200,14 @@ function ActiveSwapRow({
   first,
   onCancel,
   onDump,
+  readOnly = false,
 }: {
   s: Swap;
   first: boolean;
-  onCancel: () => void;
+  // Absent for a read-only (followed) row — foreign swaps expose no drive action.
+  onCancel?: () => void;
   onDump: () => void;
+  readOnly?: boolean;
 }) {
   const t = useT();
   const { identity } = useApp();
@@ -181,7 +259,7 @@ function ActiveSwapRow({
       </Typography>
 
       <Stack direction="row" spacing={0.75}>
-        {canCancel(s) && (
+        {!readOnly && canCancel(s) && onCancel && (
           <Button size="small" variant="outlined" color="inherit" onClick={onCancel}>
             {t("swaps.cancel")}
           </Button>

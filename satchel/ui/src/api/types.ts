@@ -183,6 +183,10 @@ export interface Info {
    *  e.g. { "pact-htlc-v1": 1, "pact-htlc-v2": 2 }. Offers whose signed
    *  `wire` differs are badged un-takeable. */
   wire_epochs?: Record<string, number>;
+  /** Short one-way label of THIS install's multi-machine scope (#122), e.g.
+   *  "M-7f3a" — shown in Settings so a user running the same seed on more than
+   *  one machine can tell them apart. */
+  machine_label?: string;
 }
 
 /** A swap leg's chain ref (older builds used `asset` instead of `coin_id`). */
@@ -241,6 +245,14 @@ export interface Swap {
    *  swap record (set at init/accept); shown via CounterpartyTag. Absent on a
    *  pre-record pending take until the maker is known. */
   counterparty_identity?: string | null;
+  /** Multi-machine ownership (issue #122): `"local"` = driven by this machine,
+   *  `"foreign"` = another machine on the same seed drives it and we only follow
+   *  it read-only (take it over to drive it here). Computed by pactd; absent ⇒
+   *  treat as local (a pre-#122 daemon, or a pending take). */
+  source?: "local" | "foreign";
+  /** Short one-way label of the machine that owns this swap (e.g. "M-7f3a"),
+   *  used to GROUP foreign swaps per machine in the dock. From pactd. */
+  machine_label?: string;
 }
 
 /** Live per-swap progress from pactd `swapprogress` (rebuilt each scheduler
@@ -309,6 +321,10 @@ export interface AdaptorSwapRecord {
   final_txid_b?: string | null;
   /** BIP340 pubkey (hex) of the counterparty. */
   counterparty_identity?: string | null;
+  /** Multi-machine ownership (issue #122) — see `Swap.source` / `machine_label`.
+   *  Stamped by pactd's `listadaptorswaps`; propagated by `adaptorToSwap`. */
+  source?: "local" | "foreign";
+  machine_label?: string;
 }
 
 export interface TickEvent {

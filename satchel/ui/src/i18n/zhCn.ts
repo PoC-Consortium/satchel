@@ -357,6 +357,9 @@ export const zhCn: Bundle = {
     protocols: "交换协议",
     protocolsHint:
       "此版本支持的协议——版本不同的报价可以浏览但无法接受。交换双方必须一致。",
+    machine: "本机",
+    machineHint:
+      "此安装的标识。如果你在多台机器上运行同一个种子，每台机器都驱动自己的交换——其余的会在交换面板中以只读方式显示为“另一台机器”，若某台停止，你可以在此处接管它们。多机使用是为了故障转移和恢复，而不是同时从两台机器交易（它们共享同一个余额）。",
     trustModel: "你的密钥存放在哪里",
     trustModelBody:
       "私密信息存放在引擎中，绝不在 Satchel 中。商户种子位于引擎的数据文件夹内（加密或明文 — 由你选择）；Satchel 不存储任何种子或口令。按设计，该种子是热的（仅中转密钥）— 请将可观的收益清扫到你自己的冷钱包。",
@@ -658,6 +661,15 @@ export const zhCn: Bundle = {
     cancelReason: "在 Satchel 中取消",
     cancelBody:
       "这会在你注资之前放弃该交换。你的任何资金都尚未锁定，因此你不会损失任何东西 — 只是该报价不会完成。",
+    foreignGroup: "另一台机器 · {machine}",
+    takeover: "接管",
+    takeoverHint:
+      "在此处开始驱动这台机器的交换。仅在那台机器已停止后才这样做。",
+    takeoverTitle: "接管 {machine} 的交换？",
+    takeoverBody:
+      "仅当 {machine} 已停止时。本机将开始驱动它所有进行中的交换。如果两台机器同时驱动同一笔交换，它们可能重复花费你的资金并造成损失。",
+    takeoverConfirm: "那台机器已停止 — 接管",
+    takeoverCancel: "取消",
     col: {
       swap: "交换",
       role: "角色",

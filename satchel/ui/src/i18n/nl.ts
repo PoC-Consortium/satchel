@@ -357,6 +357,9 @@ export const nl: Bundle = {
     protocols: "Swap-protocollen",
     protocolsHint:
       "Wat deze versie spreekt — aanbiedingen met een andere versie zijn zichtbaar maar niet te nemen. Beide kanten van een swap moeten overeenkomen.",
+    machine: "Deze machine",
+    machineHint:
+      "De id van deze installatie. Als je hetzelfde seed op meer dan één machine draait, bestuurt elk zijn eigen swaps — de andere verschijnen alleen-lezen als “Een andere machine” in de swaps-dock, en je kunt ze hier overnemen als er een stopt. Gebruik op meerdere machines is voor failover en herstel, niet om vanaf twee machines tegelijk te handelen (ze delen één saldo).",
     trustModel: "Waar je sleutels staan",
     trustModelBody:
       "Geheimen staan in de engine, nooit in Satchel. Het merchant-seed staat in de datamap van de engine (versleuteld of platte tekst — jouw keuze); Satchel slaat geen seed of wachtwoordzin op. Het seed is bewust hot (alleen transit-sleutels) — veeg aanzienlijke opbrengsten naar je eigen cold wallet.",
@@ -658,6 +661,15 @@ export const nl: Bundle = {
     cancelReason: "geannuleerd in Satchel",
     cancelBody:
       "Dit verlaat de swap voordat je hebt gefund. Niets van jou is nog vergrendeld, dus je verliest niets — het aanbod komt alleen niet tot stand.",
+    foreignGroup: "Een andere machine · {machine}",
+    takeover: "Overnemen",
+    takeoverHint:
+      "Begin hier met het besturen van de swaps van deze machine. Doe dit alleen zodra die machine gestopt is.",
+    takeoverTitle: "De swaps van {machine} overnemen?",
+    takeoverBody:
+      "Alleen als {machine} gestopt is. Deze machine gaat al zijn lopende swaps besturen. Als beide machines dezelfde swap tegelijk besturen, kunnen ze je fondsen dubbel uitgeven en geld verliezen.",
+    takeoverConfirm: "Die machine is gestopt — overnemen",
+    takeoverCancel: "Annuleren",
     col: {
       swap: "swap",
       role: "rol",

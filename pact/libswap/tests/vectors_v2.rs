@@ -1,11 +1,11 @@
 //! Regression-pins libswap against the committed v2 spec vectors
-//! (spec v2 §11). If this fails, either the protocol bytes changed (requires
+//! (spec v2 Â§11). If this fails, either the protocol bytes changed (requires
 //! a protocol version bump) or the vectors are stale (regenerate with
 //! `cargo run -p libswap --example gen-vectors-v2 > ../spec/vectors/htlc_v2.json`).
 
 use bitcoin::secp256k1::Secp256k1;
 use libswap::adaptor_swap::AdaptorSwapParams;
-use libswap::keys::{PactSeed, COIN_BTC, COIN_BTCX};
+use libswap::keys::{DeriveScope, PactSeed, COIN_BTC, COIN_BTCX};
 use libswap::params::{BTCX_REGTEST, BTC_REGTEST};
 use serde_json::Value;
 
@@ -27,11 +27,19 @@ fn committed_v2_vectors_reproduce() {
 
     // Adaptor secret/point.
     assert_eq!(
-        hex::encode(alice.adaptor_secret(i).unwrap().secret_bytes()),
+        hex::encode(
+            alice
+                .adaptor_secret(DeriveScope::LEGACY, i)
+                .unwrap()
+                .secret_bytes()
+        ),
         v["adaptor"]["secret_t"].as_str().unwrap()
     );
     assert_eq!(
-        alice.adaptor_point(i).unwrap().to_string(),
+        alice
+            .adaptor_point(DeriveScope::LEGACY, i)
+            .unwrap()
+            .to_string(),
         v["adaptor"]["point_T"].as_str().unwrap()
     );
 
@@ -40,13 +48,19 @@ fn committed_v2_vectors_reproduce() {
         amount_b: v["amounts"]["amount_b"].as_u64().unwrap(),
         t1,
         t2,
-        alice_swap_a: alice.swap_pubkey(COIN_BTCX, i).unwrap(),
-        alice_swap_b: alice.swap_pubkey(COIN_BTC, i).unwrap(),
-        bob_swap_a: bob.swap_pubkey(COIN_BTCX, i).unwrap(),
-        bob_swap_b: bob.swap_pubkey(COIN_BTC, i).unwrap(),
-        alice_refund_a: alice.refund_xonly_pubkey(COIN_BTCX, i).unwrap(),
-        bob_refund_b: bob.refund_xonly_pubkey(COIN_BTC, i).unwrap(),
-        adaptor_point: alice.adaptor_point(i).unwrap(),
+        alice_swap_a: alice
+            .swap_pubkey(COIN_BTCX, DeriveScope::LEGACY, i)
+            .unwrap(),
+        alice_swap_b: alice.swap_pubkey(COIN_BTC, DeriveScope::LEGACY, i).unwrap(),
+        bob_swap_a: bob.swap_pubkey(COIN_BTCX, DeriveScope::LEGACY, i).unwrap(),
+        bob_swap_b: bob.swap_pubkey(COIN_BTC, DeriveScope::LEGACY, i).unwrap(),
+        alice_refund_a: alice
+            .refund_xonly_pubkey(COIN_BTCX, DeriveScope::LEGACY, i)
+            .unwrap(),
+        bob_refund_b: bob
+            .refund_xonly_pubkey(COIN_BTC, DeriveScope::LEGACY, i)
+            .unwrap(),
+        adaptor_point: alice.adaptor_point(DeriveScope::LEGACY, i).unwrap(),
     };
     params.validate_structure().unwrap();
 

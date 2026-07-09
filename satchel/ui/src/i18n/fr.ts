@@ -357,6 +357,9 @@ export const fr: Bundle = {
     protocols: "Protocoles de swap",
     protocolsHint:
       "Ce que parle cette version — les offres d'une autre version restent visibles mais ne peuvent pas être prises. Les deux côtés d'un swap doivent correspondre.",
+    machine: "Cette machine",
+    machineHint:
+      "L'id de cette installation. Si vous exécutez la même seed sur plus d'une machine, chacune pilote ses propres swaps — les autres apparaissent en lecture seule comme « Une autre machine » dans le dock des swaps, et vous pouvez les reprendre ici si l'une s'arrête. L'usage multi-machine sert au basculement et à la récupération, pas à trader depuis deux machines à la fois (elles partagent un seul solde).",
     trustModel: "Où résident vos clés",
     trustModelBody:
       "Les secrets résident dans le moteur, jamais dans Satchel. La seed du merchant se trouve dans le dossier de données du moteur (chiffrée ou en clair — à votre choix) ; Satchel ne stocke aucune seed ni phrase secrète. La seed est chaude par conception (clés de transit uniquement) — balayez les gains conséquents vers votre propre portefeuille froid.",
@@ -660,6 +663,15 @@ export const fr: Bundle = {
     cancelReason: "annulé dans Satchel",
     cancelBody:
       "Ceci abandonne le swap avant que vous n'ayez financé. Rien de vous n'est encore verrouillé, vous ne perdez donc rien — l'offre ne se finalisera simplement pas.",
+    foreignGroup: "Une autre machine · {machine}",
+    takeover: "Reprendre",
+    takeoverHint:
+      "Commencez à piloter les swaps de cette machine ici. Ne le faites qu'une fois cette machine arrêtée.",
+    takeoverTitle: "Reprendre les swaps de {machine} ?",
+    takeoverBody:
+      "Uniquement si {machine} est arrêtée. Cette machine va commencer à piloter tous ses swaps en cours. Si les deux machines pilotent le même swap en même temps, elles peuvent double-dépenser vos fonds et perdre de l'argent.",
+    takeoverConfirm: "Cette machine est arrêtée — reprendre",
+    takeoverCancel: "Annuler",
     col: {
       swap: "swap",
       role: "rôle",
