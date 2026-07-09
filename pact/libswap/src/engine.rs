@@ -848,14 +848,16 @@ impl Engine {
             .collect::<Result<_>>()?;
         let wallet = match self.store.seed() {
             Ok(seed) => {
-                // The nodeless wallet is the BIP-86 branch of the same
-                // mnemonic (docs/NODELESS_WALLET.md D1) — the descriptor
-                // kind is now explicit at open (wallet-btcx).
+                // The nodeless wallet is the BIP-84 branch of the same
+                // mnemonic (docs/NODELESS_WALLET.md D1): segwit v0, matching
+                // the BTCX ecosystem (mining account ids, Phoenix). Taproot
+                // stays a protocol-output concern (v2 swaps), not a wallet
+                // default — DescriptorKind::Bip86 remains available.
                 let handle = self.wallet_manager.open(
                     coin_id,
                     params,
                     seed.wallet(),
-                    crate::keys::DescriptorKind::Bip86,
+                    crate::keys::DescriptorKind::Bip84,
                 )?;
                 let worker = self
                     .wallet_manager

@@ -39,25 +39,29 @@ The swap engine itself — v1, v2, both fee nurses, rescue rediscovery —
 
 ## 2. Decisions
 
-### D1 — Wallet keys: same mnemonic, standard BIP-86 branch
+### D1 — Wallet keys: same mnemonic, standard BIP-84 branch
 
 The on-chain wallet derives from the **same BIP39 mnemonic** as the Pact
-seed, under **standard BIP-86 paths**, not under the Pact purpose:
+seed, under **standard BIP-84 paths**, not under the Pact purpose:
 
 ```
-m/86'/<bip32_coin_type>'/0'   (external + internal keychains)
+m/84'/<bip32_coin_type>'/0'   (external + internal keychains)
 ```
 
 - `bip32_coin_type` comes from the registry (`registry.rs:76`; BTC = 0,
-  PoCX = 0x504F4358 — fits a 31-bit hardened index; file coins declare their
+  BTCX = 0x504F4358 — fits a 31-bit hardened index; file coins declare their
   own, e.g. LTC = 2).
 - The Pact tree `m/7228'/{0..3}'/…` (`keys.rs`) is untouched; the branches
   cannot collide (different purpose).
 - One mnemonic = one backup covering identity **and** funds; the funds side
   is recoverable in any standard descriptor wallet.
-- Taproot (BIP-86) everywhere: every supported coin requires the modern
-  script set already; single-keychain-pair, no legacy descriptors
-  (no-backward-compat principle — this wallet never shipped).
+- Segwit v0 (BIP-84) as the default: the BTCX ecosystem is v0 throughout
+  (mining account ids are 20-byte v0 witness programs, Phoenix and pools use
+  v0), and a lone taproot wallet would fingerprint itself on-chain. Taproot
+  remains a protocol-output concern (v2 adaptor swaps build their own P2TR
+  outputs) and `DescriptorKind::Bip86` stays available in keys-btcx; changed
+  from BIP-86 while the wallet had never shipped (no-backward-compat
+  principle), so no deployed seeds are affected.
 
 **Consequence to document loudly:** in nodeless mode the seed is no longer
 "hot transit only" (`keys.rs:58`) — it holds funds. Passphrase encryption
@@ -225,8 +229,8 @@ entirely:
 ## 5. Testing
 
 - **Unit/component:** `BdkWalletBackend` against electrs on regtest;
-  deterministic derivation vectors for the BIP-86 tree next to the existing
-  spec vectors.
+  deterministic derivation vectors for the BIP-84 wallet tree next to the
+  existing spec vectors.
 - **e2e parity:** the full regtest suite runs v1+v2 swaps
   nodeless↔nodeless and nodeless↔Core, including funding-nurse RBF/CPFP,
   locked-seed gating, and rescue rediscovery (`find_funding` re-adoption).
