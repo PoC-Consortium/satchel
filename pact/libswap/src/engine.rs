@@ -4343,7 +4343,37 @@ impl Engine {
                 active_coins.insert(rec.chain_b.coin_id.clone());
             }
         }
-        for record in records {
+        for mut record in records {
+            // Upgrade path (§1): a LEGACY record (derive_scope 0, written by a
+            // pre-scope build) in a TERMINAL state is this machine's own
+            // pre-upgrade HISTORY, not another machine's swap — claim it
+            // (adopted=true) so it stays a local ledger entry and is never
+            // follow-purged. ACTIVE legacy records keep the confirm-gated
+            // takeover (two upgraded machines on one seed must not both
+            // auto-drive the same in-flight swap); one that terminates while
+            // followed is claimed here on a later tick.
+            if record.derive_scope == 0
+                && !record.adopted
+                && !self.machine_scope.is_legacy()
+                && matches!(
+                    record.state,
+                    State::Completed | State::Refunded | State::Aborted
+                )
+            {
+                record.adopted = true;
+                match self.store.put(&record) {
+                    Ok(()) => events.push(TickEvent {
+                        swap_id: record.swap_id.clone(),
+                        action: "legacy-history-claimed".into(),
+                        detail: "pre-upgrade swap claimed as this machine's history".into(),
+                    }),
+                    Err(err) => events.push(TickEvent {
+                        swap_id: record.swap_id.clone(),
+                        action: "error".into(),
+                        detail: format!("legacy-claim: {err:#}"),
+                    }),
+                }
+            }
             // §3/§5: drive only records this machine owns (own scope) or has
             // taken over (adopted). A FOLLOWED record (another machine's swap) is
             // never driven — the read-only `follow_one` evaluator observes it
@@ -4372,7 +4402,31 @@ impl Engine {
             }
         }
         // v2 (pact-htlc-v2) adaptor swaps: same auto-redeem/auto-refund policy.
-        for rec in adaptor_records {
+        for mut rec in adaptor_records {
+            // Upgrade path (§1): claim terminal LEGACY records as this
+            // machine's history — same rule as the v1 loop above.
+            if rec.derive_scope == 0
+                && !rec.adopted
+                && !self.machine_scope.is_legacy()
+                && matches!(
+                    rec.state,
+                    AdaptorState::Completed | AdaptorState::Refunded | AdaptorState::Aborted
+                )
+            {
+                rec.adopted = true;
+                match self.store.put_adaptor(&rec) {
+                    Ok(()) => events.push(TickEvent {
+                        swap_id: rec.swap_id.clone(),
+                        action: "legacy-history-claimed".into(),
+                        detail: "pre-upgrade swap claimed as this machine's history".into(),
+                    }),
+                    Err(err) => events.push(TickEvent {
+                        swap_id: rec.swap_id.clone(),
+                        action: "error".into(),
+                        detail: format!("legacy-claim: {err:#}"),
+                    }),
+                }
+            }
             if !self.drives(rec.derive_scope, rec.adopted) {
                 // followed — observe-only + purge-on-terminal (§3/§5)
                 match self.follow_adaptor_one(&rec) {
@@ -5226,6 +5280,12 @@ impl Engine {
             }
             let _ = self.store.put(&updated); // status-only write (never a tx)
         }
+        // Legacy belt: a derive_scope-0 record is pre-upgrade history (claimed
+        // as local by the tick), NEVER "another machine's swap" — observe it,
+        // but never purge it.
+        if rec.derive_scope == 0 {
+            return Ok(None);
+        }
         let both = matches!((res_a, res_b), (Some(true), Some(true)));
         self.purge_followed_if_deep(
             &rec.swap_id,
@@ -5279,6 +5339,10 @@ impl Engine {
                 updated.funding_b_vout = Some(v);
             }
             let _ = self.store.put_adaptor(&updated);
+        }
+        // Legacy belt: same as follow_one — pre-upgrade history is never purged.
+        if rec.derive_scope == 0 {
+            return Ok(None);
         }
         let both = matches!((res_a, res_b), (Some(true), Some(true)));
         self.purge_followed_if_deep(&rec.swap_id, &rec.chain_a, rec.n_a.max(rec.n_b), both, true)
@@ -8096,6 +8160,70 @@ mod tests {
         assert!(!b.drives(ra.derive_scope, ra.adopted));
         std::fs::remove_dir_all(&da).ok();
         std::fs::remove_dir_all(&db).ok();
+    }
+
+    #[test]
+    fn legacy_terminal_records_claimed_as_history() {
+        // Upgrade regression (2026-07-09 field find): a machine's own
+        // PRE-UPGRADE records carry derive_scope 0 → they read as foreign to
+        // the freshly-scoped machine, vanish from the ledger, and — being
+        // terminal — the follow evaluator queues them for purge: the user's
+        // whole swap history self-deletes. The tick must instead CLAIM
+        // terminal legacy records as local history (adopted=true), while an
+        // ACTIVE legacy record stays takeover-gated (the real cross-machine
+        // safety).
+        let (mut engine, dir) = engine_with("legacy-claim", None);
+        engine.machine_scope = crate::keys::DeriveScope(0xCCCC);
+        let mk = |t1: u32| {
+            engine
+                .offer(
+                    Network::Regtest,
+                    ("btcx".into(), 100),
+                    ("btc".into(), 100),
+                    t1,
+                    t1 - 1,
+                    None,
+                    None,
+                )
+                .unwrap()
+                .0
+        };
+        let mut done = mk(1_700_000_002);
+        done.derive_scope = 0; // pre-upgrade record
+        done.state = State::Completed;
+        engine.store.put(&done).unwrap();
+        let mut live = mk(1_700_000_004);
+        live.derive_scope = 0;
+        engine.store.put(&live).unwrap();
+
+        let events = engine.tick();
+        assert!(
+            events
+                .iter()
+                .any(|e| e.action == "legacy-history-claimed" && e.swap_id == done.swap_id),
+            "claim event emitted"
+        );
+        let done = engine.store.get(&done.swap_id).unwrap();
+        assert!(done.adopted, "terminal legacy record claimed as history");
+        assert!(
+            engine.drives(done.derive_scope, done.adopted),
+            "claimed history is local (ledger-visible), not followed"
+        );
+        let live = engine.store.get(&live.swap_id).unwrap();
+        assert!(
+            !live.adopted,
+            "ACTIVE legacy record stays confirm-gated (takeover)"
+        );
+        // Idempotent: a second tick claims nothing new.
+        let again = engine.tick();
+        assert!(
+            !again.iter().any(|e| e.action == "legacy-history-claimed"),
+            "claim is one-shot"
+        );
+        // And the follow belt never purges a legacy record either way.
+        assert!(engine.follow_one(&live).unwrap().is_none());
+        assert!(engine.store.get(&live.swap_id).is_ok());
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
