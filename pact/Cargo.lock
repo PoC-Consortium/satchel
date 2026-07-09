@@ -625,6 +625,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91622ff5e7162018101f2fea40d6ebf4a78bbe5a49736a2020649edf9693679e"
 
 [[package]]
+name = "electrum-btcx"
+version = "0.1.0"
+source = "git+https://github.com/PoC-Consortium/btcx?rev=f1e216897bae629a251f4bd83f95bb71b4ffb06e#f1e216897bae629a251f4bd83f95bb71b4ffb06e"
+dependencies = [
+ "anyhow",
+ "bdk_wallet",
+ "bitcoin",
+ "electrum-client",
+ "hex",
+ "params-btcx",
+ "rustls",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "electrum-client"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1125,6 +1142,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "keys-btcx"
+version = "0.1.0"
+source = "git+https://github.com/PoC-Consortium/btcx?rev=f1e216897bae629a251f4bd83f95bb71b4ffb06e#f1e216897bae629a251f4bd83f95bb71b4ffb06e"
+dependencies = [
+ "anyhow",
+ "bip39",
+ "bitcoin",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1152,24 +1179,21 @@ name = "libswap"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bdk_wallet",
- "bech32",
- "bip39",
  "bitcoin",
- "chacha20poly1305",
- "electrum-client",
+ "electrum-btcx",
  "hex",
- "keyring",
+ "keys-btcx",
  "miniscript",
  "musig2",
  "pact-proto",
+ "params-btcx",
  "rusqlite",
- "rustls",
- "scrypt",
+ "seedstore",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
  "toml",
+ "wallet-btcx",
 ]
 
 [[package]]
@@ -1422,6 +1446,20 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "params-btcx"
+version = "0.1.0"
+source = "git+https://github.com/PoC-Consortium/btcx?rev=f1e216897bae629a251f4bd83f95bb71b4ffb06e#f1e216897bae629a251f4bd83f95bb71b4ffb06e"
+dependencies = [
+ "anyhow",
+ "bech32",
+ "bitcoin",
+ "hex",
+ "keys-btcx",
+ "serde",
+ "toml",
 ]
 
 [[package]]
@@ -1783,6 +1821,21 @@ checksum = "6ce2691df843ecc5d231c0b14ece2acc3efb62c0a398c7e1d875f3983ce020e3"
 dependencies = [
  "core-foundation-sys",
  "libc",
+]
+
+[[package]]
+name = "seedstore"
+version = "0.1.0"
+source = "git+https://github.com/PoC-Consortium/btcx?rev=f1e216897bae629a251f4bd83f95bb71b4ffb06e#f1e216897bae629a251f4bd83f95bb71b4ffb06e"
+dependencies = [
+ "anyhow",
+ "bip39",
+ "chacha20poly1305",
+ "hex",
+ "keyring",
+ "rand 0.8.6",
+ "scrypt",
+ "serde",
 ]
 
 [[package]]
@@ -2398,6 +2451,22 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "wallet-btcx"
+version = "0.1.0"
+source = "git+https://github.com/PoC-Consortium/btcx?rev=f1e216897bae629a251f4bd83f95bb71b4ffb06e#f1e216897bae629a251f4bd83f95bb71b4ffb06e"
+dependencies = [
+ "anyhow",
+ "bdk_wallet",
+ "bech32",
+ "bitcoin",
+ "electrum-btcx",
+ "hex",
+ "keys-btcx",
+ "params-btcx",
+ "serde",
+]
 
 [[package]]
 name = "wasi"

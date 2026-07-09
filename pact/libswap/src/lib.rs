@@ -6,16 +6,19 @@
 //!
 //! Layering:
 //! - [`params`] — chain/network constants (read from bitcoin-pocx
-//!   chainparams; never guessed) and address encoding.
+//!   chainparams; never guessed) and address encoding. Lives in the
+//!   extracted `params-btcx` crate; re-exported here.
 //! - [`registry`] — the trusted chain registry: coins as data
 //!   ([`ChainDef`](registry::ChainDef)) keyed by string id, with capability
-//!   flags and the capability-derived pair resolver.
+//!   flags (from `params-btcx`) and the capability-derived pair resolver
+//!   (local — it is swap-protocol policy, not chain data).
 //! - [`keys`] — BIP32 derivation from the Pact seed: identity key, per-swap
-//!   keys, deterministic preimages (spec §4).
+//!   keys, deterministic preimages (spec §4). Built on `keys-btcx`.
 //! - [`htlc`] — the v1 witness script and P2WSH output (spec §5).
 //! - [`messages`] — signed handshake envelopes (spec §8).
 //! - [`chain`] — chain-backend trait (Core RPC / Electrum), data treated as
-//!   untrusted hints; safety never depends on backend honesty.
+//!   untrusted hints; safety never depends on backend honesty. The Electrum
+//!   transport itself lives in the extracted `electrum-btcx` crate.
 //! - [`swap`] — per-swap state machine and transaction building (spec §6,
 //!   §7, §9). Stubbed in the scaffold.
 
@@ -23,7 +26,6 @@ pub mod adaptor_engine;
 pub mod adaptor_swap;
 pub mod board;
 pub mod chain;
-pub mod coins_file;
 pub mod engine;
 pub mod fee_policy;
 pub mod htlc;
@@ -31,15 +33,19 @@ pub mod keys;
 pub mod messages;
 pub mod musig;
 pub mod nostr_board;
-pub mod params;
 pub mod registry;
 pub mod rpc;
-pub mod server_health;
 pub mod store;
 pub mod swap;
 pub mod taproot;
 pub mod wallet_bdk;
-pub mod wallet_worker;
+
+// Extracted to the btcx crates (github.com/PoC-Consortium/btcx); re-exported
+// under their old module paths so `crate::params::…` / `crate::server_health::…`
+// callers are unchanged.
+pub use electrum_btcx::server_health;
+pub use params_btcx::coins_file;
+pub use params_btcx::params;
 
 pub use fee_policy::FeeBumpPolicy;
 pub use pact_proto::PROTOCOL_VERSION;

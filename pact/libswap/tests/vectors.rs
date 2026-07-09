@@ -4,8 +4,8 @@
 //! (regenerate with `cargo run -p libswap --example gen-vectors`).
 
 use libswap::htlc::Htlc;
-use libswap::keys::{hash_preimage, swap_id, PactSeed, COIN_BTC, COIN_POCX};
-use libswap::params::{BTC_REGTEST, POCX_REGTEST};
+use libswap::keys::{hash_preimage, swap_id, PactSeed, COIN_BTC, COIN_BTCX};
+use libswap::params::{BTCX_REGTEST, BTC_REGTEST};
 use serde_json::Value;
 
 #[test]
@@ -36,8 +36,8 @@ fn committed_vectors_reproduce() {
 
     let htlc_a = Htlc::new(
         h,
-        bob.swap_pubkey(COIN_POCX, index).unwrap(),
-        alice.swap_pubkey(COIN_POCX, index).unwrap(),
+        bob.swap_pubkey(COIN_BTCX, index).unwrap(),
+        alice.swap_pubkey(COIN_BTCX, index).unwrap(),
         t1,
     )
     .unwrap();
@@ -50,7 +50,7 @@ fn committed_vectors_reproduce() {
     .unwrap();
 
     for (htlc, chain, key) in [
-        (&htlc_a, &POCX_REGTEST, "htlc_a_pocx_regtest"),
+        (&htlc_a, &BTCX_REGTEST, "htlc_a_pocx_regtest"),
         (&htlc_b, &BTC_REGTEST, "htlc_b_btc_regtest"),
     ] {
         assert_eq!(

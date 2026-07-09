@@ -160,7 +160,7 @@ mod tests {
         let htlc = test_htlc();
         let spk = htlc.script_pubkey();
         assert!(spk.is_p2wsh());
-        let pocx = htlc.address(&crate::params::POCX_REGTEST).unwrap();
+        let pocx = htlc.address(&crate::params::BTCX_REGTEST).unwrap();
         let btc = htlc.address(&crate::params::BTC_REGTEST).unwrap();
         assert!(pocx.starts_with("rpocx1"));
         assert!(btc.starts_with("bcrt1"));

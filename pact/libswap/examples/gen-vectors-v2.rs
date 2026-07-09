@@ -7,8 +7,8 @@
 
 use bitcoin::secp256k1::Secp256k1;
 use libswap::adaptor_swap::AdaptorSwapParams;
-use libswap::keys::{PactSeed, COIN_BTC, COIN_POCX};
-use libswap::params::{BTC_REGTEST, POCX_REGTEST};
+use libswap::keys::{PactSeed, COIN_BTC, COIN_BTCX};
+use libswap::params::{BTCX_REGTEST, BTC_REGTEST};
 use serde_json::json;
 
 const ALICE_MNEMONIC: &str =
@@ -32,11 +32,11 @@ fn main() -> anyhow::Result<()> {
         amount_b: AMOUNT_B,
         t1: T1,
         t2: T2,
-        alice_swap_a: alice.swap_pubkey(COIN_POCX, i)?,
+        alice_swap_a: alice.swap_pubkey(COIN_BTCX, i)?,
         alice_swap_b: alice.swap_pubkey(COIN_BTC, i)?,
-        bob_swap_a: bob.swap_pubkey(COIN_POCX, i)?,
+        bob_swap_a: bob.swap_pubkey(COIN_BTCX, i)?,
         bob_swap_b: bob.swap_pubkey(COIN_BTC, i)?,
-        alice_refund_a: alice.refund_xonly_pubkey(COIN_POCX, i)?,
+        alice_refund_a: alice.refund_xonly_pubkey(COIN_BTCX, i)?,
         bob_refund_b: bob.refund_xonly_pubkey(COIN_BTC, i)?,
         adaptor_point: alice.adaptor_point(i)?,
     };
@@ -70,7 +70,7 @@ fn main() -> anyhow::Result<()> {
             "internal_key": leg_a.internal_key.to_string(),
             "output_key": out_a.to_string(),
             "refund_script": hex::encode(leg_a.refund_script().as_bytes()),
-            "address": leg_a.address(&secp, &POCX_REGTEST)?,
+            "address": leg_a.address(&secp, &BTCX_REGTEST)?,
         },
         "leg_b_btc_regtest": {
             "internal_key": leg_b.internal_key.to_string(),

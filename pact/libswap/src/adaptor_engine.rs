@@ -132,9 +132,9 @@ mod tests {
     use super::*;
     use crate::adaptor_swap::{tweaked_ctx_for_leg, AdaptorSwapParams};
     use crate::chain::{ChainBackend, TxOutInfo};
-    use crate::keys::{PactSeed, COIN_BTC, COIN_POCX};
+    use crate::keys::{PactSeed, COIN_BTC, COIN_BTCX};
     use crate::musig;
-    use crate::params::{ChainParams, BTC_REGTEST, POCX_REGTEST};
+    use crate::params::{ChainParams, BTCX_REGTEST, BTC_REGTEST};
     use crate::taproot::{attach_keypath_signature, build_keypath_redeem, build_refund_tx};
     use bitcoin::secp256k1::{All, Secp256k1};
     use bitcoin::{Amount, OutPoint, ScriptBuf, Transaction, TxOut, Txid};
@@ -297,11 +297,11 @@ mod tests {
             amount_b: 100_000,
             t1: T1,
             t2: T2,
-            alice_swap_a: alice.swap_pubkey(COIN_POCX, i).unwrap(),
+            alice_swap_a: alice.swap_pubkey(COIN_BTCX, i).unwrap(),
             alice_swap_b: alice.swap_pubkey(COIN_BTC, i).unwrap(),
-            bob_swap_a: bob.swap_pubkey(COIN_POCX, i).unwrap(),
+            bob_swap_a: bob.swap_pubkey(COIN_BTCX, i).unwrap(),
             bob_swap_b: bob.swap_pubkey(COIN_BTC, i).unwrap(),
-            alice_refund_a: alice.refund_xonly_pubkey(COIN_POCX, i).unwrap(),
+            alice_refund_a: alice.refund_xonly_pubkey(COIN_BTCX, i).unwrap(),
             bob_refund_b: bob.refund_xonly_pubkey(COIN_BTC, i).unwrap(),
             adaptor_point: alice.adaptor_point(i).unwrap(),
         };
@@ -310,7 +310,7 @@ mod tests {
         let leg_b = params.leg_b(&secp).unwrap();
 
         // ---- Funding (both legs) registered on each chain's backend ----
-        let pocx = MockBackend::new(&POCX_REGTEST);
+        let pocx = MockBackend::new(&BTCX_REGTEST);
         let btc = MockBackend::new(&BTC_REGTEST);
         pocx.fund(
             op(0xaa),
@@ -409,7 +409,7 @@ mod tests {
             swap_id,
             "redeem_a",
             &ctx_a,
-            musig::seckey_to_scalar(&alice.swap_secret_key(COIN_POCX, i).unwrap()).unwrap(),
+            musig::seckey_to_scalar(&alice.swap_secret_key(COIN_BTCX, i).unwrap()).unwrap(),
             a_sn_a,
             &aggnonce_a,
             t_point,
@@ -421,7 +421,7 @@ mod tests {
             swap_id,
             "redeem_a",
             &ctx_a,
-            musig::seckey_to_scalar(&bob.swap_secret_key(COIN_POCX, i).unwrap()).unwrap(),
+            musig::seckey_to_scalar(&bob.swap_secret_key(COIN_BTCX, i).unwrap()).unwrap(),
             b_sn_a,
             &aggnonce_a,
             t_point,
@@ -470,7 +470,7 @@ mod tests {
 
         // ---- Refund path is independently broadcastable (single-key) ----
         let refund_kp = alice
-            .refund_secret_key(COIN_POCX, i)
+            .refund_secret_key(COIN_BTCX, i)
             .unwrap()
             .keypair(&secp);
         let refund = build_refund_tx(

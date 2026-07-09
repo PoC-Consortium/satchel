@@ -147,8 +147,8 @@ pub fn tweaked_ctx_for_leg<C: Verification>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::keys::{PactSeed, COIN_BTC, COIN_POCX};
-    use crate::params::{BTC_REGTEST, POCX_REGTEST};
+    use crate::keys::{PactSeed, COIN_BTC, COIN_BTCX};
+    use crate::params::{BTCX_REGTEST, BTC_REGTEST};
     use crate::taproot::{attach_keypath_signature, build_keypath_redeem, build_refund_tx};
     use bitcoin::secp256k1::{All, Keypair, Message};
     use bitcoin::sighash::{Prevouts, SighashCache};
@@ -249,9 +249,9 @@ mod tests {
         let i = 0u32;
 
         // Keys: leg A on PoCX, leg B on BTC.
-        let alice_swap_a = alice.swap_pubkey(COIN_POCX, i).unwrap();
+        let alice_swap_a = alice.swap_pubkey(COIN_BTCX, i).unwrap();
         let alice_swap_b = alice.swap_pubkey(COIN_BTC, i).unwrap();
-        let bob_swap_a = bob.swap_pubkey(COIN_POCX, i).unwrap();
+        let bob_swap_a = bob.swap_pubkey(COIN_BTCX, i).unwrap();
         let bob_swap_b = bob.swap_pubkey(COIN_BTC, i).unwrap();
 
         let params = AdaptorSwapParams {
@@ -263,7 +263,7 @@ mod tests {
             alice_swap_b,
             bob_swap_a,
             bob_swap_b,
-            alice_refund_a: alice.refund_xonly_pubkey(COIN_POCX, i).unwrap(),
+            alice_refund_a: alice.refund_xonly_pubkey(COIN_BTCX, i).unwrap(),
             bob_refund_b: bob.refund_xonly_pubkey(COIN_BTC, i).unwrap(),
             adaptor_point: alice.adaptor_point(i).unwrap(),
         };
@@ -273,7 +273,7 @@ mod tests {
         let leg_b = params.leg_b(&secp).unwrap();
         // Distinct legs with valid P2TR addresses on each chain.
         assert!(leg_a
-            .address(&secp, &POCX_REGTEST)
+            .address(&secp, &BTCX_REGTEST)
             .unwrap()
             .starts_with("rpocx1p"));
         assert!(leg_b
@@ -289,8 +289,8 @@ mod tests {
         let a_sk_b = musig::seckey_to_scalar(&alice.swap_secret_key(COIN_BTC, i).unwrap()).unwrap();
         let b_sk_b = musig::seckey_to_scalar(&bob.swap_secret_key(COIN_BTC, i).unwrap()).unwrap();
         let a_sk_a =
-            musig::seckey_to_scalar(&alice.swap_secret_key(COIN_POCX, i).unwrap()).unwrap();
-        let b_sk_a = musig::seckey_to_scalar(&bob.swap_secret_key(COIN_POCX, i).unwrap()).unwrap();
+            musig::seckey_to_scalar(&alice.swap_secret_key(COIN_BTCX, i).unwrap()).unwrap();
+        let b_sk_a = musig::seckey_to_scalar(&bob.swap_secret_key(COIN_BTCX, i).unwrap()).unwrap();
 
         // ---- Leg B redeem: Alice claims B (Bob funder idx0, Alice idx1) ----
         let (mut redeem_b, sighash_b) = build_keypath_redeem(
@@ -344,7 +344,7 @@ mod tests {
 
         // ---- Refund path (independently spendable, single-key) ----
         let alice_refund_kp: Keypair = alice
-            .refund_secret_key(COIN_POCX, i)
+            .refund_secret_key(COIN_BTCX, i)
             .unwrap()
             .keypair(&secp);
         let refund_a = build_refund_tx(

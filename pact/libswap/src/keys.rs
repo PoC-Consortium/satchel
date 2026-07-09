@@ -21,11 +21,16 @@
 //! embedded in the on-chain HTLC script), and two different swaps can never
 //! collide on one key. The path depths differ (counter 4 vs anchored 7), so
 //! the two schemes can never derive the same key either.
+//!
+//! The seed/master-key handling and the standard on-chain wallet branches
+//! (BIP-84/BIP-86) live in the extracted `keys-btcx` crate
+//! ([`WalletSeed`]); only the Pact tree (`m/7228'`) is defined here, built
+//! on [`WalletSeed::derive_hardened`].
 
 use anyhow::Result;
-use bitcoin::bip32::{ChildNumber, Xpriv};
-use bitcoin::secp256k1::{All, Keypair, PublicKey, Secp256k1, SecretKey, XOnlyPublicKey};
-use bitcoin::NetworkKind;
+use bitcoin::secp256k1::{Keypair, PublicKey, SecretKey, XOnlyPublicKey};
+
+pub use keys_btcx::{DescriptorKind, WalletSeed, COIN_BTC, COIN_BTCX};
 
 // Protocol hashes live in pact-proto now; re-exported so existing
 // `crate::keys::{tagged_hash, hash_preimage, swap_id}` callers are unchanged.
@@ -33,10 +38,6 @@ pub use pact_proto::crypto::{hash_preimage, swap_id, tagged_hash};
 
 /// BIP32 purpose for Pact: "PACT" on a phone keypad.
 pub const PURPOSE: u32 = 7228;
-/// Asset constants for `coin(c)` — asset, not network (spec §4.1).
-pub const COIN_BTC: u32 = 0;
-/// `0x504F4358` = ASCII "POCX" (matches the node's `POCX` assignment marker).
-pub const COIN_POCX: u32 = 0x504F_4358;
 
 const TAG_PREIMAGE: &str = "pact/htlc/preimage/v1";
 /// v2 adaptor secret tag (spec v2 §3.1).
@@ -56,39 +57,43 @@ fn anchor_levels(anchor: &[u8]) -> [u32; 4] {
 }
 
 /// The Pact seed: hot transit keys only; proceeds sweep to the core wallet.
+/// A thin wrapper over [`WalletSeed`] (keys-btcx) that adds the Pact
+/// protocol tree (`m/7228'`) on top of the same master key.
 pub struct PactSeed {
-    master: Xpriv,
-    secp: Secp256k1<All>,
+    seed: WalletSeed,
 }
 
 impl PactSeed {
     /// From a BIP39 mnemonic phrase (+ optional passphrase).
     pub fn from_mnemonic(phrase: &str, passphrase: &str) -> Result<Self> {
-        let mnemonic = bip39::Mnemonic::parse_normalized(phrase)?;
-        Self::from_seed(&mnemonic.to_seed_normalized(passphrase))
+        Ok(Self {
+            seed: WalletSeed::from_mnemonic(phrase, passphrase)?,
+        })
     }
 
     /// From raw BIP39 seed bytes. The BIP32 network kind only affects
     /// xprv/xpub serialization, never derived keys; Main is used throughout.
     pub fn from_seed(seed: &[u8]) -> Result<Self> {
         Ok(Self {
-            master: Xpriv::new_master(NetworkKind::Main, seed)?,
-            secp: Secp256k1::new(),
+            seed: WalletSeed::from_seed(seed)?,
         })
     }
 
+    /// The underlying [`WalletSeed`] — the standard on-chain wallet branches
+    /// (BIP-84/BIP-86 descriptors) of the SAME mnemonic. The purposes
+    /// (84'/86') are disjoint from the Pact tree (7228') by construction.
+    pub fn wallet(&self) -> &WalletSeed {
+        &self.seed
+    }
+
     fn derive(&self, path: &[u32]) -> Result<SecretKey> {
-        let path: Vec<ChildNumber> = path
-            .iter()
-            .map(|&i| ChildNumber::from_hardened_idx(i).map_err(Into::into))
-            .collect::<Result<_>>()?;
-        Ok(self.master.derive_priv(&self.secp, &path)?.private_key)
+        self.seed.derive_hardened(path)
     }
 
     /// Identity keypair at `m/7228'/0'/0'` — signs handshake messages
     /// (BIP340 Schnorr); never used in any HTLC.
     pub fn identity_keypair(&self) -> Result<Keypair> {
-        Ok(self.derive(&[PURPOSE, 0, 0])?.keypair(&self.secp))
+        Ok(self.derive(&[PURPOSE, 0, 0])?.keypair(self.seed.secp()))
     }
 
     /// x-only identity pubkey (the `from` field of message envelopes).
@@ -104,7 +109,9 @@ impl PactSeed {
 
     /// Compressed pubkey for [`Self::swap_secret_key`].
     pub fn swap_pubkey(&self, coin: u32, index: u32) -> Result<PublicKey> {
-        Ok(self.swap_secret_key(coin, index)?.public_key(&self.secp))
+        Ok(self
+            .swap_secret_key(coin, index)?
+            .public_key(self.seed.secp()))
     }
 
     /// Participant swap key at `m/7228'/1'/coin'/a'/b'/c'/d'`, the four levels
@@ -120,7 +127,7 @@ impl PactSeed {
     pub fn swap_pubkey_anchored(&self, coin: u32, anchor: &[u8]) -> Result<PublicKey> {
         Ok(self
             .swap_secret_key_anchored(coin, anchor)?
-            .public_key(&self.secp))
+            .public_key(self.seed.secp()))
     }
 
     /// Deterministic preimage for swap index `i` (spec §4.3) —
@@ -139,7 +146,7 @@ impl PactSeed {
     pub fn swap_xonly_pubkey(&self, coin: u32, index: u32) -> Result<XOnlyPublicKey> {
         Ok(self
             .swap_secret_key(coin, index)?
-            .x_only_public_key(&self.secp)
+            .x_only_public_key(self.seed.secp())
             .0)
     }
 
@@ -154,7 +161,7 @@ impl PactSeed {
     pub fn refund_xonly_pubkey(&self, coin: u32, index: u32) -> Result<XOnlyPublicKey> {
         Ok(self
             .refund_secret_key(coin, index)?
-            .x_only_public_key(&self.secp)
+            .x_only_public_key(self.seed.secp())
             .0)
     }
 
@@ -169,7 +176,7 @@ impl PactSeed {
     pub fn refund_xonly_pubkey_anchored(&self, coin: u32, anchor: &[u8]) -> Result<XOnlyPublicKey> {
         Ok(self
             .refund_secret_key_anchored(coin, anchor)?
-            .x_only_public_key(&self.secp)
+            .x_only_public_key(self.seed.secp())
             .0)
     }
 
@@ -188,37 +195,7 @@ impl PactSeed {
     /// The adaptor point `T = t·G` (compressed pubkey) — shared in `init`,
     /// not secret (spec v2 §3.1).
     pub fn adaptor_point(&self, index: u32) -> Result<PublicKey> {
-        Ok(self.adaptor_secret(index)?.public_key(&self.secp))
-    }
-
-    // ---- nodeless on-chain wallet (docs/NODELESS_WALLET.md D1) ----
-
-    /// Account xprv of the nodeless on-chain wallet at `m/86'/coin_type'/0'`
-    /// — the standard BIP-86 branch of the SAME mnemonic. Standard paths keep
-    /// the funds recoverable in any descriptor wallet, and the purpose (86')
-    /// is disjoint from the Pact tree (7228') by construction. `coin_type` is
-    /// the registry's `bip32_coin_type` (spec §4.1), NOT the SLIP-44 network
-    /// constant of whatever network the coin happens to run.
-    pub fn wallet_account_xpriv(&self, coin_type: u32) -> Result<Xpriv> {
-        let path: Vec<ChildNumber> = [86, coin_type, 0]
-            .iter()
-            .map(|&i| ChildNumber::from_hardened_idx(i).map_err(Into::into))
-            .collect::<Result<_>>()?;
-        Ok(self.master.derive_priv(&self.secp, &path)?)
-    }
-
-    /// bdk descriptor pair `(external, internal)` for the nodeless wallet:
-    /// `tr([fingerprint/86'/coin'/0']xprv/{0,1}/*)`. Private descriptors —
-    /// they carry the account xprv so bdk can sign; they must never be
-    /// logged or persisted (bdk stores only the public form).
-    pub fn wallet_descriptors(&self, coin_type: u32) -> Result<(String, String)> {
-        let fingerprint = self.master.fingerprint(&self.secp);
-        let account = self.wallet_account_xpriv(coin_type)?;
-        let origin = format!("[{fingerprint}/86'/{coin_type}'/0']");
-        Ok((
-            format!("tr({origin}{account}/0/*)"),
-            format!("tr({origin}{account}/1/*)"),
-        ))
+        Ok(self.adaptor_secret(index)?.public_key(self.seed.secp()))
     }
 }
 
@@ -247,11 +224,11 @@ mod tests {
         assert_eq!(a.preimage(0).unwrap(), b.preimage(0).unwrap());
         assert_ne!(a.preimage(0).unwrap(), a.preimage(1).unwrap());
         assert_eq!(
-            a.swap_pubkey(COIN_POCX, 0).unwrap(),
-            b.swap_pubkey(COIN_POCX, 0).unwrap()
+            a.swap_pubkey(COIN_BTCX, 0).unwrap(),
+            b.swap_pubkey(COIN_BTCX, 0).unwrap()
         );
         assert_ne!(
-            a.swap_pubkey(COIN_POCX, 0).unwrap(),
+            a.swap_pubkey(COIN_BTCX, 0).unwrap(),
             a.swap_pubkey(COIN_BTC, 0).unwrap()
         );
     }
@@ -277,7 +254,7 @@ mod tests {
 
     #[test]
     fn adaptor_secret_deterministic_and_point_matches() {
-        let secp = Secp256k1::new();
+        let secp = bitcoin::secp256k1::Secp256k1::new();
         let (a, b) = (seed(), seed());
         // Deterministic across instances, distinct per index.
         assert_eq!(a.adaptor_secret(0).unwrap(), b.adaptor_secret(0).unwrap());
@@ -302,7 +279,7 @@ mod tests {
         );
         assert_ne!(
             s.refund_secret_key(COIN_BTC, 0).unwrap(),
-            s.refund_secret_key(COIN_POCX, 0).unwrap()
+            s.refund_secret_key(COIN_BTCX, 0).unwrap()
         );
         // Branch 3' refund key is independent of the branch 1' swap key.
         assert_ne!(
@@ -330,7 +307,7 @@ mod tests {
         );
         assert_ne!(
             s.swap_secret_key_anchored(COIN_BTC, &h1).unwrap(),
-            s.swap_secret_key_anchored(COIN_POCX, &h1).unwrap()
+            s.swap_secret_key_anchored(COIN_BTCX, &h1).unwrap()
         );
         // Refund branch is independent of the swap branch for the same anchor.
         assert_ne!(
@@ -361,41 +338,38 @@ mod tests {
         }
     }
 
-    // ---- nodeless wallet branch (docs/NODELESS_WALLET.md D1) ----
+    // ---- nodeless wallet branch (keys-btcx; docs/NODELESS_WALLET.md D1) ----
 
     #[test]
-    fn wallet_account_matches_bip86_vector() {
-        // COIN_BTC = 0, so m/86'/0'/0' from the standard test mnemonic is
-        // exactly BIP-86's published account-xprv test vector.
-        let account = seed().wallet_account_xpriv(COIN_BTC).unwrap();
-        assert_eq!(
-            account.to_string(),
-            "xprv9xgqHN7yz9MwCkxsBPN5qetuNdQSUttZNKw1dcYTV4mkaAFiBVGQziHs3NRSWMkCzvgjEe3n9xV8oYywvM8at9yRqyaZVz6TYYhX98VjsUk"
-        );
-    }
-
-    #[test]
-    fn wallet_descriptors_shape_and_disjointness() {
+    fn pact_tree_is_disjoint_from_wallet_branches() {
+        // The Pact purpose (7228') can never collide with the standard wallet
+        // purposes (84'/86') the underlying WalletSeed derives — same master
+        // key, different first level.
         let s = seed();
-        let (ext, int) = s.wallet_descriptors(COIN_POCX).unwrap();
-        // tr() descriptors with full origin, distinct keychains.
-        assert!(ext.starts_with("tr(["));
-        assert!(ext.contains(&format!("/86'/{COIN_POCX}'/0']")));
-        assert!(ext.ends_with("/0/*)"));
-        assert!(int.ends_with("/1/*)"));
-        assert_ne!(ext, int);
-        // Deterministic; distinct per coin type.
-        assert_eq!(ext, seed().wallet_descriptors(COIN_POCX).unwrap().0);
-        assert_ne!(ext, s.wallet_descriptors(COIN_BTC).unwrap().0);
+        let account = s
+            .wallet()
+            .wallet_account_xpriv(DescriptorKind::Bip86, COIN_BTC)
+            .unwrap();
+        assert_ne!(
+            account.private_key,
+            s.derive(&[PURPOSE, 0, 0]).unwrap(),
+            "wallet account key must not equal a Pact-tree key"
+        );
+        // And the wrapper really shares the master key with the wallet seed:
+        // deriving m/86'/0'/0' through either path gives the same key.
+        assert_eq!(
+            account.private_key,
+            s.wallet().derive_hardened(&[86, COIN_BTC, 0]).unwrap()
+        );
     }
 
     #[test]
     fn swap_xonly_matches_swap_pubkey() {
         let s = seed();
-        let xonly = s.swap_xonly_pubkey(COIN_POCX, 0).unwrap();
+        let xonly = s.swap_xonly_pubkey(COIN_BTCX, 0).unwrap();
         assert_eq!(
             xonly,
-            s.swap_pubkey(COIN_POCX, 0).unwrap().x_only_public_key().0
+            s.swap_pubkey(COIN_BTCX, 0).unwrap().x_only_public_key().0
         );
     }
 }

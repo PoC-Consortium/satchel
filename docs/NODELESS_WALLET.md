@@ -187,7 +187,8 @@ The wallet ops above perform **no chain I/O of their own**. Step 1 (#86)
 batched the sync to a few round-trips; step 2 moved it off the RPC path
 entirely:
 
-- One `SyncWorker` thread per nodeless coin (`wallet_worker.rs`), owning
+- One `SyncWorker` thread per nodeless coin (the extracted `electrum-btcx`
+  crate's `worker` module; debug trace via `BTCX_WALLET_SYNC_TRACE`), owning
   the coin's **one long-lived Electrum connection** (an `ElectrumPool`
   entry shared with every engine call; lazy, reconnects on transport
   errors, `verify_chain` cached per connection generation).

@@ -848,7 +848,15 @@ impl Engine {
             .collect::<Result<_>>()?;
         let wallet = match self.store.seed() {
             Ok(seed) => {
-                let handle = self.wallet_manager.open(coin_id, params, &seed)?;
+                // The nodeless wallet is the BIP-86 branch of the same
+                // mnemonic (docs/NODELESS_WALLET.md D1) — the descriptor
+                // kind is now explicit at open (wallet-btcx).
+                let handle = self.wallet_manager.open(
+                    coin_id,
+                    params,
+                    seed.wallet(),
+                    crate::keys::DescriptorKind::Bip86,
+                )?;
                 let worker = self
                     .wallet_manager
                     .ensure_worker(coin_id, params, home, &handle)?;
@@ -7531,6 +7539,9 @@ mod tests {
     use super::*;
 
     fn engine_with(tag: &str, passphrase: Option<&str>) -> (Engine, std::path::PathBuf) {
+        // Tests must never write into the developer's real OS keystore
+        // (seedstore's cfg!(test) guard cannot see libswap's test builds).
+        std::env::set_var("PACT_DISABLE_KEYRING", "1");
         let dir = std::env::temp_dir().join(format!("libswap-engine-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         Store::init(&dir, passphrase).unwrap();
@@ -7587,7 +7598,7 @@ mod tests {
     #[test]
     fn adaptor_handshake_v2_routes_and_agrees() {
         use crate::adaptor_swap::AdaptorSwapParams;
-        use crate::params::POCX_REGTEST;
+        use crate::params::BTCX_REGTEST;
         use bitcoin::secp256k1::{PublicKey, Secp256k1};
         use bitcoin::XOnlyPublicKey;
 
@@ -7632,7 +7643,7 @@ mod tests {
         assert!(params
             .leg_a(&secp)
             .unwrap()
-            .address(&secp, &POCX_REGTEST)
+            .address(&secp, &BTCX_REGTEST)
             .unwrap()
             .starts_with("rpocx1p"));
 
@@ -8383,6 +8394,7 @@ mod tests {
         // when a leg's node is unreachable (here, a dead loopback port). Pure
         // envelope builders (offer/accept/make_private_offer) are NOT gated, so
         // they still succeed with no live node — that's the altitude split.
+        std::env::set_var("PACT_DISABLE_KEYRING", "1");
         let dir = std::env::temp_dir().join(format!("libswap-chaindown-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         Store::init(&dir, None).unwrap();
@@ -8480,6 +8492,7 @@ mod tests {
 
     #[test]
     fn configured_coins_in_registry_order() {
+        std::env::set_var("PACT_DISABLE_KEYRING", "1");
         let dir = std::env::temp_dir().join(format!("libswap-coins-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         Store::init(&dir, None).unwrap();
