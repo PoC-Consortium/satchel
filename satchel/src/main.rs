@@ -1453,6 +1453,22 @@ fn main() {
             update::check_app_update
         ])
         .setup(|app| {
+            // #160: record where Tauri unpacked the bundled resources FIRST —
+            // before the mode branches (external returns early) and before any
+            // template read or pactd spawn — so coins-file resolution can find
+            // the shipped coins.toml on Linux, where .deb/AppImage put the exe
+            // in usr/bin/ but resources in usr/lib/<app>/ and the exe-sibling
+            // lookup misses. On Windows (NSIS) the resource dir IS the exe dir,
+            // so behavior there is unchanged. NON-fatal: without it the
+            // config-dir copy / baked-in defaults still apply.
+            match app.path().resource_dir() {
+                Ok(dir) => coins_file::set_resource_dir(dir),
+                Err(e) => eprintln!(
+                    "satchel: resource dir unavailable ({e}); coin templates fall \
+                     back to the config-dir copy or baked-in defaults"
+                ),
+            }
+
             // Tray presence (issue #55) — before the pactd mode branches so
             // every mode (external returns early below) gets it. NON-fatal: a
             // desktop without a tray host (minimal Linux WMs) must not stop a
