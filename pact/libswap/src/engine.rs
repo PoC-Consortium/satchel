@@ -766,6 +766,19 @@ impl Engine {
         self.machine_scope.is_legacy() || adopted || derive_scope == self.machine_scope.0
     }
 
+    /// Whether `swap_id` names a record this machine only FOLLOWS (holds, but
+    /// does not drive — §5). False when we hold no such record at all, so
+    /// callers can use it as a pure "is this another machine's swap" gate.
+    fn followed_locally(&self, swap_id: &str) -> bool {
+        if let Ok(r) = self.store.get(swap_id) {
+            return !self.drives(r.derive_scope, r.adopted);
+        }
+        if let Ok(r) = self.store.get_adaptor(swap_id) {
+            return !self.drives(r.derive_scope, r.adopted);
+        }
+        false
+    }
+
     /// The single choke point every swap-tx broadcast funnels through (§3/§5 of
     /// docs/MULTI_MACHINE_122.md). A **followed** record (foreign scope AND not
     /// adopted) must never sign or broadcast — it is another machine's swap that
@@ -2392,6 +2405,13 @@ impl Engine {
     /// nodes (the in-process flow is covered by `adaptor_funding_ready`).
     pub fn adaptor_fund(&self, swap: &str) -> Result<Envelope> {
         let rec = self.store.get_adaptor(swap)?;
+        // §5 belt, same as the v1 `fund`: a FOLLOWED record never commits
+        // funds (nor pre-builds its leg for the scheduler to broadcast).
+        ensure!(
+            self.drives(rec.derive_scope, rec.adopted),
+            "refusing to fund swap {swap}: it belongs to another machine \
+             (followed, not driven) — take it over first if that machine is stopped"
+        );
         // CRITICAL: the participant NEVER broadcasts leg B here — not even on the
         // manual RPC path. It builds + pre-signs leg B; the scheduler broadcasts it
         // only once the swap is `Signed` (σ_A held) AND leg A is verified on-chain
@@ -3797,6 +3817,16 @@ impl Engine {
     /// §9.1 (initiator, chain A) / §9.2 (participant, chain B).
     pub fn fund(&self, swap: &str) -> Result<(SwapRecord, Envelope)> {
         let mut rec = self.store.get(swap)?;
+        // §5 belt at the one broadcast site outside `broadcast_swap_tx`
+        // (funding pays via `wallet_send`): a FOLLOWED record never commits
+        // funds — the owning machine may have funded this leg already
+        // (double-fund). Keyed on the drive rule, so an adopted (taken-over)
+        // swap still funds, exactly like the redeem/refund belt.
+        ensure!(
+            self.drives(rec.derive_scope, rec.adopted),
+            "refusing to fund swap {swap}: it belongs to another machine \
+             (followed, not driven) — take it over first if that machine is stopped"
+        );
         let params = self.swap_params(&rec)?;
 
         let (leg, chain, htlc, amount) = match rec.role {
@@ -6298,6 +6328,80 @@ impl Engine {
         Ok((pending, blobs.len()))
     }
 
+    /// Auto-import OTHER machines' relay snapshots as FOLLOWED records — the
+    /// ungated visibility half of the multi-machine design (#163, §3–§5 of
+    /// docs/MULTI_MACHINE_122.md). The confirm gate protects DRIVING (takeover /
+    /// `restorefromrelay`), not read-only visibility: a same-seed standby must
+    /// see the primary's in-flight swaps in its dock without any confirm.
+    ///
+    /// Per decoded snapshot (same-identity, encrypted-to-self — the #54
+    /// machinery):
+    /// - skip if the swap_id already exists locally, was follow-purged
+    ///   (`purged_foreign:` memo, via [`Engine::rescue_context`]) or the
+    ///   snapshot is terminal — a lingering relay snapshot never re-imports;
+    /// - skip OWN-scope snapshots: that is the #54 self-rescue case, which
+    ///   stays confirm-gated (`rescuestatus` warning + explicit
+    ///   `restorefromrelay`, unchanged). A LEGACY machine scope (bare
+    ///   `Engine::open` — harness/CLI, no partition) drives *everything*, so it
+    ///   skips every snapshot here: an auto-import would instantly auto-DRIVE
+    ///   it, the exact double-drive the gate exists to prevent;
+    /// - skip LEGACY (scope 0) snapshots: a pre-upgrade record could be ANY
+    ///   machine's — legacy is foreign to everyone and recoverable only via the
+    ///   gated path (§1);
+    /// - otherwise (foreign nonzero scope) import as FOLLOWED: `adopted` forced
+    ///   false ([`RescuedRecord::with_adopted_cleared`], §1 — it must never
+    ///   travel), the swap counter NOT raised (own-scope-only by design, §3),
+    ///   and no nonce secrets — snapshots carry only the record + `next_index`,
+    ///   never `nonce_sessions` (§1 invariant). The record then flows through
+    ///   the existing routing: `drives()` = false → the read-only follow
+    ///   evaluator; pactd's `listswaps` stamps `source = "foreign"` +
+    ///   `machine_label` so the dock groups it per machine.
+    ///
+    /// Returns one `followed-imported` [`TickEvent`] per newly-followed swap so
+    /// the activity log shows why a swap appeared. Idempotent: a second scan
+    /// over the same blobs imports nothing.
+    pub fn follow_foreign_from_blobs(&self, blobs: &[String]) -> Result<Vec<TickEvent>> {
+        let (kp, me, have) = self.rescue_context()?;
+        let mut events: Vec<TickEvent> = Vec::new();
+        // A swap can surface as more than one event in a single fetch (accept +
+        // Signed snapshots across relays). Mirror `rescue_from_blobs`: every
+        // matching blob is stored (keyed upsert — last wins, exactly the proven
+        // restore semantics), but announce each swap only once.
+        let mut announced: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for blob in blobs {
+            let rec = match self.rescue_decode(&kp, &me, blob) {
+                Ok((rec, _next_index)) => rec,
+                Err(e) => {
+                    eprintln!("follow: skipping unreadable snapshot: {e:#}");
+                    continue;
+                }
+            };
+            if have.contains(rec.swap_id()) || rec.terminal() {
+                continue;
+            }
+            let scope = rec.derive_scope();
+            if self.drives(scope, false) || scope == 0 {
+                continue; // ours-to-drive or legacy — both stay confirm-gated
+            }
+            let swap_id = rec.swap_id().to_string();
+            match rec.with_adopted_cleared() {
+                RescuedRecord::V1(r) => self.store.put(&r)?,
+                RescuedRecord::V2(r) => self.store.put_adaptor(&r)?,
+            }
+            if announced.insert(swap_id.clone()) {
+                let label = crate::machine::machine_label(crate::keys::DeriveScope(scope));
+                events.push(TickEvent {
+                    swap_id,
+                    action: "followed-imported".into(),
+                    detail: format!(
+                        "following another machine's swap ({label}) from its relay snapshot — read-only until taken over"
+                    ),
+                });
+            }
+        }
+        Ok(events)
+    }
+
     /// Shared setup for a rescue pass: identity keypair + pubkey and the set
     /// of swap ids we already hold locally (local always wins over a snapshot).
     fn rescue_context(
@@ -7321,6 +7425,40 @@ impl Engine {
                 detail,
             }))
         };
+        // §2 (docs/MULTI_MACHINE_122.md): a FOLLOWED record (foreign scope, not
+        // adopted) ignores inbound protocol messages — a follower advances by
+        // chain only, never by the handshake. Load-bearing with the #163
+        // auto-follow: machines on one seed share the identity mailbox, so a
+        // standby holds followed records for swaps whose protocol messages it
+        // ALSO receives; processing one would mutate the record and — worst
+        // case, `auto_fund` on the v1 `funded` arm below — commit funds to a
+        // leg the owning machine already funded: the exact double-fund the
+        // partition exists to prevent (caught live by the e2e rescue harness,
+        // 2026-07-10: a replayed `funded` made a follower re-fund leg B). The
+        // `take`/`init` arms need no record and have their own §2 ownership
+        // gates; everything else keys on the local record's drive status. The
+        // message is consumed (each machine keeps its own relay cursor, so
+        // ignoring it here never starves the owning machine).
+        if matches!(
+            envelope.msg_type.as_str(),
+            "abort"
+                | "funding_ready"
+                | "nonces"
+                | "partial_sigs"
+                | "accept"
+                | "funded"
+                | "redeemed"
+        ) && self.followed_locally(&envelope.swap_id)
+        {
+            return event(
+                &envelope.swap_id,
+                "follow-ignored",
+                format!(
+                    "`{}` for another machine's swap — a follower advances by chain only (take it over to drive)",
+                    envelope.msg_type
+                ),
+            );
+        }
         match envelope.msg_type.as_str() {
             // We are the maker: someone took our offer.
             "take" => {
@@ -8258,6 +8396,302 @@ mod tests {
             engine.store.get(&rec.swap_id).is_ok(),
             "followed record survives an unobservable tick"
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Seal an encrypted-to-self snapshot blob exactly the way
+    /// `publish_snapshot_body` does (#54/#163) — the shape `rescue_decode`
+    /// expects back from the relays.
+    fn sealed_snapshot(
+        engine: &Engine,
+        v: u64,
+        swap_id: &str,
+        record: serde_json::Value,
+        next_index: u32,
+    ) -> String {
+        let body = serde_json::json!({ "v": v, "record": record, "next_index": next_index });
+        let env = engine.signed_envelope("swapstate", swap_id, body).unwrap();
+        let me = engine.identity().unwrap();
+        crate::board::seal_envelope(&me, &env).unwrap()
+    }
+
+    #[test]
+    fn foreign_snapshot_auto_imports_as_followed() {
+        // #163: a foreign-scope snapshot imports as a FOLLOWED record with no
+        // confirm — adopted forced false, never driven, counter untouched —
+        // and a second scan is idempotent.
+        let (mut engine, dir) = engine_with("follow-import", None);
+        engine.machine_scope = crate::keys::DeriveScope(0xAAAA);
+        let (mut rec, _) = engine
+            .offer(
+                Network::Regtest,
+                ("btcx".into(), 100),
+                ("btc".into(), 100),
+                1_700_000_002,
+                1_700_000_001,
+                None,
+                None,
+            )
+            .unwrap();
+        // Rebuild the record as ANOTHER machine's: foreign scope, and adopted
+        // stamped true in the snapshot (an adopter re-publishes as it drives) —
+        // the import must clear it (§1: `adopted` never travels).
+        engine.store.delete(&rec.swap_id).unwrap();
+        rec.derive_scope = 0xBBBB;
+        rec.adopted = true;
+        let rec_json = serde_json::to_value(&rec).unwrap();
+        // §1 invariant: snapshots never carry nonce secrets — only the record
+        // (+ next_index), and no secnonce ever rides the record.
+        assert!(
+            !rec_json.to_string().contains("secnonce"),
+            "snapshot record must never carry nonce secrets"
+        );
+        let blob = sealed_snapshot(&engine, 1, &rec.swap_id, rec_json, 999);
+        let counter_before = engine.store.peek_next_swap_index().unwrap();
+
+        let events = engine
+            .follow_foreign_from_blobs(std::slice::from_ref(&blob))
+            .unwrap();
+        assert_eq!(events.len(), 1, "one followed-import event");
+        assert_eq!(events[0].action, "followed-imported");
+        assert_eq!(events[0].swap_id, rec.swap_id);
+        let label = crate::machine::machine_label(crate::keys::DeriveScope(0xBBBB));
+        assert!(
+            events[0].detail.contains(&label),
+            "event names the machine label: {}",
+            events[0].detail
+        );
+        let got = engine.store.get(&rec.swap_id).unwrap();
+        assert!(
+            !got.adopted,
+            "adopted forced false on import (never travels)"
+        );
+        assert_eq!(got.derive_scope, 0xBBBB, "originating scope preserved");
+        assert!(
+            !engine.drives(got.derive_scope, got.adopted),
+            "followed = foreign and not adopted → never driven"
+        );
+        assert_eq!(
+            engine.store.peek_next_swap_index().unwrap(),
+            counter_before,
+            "a foreign snapshot never raises OUR swap counter"
+        );
+        assert!(
+            engine
+                .store
+                .nonce_session(&rec.swap_id, "redeem_a")
+                .unwrap()
+                .is_none(),
+            "import creates no nonce sessions"
+        );
+        // Second scan: the record now exists locally → idempotent, no dup.
+        let again = engine.follow_foreign_from_blobs(&[blob]).unwrap();
+        assert!(again.is_empty(), "second scan imports nothing");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn foreign_v2_snapshot_auto_imports_as_followed() {
+        // #163: same as the v1 case, through the adaptor (v2) store.
+        let (mut engine, dir) = engine_with("follow-import-v2", None);
+        engine.machine_scope = crate::keys::DeriveScope(0xAAAA);
+        let mut rec = v2_record(&engine);
+        engine.store.delete_adaptor(&rec.swap_id).unwrap();
+        rec.derive_scope = 0xBBBB;
+        rec.adopted = true;
+        let blob = sealed_snapshot(
+            &engine,
+            2,
+            &rec.swap_id,
+            serde_json::to_value(&rec).unwrap(),
+            999,
+        );
+        let events = engine.follow_foreign_from_blobs(&[blob]).unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].action, "followed-imported");
+        let got = engine.store.get_adaptor(&rec.swap_id).unwrap();
+        assert!(!got.adopted, "adopted forced false on v2 import");
+        assert!(!engine.drives(got.derive_scope, got.adopted));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn own_scope_legacy_and_terminal_snapshots_never_auto_import() {
+        // #163: only FOREIGN NONZERO scopes auto-follow. Own-scope stays the
+        // confirm-gated #54 self-rescue; legacy (0) is foreign to everyone and
+        // stays gated; terminal snapshots never import; and a LEGACY machine
+        // scope (unpartitioned engine) imports nothing — it would auto-DRIVE.
+        let (mut engine, dir) = engine_with("follow-gates", None);
+        engine.machine_scope = crate::keys::DeriveScope(0xAAAA);
+        let mk = |t1: u32| {
+            engine
+                .offer(
+                    Network::Regtest,
+                    ("btcx".into(), 100),
+                    ("btc".into(), 100),
+                    t1,
+                    t1 - 1,
+                    None,
+                    None,
+                )
+                .unwrap()
+                .0
+        };
+        // Own scope (0xAAAA — what offer() stamped).
+        let own = mk(1_700_000_002);
+        engine.store.delete(&own.swap_id).unwrap();
+        let own_blob = sealed_snapshot(
+            &engine,
+            1,
+            &own.swap_id,
+            serde_json::to_value(&own).unwrap(),
+            0,
+        );
+        // Legacy scope 0.
+        let mut legacy = mk(1_700_000_004);
+        engine.store.delete(&legacy.swap_id).unwrap();
+        legacy.derive_scope = 0;
+        let legacy_blob = sealed_snapshot(
+            &engine,
+            1,
+            &legacy.swap_id,
+            serde_json::to_value(&legacy).unwrap(),
+            0,
+        );
+        // Foreign but terminal.
+        let mut done = mk(1_700_000_006);
+        engine.store.delete(&done.swap_id).unwrap();
+        done.derive_scope = 0xBBBB;
+        done.state = State::Completed;
+        let done_blob = sealed_snapshot(
+            &engine,
+            1,
+            &done.swap_id,
+            serde_json::to_value(&done).unwrap(),
+            0,
+        );
+        let blobs = vec![own_blob, legacy_blob, done_blob];
+        let events = engine.follow_foreign_from_blobs(&blobs).unwrap();
+        assert!(events.is_empty(), "nothing auto-imports: {events:?}");
+        assert!(
+            engine.store.get(&own.swap_id).is_err(),
+            "own-scope stays gated"
+        );
+        assert!(
+            engine.store.get(&legacy.swap_id).is_err(),
+            "legacy stays gated"
+        );
+        assert!(
+            engine.store.get(&done.swap_id).is_err(),
+            "terminal never imports"
+        );
+        // A LEGACY machine scope drives everything → auto-import would
+        // auto-drive with no confirm; the scan must skip every snapshot.
+        let mut foreign = mk(1_700_000_008);
+        engine.store.delete(&foreign.swap_id).unwrap();
+        foreign.derive_scope = 0xBBBB;
+        let foreign_blob = sealed_snapshot(
+            &engine,
+            1,
+            &foreign.swap_id,
+            serde_json::to_value(&foreign).unwrap(),
+            0,
+        );
+        engine.machine_scope = crate::keys::DeriveScope::LEGACY;
+        let events = engine.follow_foreign_from_blobs(&[foreign_blob]).unwrap();
+        assert!(events.is_empty(), "legacy machine scope imports nothing");
+        assert!(engine.store.get(&foreign.swap_id).is_err());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn followed_record_ignores_inbound_and_refuses_funding() {
+        // §2: a FOLLOWED record ignores inbound protocol messages (a follower
+        // advances by chain only) and can never fund — the two holes that
+        // would let a same-seed standby double-fund the owner's swap (found
+        // live by the e2e rescue harness, 2026-07-10). Both gates key on the
+        // drive rule, so the SAME record processes messages and funds again
+        // once taken over.
+        let (mut alice, ad) = engine_with("follow-inbound-alice", None);
+        let (bob, bd) = engine_with("follow-inbound-bob", None);
+        alice.machine_scope = crate::keys::DeriveScope(0xAAAA);
+        let (mut rec, _) = alice
+            .offer(
+                Network::Regtest,
+                ("btcx".into(), 100),
+                ("btc".into(), 100),
+                1_700_000_002,
+                1_700_000_001,
+                None,
+                None,
+            )
+            .unwrap();
+        rec.derive_scope = 0xBBBB; // another machine's swap → followed
+        alice.store.put(&rec).unwrap();
+        let state_before = alice.store.get(&rec.swap_id).unwrap().state;
+        // Inbound protocol message for the followed swap → consumed + ignored,
+        // record untouched.
+        let env = bob
+            .signed_envelope("funded", &rec.swap_id, serde_json::json!({}))
+            .unwrap();
+        let ev = alice.handle_relay_envelope(&env).unwrap().unwrap();
+        assert_eq!(ev.action, "follow-ignored", "{ev:?}");
+        assert_eq!(
+            alice.store.get(&rec.swap_id).unwrap().state,
+            state_before,
+            "inbound message must not mutate a followed record"
+        );
+        // Funding a followed record is refused at the fund() belt.
+        let err = alice.fund(&rec.swap_id).unwrap_err().to_string();
+        assert!(err.contains("another machine"), "{err}");
+        // Taken over → driven: the gates open (fund now fails on STATE, not
+        // on the drive rule — the record is Created, not Accepted).
+        alice.take_over_swap(&rec.swap_id).unwrap();
+        let err = alice.fund(&rec.swap_id).unwrap_err().to_string();
+        assert!(!err.contains("another machine"), "{err}");
+        // And the v2 belt: a followed adaptor record refuses adaptor_fund.
+        let mut v2 = v2_record(&alice);
+        v2.derive_scope = 0xBBBB;
+        alice.store.put_adaptor(&v2).unwrap();
+        let err = alice.adaptor_fund(&v2.swap_id).unwrap_err().to_string();
+        assert!(err.contains("another machine"), "{err}");
+        std::fs::remove_dir_all(&ad).ok();
+        std::fs::remove_dir_all(&bd).ok();
+    }
+
+    #[test]
+    fn purged_foreign_memo_blocks_reimport() {
+        // §5: a follow-purged swap's lingering relay snapshot must not churn
+        // back in — the `purged_foreign:` memo counts as "already have".
+        let (mut engine, dir) = engine_with("follow-purged", None);
+        engine.machine_scope = crate::keys::DeriveScope(0xAAAA);
+        let (mut rec, _) = engine
+            .offer(
+                Network::Regtest,
+                ("btcx".into(), 100),
+                ("btc".into(), 100),
+                1_700_000_002,
+                1_700_000_001,
+                None,
+                None,
+            )
+            .unwrap();
+        engine.store.delete(&rec.swap_id).unwrap();
+        rec.derive_scope = 0xBBBB;
+        let blob = sealed_snapshot(
+            &engine,
+            1,
+            &rec.swap_id,
+            serde_json::to_value(&rec).unwrap(),
+            0,
+        );
+        engine
+            .store
+            .meta_set(&format!("{PURGED_FOREIGN_PREFIX}{}", rec.swap_id), "1")
+            .unwrap();
+        let events = engine.follow_foreign_from_blobs(&[blob]).unwrap();
+        assert!(events.is_empty(), "purged memo blocks the re-import");
+        assert!(engine.store.get(&rec.swap_id).is_err());
         std::fs::remove_dir_all(&dir).ok();
     }
 
