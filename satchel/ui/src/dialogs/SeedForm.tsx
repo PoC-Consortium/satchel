@@ -236,9 +236,11 @@ export default function SeedForm({
           />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button color="inherit" onClick={() => (presetMode ? onBack?.() : setStep("choose"))} sx={{ mr: "auto" }}>
-            {t("wizard.back")}
-          </Button>
+          {(!presetMode || onBack) && (
+            <Button color="inherit" onClick={() => (presetMode ? onBack?.() : setStep("choose"))} sx={{ mr: "auto" }}>
+              {t("wizard.back")}
+            </Button>
+          )}
           <Button variant="contained" disabled={!ack || words.length === 0} onClick={() => setStep(skipVerify ? "passphrase" : "verify")}>
             {t("wizard.continue")}
           </Button>
@@ -333,9 +335,11 @@ export default function SeedForm({
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button color="inherit" onClick={() => (presetMode ? onBack?.() : setStep("choose"))} sx={{ mr: "auto" }}>
-            {t("wizard.back")}
-          </Button>
+          {(!presetMode || onBack) && (
+            <Button color="inherit" onClick={() => (presetMode ? onBack?.() : setStep("choose"))} sx={{ mr: "auto" }}>
+              {t("wizard.back")}
+            </Button>
+          )}
           <Button variant="contained" disabled={!checksumOk} onClick={() => setStep("passphrase")}>
             {t("wizard.continue")}
           </Button>

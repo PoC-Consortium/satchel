@@ -223,6 +223,8 @@ export const it: Bundle = {
     enterTitle: "Importa la tua frase di recupero",
     enterBody:
       "Digita ogni parola — si auto-completano man mano — oppure incolla l'intera frase. La verifichiamo prima di continuare.",
+    reimportBanner:
+      "Questo computer non può più sbloccare il seed salvato — manca la chiave nel portachiavi di sistema (la cartella dei dati è stata spostata su un nuovo computer o il portachiavi è stato ripristinato). Reinserisci la tua frase di recupero per configurarlo di nuovo su questo computer. I tuoi fondi e i tuoi swap non sono interessati.",
     wordCount: "{n} parole",
     wordCountHint:
       "12 parole bastano e avanzano — questo è un wallet di transito caldo, non cold storage. Scegli 24 se preferisci la frase più lunga.",

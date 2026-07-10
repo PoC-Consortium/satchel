@@ -223,6 +223,8 @@ export const gl: Bundle = {
     enterTitle: "Importa a túa frase de recuperación",
     enterBody:
       "Escribe cada palabra — autocompletanse a medida que avanzas — ou pega a frase enteira. Compróbase antes de continuar.",
+    reimportBanner:
+      "Este equipo xa non pode desbloquear a semente almacenada — falta a chave do almacén de chaves do sistema (o cartafol de datos moveuse a un equipo novo ou restableceuse o chaveiro). Volve introducir a túa frase de recuperación para configurala de novo neste equipo. Os teus fondos e swaps non se ven afectados.",
     wordCount: "{n} palabras",
     wordCountHint:
       "Con 12 palabras chega de sobra — esta é unha carteira de tránsito en quente, non almacenamento en frío. Escolle 24 se prefires a frase máis longa.",

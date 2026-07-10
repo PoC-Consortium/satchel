@@ -223,6 +223,8 @@ export const de: Bundle = {
     enterTitle: "Importiere deine Wiederherstellungsphrase",
     enterBody:
       "Tippe jedes Wort — sie vervollständigen sich automatisch — oder füge die ganze Phrase ein. Wir prüfen sie, bevor du fortfährst.",
+    reimportBanner:
+      "Dieser Rechner kann den gespeicherten Seed nicht mehr entsperren — der Schlüssel im System-Schlüsselspeicher fehlt (der Datenordner wurde auf einen neuen Rechner verschoben oder der Schlüsselbund zurückgesetzt). Gib deine Wiederherstellungsphrase erneut ein, um ihn auf diesem Rechner neu einzurichten. Deine Guthaben und Swaps sind nicht betroffen.",
     wordCount: "{n} Wörter",
     wordCountHint:
       "12 Wörter reichen völlig — das ist eine heiße Transit-Wallet, kein Cold Storage. Wähle 24, wenn du die längere Phrase bevorzugst.",

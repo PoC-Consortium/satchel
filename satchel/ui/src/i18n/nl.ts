@@ -223,6 +223,8 @@ export const nl: Bundle = {
     enterTitle: "Importeer je herstelzin",
     enterBody:
       "Typ elk woord — ze worden automatisch aangevuld terwijl je typt — of plak de hele zin. We controleren hem voordat je verdergaat.",
+    reimportBanner:
+      "Deze computer kan de opgeslagen seed niet meer ontgrendelen — de sleutel in de systeemsleutelhanger ontbreekt (de datamap is naar een nieuwe computer verplaatst of de sleutelhanger is gereset). Voer je herstelzin opnieuw in om hem op deze computer opnieuw in te stellen. Je tegoeden en swaps blijven onaangetast.",
     wordCount: "{n} woorden",
     wordCountHint:
       "12 woorden is ruim voldoende — dit is een hot transit-wallet, geen cold storage. Kies 24 als je liever de langere zin hebt.",

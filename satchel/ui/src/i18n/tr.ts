@@ -223,6 +223,8 @@ export const tr: Bundle = {
     enterTitle: "Kurtarma ifadenizi içe aktarın",
     enterBody:
       "Her sözcüğü yazın — yazdıkça otomatik tamamlanırlar — veya tüm ifadeyi yapıştırın. Devam etmeden önce kontrol ederiz.",
+    reimportBanner:
+      "Bu makine kayıtlı seed'i artık açamıyor — sistem anahtar deposundaki anahtar eksik (veri klasörü yeni bir makineye taşındı veya anahtar zinciri sıfırlandı). Bu makinede yeniden kurmak için kurtarma ifadenizi tekrar girin. Fonlarınız ve swap'larınız etkilenmez.",
     wordCount: "{n} sözcük",
     wordCountHint:
       "12 sözcük fazlasıyla yeter — bu bir sıcak geçiş cüzdanıdır, soğuk depolama değil. Daha uzun ifadeyi tercih ediyorsanız 24'ü seçin.",

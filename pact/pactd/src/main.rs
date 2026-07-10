@@ -1003,7 +1003,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             // Tolerate a missing/locked seed: a fresh merchant (first run) or
             // a locked encrypted one has no identity to show yet. The UI uses
             // seed_exists/locked to drive the wizard / unlock prompt.
-            let (status, identity, coins, machine_label) = blocking(app, |e| {
+            let (status, identity, needs_reimport, coins, machine_label) = blocking(app, |e| {
                 let status = e.store.wallet_status()?;
                 let identity = if status.seed_exists && !status.locked {
                     e.store
@@ -1014,10 +1014,22 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 } else {
                     None
                 };
+                // #133: a keyring seed this machine can no longer decrypt looks
+                // healthy in `status` (encrypted, not locked) — surface it
+                // distinctly so the UI can route to the guided re-import instead
+                // of failing lazily on the first seed-using action.
+                let needs_reimport =
+                    status.seed_exists && !status.locked && e.store.seed_needs_reimport();
                 // Short one-way label of THIS machine's scope (§5) — the UI shows
                 // it in Settings so a user can tell their machines apart.
                 let machine_label = libswap::machine::machine_label(e.machine_scope);
-                Ok((status, identity, e.configured_coins(), machine_label))
+                Ok((
+                    status,
+                    identity,
+                    needs_reimport,
+                    e.configured_coins(),
+                    machine_label,
+                ))
             })
             .await?;
             Ok(json!({
@@ -1036,13 +1048,24 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 "seed_exists": status.seed_exists,
                 "encrypted": status.encrypted,
                 "locked": status.locked,
+                "needs_reimport": needs_reimport,
                 "coins": coins,
                 "machine_label": machine_label,
             }))
         }
         "walletstatus" => {
-            let status = blocking(app, |e| e.store.wallet_status()).await?;
-            Ok(serde_json::to_value(status)?)
+            let (status, needs_reimport) = blocking(app, |e| {
+                let status = e.store.wallet_status()?;
+                // #133: see getinfo — an undecryptable keyring seed is invisible
+                // in the prefix-probed WalletStatus fields.
+                let needs_reimport =
+                    status.seed_exists && !status.locked && e.store.seed_needs_reimport();
+                Ok((status, needs_reimport))
+            })
+            .await?;
+            let mut v = serde_json::to_value(status)?;
+            v["needs_reimport"] = json!(needs_reimport);
+            Ok(v)
         }
         // The active merchant's fee-bump policy (per-merchant; pactd's store owns
         // it). Callable from the CLI like any other method — typed params, no JSON

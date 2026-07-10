@@ -223,6 +223,8 @@ export const fi: Bundle = {
     enterTitle: "Tuo palautuslauseesi",
     enterBody:
       "Kirjoita jokainen sana — ne täydentyvät automaattisesti — tai liitä koko lause. Tarkistamme sen ennen kuin jatkat.",
+    reimportBanner:
+      "Tämä kone ei voi enää avata tallennettua seediä — järjestelmän avainsäilön avain puuttuu (datakansio on siirretty uudelle koneelle tai avainnippu on nollattu). Syötä palautuslauseesi uudelleen ottaaksesi sen käyttöön tällä koneella. Varasi ja swapit eivät muutu.",
     wordCount: "{n} sanaa",
     wordCountHint:
       "12 sanaa riittää hyvin — tämä on kuuma siirtolompakko, ei kylmäsäilytys. Valitse 24, jos haluat mieluummin pidemmän lauseen.",

@@ -39,6 +39,7 @@ export type Phase =
   | "wizard"
   | "seed"
   | "unlock"
+  | "reimport"
   | "disconnected"
   | "ready";
 
@@ -314,6 +315,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     if (gi.locked) {
       setPhase("unlock");
+      return;
+    }
+    // #133: the seed file exists but this machine's OS-keystore key can no
+    // longer decrypt it (data dir moved to a new machine / keychain reset).
+    // Without this the app lands in "ready" looking healthy and only fails on
+    // the first seed-using action, with no guided recovery.
+    if (gi.needs_reimport) {
+      setPhase("reimport");
       return;
     }
 

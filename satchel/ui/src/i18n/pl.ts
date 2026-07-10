@@ -223,6 +223,8 @@ export const pl: Bundle = {
     enterTitle: "Wpisz swoją frazę odzyskiwania",
     enterBody:
       "Wpisuj każde słowo — uzupełniają się automatycznie w trakcie pisania — lub wklej całą frazę. Sprawdzamy ją, zanim przejdziesz dalej.",
+    reimportBanner:
+      "Ten komputer nie może już odblokować zapisanego seeda — brakuje klucza w systemowym magazynie kluczy (folder danych przeniesiono na nowy komputer lub zresetowano pęk kluczy). Wpisz ponownie swoją frazę odzyskiwania, aby skonfigurować go na nowo na tym komputerze. Twoje środki i swapy pozostają nienaruszone.",
     wordCount: "{n} słów",
     wordCountHint:
       "12 słów w zupełności wystarczy — to gorący portfel tranzytowy, a nie zimne przechowywanie. Wybierz 24, jeśli wolisz dłuższą frazę.",
