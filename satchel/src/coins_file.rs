@@ -7,16 +7,22 @@
 //! coin — node connection defaults, icon, and engine consensus — is a single
 //! edit with no recompile.
 //!
-//! Resolution order for the file: first the sibling of the Satchel executable
-//! (`<exe dir>/coins.toml`, the shipped bundle copy), else `<config dir>/
-//! coins.toml` (a user-editable copy). If neither exists, the baked-in
+//! Resolution order for the file (#160): first the sibling of the Satchel
+//! executable (`<exe dir>/coins.toml` — the Windows/NSIS bundle layout), else
+//! the Tauri **resource dir** (where `bundle.resources` land on Linux
+//! .deb/AppImage — the exe is `usr/bin/satchel` but resources go to
+//! `usr/lib/<app>/` — and in macOS `Resources/`), else `<config dir>/
+//! coins.toml` (a user-editable copy). If none exists, the baked-in
 //! [`DEFAULT_COINS_TOML`] is written to the config dir so the user can edit it.
 //! A parse error logs and falls back to the baked-in default, never crashing
-//! boot.
+//! boot. The shipped copy (exe-sibling or resource dir) deliberately outranks
+//! the config-dir copy so an upgrade's new defaults take effect; the config
+//! copy is only authoritative where no shipped copy is found.
 
 use serde::Deserialize;
 use serde_json::json;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 /// The default templates shipped with Satchel (btcx + btc): connection presets
 /// plus icon, and the engine consensus params (the latter dropped by pactd as
@@ -86,13 +92,54 @@ impl CoinDoc {
     }
 }
 
+/// Where Tauri unpacked the bundled resources (`coins.toml`, the coin icons).
+/// Recorded once at app setup from `tauri::Manager::path().resource_dir()`;
+/// unset in non-Tauri contexts (unit tests) or if the resolver fails, in which
+/// case resolution simply skips this step.
+static RESOURCE_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Record the Tauri resource dir for coins-file resolution (#160). Called once
+/// during app setup, before anything reads templates or spawns pactd; a second
+/// call is ignored (first write wins).
+pub fn set_resource_dir(dir: PathBuf) {
+    let _ = RESOURCE_DIR.set(dir);
+}
+
 /// Resolve the coins file path, materializing the baked-in default into the
 /// config dir if no file exists anywhere. Always returns a path that exists.
 pub fn resolve_coins_file(config_dir: &Path) -> PathBuf {
-    if let Ok(exe) = std::env::current_exe() {
-        let sibling = exe.with_file_name("coins.toml");
-        if sibling.exists() {
-            return sibling;
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(Path::to_path_buf));
+    resolve_coins_file_in(
+        exe_dir.as_deref(),
+        RESOURCE_DIR.get().map(PathBuf::as_path),
+        config_dir,
+    )
+}
+
+/// Testable core of [`resolve_coins_file`]: probe each candidate dir in order.
+///
+/// 1. `<exe dir>/coins.toml` — the Windows (NSIS) bundle layout, where
+///    resources sit next to the executable. Kept first so Windows behavior is
+///    unchanged (there the resource dir IS the exe dir anyway).
+/// 2. `<resource dir>/coins.toml` — where Tauri puts `bundle.resources` on
+///    Linux (.deb: `/usr/lib/<app>/`; AppImage: `<mount>/usr/lib/<app>/`) and
+///    macOS (`Contents/Resources/`). Without this step the Linux lookup fell
+///    through to a config-dir copy materialized by the FIRST ever install and
+///    never updated — shadowing every upgrade's new defaults (#160).
+/// 3. `<config dir>/coins.toml` — the user-editable copy, written from the
+///    baked-in default when missing so there is always a file to edit and the
+///    templates are never empty even if both shipped copies miss.
+fn resolve_coins_file_in(
+    exe_dir: Option<&Path>,
+    resource_dir: Option<&Path>,
+    config_dir: &Path,
+) -> PathBuf {
+    for dir in [exe_dir, resource_dir].into_iter().flatten() {
+        let shipped = dir.join("coins.toml");
+        if shipped.exists() {
+            return shipped;
         }
     }
     let user_copy = config_dir.join("coins.toml");
@@ -255,6 +302,80 @@ pub fn icon_data_url(config_dir: &Path, coin_id: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Self-cleaning unique temp dir (no tempfile dep for one test).
+    struct TempDir(PathBuf);
+    impl TempDir {
+        fn new(tag: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!(
+                "satchel-coins-test-{tag}-{}-{:?}",
+                std::process::id(),
+                std::thread::current().id()
+            ));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            TempDir(dir)
+        }
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// #160 — the full resolution chain: exe-sibling → resource dir →
+    /// config-dir copy (materialized from the baked-in default when missing).
+    #[test]
+    fn resolution_chain_prefers_shipped_then_materializes_default() {
+        let exe = TempDir::new("exe");
+        let res = TempDir::new("res");
+        let cfg = TempDir::new("cfg");
+
+        // Nothing anywhere → the baked-in default is materialized into the
+        // config dir, and it parses with working (non-empty) Electrum fleets,
+        // so the wizard is never empty even if every shipped lookup misses.
+        let got = resolve_coins_file_in(Some(exe.path()), Some(res.path()), cfg.path());
+        assert_eq!(got, cfg.path().join("coins.toml"));
+        assert!(got.exists());
+        let doc: CoinFileDoc = toml::from_str(&std::fs::read_to_string(&got).unwrap()).unwrap();
+        let btc = doc.coins.iter().find(|c| c.coin_id == "btc").unwrap();
+        let conn = btc.mainnet.as_ref().unwrap().connection.as_ref().unwrap();
+        assert!(
+            !conn.electrum.is_empty(),
+            "baked-in default must carry Electrum fleets"
+        );
+
+        // A shipped copy in the resource dir (the Linux .deb/AppImage layout)
+        // outranks the (now stale) config-dir copy — the #160 fix.
+        std::fs::write(res.path().join("coins.toml"), "# resource copy").unwrap();
+        let got = resolve_coins_file_in(Some(exe.path()), Some(res.path()), cfg.path());
+        assert_eq!(got, res.path().join("coins.toml"));
+
+        // The exe-sibling (Windows layout) outranks both — unchanged behavior.
+        std::fs::write(exe.path().join("coins.toml"), "# exe copy").unwrap();
+        let got = resolve_coins_file_in(Some(exe.path()), Some(res.path()), cfg.path());
+        assert_eq!(got, exe.path().join("coins.toml"));
+
+        // No resource dir recorded (unit tests / resolver failure) → the chain
+        // still works, skipping that step.
+        let got = resolve_coins_file_in(None, None, cfg.path());
+        assert_eq!(got, cfg.path().join("coins.toml"));
+    }
+
+    /// An existing config-dir copy is used as-is (user-editable), never
+    /// overwritten by the materialization step.
+    #[test]
+    fn config_dir_copy_is_not_clobbered() {
+        let cfg = TempDir::new("cfg-keep");
+        let user_copy = cfg.path().join("coins.toml");
+        std::fs::write(&user_copy, "# user edit").unwrap();
+        let got = resolve_coins_file_in(None, None, cfg.path());
+        assert_eq!(got, user_copy);
+        assert_eq!(std::fs::read_to_string(&user_copy).unwrap(), "# user edit");
+    }
 
     #[test]
     fn default_toml_parses_and_has_both_coins() {
