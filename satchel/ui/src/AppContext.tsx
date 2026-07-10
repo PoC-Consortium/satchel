@@ -90,6 +90,10 @@ interface AppCtx {
    *  immediately instead of waiting for its next poll tick. */
   boardNonce: number;
   pokeBoard: () => void;
+  /** True while a boardpostoffer is in flight (user already navigated to the
+   *  Corkboard) — the board shows a posting… strip until the poke lands. */
+  postingOffer: boolean;
+  setPostingOffer: (v: boolean) => void;
 
   /** coin_id → last-known wallet balance, cached app-wide so the Wallets page
    *  shows values instantly on every visit — stale, never blank (#91). */
@@ -154,6 +158,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [coinsLoaded, setCoinsLoaded] = useState(false);
   const [boardNonce, setBoardNonce] = useState(0);
   const pokeBoard = useCallback(() => setBoardNonce((n) => n + 1), []);
+  const [postingOffer, setPostingOffer] = useState(false);
   const [balances, setBalances] = useState<Record<string, Bal>>({});
   const [coinIcons, setCoinIcons] = useState<Record<string, string | null>>({});
   const [relays, setRelays] = useState<RelayStatus[]>([]);
@@ -456,6 +461,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     coinsLoaded,
     boardNonce,
     pokeBoard,
+    postingOffer,
+    setPostingOffer,
     refreshCoins,
     balances,
     refreshBalances,

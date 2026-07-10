@@ -15,7 +15,7 @@ import { useT } from "../i18n";
 import { EmptyState } from "../components/StatusViews";
 
 export default function PostOfferScreen() {
-  const { log, coins, coinsLoaded, pokeBoard } = useApp();
+  const { log, coins, coinsLoaded, pokeBoard, setPostingOffer } = useApp();
   const navigate = useNavigate();
   const t = useT();
 
@@ -32,6 +32,7 @@ export default function PostOfferScreen() {
       // flight (no second wait on the busy form). The board shows the notice
       // only on success; the outcome lands in the activity log either way.
       navigate("board");
+      setPostingOffer(true); // board shows a posting… strip until we land
       try {
         // protocol (param 4) + ttl_secs (param 5) are both optional; a null at 4
         // lets us set the ttl without forcing a protocol (opt_str ignores null).
@@ -44,9 +45,11 @@ export default function PostOfferScreen() {
         pokeBoard();
       } catch (e) {
         log(t("log.postOfferError", { err: errMsg(e) }));
+      } finally {
+        setPostingOffer(false);
       }
     },
-    [log, navigate, pokeBoard, t],
+    [log, navigate, pokeBoard, setPostingOffer, t],
   );
 
   // #139: don't decide anything before coins have loaded once — the context

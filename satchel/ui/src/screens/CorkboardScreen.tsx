@@ -89,7 +89,7 @@ interface MyOfferRow {
 }
 
 export default function CorkboardScreen() {
-  const { identity, swaps, symOf, log, refreshSwaps, coins, info, boardNonce } = useApp();
+  const { identity, swaps, symOf, log, refreshSwaps, coins, info, boardNonce, postingOffer } = useApp();
   // A leg is tradeable only when its coin has a live ("ok") node. Used to gate
   // the Take button so you can't start a swap against a down chain (the engine
   // refuses too — this is the friendly up-front block).
@@ -542,6 +542,17 @@ export default function CorkboardScreen() {
           </Tooltip>
         )}
 
+        {/* A boardpostoffer is in flight (we navigated here on confirm) — the
+            offer exists only once the engine finishes it, so bridge the gap
+            with the same posting… language as the staged chip it hands off to. */}
+        {postingOffer && (
+          <Chip
+            size="small"
+            variant="outlined"
+            label={t("corkboard.offerStaged")}
+            sx={{ height: 20, fontSize: 11, color: "text.secondary", borderColor: C.line }}
+          />
+        )}
         <Box sx={{ flex: 1 }} />
 
         {/* RIGHT: noticeboard selection (switch between configured boards). */}
