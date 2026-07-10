@@ -359,31 +359,63 @@ async fn fetch_rescue_blobs(app: &App) -> Result<Vec<String>> {
     Ok(svc.fetch_my_snapshots(&me).await)
 }
 
-/// Run the followed-import scan every Nth scheduler pass (#163): snapshots were
-/// previously fetched only on demand (boot detection + the rescue RPCs), so the
-/// periodic cadence is new — and a snapshot fetch is a full relay round-trip
-/// (up to FETCH_TIMEOUT per relay), too heavy for every 30s tick. Followed
-/// records are read-only visibility (takeover is a manual, confirm-gated act),
-/// so minutes of latency are fine; 10 ticks ≈ 5 min at the default `--tick-secs
-/// 30`. The countdown starts at 0 (scan on the first active pass) and is only
-/// re-armed after a scan actually ran, so a locked seed keeps retrying each
-/// tick and the first scan lands right after unlock.
-const FOLLOW_SCAN_TICKS: u64 = 10;
+/// Persisted since-cursor for the incremental follow scan (#165) — same
+/// family as the `nostr_since:*` offer/mailbox/deletion cursors, same #146
+/// clamp + self-heal (see `nostr_service::since`/`advance_cursor`).
+const SNAPSHOTS_SINCE_KEY: &str = "nostr_since:snapshots";
 
-/// One followed-import scan (#163, §3–§5 of docs/MULTI_MACHINE_122.md): fetch
-/// our encrypted-to-self snapshots and import OTHER machines' in-flight swaps
-/// as FOLLOWED records — read-only, `adopted` forced false — so a same-seed
-/// standby sees the primary's swaps in its dock ("Another machine · M-xxxx")
-/// without any confirm. The confirm gate protects DRIVING (`takeover` /
-/// `restorefromrelay`), not visibility; own-scope and legacy snapshots stay on
-/// that gated path (see `Engine::follow_foreign_from_blobs`). Errors only when
-/// the seed is locked/unreadable or no relay transport is configured.
+/// Latched by the first SUCCESSFUL follow scan of this process (#165): that
+/// scan is FULL (since = 0) so a standby started later catches everything
+/// already in flight; every scan after is incremental over the persisted
+/// cursor. Success-latched, so a locked seed / missing relay keeps the full
+/// boot scan pending until unlock makes it possible — the "boot/unlock full
+/// scan" without tracking unlock events explicitly.
+static FOLLOW_FULL_SCAN_DONE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// One followed-import scan (#163/#165, §3–§5 of docs/MULTI_MACHINE_122.md):
+/// fetch our encrypted-to-self snapshots and import OTHER machines' in-flight
+/// swaps as FOLLOWED records — read-only, `adopted` forced false — so a
+/// same-seed standby sees the primary's swaps in its dock ("Another machine ·
+/// M-xxxx") without any confirm. The confirm gate protects DRIVING
+/// (`takeover` / `restorefromrelay`), not visibility; own-scope and legacy
+/// snapshots stay on that gated path (see `Engine::follow_foreign_from_blobs`).
+///
+/// Discovery cadence (#165): one FULL scan at boot/unlock, then a cheap
+/// incremental fetch EVERY tick — snapshots are their own addressable kind,
+/// so relays pre-filter by the `nostr_since:snapshots` cursor and a quiet
+/// tick transfers nothing. Import is idempotent (already-local / purged /
+/// own-scope / legacy all skip, #164), so a cursor that re-sees an event is
+/// harmless — the cursor is an efficiency + latency win, never a correctness
+/// gate. The cursor is persisted only after the import pass succeeded, and
+/// never regresses (a boot full scan against an empty relay can't wipe it).
+/// Errors only when the seed is locked/unreadable or no relay transport is
+/// configured.
 async fn follow_foreign_swaps(app: &App) -> Result<Vec<libswap::engine::TickEvent>> {
-    let blobs = fetch_rescue_blobs(app).await?;
-    if blobs.is_empty() {
-        return Ok(Vec::new());
-    }
-    blocking_mut(app, move |e| e.follow_foreign_from_blobs(&blobs)).await
+    use std::sync::atomic::Ordering;
+    let Some(svc) = app.nostr.clone() else {
+        bail!("nostr transport not configured — seed-only rescue needs at least one relay");
+    };
+    let full = !FOLLOW_FULL_SCAN_DONE.load(Ordering::Relaxed);
+    let (me, persisted) = blocking(app, move |e| {
+        let me = e.store.seed()?.identity_pubkey()?.to_string();
+        Ok((me, nostr_service::since(&e.store, SNAPSHOTS_SINCE_KEY)))
+    })
+    .await?;
+    let since = if full { 0 } else { persisted };
+    let (blobs, cursor) = svc.fetch_my_snapshots_since(&me, since).await;
+    let events = if blobs.is_empty() {
+        Vec::new()
+    } else {
+        blocking_mut(app, move |e| e.follow_foreign_from_blobs(&blobs)).await?
+    };
+    let cursor = cursor.max(persisted);
+    blocking(app, move |e| {
+        e.store.meta_set(SNAPSHOTS_SINCE_KEY, &cursor.to_string())
+    })
+    .await?;
+    FOLLOW_FULL_SCAN_DONE.store(true, Ordering::Relaxed);
+    Ok(events)
 }
 
 // ---- JSON-RPC plumbing -------------------------------------------------
@@ -1602,11 +1634,12 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             // take/init that just arrived is dispatched by sync_board this tick.
             // Best-effort + a no-op when the Nostr transport isn't configured.
             kick_nostr(app);
-            // #163: also mirror the scheduler's followed-import scan — spawned
-            // like kick_nostr (a relay round-trip must never block the RPC).
-            // Harness/CLI daemons run `--tick-secs 0` (no background loop), so
-            // this RPC is their only periodic surface; per-call is fine here —
-            // the scan is a cheap no-op once the records exist locally.
+            // #163/#165: also mirror the scheduler's followed-import scan —
+            // spawned like kick_nostr (a relay round-trip must never block the
+            // RPC). Harness/CLI daemons run `--tick-secs 0` (no background
+            // loop), so this RPC is their only periodic surface; per-call is
+            // fine — the first successful scan is full, then the
+            // `nostr_since:snapshots` cursor makes each call trivial.
             {
                 let app = app.clone();
                 tokio::spawn(async move {
@@ -2210,9 +2243,6 @@ async fn main() -> Result<()> {
             // immediately on restart (not after up to a full REFRESH_SECS).
             let mut readvertised = false;
             let mut rescue_checked = false;
-            // #163 followed-import cadence: 0 → scan on this pass. Starts hot
-            // so a standby shows the other machine's swaps right after boot.
-            let mut follow_countdown: u64 = 0;
             loop {
                 // Poll-then-sleep: run a pass immediately (no cold-start gap for
                 // an already-active merchant), then wait `interval` between
@@ -2268,29 +2298,26 @@ async fn main() -> Result<()> {
                             }
                         }
                     }
-                    // Multi-machine visibility (#163): periodically import
-                    // OTHER machines' relay snapshots as FOLLOWED (read-only)
+                    // Multi-machine visibility (#163/#165): import OTHER
+                    // machines' relay snapshots as FOLLOWED (read-only)
                     // records so they show in the dock without a confirm —
                     // DRIVING them stays behind the takeover gate. Runs before
                     // the engine pass so a fresh import is evaluated (and its
-                    // chain state observed) in the same tick. Re-armed only
-                    // after a successful scan: a locked seed / missing relay
-                    // retries every tick (cheap no-op) so the first scan lands
-                    // right after unlock.
-                    if follow_countdown == 0 {
-                        match follow_foreign_swaps(&scheduler).await {
-                            Ok(events) => {
-                                follow_countdown = FOLLOW_SCAN_TICKS;
-                                for ev in events {
-                                    tracing::info!(swap = %ev.swap_id, action = %ev.action, detail = %ev.detail, "scheduler");
-                                }
-                            }
-                            Err(err) => {
-                                tracing::debug!("follow: relay scan deferred: {err:#}")
+                    // chain state observed) in the same tick. EVERY tick: the
+                    // first successful scan is full (boot/unlock catch-up),
+                    // after that the `nostr_since:snapshots` cursor makes the
+                    // per-tick fetch trivial (see `follow_foreign_swaps`). A
+                    // locked seed / missing relay defers cheaply and retries
+                    // next tick, so discovery starts right after unlock.
+                    match follow_foreign_swaps(&scheduler).await {
+                        Ok(events) => {
+                            for ev in events {
+                                tracing::info!(swap = %ev.swap_id, action = %ev.action, detail = %ev.detail, "scheduler");
                             }
                         }
-                    } else {
-                        follow_countdown -= 1;
+                        Err(err) => {
+                            tracing::debug!("follow: relay scan deferred: {err:#}")
+                        }
                     }
                     match blocking(&scheduler, |e| {
                         let mut ev = e.sync_board();

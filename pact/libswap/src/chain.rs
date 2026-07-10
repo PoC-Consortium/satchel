@@ -484,6 +484,64 @@ impl<T: ChainBackend + ?Sized> ChainBackend for std::sync::Arc<T> {
     }
 }
 
+/// bitcoind-style cookie auto-discovery (#162): the default node-cookie
+/// locations for `params`' coin+network, used when a Core-RPC URL carries
+/// neither credentials nor a `__cookiefile__:` path — the same convention
+/// `bitcoin-cli` applies with no `-rpcuser`/`-rpccookiefile`. Candidates are
+/// PROBED at call time (first existing file wins), so a node started later is
+/// picked up and a restart's fresh cookie is re-read via the 401 self-heal.
+///
+/// Node data-dir name: the coin's registry display name with spaces
+/// hyphenated ("Bitcoin PoCX" → "Bitcoin-PoCX"), matching the shipped
+/// coins.toml `%NODEDIR%/<Name>` defaults — %LOCALAPPDATA%\<Name> (modern
+/// Core + bitcoin-pocx) or the older %APPDATA%\<Name> on Windows,
+/// ~/Library/Application Support/<Name> on macOS, ~/.<name lowercased>
+/// elsewhere. Testnet subdir naming differs per coin family (Bitcoin
+/// `testnet3`, Litecoin `testnet4`, PoCX `testnet`) — all are probed;
+/// existence at call time disambiguates.
+pub fn default_cookie_candidates(params: &ChainParams) -> Vec<std::path::PathBuf> {
+    use std::path::PathBuf;
+    let Some(def) = crate::registry::get(params.coin_id) else {
+        return Vec::new();
+    };
+    let name = def.display_name.replace(' ', "-");
+    let mut bases: Vec<PathBuf> = Vec::new();
+    if cfg!(windows) {
+        for var in ["LOCALAPPDATA", "APPDATA"] {
+            if let Some(v) = std::env::var_os(var) {
+                bases.push(PathBuf::from(v).join(&name));
+            }
+        }
+    } else if cfg!(target_os = "macos") {
+        if let Some(home) = std::env::var_os("HOME") {
+            bases.push(
+                PathBuf::from(home)
+                    .join("Library/Application Support")
+                    .join(&name),
+            );
+        }
+    } else if let Some(home) = std::env::var_os("HOME") {
+        bases.push(PathBuf::from(home).join(format!(".{}", name.to_lowercase())));
+    }
+    let subdirs: &[&str] = match params.network {
+        Network::Mainnet => &[""],
+        Network::Testnet => &["testnet", "testnet3", "testnet4"],
+        Network::Regtest => &["regtest"],
+    };
+    let mut out = Vec::new();
+    for base in &bases {
+        for sub in subdirs {
+            let dir = if sub.is_empty() {
+                base.clone()
+            } else {
+                base.join(sub)
+            };
+            out.push(dir.join(".cookie"));
+        }
+    }
+    out
+}
+
 /// Bitcoin Core / pocx-node JSON-RPC backend.
 pub struct CoreRpcBackend {
     params: &'static ChainParams,
@@ -491,10 +549,16 @@ pub struct CoreRpcBackend {
 }
 
 impl CoreRpcBackend {
+    /// Build from a `http://…` URL. Auth resolution (#162, bitcoind
+    /// precedence): explicit credentials in the URL are used verbatim; a
+    /// `__cookiefile__:<path>` userinfo names the node cookie FILE (read live,
+    /// re-read once on a 401); a URL with NO userinfo auto-discovers the
+    /// cookie in this coin's platform-default node data dir
+    /// ([`default_cookie_candidates`]) — `bitcoin-cli`'s no-flags behavior.
     pub fn new(params: &'static ChainParams, url: &str) -> Result<Self> {
         Ok(Self {
             params,
-            rpc: RpcClient::from_url(url)?,
+            rpc: RpcClient::from_url_or_cookie(url, default_cookie_candidates(params))?,
         })
     }
 
@@ -1696,6 +1760,51 @@ mod multi_backend_tests {
             .expect("built-in btc")
             .params(Network::Mainnet)
             .expect("btc mainnet params")
+    }
+
+    #[test]
+    fn default_cookie_candidates_follow_bitcoind_layout() {
+        // #162: the no-credentials fallback must look where the coin's node
+        // actually writes its .cookie. CI always has the platform base env
+        // (LOCALAPPDATA/APPDATA or HOME), so candidates are non-empty.
+        let btcx = registry::get("btcx")
+            .unwrap()
+            .params(Network::Regtest)
+            .unwrap();
+        let candidates = default_cookie_candidates(btcx);
+        assert!(!candidates.is_empty(), "platform base env missing?");
+        for c in &candidates {
+            let s = c.display().to_string().replace('\\', "/");
+            // Hyphenated registry display name ("Bitcoin PoCX" → Bitcoin-PoCX;
+            // lowercased dotdir on Linux) + the network subdir + .cookie.
+            assert!(
+                s.contains("Bitcoin-PoCX") || s.contains(".bitcoin-pocx"),
+                "{s}"
+            );
+            assert!(s.ends_with("regtest/.cookie"), "{s}");
+        }
+
+        // Mainnet lives at the data-dir root; testnet probes the per-family
+        // dir names (Bitcoin testnet3 / Litecoin testnet4 / PoCX testnet).
+        let btc_main = default_cookie_candidates(btc_params());
+        assert!(btc_main
+            .iter()
+            .all(|c| !c.display().to_string().contains("testnet")
+                && !c.display().to_string().contains("regtest")));
+        let btc_test = default_cookie_candidates(
+            registry::get("btc")
+                .unwrap()
+                .params(Network::Testnet)
+                .unwrap(),
+        );
+        let joined = btc_test
+            .iter()
+            .map(|c| c.display().to_string().replace('\\', "/"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        for sub in ["testnet/.cookie", "testnet3/.cookie", "testnet4/.cookie"] {
+            assert!(joined.contains(sub), "missing {sub} in {joined}");
+        }
     }
 
     /// A scriptable chain view: answers with `tip`, or errors ("absent"),

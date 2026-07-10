@@ -63,7 +63,10 @@ fn advance_cursor(cursor: u64, created: u64, now: u64) -> u64 {
     cursor.max(created.min(now + CURSOR_FUTURE_SKEW_SECS))
 }
 
-fn since(store: &Store, key: &str) -> u64 {
+/// Read a persisted `since` cursor. Also used by the snapshot follow scan
+/// (`nostr_since:snapshots`, #165), so its #146 self-heal covers that cursor
+/// too.
+pub fn since(store: &Store, key: &str) -> u64 {
     let stored: u64 = store
         .meta_get(key)
         .ok()
@@ -287,33 +290,61 @@ impl NostrService {
         out
     }
 
-    /// One-shot fetch of OUR encrypted-to-self rescue snapshots (#54). Returns
-    /// the sealed `PACTSEALED1:` blobs from every snapshot event we authored, for
-    /// the engine to decrypt and adopt. Best-effort: a filter/fetch error or an
-    /// unverifiable event yields fewer (or no) blobs rather than failing.
+    /// One-shot FULL fetch of OUR encrypted-to-self rescue snapshots (#54).
+    /// Returns the sealed `PACTSEALED1:` blobs from every snapshot event we
+    /// authored, for the engine to decrypt and adopt. Best-effort: a
+    /// filter/fetch error or an unverifiable event yields fewer (or no) blobs
+    /// rather than failing. Rescue/detection always scans everything —
+    /// incremental fetching is only for the follow scan below.
     pub async fn fetch_my_snapshots(&self, me_xonly: &str) -> Vec<String> {
+        self.fetch_my_snapshots_since(me_xonly, 0).await.0
+    }
+
+    /// Incremental snapshot fetch for the per-tick follow scan (#165): only
+    /// events with `created_at >= since` (snapshots are their own addressable
+    /// kind, so relays pre-filter). Returns the blobs plus the advanced
+    /// cursor, #146-clamped ([`advance_cursor`]) so a future-dated snapshot
+    /// can never blind the scan; the caller persists it
+    /// (`nostr_since:snapshots`) only after the import pass succeeded.
+    pub async fn fetch_my_snapshots_since(&self, me_xonly: &str, since: u64) -> (Vec<String>, u64) {
         let filter = match pn::my_snapshots_filter(me_xonly) {
             Ok(f) => f,
             Err(err) => {
                 tracing::warn!("nostr: snapshot filter: {err:#}");
-                return Vec::new();
+                return (Vec::new(), since);
             }
         };
-        let events = match self.fetch(filter).await {
+        let events = match self.fetch(filter.since(Timestamp::from(since))).await {
             Ok(e) => e,
             Err(err) => {
                 tracing::warn!("nostr: fetch snapshots: {err:#}");
-                return Vec::new();
+                return (Vec::new(), since);
             }
         };
+        Self::collect_snapshots(events, me_xonly, since, unix_now())
+    }
+
+    /// Extract blobs from fetched snapshot events and advance the cursor.
+    /// Pure (no I/O) so the cursor arithmetic is unit-testable: every event
+    /// advances the clamped cursor (#146) — even an unverifiable one, exactly
+    /// like the offer/mailbox loops — but only verified own-author events
+    /// yield a blob.
+    fn collect_snapshots(
+        events: Vec<Event>,
+        me_xonly: &str,
+        cursor: u64,
+        now: u64,
+    ) -> (Vec<String>, u64) {
         let mut blobs = Vec::new();
+        let mut cursor = cursor;
         for ev in events {
+            cursor = advance_cursor(cursor, ev.created_at.as_secs(), now);
             match pn::snapshot_blob_from_event(&ev, me_xonly) {
                 Ok(blob) => blobs.push(blob),
                 Err(err) => tracing::warn!("nostr: skip snapshot event: {err:#}"),
             }
         }
-        blobs
+        (blobs, cursor)
     }
 
     async fn fetch(&self, filter: Filter) -> Result<Vec<Event>> {
@@ -652,6 +683,49 @@ mod tests {
             advance_cursor(10, now + 999_999_999, now),
             now + CURSOR_FUTURE_SKEW_SECS
         );
+    }
+
+    #[test]
+    fn snapshot_scan_yields_blobs_and_advances_clamped_cursor() {
+        // #165: the per-tick follow scan is incremental over a persisted
+        // cursor; the cursor must advance with each snapshot event and take
+        // the same #146 clamp as the offer/mailbox cursors, so one
+        // future-dated snapshot can't blind discovery.
+        let p = party("snap-cursor");
+        let now = 1_700_000_000u64;
+        let blob = "PACTSEALED1:opaque"; // collect() doesn't decrypt — the engine does
+        let sane = pn::snapshot_event(blob, &pn::snapshot_dtag("s1"), &p.keys, now - 50).unwrap();
+        let future =
+            pn::snapshot_event(blob, &pn::snapshot_dtag("s2"), &p.keys, now + 999_999).unwrap();
+        // A foreign author's event advances the cursor but yields no blob.
+        let stranger = party("snap-stranger");
+        let foreign =
+            pn::snapshot_event(blob, &pn::snapshot_dtag("s3"), &stranger.keys, now - 20).unwrap();
+
+        let (blobs, cursor) =
+            NostrService::collect_snapshots(vec![sane, foreign, future], &p.xonly, 10, now);
+        assert_eq!(blobs, vec![blob.to_string(), blob.to_string()]);
+        assert_eq!(
+            cursor,
+            now + CURSOR_FUTURE_SKEW_SECS,
+            "future-dated snapshot is processed but clamped"
+        );
+
+        // Without the future event the cursor lands on the newest created_at,
+        // and it never regresses below its starting value.
+        let sane2 = pn::snapshot_event(blob, &pn::snapshot_dtag("s1"), &p.keys, now - 50).unwrap();
+        let (_, cursor) = NostrService::collect_snapshots(vec![sane2], &p.xonly, 10, now);
+        assert_eq!(cursor, now - 50);
+        let (_, cursor) = NostrService::collect_snapshots(Vec::new(), &p.xonly, 42, now);
+        assert_eq!(cursor, 42);
+
+        // The persisted key takes the same #146 self-heal on load as the
+        // other cursors (same `since()` path).
+        let key = "nostr_since:snapshots";
+        p.store
+            .meta_set(key, &(unix_now() + 10 * 365 * 24 * 3600).to_string())
+            .unwrap();
+        assert!(since(&p.store, key) <= unix_now() + CURSOR_FUTURE_SKEW_SECS);
     }
 
     #[test]
