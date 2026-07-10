@@ -85,6 +85,12 @@ interface AppCtx {
   coinsLoaded: boolean;
   refreshCoins: () => Promise<void>;
 
+  /** Bumped when something changed the board out-of-band (e.g. a post that
+   *  completed after navigation, #153 follow-up) — the Corkboard reloads
+   *  immediately instead of waiting for its next poll tick. */
+  boardNonce: number;
+  pokeBoard: () => void;
+
   /** coin_id → last-known wallet balance, cached app-wide so the Wallets page
    *  shows values instantly on every visit — stale, never blank (#91). */
   balances: Record<string, Bal>;
@@ -146,6 +152,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [swapsLoaded, setSwapsLoaded] = useState(() => !!lastSwaps);
   const [coins, setCoins] = useState<CoinInfo[]>([]);
   const [coinsLoaded, setCoinsLoaded] = useState(false);
+  const [boardNonce, setBoardNonce] = useState(0);
+  const pokeBoard = useCallback(() => setBoardNonce((n) => n + 1), []);
   const [balances, setBalances] = useState<Record<string, Bal>>({});
   const [coinIcons, setCoinIcons] = useState<Record<string, string | null>>({});
   const [relays, setRelays] = useState<RelayStatus[]>([]);
@@ -446,6 +454,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshSwaps,
     coins,
     coinsLoaded,
+    boardNonce,
+    pokeBoard,
     refreshCoins,
     balances,
     refreshBalances,

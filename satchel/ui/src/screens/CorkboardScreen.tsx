@@ -89,7 +89,7 @@ interface MyOfferRow {
 }
 
 export default function CorkboardScreen() {
-  const { identity, swaps, symOf, log, refreshSwaps, coins, info } = useApp();
+  const { identity, swaps, symOf, log, refreshSwaps, coins, info, boardNonce } = useApp();
   // A leg is tradeable only when its coin has a live ("ok") node. Used to gate
   // the Take button so you can't start a swap against a down chain (the engine
   // refuses too — this is the friendly up-front block).
@@ -231,7 +231,9 @@ export default function CorkboardScreen() {
     void loadOffers();
     const t2 = setInterval(() => void loadOffers(), 4000);
     return () => clearInterval(t2);
-  }, [loadOffers, identity]);
+    // boardNonce: an out-of-band change (a post completing after navigation)
+    // pokes an immediate reload instead of waiting out the poll tick.
+  }, [loadOffers, identity, boardNonce]);
 
   // Configured boards (from satchel.json). Default the selector to the first.
   const boards = useMemo(() => savedBoards.split(",").map((s) => s.trim()).filter(Boolean), [savedBoards]);

@@ -15,7 +15,7 @@ import { useT } from "../i18n";
 import { EmptyState } from "../components/StatusViews";
 
 export default function PostOfferScreen() {
-  const { log, coins, coinsLoaded } = useApp();
+  const { log, coins, coinsLoaded, pokeBoard } = useApp();
   const navigate = useNavigate();
   const t = useT();
 
@@ -38,11 +38,15 @@ export default function PostOfferScreen() {
         const params = [give, want, t1, t2, protocol ?? null, ttlSecs ?? null];
         const r = await rpc<{ offer_id: string }>("boardpostoffer", params);
         log(t("log.postedOffer", { id: r.offer_id }));
+        // The user is already watching the Corkboard — surface the fresh
+        // offer NOW (staged own offers list instantly) instead of within
+        // the next 4s poll tick.
+        pokeBoard();
       } catch (e) {
         log(t("log.postOfferError", { err: errMsg(e) }));
       }
     },
-    [log, navigate, t],
+    [log, navigate, pokeBoard, t],
   );
 
   // #139: don't decide anything before coins have loaded once — the context
