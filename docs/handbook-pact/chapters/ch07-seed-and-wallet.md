@@ -83,6 +83,32 @@ the binary, so it is *not* a secret and counts as unencrypted.
 > re-importing the *same* recovery phrase re-provisions it under a fresh machine
 > key. A seed the engine can still read is never clobbered for you.
 
+> **Note** — That unreadable-keyring state is **surfaced**, not failed lazily:
+> `getinfo` and `walletstatus` report `needs_reimport: true`, and Satchel
+> detects it at startup and opens a guided re-import dialog. Funds and swaps
+> are not affected by the re-import; the machine's derive scope rotates (see
+> below). Linux is unaffected — the obfuscation wrap is always readable.
+
+### One seed on more than one machine
+
+Running one BIP39 seed on several machines (failover, standby, recovery) is
+safe. Each install draws a random 62-bit **derive scope** on first run,
+persisted in `machine.json` at the data-dir root and injected as two hardened
+BIP32 levels into every initiator (counter-based) derivation — swap key,
+preimage/adaptor secret, refund key — so two machines on the same seed derive
+**different secrets and swap ids** at the same counter. Participant (anchored)
+keys are unchanged. Scope `0` is the reserved **legacy marker**: pre-upgrade
+records reproduce their original derivations exactly, and the committed spec
+vectors are unchanged.
+
+Copying a data directory to another machine cannot clone a scope: the keystore
+key doesn't travel, so the copy lands in the reconfirm-with-mnemonic path
+above, and that re-import **rotates the machine scope** — a copy can never
+reuse the source machine's scope. After rotation the machine's own old
+in-flight swaps read as another machine's; one `takeover` (the dock's "Take
+over") adopts them. The full partitioning model is `docs/MULTI_MACHINE_122.md`
+and the chapter "Network Support, Reorgs & Safety".
+
 ## The merchant model
 
 A *merchant* is one identity backed by one seed in one data directory. Pact
@@ -118,6 +144,8 @@ mode):
 | `pact.sqlite` | All swap, offer, nonce, and Nostr state (see below). |
 | `seed.mnemonic` | The BIP39 seed — never plaintext: `PACTSEEDv1:…` (passphrase), `PACTSEEDv2-keyring:…` (OS-keystore machine key), or `PACTSEEDv2-obfs:…` (obfuscated fallback). |
 | `.cookie` | The per-run RPC cookie (data-dir root only). |
+| `.lock` | Exclusive daemon lock (data-dir root only); a second `pactd` on the same data dir refuses to start. |
+| `machine.json` | This install's random derive scope (data-dir root only); see "One seed on more than one machine" above. |
 | `pact.conf` | Optional `rpcuser` / `rpcpassword` for RPC auth. |
 | `merchants.json` | The merchant manifest (parent data dir, nested mode only). |
 | `logs/pactd.log.<date>` | Rolling daily log files (data-dir root). Secret-free; see the chapter "Running pactd". |
@@ -177,7 +205,8 @@ adoption is an explicit, human decision:
 
 A restored swap's local record always wins over a snapshot (adoption is
 skipped if we already hold that `swap_id`), and restoring also raises the
-seed's next-swap-index high-water mark from the snapshots, so a reissued index
+seed's next-swap-index high-water mark from **own-scope** snapshots (another
+machine's scope can never move this machine's counter), so a reissued index
 can never reuse a completed swap's keys.
 
 ### Anchored participant keys

@@ -180,6 +180,11 @@ The **About** tab is your reference corner.
   badge or an update notice. If a newer release exists, Satchel tells you here (and
   with a small badge by the logo in the navigation); use **Check for updates** to
   look again.
+- **This machine** — this install's short id, shown as **This machine ·
+  M-xxxx**. It matters only if you run the same recovery phrase on more than
+  one machine: each machine drives its own swaps, and this label is how the
+  others refer to this one in the active-swaps dock. See *"One seed on more
+  than one machine"* in the *Backup, Seeds & Safety* chapter.
 - **Where your keys live** — a short trust note reminding you that your keys and
   recovery phrase stay on your own machine and are never sent to Satchel, to any
   noticeboard, or to anyone else.

@@ -18,6 +18,8 @@ Per-merchant data directory (flat root, or `merchants/<id>/` nested):
 | `pact.sqlite` | Swap/offer/nonce/Nostr state. |
 | `seed.mnemonic` | BIP39 seed (plaintext, or `PACTSEEDv1:<salt>:<nonce>:<ciphertext>` when encrypted). |
 | `.cookie` | Per-run RPC cookie `__cookie__:<hex>` (data-dir root only). |
+| `.lock` | Exclusive daemon lock (data-dir root only); a second `pactd` on the same data dir refuses to start. |
+| `machine.json` | Per-install derive scope for multi-machine seed partitioning (data-dir root only). |
 | `pact.conf` | Optional `rpcuser` / `rpcpassword`. |
 | `merchants.json` | Merchant manifest (parent data dir, nested mode). |
 | `logs/pactd.log.<date>` | Rolling daily log (data-dir root); secret-free; `RUST_LOG`, default `INFO`. |
@@ -31,7 +33,7 @@ board)".
 
 ## RPC method index
 
-All methods are JSON-RPC over `POST /` — **63 public methods**, grouped by
+All methods are JSON-RPC over `POST /` — **66 public methods**, grouped by
 area; see the named chapter for params and return shapes. The daemon prints
 the same catalog live: `help` (by category, plain text) and `listmethods`
 (a name array).
@@ -40,9 +42,10 @@ the same catalog live: `help` (by category, plain text) and `listmethods`
 `walletstatus`, `help`, `listmethods`, `stop`, `getfeepolicy`,
 `setfeepolicy`.
 
-**Seed-only rescue** (same chapter; full mechanics in "Seeds, Wallets &
-Merchants"): `restorefromrelay` (adopt rescuable relay snapshots),
-`rescuestatus` (read-only preview + the two-machines warning).
+**Seed-only rescue / multi-machine** (same chapter; full mechanics in "Seeds,
+Wallets & Merchants"): `restorefromrelay` (adopt rescuable relay snapshots),
+`rescuestatus` (read-only preview + the two-machines warning), `takeover`
+(adopt another machine's swap after confirming that machine is stopped).
 
 **Seed lifecycle** (same chapter): `createseed`, `generateseed`, `importseed`,
 `unlock`.
@@ -50,7 +53,8 @@ Merchants"): `restorefromrelay` (adopt rescuable relay snapshots),
 **Merchants** (same chapter): `createmerchant`, `listmerchants`, `loadmerchant`,
 `renamemerchant`, `unloadmerchant`, `getmerchantinfo`.
 
-**Coins / pairs** (same chapter): `listcoins`, `listpairs`, `validatecoin`.
+**Coins / pairs** (same chapter): `listcoins`, `listpairs`, `validatecoin`,
+`serverstatus`.
 
 **Wallet helpers** (same chapter): `getbalance`, `getnewaddress`,
 `estimatesendfee`, `sendtoaddress`, `bumpfee`, `listtransactions`.
@@ -65,7 +69,8 @@ Merchants"): `restorefromrelay` (adopt rescuable relay snapshots),
 `adaptorredeem`, `adaptorrefund`.
 
 **Board** (*"API: Board, Private Offers & Fees"*): `boardlistoffers`,
-`boardstatus`, `boardpostoffer`, `boardtake`, `boardrevoke`.
+`boardstatus`, `boardpostoffer`, `boardtake`, `boardrevoke`,
+`revokeoffersforcoin`.
 
 **Private offers** (same chapter, and "Private (Off-Market) Offers"):
 `makeprivateoffer`, `takeoffer`, `listprivateoffers`, `cancelprivateoffer`.

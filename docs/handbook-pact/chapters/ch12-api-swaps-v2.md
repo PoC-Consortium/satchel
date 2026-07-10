@@ -88,6 +88,11 @@ never be signed again.
 |---|---|---|---|
 | `listadaptorswaps` | — | `[AdaptorSwapRecord]` | no |
 
+Entries carry the same `source` (`"local"` / `"foreign"`) and `machine_label`
+fields as `listswaps` — a `"foreign"` record is another machine's swap on the
+same seed, followed read-only until an explicit `takeover` (see the chapter
+"API: v1 HTLC Swaps").
+
 ## Handshake & lifecycle methods
 
 `give`/`get` use the same `coin:amount` string convention as v1 (e.g.

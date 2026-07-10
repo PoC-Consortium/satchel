@@ -9,8 +9,8 @@ merchant* error) are covered in the chapter "JSON-RPC Conventions".
 
 | Method | Params | Returns | Mutates |
 |---|---|---|---|
-| `getinfo` | — | `{ name, version, protocol, wire_epochs, network, identity?, seed_exists, encrypted, locked, coins }` | no |
-| `walletstatus` | — | `{ seed_exists, encrypted, locked }` | no |
+| `getinfo` | — | `{ name, version, protocol, wire_epochs, network, identity?, seed_exists, encrypted, locked, needs_reimport, machine_label, coins }` | no |
+| `walletstatus` | — | `{ seed_exists, encrypted, locked, needs_reimport }` | no |
 | `help` | `method?` | plain-text catalog (string) | no |
 | `listmethods` | — | `[name, …]` | no |
 | `stop` | — | `"pactd stopping"` | yes (lifecycle) |
@@ -24,9 +24,14 @@ merchant* error) are covered in the chapter "JSON-RPC Conventions".
   signed `wire` differs as un-takeable; `network` is the lowercased network
   name (`regtest`/`testnet`/`mainnet`); `coins` is the list of configured coin
   ids. Tolerates a missing or locked seed — `identity` is `null` until a seed is
-  present **and** unlocked.
+  present **and** unlocked. `machine_label` is the short one-way label of this
+  install's derive scope (e.g. `"M-7f3a"` — never the raw scope);
+  `needs_reimport` is true when the seed file exists but its OS-keystore key is
+  unavailable, so the recovery phrase must be re-imported (see the chapter
+  "Seeds, Wallets & Merchants").
 - `walletstatus` — the seed state triple. `locked` is true only when the seed
-  is encrypted **and** its passphrase is not held in memory.
+  is encrypted **and** its passphrase is not held in memory. `needs_reimport`
+  as in `getinfo`.
 - `help` — with no param, the daemon's full method catalog grouped by
   category, rendered as plain text (the CLI prints string results raw, so it
   reads like a man page); with a `method` name, that one method's arguments

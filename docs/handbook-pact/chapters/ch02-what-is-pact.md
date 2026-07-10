@@ -30,6 +30,13 @@ owns what is the fastest way to navigate the codebase:
 > two state machines (`swap::State` for v1, `AdaptorState` for v2) are defined
 > in `libswap` and stepped by the engine's scheduler tick inside `pactd`.
 
+`libswap`'s coin-generic plumbing — chain params and registry, wallet key
+derivation, seed-at-rest storage, the Electrum connection layer, and the BDK
+on-chain wallet — lives in the extracted **`btcx`** crates
+(`github.com/PoC-Consortium/btcx`), consumed as rev-pinned git dependencies.
+The extraction is behavior-preserving; all swap intelligence stays in
+`libswap`.
+
 ## The bitcoind analogy
 
 If you have run Bitcoin Core, the shape of Pact will be familiar — it is

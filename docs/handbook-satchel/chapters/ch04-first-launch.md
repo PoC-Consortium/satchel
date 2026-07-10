@@ -167,6 +167,13 @@ Make your choice and finish. Your merchant is ready.
 If you chose **No passphrase**, Satchel goes straight to trading every time you
 open it.
 
+> **Note** — One rare exception: if this computer can no longer unlock the seed
+> stored on disk — typically because the data folder was moved to a new machine,
+> or the system keychain was reset — Satchel opens a **guided re-import dialog**
+> at startup explaining exactly that. Re-enter your recovery phrase and you're
+> back; **your funds and swaps are not affected**. The *Backup, Seeds & Safety*
+> chapter has the details.
+
 If you chose **Encrypt with a passphrase**, the next time you start Satchel you'll
 see an **Unlock merchant** screen. Type your passphrase to unlock the seed for
 this session. Satchel holds it in memory only and forgets it when you close the

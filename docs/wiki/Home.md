@@ -19,9 +19,9 @@
 
 > **Status** — live. v1 (hash-locked HTLC) and v2 (Taproot/MuSig2 adaptor) are **reviewed and running on mainnet**. As with any self-custody software, you alone hold your keys — keep your recovery phrase safe.
 >
-> *These docs were verified against commit `933e5f9`.*
+> *These docs were verified against commit `44e612b`.*
 
-> **Upgrading** — every offer and handshake message carries its protocol's **wire epoch**, and incompatible peers are refused up-front (offers badged un-takeable on the Corkboard, a mixed-version take rejected with a clear reason) so nothing fails mid-swap. Two flag-days matter: **rc10** changed the v2 (Taproot) cooperative redeem and set the epochs to v1 = 1, v2 = 2; the **rc12 recut** made confirmation depths per-side and bumped both epochs to **v1 = 2, v2 = 3**. Because both epochs move in the recut, an updated build and a pre-recut build cannot open **either** v1 or v2 swaps with each other — **settle or abort any live swaps before upgrading**; swaps already past the handshake finish on the version that made them. Also from rc10: v2 fundings and redeems broadcast **non-replaceable** (the engine bumps a stuck one via CPFP); the timelock refund keeps RBF.
+> **Upgrading** — every offer and handshake message carries its protocol's **wire epoch**, and incompatible peers are refused up-front (offers badged un-takeable on the Corkboard, a mixed-version take rejected with a clear reason) so nothing fails mid-swap. Two flag-days matter: **rc10** changed the v2 (Taproot) cooperative redeem and set the epochs to v1 = 1, v2 = 2; the **rc12 recut** made confirmation depths per-side and bumped both epochs to **v1 = 2, v2 = 3**. Because both epochs move in the recut, an updated build and a pre-recut build cannot open **either** v1 or v2 swaps with each other — **settle or abort any live swaps before upgrading**; swaps already past the handshake finish on the version that made them. Also from rc10: v2 fundings and redeems broadcast **non-replaceable** (the engine bumps a stuck one via CPFP); the timelock refund keeps RBF. **rc13** is wire-compatible with rc12 — no flag day, epochs unchanged (v1 = 2, v2 = 3). On first start after upgrading, your finished swap history is claimed automatically; a swap still active from before the upgrade appears under **"Another machine"** and needs one **Take over** click.
 
 ## Start here
 

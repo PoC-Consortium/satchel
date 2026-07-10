@@ -55,6 +55,19 @@ on any chain until a backend is attached.
 > the size of the offers they posted. (v2 adaptor swaps auto-fund regardless, via
 > the autopilot.)
 
+## The data-dir lock and machine identity
+
+Two further artifacts live at the data-dir root from the first run:
+
+- **`.lock`** — on startup `pactd` takes an **exclusive** advisory OS lock on
+  `<data-dir>/.lock` (Bitcoin-Core-style) and refuses to start if another
+  daemon already holds it. One data directory is one daemon, never two.
+- **`machine.json`** — this install's random per-install **derive scope**,
+  generated on first run. It partitions key derivation between machines
+  sharing one seed, so a failover or standby install never derives the same
+  swap secrets as another machine. See the chapter "Seeds, Wallets &
+  Merchants" and `docs/MULTI_MACHINE_122.md`.
+
 ## Logging
 
 `pactd` writes its `tracing` output to **both** stdout and a rolling daily file
