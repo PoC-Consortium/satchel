@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Typography } from "@mui/material";
+import { Alert, Box, Typography } from "@mui/material";
 import { useApp } from "../AppContext";
 import { useConfirmDisable } from "../ui/ConfirmProvider";
 import { useT } from "../i18n";
@@ -61,12 +61,19 @@ export function LockFundsGate({
     };
   }, [lockCoin, otherCoin, amountSat, setConfirmDisabled]);
 
+  // A stable one-line slot either way: the "checking" line resolving to a
+  // clean bill of health must not shrink the dialog (the funds twin of the
+  // FeePreview reservation, #140).
   if (funds === undefined) {
     return (
-      <Typography sx={{ fontSize: 12, color: "text.secondary", fontStyle: "italic" }}>
+      <Typography sx={{ fontSize: 12, color: "text.secondary", fontStyle: "italic", minHeight: 18 }}>
         {t("funds.checking")}
       </Typography>
     );
   }
-  return <InsufficientFunds check={funds} />;
+  return (
+    <Box sx={{ minHeight: 18 }}>
+      <InsufficientFunds check={funds} />
+    </Box>
+  );
 }

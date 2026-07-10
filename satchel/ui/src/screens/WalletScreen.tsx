@@ -20,7 +20,7 @@ import type { CoinInfo } from "../api/types";
 // mount-time refreshes update statuses and numbers in place; only a coin
 // that has never reported a balance shows a skeleton slot.
 export default function WalletScreen() {
-  const { coins, refreshCoins, balances, refreshBalances, connOk } = useApp();
+  const { coins, coinsLoaded, refreshCoins, balances, refreshBalances, connOk } = useApp();
   const navigate = useNavigate();
   const t = useT();
 
@@ -54,7 +54,25 @@ export default function WalletScreen() {
         </Box>
       </Alert>
 
-      {!connOk ? (
+      {!coinsLoaded ? (
+        // First-ever load: coins haven't resolved yet — skeleton cards (the
+        // Swaps screen's wait indicator, #139 pattern), never a false
+        // "no coins" / "not connected" claim.
+        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 1.875 }}>
+          {[0, 1].map((i) => (
+            <Card key={i} variant="outlined" aria-busy>
+              <CardContent sx={{ display: "flex", alignItems: "center", gap: 1.6 }}>
+                <Skeleton variant="circular" width={34} height={34} />
+                <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                  <Skeleton variant="text" sx={{ fontSize: 15, width: 110 }} />
+                  <Skeleton variant="text" sx={{ fontSize: 12, width: 70 }} />
+                </Box>
+                <Skeleton variant="text" sx={{ fontSize: 22, width: 96, ml: "auto" }} />
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
+      ) : !connOk ? (
         <EmptyState title={t("wallets.notConnected")}>{t("wallets.notConnectedBody")}</EmptyState>
       ) : configured.length === 0 ? (
         <EmptyState
