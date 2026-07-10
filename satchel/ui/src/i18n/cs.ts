@@ -76,6 +76,13 @@ export const cs: Bundle = {
       medium: "Střední — vyvážené okno pro vrácení (~24 h / 12 h).",
       long: "Dlouhý (nejbezpečnější) — nejširší bezpečnostní rezerva; automatické vrácení po ~36 h / 18 h, pokud obchod uvázne.",
     },
+    validForTitle: "Platnost",
+    ttl1h: "1 h",
+    ttl4h: "4 h",
+    ttl8h: "8 h",
+    ttl24h: "24 h",
+    ttl1w: "1 týden",
+    ttlCustom: "Vlastní",
     validFor: "Platnost (minuty)",
     validForMins: "{mins} min",
     validForHint:
@@ -708,6 +715,7 @@ export const cs: Bundle = {
     ifItStalls: "(pokud uvázne)",
   },
   funds: {
+    checking: "Kontrola prostředků…",
     insufficient:
       "Nedostatek {sym} na financování tohoto swapu — potřeba ~{need} {sym} (množství + poplatek za financování), peněženka má {have} {sym}.",
   },
@@ -747,6 +755,7 @@ export const cs: Bundle = {
     offerWithdrawn: "nabídka {id} stažena",
     withdrawError: "stažení: {err}",
     postedOffer: "vystavena nabídka {id} — kdykoli ji stáhněte; nic není uzamčeno",
+    postOfferError: "vystavení nabídky: {err}",
     createdSlip: "vytvořen soukromý nabídkový lístek — pošlete ho svému příteli",
     tookPrivateOffer: "přijata soukromá nabídka {id} — nyní se objevuje ve vašich aktivních swapech",
     cancelledPrivateOffer: "zrušena soukromá nabídka {id}",

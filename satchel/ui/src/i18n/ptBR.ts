@@ -76,6 +76,13 @@ export const ptBR: Bundle = {
       medium: "Médio — janela de refund equilibrada (~24h / 12h).",
       long: "Longo (mais seguro) — maior margem de segurança; refund automático após ~36h / 18h se a negociação travar.",
     },
+    validForTitle: "Válida por",
+    ttl1h: "1 h",
+    ttl4h: "4 h",
+    ttl8h: "8 h",
+    ttl24h: "24 h",
+    ttl1w: "1 semana",
+    ttlCustom: "Personalizado",
     validFor: "Válida por (minutos)",
     validForMins: "{mins} min",
     validForHint:
@@ -705,6 +712,7 @@ export const ptBR: Bundle = {
     ifItStalls: "(se travar)",
   },
   funds: {
+    checking: "Verificando fundos…",
     insufficient:
       "{sym} insuficiente para financiar este swap — necessário ~{need} {sym} (quantia + taxa de funding), a carteira tem {have} {sym}.",
   },
@@ -744,6 +752,7 @@ export const ptBR: Bundle = {
     offerWithdrawn: "oferta {id} retirada",
     withdrawError: "retirar: {err}",
     postedOffer: "oferta {id} publicada — retire quando quiser; nada fica bloqueado",
+    postOfferError: "publicar oferta: {err}",
     createdSlip: "comprovante de oferta privada criado — envie ao seu amigo",
     tookPrivateOffer: "oferta privada {id} aceita — agora aparece nos seus swaps ativos",
     cancelledPrivateOffer: "oferta privada {id} cancelada",

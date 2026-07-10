@@ -76,6 +76,13 @@ export const ru: Bundle = {
       medium: "Средний — сбалансированное окно возврата (~24 ч / 12 ч).",
       long: "Длинный (самый безопасный) — максимальный запас безопасности; авто-возврат через ~36 ч / 18 ч, если сделка зависнет.",
     },
+    validForTitle: "Действует",
+    ttl1h: "1 ч",
+    ttl4h: "4 ч",
+    ttl8h: "8 ч",
+    ttl24h: "24 ч",
+    ttl1w: "1 неделя",
+    ttlCustom: "Свой",
     validFor: "Действует (минут)",
     validForMins: "{mins} мин",
     validForHint:
@@ -705,6 +712,7 @@ export const ru: Bundle = {
     ifItStalls: "(если зависнет)",
   },
   funds: {
+    checking: "Проверка средств…",
     insufficient:
       "Недостаточно {sym} для финансирования этого свопа — нужно ~{need} {sym} (объём + комиссия фандинга), в кошельке {have} {sym}.",
   },
@@ -744,6 +752,7 @@ export const ru: Bundle = {
     offerWithdrawn: "оффер {id} снят",
     withdrawError: "снятие: {err}",
     postedOffer: "оффер {id} размещён — снимайте в любой момент; ничего не заблокировано",
+    postOfferError: "размещение оффера: {err}",
     createdSlip: "создан приватный слип оффера — отправьте его другу",
     tookPrivateOffer: "принят приватный оффер {id} — теперь он появляется в ваших активных свопах",
     cancelledPrivateOffer: "приватный оффер {id} отменён",

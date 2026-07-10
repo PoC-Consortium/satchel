@@ -76,6 +76,13 @@ export const sr: Bundle = {
       medium: "Средњи — уравнотежен прозор за повраћај (~24ч / 12ч).",
       long: "Дуг (најбезбеднији) — највећа безбедносна маргина; аутоматски повраћај након ~36ч / 18ч ако трговина застане.",
     },
+    validForTitle: "Важи",
+    ttl1h: "1 ч",
+    ttl4h: "4 ч",
+    ttl8h: "8 ч",
+    ttl24h: "24 ч",
+    ttl1w: "1 недеља",
+    ttlCustom: "Прилагођено",
     validFor: "Важи (минута)",
     validForMins: "{mins} мин",
     validForHint:
@@ -705,6 +712,7 @@ export const sr: Bundle = {
     ifItStalls: "(ако застане)",
   },
   funds: {
+    checking: "Провера средстава…",
     insufficient:
       "Нема довољно {sym} за уплату овог свопа — потребно ~{need} {sym} (износ + накнада за уплату), новчаник има {have} {sym}.",
   },
@@ -744,6 +752,7 @@ export const sr: Bundle = {
     offerWithdrawn: "понуда {id} повучена",
     withdrawError: "повлачење: {err}",
     postedOffer: "објављена понуда {id} — повуците у било ком тренутку; ништа није закључано",
+    postOfferError: "објављивање понуде: {err}",
     createdSlip: "направљен приватни листић са понудом — пошаљите га свом пријатељу",
     tookPrivateOffer: "прихваћена приватна понуда {id} — сада се појављује у вашим активним своповима",
     cancelledPrivateOffer: "отказана приватна понуда {id}",

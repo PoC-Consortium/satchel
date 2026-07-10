@@ -76,6 +76,13 @@ export const pl: Bundle = {
       medium: "Średni — zrównoważone okno zwrotu (~24 h / 12 h).",
       long: "Długi (najbezpieczniejszy) — najszerszy margines bezpieczeństwa; automatyczny zwrot po ~36 h / 18 h, jeśli transakcja utknie.",
     },
+    validForTitle: "Ważna przez",
+    ttl1h: "1 godz.",
+    ttl4h: "4 godz.",
+    ttl8h: "8 godz.",
+    ttl24h: "24 godz.",
+    ttl1w: "1 tydzień",
+    ttlCustom: "Własny",
     validFor: "Ważna przez (minuty)",
     validForMins: "{mins} min",
     validForHint:
@@ -705,6 +712,7 @@ export const pl: Bundle = {
     ifItStalls: "(jeśli utknie)",
   },
   funds: {
+    checking: "Sprawdzanie środków…",
     insufficient:
       "Za mało {sym}, aby sfinansować ten swap — potrzeba ~{need} {sym} (kwota + opłata za finansowanie), portfel ma {have} {sym}.",
   },
@@ -744,6 +752,7 @@ export const pl: Bundle = {
     offerWithdrawn: "oferta {id} wycofana",
     withdrawError: "wycofanie: {err}",
     postedOffer: "wystawiono ofertę {id} — wycofaj w każdej chwili; nic nie jest blokowane",
+    postOfferError: "wystawienie oferty: {err}",
     createdSlip: "utworzono prywatny slip ofertowy — wyślij go znajomemu",
     tookPrivateOffer: "przyjęto prywatną ofertę {id} — pojawia się teraz w Twoich aktywnych swapach",
     cancelledPrivateOffer: "anulowano prywatną ofertę {id}",

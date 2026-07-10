@@ -33,6 +33,9 @@ export interface UiPrefs {
   /** One-time first-run flag: true once the user has completed or skipped the
    *  first-run coin-setup dialog, so it never shows again. */
   onboarded: boolean;
+  /** "Valid for" lifetime for new offers, in minutes — the offer form's last
+   *  choice (preset or custom), restored across restarts. */
+  offer_ttl_min: number;
   /** Desktop-notification switches (issue #55). */
   notify: NotifyPrefs;
 }

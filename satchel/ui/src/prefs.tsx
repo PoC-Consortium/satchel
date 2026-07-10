@@ -23,6 +23,7 @@ const DEFAULTS: UiPrefs = {
   language: "en",
   nav_open: true,
   onboarded: false,
+  offer_ttl_min: 60,
   notify: {
     enabled: true,
     swap_started: true,

@@ -76,6 +76,13 @@ export const nl: Bundle = {
       medium: "Gemiddeld — gebalanceerd refund-venster (~24u / 12u).",
       long: "Lang (veiligst) — breedste veiligheidsmarge; auto-refund na ~36u / 18u als de handel vastloopt.",
     },
+    validForTitle: "Geldig gedurende",
+    ttl1h: "1 u",
+    ttl4h: "4 u",
+    ttl8h: "8 u",
+    ttl24h: "24 u",
+    ttl1w: "1 week",
+    ttlCustom: "Aangepast",
     validFor: "Geldig gedurende (minuten)",
     validForMins: "{mins} min",
     validForHint:
@@ -705,6 +712,7 @@ export const nl: Bundle = {
     ifItStalls: "(als het vastloopt)",
   },
   funds: {
+    checking: "Saldo controleren…",
     insufficient:
       "Niet genoeg {sym} om deze swap te funden — nodig ~{need} {sym} (bedrag + funding-fee), wallet heeft {have} {sym}.",
   },
@@ -744,6 +752,7 @@ export const nl: Bundle = {
     offerWithdrawn: "aanbod {id} teruggetrokken",
     withdrawError: "terugtrekken: {err}",
     postedOffer: "aanbod {id} geplaatst — trek het op elk moment terug; er wordt niets vergrendeld",
+    postOfferError: "aanbod plaatsen: {err}",
     createdSlip: "een privé aanbod-slip aangemaakt — stuur het naar je vriend",
     tookPrivateOffer: "privé aanbod {id} aangenomen — het verschijnt nu in je actieve swaps",
     cancelledPrivateOffer: "privé aanbod {id} geannuleerd",

@@ -25,7 +25,8 @@ import { useConfirm } from "../ui/ConfirmProvider";
 import { useDenom } from "../denom";
 import { useFx, useFxContext } from "../fx";
 import { useT } from "../i18n";
-import { assessLockFunds, rpc } from "../api/tauri";
+import { usePrefs } from "../prefs";
+import { rpc } from "../api/tauri";
 import {
   baseQuote,
   canonicalAmount,
@@ -47,7 +48,7 @@ import {
   type Denom,
 } from "../format";
 import FeePreview from "./FeePreview";
-import InsufficientFunds from "./InsufficientFunds";
+import { LockFundsGate } from "./InsufficientFunds";
 import { C } from "../theme";
 import type { Pair } from "../api/types";
 
@@ -60,6 +61,19 @@ export const TERMS = {
   long: { t1: 36 * 3600, t2: 18 * 3600 },
 } as const;
 export type Term = keyof typeof TERMS;
+
+// "Valid for" presets (offer lifetime, minutes) — the common lifetimes as one
+// tap; Custom reveals the raw minutes field. The last choice (preset or custom
+// minutes) persists in satchel.json (ui.offer_ttl_min), so the form reopens the
+// way you left it; stored minutes map back to their preset chip, else Custom.
+const TTL_PRESETS = [60, 240, 480, 1440, 10080] as const;
+const TTL_LABEL_KEY: Record<number, string> = {
+  60: "makeOffer.ttl1h",
+  240: "makeOffer.ttl4h",
+  480: "makeOffer.ttl8h",
+  1440: "makeOffer.ttl24h",
+  10080: "makeOffer.ttl1w",
+};
 
 // The Corkboard persists its selected pair here; the form defaults to it so you
 // land on the pair you were just looking at.
@@ -99,6 +113,7 @@ export default function OfferForm({
   const { coins, symOf } = useApp();
   const confirm = useConfirm();
   const t = useT();
+  const { prefs, update: updatePrefs } = usePrefs();
   const configured = useMemo(() => coins.filter((c) => c.configured), [coins]);
 
   // Tradable pairs (capability-derived, from listpairs) → canonical base/quote.
@@ -120,7 +135,13 @@ export default function OfferForm({
   const onDenom = (d: Denom) => setDenom(d);
   const [proto, setProto] = useState<string | null>(null); // explicit override
   const [term, setTerm] = useState<Term>("medium");
-  const [validMin, setValidMin] = useState("60"); // offer lifetime (minutes)
+  // Offer lifetime — seeded from the persisted last choice (60 = the 1h default
+  // on a fresh install); a stored value off the preset grid opens as Custom.
+  const storedTtl = Math.max(1, Math.round(prefs.offer_ttl_min || 60));
+  const [ttlSel, setTtlSel] = useState<number | "custom">(() =>
+    (TTL_PRESETS as readonly number[]).includes(storedTtl) ? storedTtl : "custom",
+  );
+  const [validMin, setValidMin] = useState(String(storedTtl)); // custom minutes
   const [balances, setBalances] = useState<Record<string, string>>({});
 
   // Load the capability-derived pairs (same source as the Corkboard).
@@ -246,18 +267,32 @@ export default function OfferForm({
 
   const unitLabel = quote ? denomLabel(quote, symOf(quote), denom) : "";
 
+  // Effective offer lifetime in minutes (preset chip, or the custom field).
+  const ttlMin = ttlSel === "custom" ? Math.max(1, Math.round(Number(validMin) || 60)) : ttlSel;
+  // Both handlers write the choice through to satchel.json so it survives
+  // restarts; custom keystrokes only persist once they parse to a real minute.
+  const onTtlPreset = (v: number | "custom") => {
+    setTtlSel(v);
+    updatePrefs({ offer_ttl_min: v === "custom" ? Math.max(1, Math.round(Number(validMin) || 60)) : v });
+  };
+  const onTtlCustom = (raw: string) => {
+    setValidMin(raw);
+    const mins = Math.round(Number(raw));
+    if (Number.isFinite(mins) && mins >= 1) updatePrefs({ offer_ttl_min: mins });
+  };
+
   async function submit() {
     if (!valid || busy || !effProto) return;
     const { t1, t2 } = TERMS[term];
-    const validForMin = Math.max(1, Math.round(Number(validMin) || 60));
+    const validForMin = ttlMin;
     const ttlSecs = validForMin * 60;
     const lbl = { fontSize: 12, color: "text.secondary" } as const;
     const val = { textAlign: "right", fontFamily: C.mono, fontSize: 13.5 } as const;
-    const funds = await assessLockFunds(giveCoin, wantCoin, giveSat);
+    // The funds pre-check streams INSIDE the dialog body (LockFundsGate below),
+    // so the review opens instantly instead of stalling on chain-touching calls.
     const ok = await confirm({
       title: confirmTitle,
       wide: true,
-      confirmDisabled: funds ? !funds.ok : false,
       confirmLabel: submitLabel,
       body: (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
@@ -295,7 +330,7 @@ export default function OfferForm({
           </Box>
           <Typography sx={{ fontSize: 12, color: "text.secondary" }}>{t("makeOffer.note")}</Typography>
           <FeePreview giveCoin={giveCoin} getCoin={wantCoin} />
-          <InsufficientFunds check={funds} />
+          <LockFundsGate lockCoin={giveCoin} otherCoin={wantCoin} amountSat={giveSat} />
         </Box>
       ),
     });
@@ -465,16 +500,44 @@ export default function OfferForm({
         </Typography>
       </Box>
 
-      {/* Offer validity (minutes). */}
-      <TextField
-        label={t("makeOffer.validFor")}
-        size="small"
-        type="number"
-        value={validMin}
-        onChange={(e) => setValidMin(e.target.value)}
-        inputProps={{ min: 1 }}
-        helperText={t("makeOffer.validForHint")}
-      />
+      {/* Offer validity — preset chips (last choice persists across restarts);
+          Custom reveals the raw minutes field. */}
+      <Box>
+        <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 0.75 }}>
+          {t("makeOffer.validForTitle")}
+        </Typography>
+        <ToggleButtonGroup
+          exclusive
+          fullWidth
+          size="small"
+          value={ttlSel}
+          onChange={(_, v) => v != null && onTtlPreset(v as number | "custom")}
+        >
+          {TTL_PRESETS.map((m) => (
+            <ToggleButton key={m} value={m}>
+              {t(TTL_LABEL_KEY[m])}
+            </ToggleButton>
+          ))}
+          <ToggleButton value="custom">{t("makeOffer.ttlCustom")}</ToggleButton>
+        </ToggleButtonGroup>
+        {ttlSel === "custom" ? (
+          <TextField
+            label={t("makeOffer.validFor")}
+            size="small"
+            fullWidth
+            type="number"
+            value={validMin}
+            onChange={(e) => onTtlCustom(e.target.value)}
+            inputProps={{ min: 1 }}
+            helperText={t("makeOffer.validForHint")}
+            sx={{ mt: 1 }}
+          />
+        ) : (
+          <Typography sx={{ fontSize: 11.5, color: "text.secondary", mt: 0.75 }}>
+            {t("makeOffer.validForHint")}
+          </Typography>
+        )}
+      </Box>
 
       {error && (
         <Typography sx={{ color: "error.main", fontSize: 13, whiteSpace: "pre-wrap" }}>{error}</Typography>

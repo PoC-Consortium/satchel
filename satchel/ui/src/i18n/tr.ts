@@ -76,6 +76,13 @@ export const tr: Bundle = {
       medium: "Orta — dengeli geri ödeme penceresi (~24s / 12s).",
       long: "Uzun (en güvenli) — en geniş güvenlik payı; işlem takılırsa ~36s / 18s sonra otomatik geri ödeme.",
     },
+    validForTitle: "Geçerlilik süresi",
+    ttl1h: "1 sa",
+    ttl4h: "4 sa",
+    ttl8h: "8 sa",
+    ttl24h: "24 sa",
+    ttl1w: "1 hafta",
+    ttlCustom: "Özel",
     validFor: "Geçerlilik süresi (dakika)",
     validForMins: "{mins} dk",
     validForHint:
@@ -705,6 +712,7 @@ export const tr: Bundle = {
     ifItStalls: "(takılırsa)",
   },
   funds: {
+    checking: "Fonlar kontrol ediliyor…",
     insufficient:
       "Bu takası fonlamak için yeterli {sym} yok — ~{need} {sym} gerekir (miktar + fonlama ücreti), cüzdanda {have} {sym} var.",
   },
@@ -744,6 +752,7 @@ export const tr: Bundle = {
     offerWithdrawn: "{id} teklifi geri çekildi",
     withdrawError: "geri çek: {err}",
     postedOffer: "{id} teklifi yayınlandı — istediğiniz zaman geri çekin; hiçbir şey kilitli değil",
+    postOfferError: "teklif yayınlama: {err}",
     createdSlip: "özel bir teklif fişi oluşturuldu — arkadaşınıza gönderin",
     tookPrivateOffer: "{id} özel teklifi alındı — artık etkin takaslarınızda görünüyor",
     cancelledPrivateOffer: "{id} özel teklifi iptal edildi",

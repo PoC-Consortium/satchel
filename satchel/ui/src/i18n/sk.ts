@@ -76,6 +76,13 @@ export const sk: Bundle = {
       medium: "Stredný — vyvážené okno na vrátenie (~24 h / 12 h).",
       long: "Dlhý (najbezpečnejší) — najširšia bezpečnostná rezerva; automatické vrátenie po ~36 h / 18 h, ak sa obchod zasekne.",
     },
+    validForTitle: "Platí",
+    ttl1h: "1 h",
+    ttl4h: "4 h",
+    ttl8h: "8 h",
+    ttl24h: "24 h",
+    ttl1w: "1 týždeň",
+    ttlCustom: "Vlastné",
     validFor: "Platí (minúty)",
     validForMins: "{mins} min",
     validForHint:
@@ -705,6 +712,7 @@ export const sk: Bundle = {
     ifItStalls: "(ak sa zasekne)",
   },
   funds: {
+    checking: "Kontrola prostriedkov…",
     insufficient:
       "Nedostatok {sym} na financovanie tohto swapu — potrebných ~{need} {sym} (suma + financovací poplatok), peňaženka má {have} {sym}.",
   },
@@ -744,6 +752,7 @@ export const sk: Bundle = {
     offerWithdrawn: "ponuka {id} stiahnutá",
     withdrawError: "stiahnutie: {err}",
     postedOffer: "ponuka {id} zverejnená — kedykoľvek stiahnite; nič nie je zamknuté",
+    postOfferError: "zverejnenie ponuky: {err}",
     createdSlip: "vytvorený súkromný ponukový lístok — pošlite ho svojmu priateľovi",
     tookPrivateOffer: "súkromná ponuka {id} prijatá — teraz sa zobrazuje vo vašich aktívnych swapoch",
     cancelledPrivateOffer: "súkromná ponuka {id} zrušená",

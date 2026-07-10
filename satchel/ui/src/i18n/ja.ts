@@ -76,6 +76,13 @@ export const ja: Bundle = {
       medium: "中程度 — バランスの取れた返金期間（約 24 時間 / 12 時間）。",
       long: "長い（最も安全）— 安全マージンが最も広く、取引が滞った場合は約 36 時間 / 18 時間後に自動返金されます。",
     },
+    validForTitle: "有効期間",
+    ttl1h: "1 時間",
+    ttl4h: "4 時間",
+    ttl8h: "8 時間",
+    ttl24h: "24 時間",
+    ttl1w: "1 週間",
+    ttlCustom: "カスタム",
     validFor: "有効期間（分）",
     validForMins: "{mins} 分",
     validForHint:
@@ -705,6 +712,7 @@ export const ja: Bundle = {
     ifItStalls: "（滞った場合）",
   },
   funds: {
+    checking: "資金を確認中…",
     insufficient:
       "このスワップに資金を入れるには {sym} が足りません — 約 {need} {sym}（数量 + 資金手数料）が必要ですが、ウォレットには {have} {sym} しかありません。",
   },
@@ -744,6 +752,7 @@ export const ja: Bundle = {
     offerWithdrawn: "オファー {id} を取り下げました",
     withdrawError: "取り下げ: {err}",
     postedOffer: "オファー {id} を投稿しました — いつでも取り下げ可能、何もロックされません",
+    postOfferError: "オファーの投稿: {err}",
     createdSlip: "プライベートオファースリップを作成しました — 友人に送ってください",
     tookPrivateOffer: "プライベートオファー {id} を取得しました — 進行中スワップに表示されます",
     cancelledPrivateOffer: "プライベートオファー {id} をキャンセルしました",

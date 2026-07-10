@@ -1,9 +1,10 @@
 // Public ▸ Post an offer. Lists a signed offer on the noticeboard
 // (boardpostoffer) — the public counterpart of Private ▸ Create slip. Reuses the
-// shared OfferForm; on success it jumps to the Corkboard where the new notice
-// shows up. Posting locks nothing; an offer is just a withdrawable advert.
+// shared OfferForm; confirming jumps straight to the Corkboard while the post
+// finishes in flight (the new notice shows up there on success; a failure lands
+// in the activity log). Posting locks nothing; an offer is a withdrawable advert.
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Box, Button, Card, CardContent, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import OfferForm from "../components/OfferForm";
@@ -17,8 +18,6 @@ export default function PostOfferScreen() {
   const { log, coins, coinsLoaded } = useApp();
   const navigate = useNavigate();
   const t = useT();
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
 
   const submit = useCallback(
     async (
@@ -29,21 +28,21 @@ export default function PostOfferScreen() {
       protocol?: string,
       ttlSecs?: number,
     ) => {
-      setBusy(true);
-      setErr(null);
+      // Confirmed — jump straight to the Corkboard and let the post finish in
+      // flight (no second wait on the busy form). The board shows the notice
+      // only on success; the outcome lands in the activity log either way.
+      navigate("board");
       try {
         // protocol (param 4) + ttl_secs (param 5) are both optional; a null at 4
         // lets us set the ttl without forcing a protocol (opt_str ignores null).
         const params = [give, want, t1, t2, protocol ?? null, ttlSecs ?? null];
         const r = await rpc<{ offer_id: string }>("boardpostoffer", params);
         log(t("log.postedOffer", { id: r.offer_id }));
-        navigate("board");
       } catch (e) {
-        setErr(errMsg(e));
-        setBusy(false);
+        log(t("log.postOfferError", { err: errMsg(e) }));
       }
     },
-    [log, navigate],
+    [log, navigate, t],
   );
 
   // #139: don't decide anything before coins have loaded once — the context
@@ -85,8 +84,8 @@ export default function PostOfferScreen() {
             submitLabel={t("makeOffer.post")}
             submitIcon={<AddIcon />}
             confirmTitle={t("makeOffer.reviewOfferTitle")}
-            busy={busy}
-            error={err}
+            busy={false}
+            error={null}
             onSubmit={submit}
           />
         </CardContent>

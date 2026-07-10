@@ -76,6 +76,13 @@ export const lt: Bundle = {
       medium: "Vidutinis — subalansuotas grąžinimo langas (~24 val. / 12 val.).",
       long: "Ilgas (saugiausias) — didžiausia saugumo atsarga; automatinis grąžinimas po ~36 val. / 18 val., jei sandoris užstringa.",
     },
+    validForTitle: "Galioja",
+    ttl1h: "1 val.",
+    ttl4h: "4 val.",
+    ttl8h: "8 val.",
+    ttl24h: "24 val.",
+    ttl1w: "1 savaitė",
+    ttlCustom: "Pasirinktinė",
     validFor: "Galioja (minutėmis)",
     validForMins: "{mins} min.",
     validForHint:
@@ -705,6 +712,7 @@ export const lt: Bundle = {
     ifItStalls: "(jei užstringa)",
   },
   funds: {
+    checking: "Tikrinamos lėšos…",
     insufficient:
       "Nepakanka {sym} šiems mainams finansuoti — reikia ~{need} {sym} (suma + finansavimo mokestis), piniginėje yra {have} {sym}.",
   },
@@ -744,6 +752,7 @@ export const lt: Bundle = {
     offerWithdrawn: "pasiūlymas {id} pašalintas",
     withdrawError: "pašalinimas: {err}",
     postedOffer: "paskelbtas pasiūlymas {id} — pašalinkite bet kada; niekas neužrakinta",
+    postOfferError: "pasiūlymo skelbimas: {err}",
     createdSlip: "sukurtas privataus pasiūlymo lapelis — nusiųskite jį draugui",
     tookPrivateOffer: "priimtas privatus pasiūlymas {id} — jis dabar pasirodo jūsų aktyviuose mainuose",
     cancelledPrivateOffer: "atšauktas privatus pasiūlymas {id}",

@@ -76,6 +76,13 @@ export const de: Bundle = {
       medium: "Mittel — ausgewogenes Erstattungsfenster (~24 Std. / 12 Std.).",
       long: "Lang (am sichersten) — größter Sicherheitspuffer; automatische Erstattung nach ~36 Std. / 18 Std., wenn der Handel stockt.",
     },
+    validForTitle: "Gültig für",
+    ttl1h: "1 Std.",
+    ttl4h: "4 Std.",
+    ttl8h: "8 Std.",
+    ttl24h: "24 Std.",
+    ttl1w: "1 Woche",
+    ttlCustom: "Eigene",
     validFor: "Gültig für (Minuten)",
     validForMins: "{mins} Min.",
     validForHint:
@@ -708,6 +715,7 @@ export const de: Bundle = {
     ifItStalls: "(falls er stockt)",
   },
   funds: {
+    checking: "Guthaben wird geprüft…",
     insufficient:
       "Nicht genug {sym}, um diesen Swap zu finanzieren — benötigt ~{need} {sym} (Betrag + Finanzierungsgebühr), Wallet hat {have} {sym}.",
   },
@@ -747,6 +755,7 @@ export const de: Bundle = {
     offerWithdrawn: "Angebot {id} zurückgezogen",
     withdrawError: "Zurückziehen: {err}",
     postedOffer: "Angebot {id} eingestellt — jederzeit zurückziehbar; nichts ist gesperrt",
+    postOfferError: "Angebot einstellen: {err}",
     createdSlip: "einen privaten Angebots-Slip erstellt — schicke ihn deinem Freund",
     tookPrivateOffer: "privates Angebot {id} angenommen — es erscheint nun in deinen aktiven Swaps",
     cancelledPrivateOffer: "privates Angebot {id} abgebrochen",

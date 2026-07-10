@@ -76,6 +76,13 @@ export const gl: Bundle = {
       medium: "Medio — xanela de reembolso equilibrada (~24 h / 12 h).",
       long: "Longo (o máis seguro) — a marxe de seguranza máis ampla; reembolso automático tras ~36 h / 18 h se a operación se atasca.",
     },
+    validForTitle: "Válido durante",
+    ttl1h: "1 h",
+    ttl4h: "4 h",
+    ttl8h: "8 h",
+    ttl24h: "24 h",
+    ttl1w: "1 semana",
+    ttlCustom: "Personalizado",
     validFor: "Válido durante (minutos)",
     validForMins: "{mins} min",
     validForHint:
@@ -703,6 +710,7 @@ export const gl: Bundle = {
     ifItStalls: "(se se atasca)",
   },
   funds: {
+    checking: "Comprobando os fondos…",
     insufficient:
       "Non hai {sym} dabondo para financiar este intercambio — precísanse ~{need} {sym} (cantidade + comisión de financiamento), a carteira ten {have} {sym}.",
   },
@@ -742,6 +750,7 @@ export const gl: Bundle = {
     offerWithdrawn: "oferta {id} retirada",
     withdrawError: "retirar: {err}",
     postedOffer: "publicouse a oferta {id} — retíraa cando queiras; non se bloquea nada",
+    postOfferError: "publicar oferta: {err}",
     createdSlip: "creouse un vale de oferta privada — envíallo ao teu amigo",
     tookPrivateOffer: "tomouse a oferta privada {id} — agora aparece nos teus intercambios activos",
     cancelledPrivateOffer: "cancelouse a oferta privada {id}",
