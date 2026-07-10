@@ -1192,9 +1192,11 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
     Drive a board swap until `stage` is reached, then DESTROY the victim's
     pactd data dir — its swap state, relay cursors and Pact seed, exactly like
     a dead laptop. Re-provision a fresh pactd with the SAME seed, assert the
-    GATED rescue (pactd detects + warns, adopts nothing by itself), adopt via
-    the explicit `restorefromrelay`, and drive to completion — or, with
-    `refund=True`, jump past the timelocks and drive to the timeout reclaim.
+    rescue surfaces (pactd detects + warns; the relay scan auto-imports the
+    now-foreign snapshot as a FOLLOWED read-only record — #163 — but nothing
+    auto-ADOPTS), adopt via the explicit `takeover`, and drive to completion —
+    or, with `refund=True`, jump past the timelocks and drive to the timeout
+    reclaim.
     Asserts the victim re-broadcasts NOTHING it already funded: its own leg's
     txid is IDENTICAL before the wipe and after settlement (adopted, not
     re-funded).
@@ -1372,11 +1374,12 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
             taker = fresh
         victim_party = fresh
         # Importing the seed re-establishes our identity. #54 decision 1: pactd
-        # only DETECTS recoverable snapshots — nothing may auto-adopt (a still-
+        # only DETECTS recoverable snapshots — nothing may auto-ADOPT (a still-
         # live machine on the same seed could be driving the swap; two drivers
         # can double-fund it). Assert `rescuestatus` reports the snapshot as
-        # pending WITH the two-machines warning while the local swap list stays
-        # empty, then adopt via the explicit `restorefromrelay`.
+        # pending WITH the two-machines warning. Deterministic: the followed-
+        # import scan below runs only on a tick (this daemon has --tick-secs 0)
+        # and none has run yet, so the swap list is still empty here.
         victim_party.setup_seed(mnemonic=mnemonic)
         st = None
         for _ in range(20):
@@ -1387,25 +1390,38 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
         assert st and st["pending"] >= 1, \
             f"rescuestatus never saw the relay snapshot: {st}"
         assert st.get("warning"), "a pending rescue must carry the two-machines warning"
-        assert swap_of(victim_party, sid) is None, \
-            "swap auto-restored without explicit confirmation (gated rescue regression)"
-        for _ in range(15):
-            r = victim_party.rpc("restorefromrelay")
-            if swap_of(victim_party, sid) is not None:
+        # Multi-machine (#122/#134/#163): the wipe destroyed machine.json too,
+        # so the fresh install minted a NEW derive scope — the old snapshot
+        # carries the OLD scope and reads as ANOTHER MACHINE's swap. The
+        # periodic relay scan therefore auto-imports it as a FOLLOWED record
+        # WITHOUT any confirm: visibility is ungated by design; the confirm
+        # gate protects DRIVING. Assert it appears, is read-only
+        # (source=foreign — i.e. not driven), and stays that way until the
+        # explicit takeover.
+        rec = None
+        for _ in range(20):
+            victim_party.rpc("tick")  # each tick kicks a followed-import scan
+            rec = swap_of(victim_party, sid)
+            if rec is not None:
                 break
             time.sleep(0.5)
-        assert swap_of(victim_party, sid) is not None, \
-            f"rescued swap never came back from the relay snapshot (last restore: {r})"
-        # Multi-machine (#122/#134): the wipe destroyed machine.json too, so the
-        # fresh install minted a NEW derive scope — the restored record carries
-        # the OLD scope and reads as another machine's swap: imported FOLLOWED
-        # (read-only), never driven. `takeover` is the explicit dead-is-dead
-        # confirm that adopts it — true here by construction (the old pactd is
-        # stopped and its state destroyed). Without it the rescued party would
-        # observe the swap forever and never redeem/refund.
+        assert rec is not None, \
+            "foreign snapshot never auto-imported as a followed record (#163)"
+        assert rec.get("source") == "foreign", \
+            f"auto-imported record must be FOLLOWED (read-only), not driven: {rec}"
+        # The explicit restore is now a no-op for this swap (local record wins)
+        # and — crucially — must NOT flip it to driven: adoption only ever
+        # happens via `takeover`.
+        r = victim_party.rpc("restorefromrelay")
+        assert r["restored"] == 0, \
+            f"restorefromrelay re-imported an already-followed swap: {r}"
         rec = swap_of(victim_party, sid)
         assert rec.get("source") == "foreign", \
-            f"restored record should be foreign to the fresh scope: {rec}"
+            f"restorefromrelay must not adopt a followed record: {rec}"
+        # `takeover` is the explicit dead-is-dead confirm that adopts the swap
+        # — true here by construction (the old pactd is stopped and its state
+        # destroyed). Without it the rescued party would observe the swap
+        # forever and never redeem/refund.
         victim_party.rpc("takeover", sid)
         rec = swap_of(victim_party, sid)
         assert rec.get("source") == "local", \
@@ -1413,7 +1429,7 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
         # The snapshot was taken at `accept`, BEFORE any funding — the rescued
         # record has no funding pointers; the tick rediscovers them on chain
         # below. (The no-double-fund check compares txids after settlement.)
-        print(f"[e2e] {tag}: swap {sid[:16]} restored from relay snapshot + taken over")
+        print(f"[e2e] {tag}: swap {sid[:16]} auto-followed from relay snapshot + taken over")
 
         # Whatever was on the wire at the wipe may still be unconfirmed.
         # find_funding is confirmed-only, so bury it first — otherwise the
