@@ -809,9 +809,11 @@ def test_create_import_then_swap(h):
         bob.setup_seed(mnemonic=BOB_MNEMONIC, passphrase="bobpass")
 
         st_a = alice.rpc("walletstatus")
-        assert st_a == {"seed_exists": True, "encrypted": False, "locked": False}, st_a
+        assert st_a == {"seed_exists": True, "encrypted": False, "locked": False,
+                        "needs_reimport": False}, st_a
         st_b = bob.rpc("walletstatus")
-        assert st_b == {"seed_exists": True, "encrypted": True, "locked": False}, st_b
+        assert st_b == {"seed_exists": True, "encrypted": True, "locked": False,
+                        "needs_reimport": False}, st_b
         # Both now have a usable identity (Bob's is deterministic from import).
         assert alice.rpc("getinfo")["identity"], "alice has no identity after createseed"
         assert bob.rpc("getinfo")["identity"], "bob has no identity after importseed"
@@ -1394,10 +1396,24 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
             time.sleep(0.5)
         assert swap_of(victim_party, sid) is not None, \
             f"rescued swap never came back from the relay snapshot (last restore: {r})"
+        # Multi-machine (#122/#134): the wipe destroyed machine.json too, so the
+        # fresh install minted a NEW derive scope — the restored record carries
+        # the OLD scope and reads as another machine's swap: imported FOLLOWED
+        # (read-only), never driven. `takeover` is the explicit dead-is-dead
+        # confirm that adopts it — true here by construction (the old pactd is
+        # stopped and its state destroyed). Without it the rescued party would
+        # observe the swap forever and never redeem/refund.
+        rec = swap_of(victim_party, sid)
+        assert rec.get("source") == "foreign", \
+            f"restored record should be foreign to the fresh scope: {rec}"
+        victim_party.rpc("takeover", sid)
+        rec = swap_of(victim_party, sid)
+        assert rec.get("source") == "local", \
+            f"takeover did not adopt the restored swap: {rec}"
         # The snapshot was taken at `accept`, BEFORE any funding — the rescued
         # record has no funding pointers; the tick rediscovers them on chain
         # below. (The no-double-fund check compares txids after settlement.)
-        print(f"[e2e] {tag}: swap {sid[:16]} restored from relay snapshot")
+        print(f"[e2e] {tag}: swap {sid[:16]} restored from relay snapshot + taken over")
 
         # Whatever was on the wire at the wipe may still be unconfirmed.
         # find_funding is confirmed-only, so bury it first — otherwise the
