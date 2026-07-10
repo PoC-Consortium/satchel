@@ -76,6 +76,13 @@ export const ca: Bundle = {
       medium: "Mitjà — finestra de reemborsament equilibrada (~24h / 12h).",
       long: "Llarg (el més segur) — marge de seguretat més ampli; reemborsament automàtic després de ~36h / 18h si el tracte s'encalla.",
     },
+    validForTitle: "Vàlida durant",
+    ttl1h: "1 h",
+    ttl4h: "4 h",
+    ttl8h: "8 h",
+    ttl24h: "24 h",
+    ttl1w: "1 setmana",
+    ttlCustom: "Personalitzat",
     validFor: "Vàlida durant (minuts)",
     validForMins: "{mins} min",
     validForHint:
@@ -707,6 +714,7 @@ export const ca: Bundle = {
     ifItStalls: "(si s'encalla)",
   },
   funds: {
+    checking: "Comprovant els fons…",
     insufficient:
       "No hi ha prou {sym} per finançar aquest intercanvi — calen ~{need} {sym} (quantitat + comissió de finançament), la cartera té {have} {sym}.",
   },
@@ -746,6 +754,7 @@ export const ca: Bundle = {
     offerWithdrawn: "oferta {id} retirada",
     withdrawError: "retirada: {err}",
     postedOffer: "oferta {id} publicada — retira-la quan vulguis; no es bloqueja res",
+    postOfferError: "publicació de l'oferta: {err}",
     createdSlip: "val d'oferta privada creat — envia'l al teu amic",
     tookPrivateOffer: "oferta privada {id} acceptada — ara apareix als teus intercanvis actius",
     cancelledPrivateOffer: "oferta privada {id} cancel·lada",

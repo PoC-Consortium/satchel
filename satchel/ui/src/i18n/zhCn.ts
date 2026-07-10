@@ -76,6 +76,13 @@ export const zhCn: Bundle = {
       medium: "中 — 平衡的退款窗口（约 24 小时 / 12 小时）。",
       long: "长（最安全）— 安全余量最大；若交易停滞，约 36 小时 / 18 小时后自动退款。",
     },
+    validForTitle: "有效期",
+    ttl1h: "1 小时",
+    ttl4h: "4 小时",
+    ttl8h: "8 小时",
+    ttl24h: "24 小时",
+    ttl1w: "1 周",
+    ttlCustom: "自定义",
     validFor: "有效期（分钟）",
     validForMins: "{mins} 分钟",
     validForHint:
@@ -705,6 +712,7 @@ export const zhCn: Bundle = {
     ifItStalls: "（若停滞）",
   },
   funds: {
+    checking: "正在检查资金…",
     insufficient:
       "{sym} 不足以为此交换注资 — 需要约 {need} {sym}（金额 + 注资费用），钱包仅有 {have} {sym}。",
   },
@@ -744,6 +752,7 @@ export const zhCn: Bundle = {
     offerWithdrawn: "报价 {id} 已撤回",
     withdrawError: "撤回：{err}",
     postedOffer: "已发布报价 {id} — 随时可撤回；什么都不会被锁定",
+    postOfferError: "发布报价：{err}",
     createdSlip: "已创建一条私下报价凭条 — 把它发给你的朋友",
     tookPrivateOffer: "已接受私下报价 {id} — 它现在出现在你的进行中交换里",
     cancelledPrivateOffer: "已取消私下报价 {id}",

@@ -76,6 +76,13 @@ export const hi: Bundle = {
       medium: "मध्यम — संतुलित refund विंडो (~24 घं. / 12 घं.)।",
       long: "लंबा (सबसे सुरक्षित) — सबसे चौड़ा सुरक्षा मार्जिन; व्यापार अटकने पर ~36 घं. / 18 घं. बाद auto-refund।",
     },
+    validForTitle: "मान्यता अवधि",
+    ttl1h: "1 घं.",
+    ttl4h: "4 घं.",
+    ttl8h: "8 घं.",
+    ttl24h: "24 घं.",
+    ttl1w: "1 सप्ताह",
+    ttlCustom: "कस्टम",
     validFor: "मान्यता अवधि (मिनट)",
     validForMins: "{mins} मिनट",
     validForHint:
@@ -705,6 +712,7 @@ export const hi: Bundle = {
     ifItStalls: "(यदि यह अटक जाए)",
   },
   funds: {
+    checking: "धनराशि जाँची जा रही है…",
     insufficient:
       "इस स्वैप को फंड करने के लिए पर्याप्त {sym} नहीं — ~{need} {sym} चाहिए (राशि + funding fee), wallet में {have} {sym} है।",
   },
@@ -744,6 +752,7 @@ export const hi: Bundle = {
     offerWithdrawn: "offer {id} वापस लिया गया",
     withdrawError: "withdraw: {err}",
     postedOffer: "offer {id} पोस्ट किया गया — कभी भी वापस लें; कुछ भी लॉक नहीं है",
+    postOfferError: "offer पोस्ट: {err}",
     createdSlip: "एक निजी offer slip बनाई गई — इसे अपने मित्र को भेजें",
     tookPrivateOffer: "निजी offer {id} लिया गया — यह अब आपके सक्रिय स्वैप में दिखाई देता है",
     cancelledPrivateOffer: "निजी offer {id} रद्द किया गया",

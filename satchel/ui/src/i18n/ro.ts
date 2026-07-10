@@ -76,6 +76,13 @@ export const ro: Bundle = {
       medium: "Mediu — fereastră de rambursare echilibrată (~24h / 12h).",
       long: "Lung (cel mai sigur) — cea mai largă marjă de siguranță; rambursare automată după ~36h / 18h dacă tranzacția se blochează.",
     },
+    validForTitle: "Valabilă pentru",
+    ttl1h: "1 h",
+    ttl4h: "4 h",
+    ttl8h: "8 h",
+    ttl24h: "24 h",
+    ttl1w: "1 săptămână",
+    ttlCustom: "Personalizat",
     validFor: "Valabilă pentru (minute)",
     validForMins: "{mins} min",
     validForHint:
@@ -705,6 +712,7 @@ export const ro: Bundle = {
     ifItStalls: "(dacă se blochează)",
   },
   funds: {
+    checking: "Se verifică fondurile…",
     insufficient:
       "Insuficient {sym} pentru a finanța acest swap — ai nevoie de ~{need} {sym} (sumă + comision de finanțare), portofelul are {have} {sym}.",
   },
@@ -744,6 +752,7 @@ export const ro: Bundle = {
     offerWithdrawn: "oferta {id} retrasă",
     withdrawError: "retragere: {err}",
     postedOffer: "ofertă postată {id} — retrage oricând; nimic nu este blocat",
+    postOfferError: "postarea ofertei: {err}",
     createdSlip: "s-a creat un bilet de ofertă privată — trimite-l prietenului tău",
     tookPrivateOffer: "ofertă privată acceptată {id} — apare acum în swap-urile tale active",
     cancelledPrivateOffer: "ofertă privată anulată {id}",

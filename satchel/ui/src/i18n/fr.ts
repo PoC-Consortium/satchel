@@ -76,6 +76,13 @@ export const fr: Bundle = {
       medium: "Moyen — fenêtre de remboursement équilibrée (~24h / 12h).",
       long: "Long (le plus sûr) — marge de sécurité la plus large ; auto-remboursement après ~36h / 18h si l'échange se bloque.",
     },
+    validForTitle: "Valable pendant",
+    ttl1h: "1 h",
+    ttl4h: "4 h",
+    ttl8h: "8 h",
+    ttl24h: "24 h",
+    ttl1w: "1 semaine",
+    ttlCustom: "Personnalisé",
     validFor: "Valable pendant (minutes)",
     validForMins: "{mins} min",
     validForHint:
@@ -707,6 +714,7 @@ export const fr: Bundle = {
     ifItStalls: "(en cas de blocage)",
   },
   funds: {
+    checking: "Vérification des fonds…",
     insufficient:
       "Pas assez de {sym} pour financer ce swap — il faut ~{need} {sym} (montant + frais de financement), le portefeuille a {have} {sym}.",
   },
@@ -746,6 +754,7 @@ export const fr: Bundle = {
     offerWithdrawn: "offre {id} retirée",
     withdrawError: "retrait : {err}",
     postedOffer: "offre {id} publiée — retirez-la à tout moment ; rien n'est verrouillé",
+    postOfferError: "publication de l'offre : {err}",
     createdSlip: "slip d'offre privée créé — envoyez-le à votre ami",
     tookPrivateOffer: "offre privée {id} prise — elle apparaît maintenant dans vos swaps actifs",
     cancelledPrivateOffer: "offre privée {id} annulée",

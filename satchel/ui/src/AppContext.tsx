@@ -71,6 +71,10 @@ interface AppCtx {
   network: string | null;
 
   swaps: Swap[];
+  /** True once a swap list is showing — either the first listswaps resolved or
+   *  the module cache seeded one — so the ledger can show skeletons on the
+   *  first-ever load instead of claiming "no swaps" (#91/#131 pattern). */
+  swapsLoaded: boolean;
   refreshSwaps: () => Promise<void>;
 
   /** Live `listcoins` (registry + configured + probed status), shared so the
@@ -110,6 +114,18 @@ interface AppCtx {
   clearToast: () => void;
 }
 
+// Stale-never-blank cache for the swap list (#91/#131 pattern, single slot like
+// the Corkboard's lastBoard): the last polled list, keyed by the merchant
+// identity it was fetched under (null = boot-time, before identity resolved —
+// treated as a wildcard). Seeds the initial state on a provider (re)mount so the
+// ledger and the ActiveSwaps dock paint instantly instead of starting empty;
+// boot() drops it when a different merchant logs in, so a switch starts fresh.
+interface SwapsSnap {
+  owner: string | null;
+  swaps: Swap[];
+}
+let lastSwaps: SwapsSnap | null = null;
+
 const Ctx = createContext<AppCtx | null>(null);
 
 export function useApp(): AppCtx {
@@ -126,7 +142,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [info, setInfo] = useState<Info | null>(null);
   const [identity, setIdentity] = useState<string | null>(null);
   const [network, setNetwork] = useState<string | null>(null);
-  const [swaps, setSwaps] = useState<Swap[]>([]);
+  const [swaps, setSwaps] = useState<Swap[]>(() => lastSwaps?.swaps ?? []);
+  const [swapsLoaded, setSwapsLoaded] = useState(() => !!lastSwaps);
   const [coins, setCoins] = useState<CoinInfo[]>([]);
   const [coinsLoaded, setCoinsLoaded] = useState(false);
   const [balances, setBalances] = useState<Record<string, Bal>>({});
@@ -142,6 +159,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // burst of OS notifications.
   const activeIdRef = useRef(activeId);
   activeIdRef.current = activeId;
+  // The merchant identity, reachable from the (stable) refreshSwaps callback —
+  // the swaps cache is keyed on it (null until boot resolves it).
+  const identityRef = useRef(identity);
+  identityRef.current = identity;
 
   const log = useCallback((msg: string) => {
     const time = new Date().toLocaleTimeString();
@@ -212,6 +233,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const pending = pend.filter((p) => !realIds.has(p.offer_id)).map(pendingTakeToSwap);
       const next = [...real, ...pending];
       setSwaps(next);
+      setSwapsLoaded(true);
+      // Refresh the single-slot cache (even boot-time polls with a null
+      // identity) so the next mount paints instantly with the last-known list.
+      lastSwaps = { owner: identityRef.current, swaps: next };
       // OS notifications on milestone crossings (#55) — contained in its own
       // try so a bug in the (cosmetic) notification path can never masquerade
       // as pactd being unreachable.
@@ -326,6 +351,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // A merchant switch starts the ledger fresh: a swap list cached/showing
+    // under a DIFFERENT identity is dropped here, where the new identity first
+    // resolves (a null-owner boot-time snapshot passes — it can only be this
+    // machine's own history).
+    if (lastSwaps?.owner != null && gi.identity && lastSwaps.owner !== gi.identity) {
+      lastSwaps = null;
+      setSwaps([]);
+      setSwapsLoaded(false);
+    }
     setIdentity(gi.identity || null);
     setNetwork(gi.network || null);
     // C10: pactd owns the merchant registry and backfills each merchant's
@@ -408,6 +442,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     identity,
     network,
     swaps,
+    swapsLoaded,
     refreshSwaps,
     coins,
     coinsLoaded,

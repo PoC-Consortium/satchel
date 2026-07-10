@@ -76,6 +76,13 @@ export const hr: Bundle = {
       medium: "Srednji — uravnotežen prozor za povrat (~24 h / 12 h).",
       long: "Dug (najsigurniji) — najšira sigurnosna margina; automatski povrat nakon ~36 h / 18 h ako trgovina zapne.",
     },
+    validForTitle: "Vrijedi",
+    ttl1h: "1 h",
+    ttl4h: "4 h",
+    ttl8h: "8 h",
+    ttl24h: "24 h",
+    ttl1w: "1 tjedan",
+    ttlCustom: "Prilagođeno",
     validFor: "Vrijedi (minuta)",
     validForMins: "{mins} min",
     validForHint:
@@ -705,6 +712,7 @@ export const hr: Bundle = {
     ifItStalls: "(ako zapne)",
   },
   funds: {
+    checking: "Provjera sredstava…",
     insufficient:
       "Nedovoljno {sym} za financiranje ovog swapa — treba ~{need} {sym} (iznos + naknada za financiranje), novčanik ima {have} {sym}.",
   },
@@ -744,6 +752,7 @@ export const hr: Bundle = {
     offerWithdrawn: "ponuda {id} povučena",
     withdrawError: "povlačenje: {err}",
     postedOffer: "objavljena ponuda {id} — povucite bilo kada; ništa nije zaključano",
+    postOfferError: "objava ponude: {err}",
     createdSlip: "stvoren privatni slip ponude — pošaljite ga svom prijatelju",
     tookPrivateOffer: "preuzeta privatna ponuda {id} — sada se pojavljuje u vašim aktivnim swapovima",
     cancelledPrivateOffer: "otkazana privatna ponuda {id}",

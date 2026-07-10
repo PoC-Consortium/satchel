@@ -184,6 +184,10 @@ struct UiPrefs {
     /// on a fresh install / missing field (serde default), so first run offers
     /// coin setup once.
     onboarded: bool,
+    /// "Valid for" lifetime for new offers, in minutes — the offer form's last
+    /// choice (preset or custom), restored across restarts. 60 (the 1h preset)
+    /// on a fresh install / missing field.
+    offer_ttl_min: u32,
     /// Desktop-notification switches (issue #55). Satchel only persists them;
     /// the webview decides when to fire (it owns the swap poll + i18n).
     notify: NotifyPrefs,
@@ -196,6 +200,7 @@ impl Default for UiPrefs {
             language: "en".into(),
             nav_open: true,
             onboarded: false,
+            offer_ttl_min: 60,
             notify: NotifyPrefs::default(),
         }
     }
@@ -634,7 +639,7 @@ fn get_ui_prefs(state: tauri::State<AppState>) -> serde_json::Value {
 
 /// Write the per-install UI preferences (UI-1). Each field is optional so the
 /// UI can patch just the one that changed (theme / language / nav_open /
-/// onboarded).
+/// onboarded / offer_ttl_min).
 #[tauri::command]
 fn set_ui_prefs(
     state: tauri::State<AppState>,
@@ -642,6 +647,7 @@ fn set_ui_prefs(
     language: Option<String>,
     nav_open: Option<bool>,
     onboarded: Option<bool>,
+    offer_ttl_min: Option<u32>,
     notify: Option<NotifyPrefs>,
 ) -> Result<(), String> {
     let mut cfg = state.config.lock().unwrap();
@@ -656,6 +662,9 @@ fn set_ui_prefs(
     }
     if let Some(onboarded) = onboarded {
         cfg.ui.onboarded = onboarded;
+    }
+    if let Some(offer_ttl_min) = offer_ttl_min {
+        cfg.ui.offer_ttl_min = offer_ttl_min;
     }
     if let Some(notify) = notify {
         cfg.ui.notify = notify;
@@ -1700,6 +1709,7 @@ mod tests {
         assert_eq!(fresh.ui.theme, "system");
         assert_eq!(fresh.ui.language, "en");
         assert!(fresh.ui.nav_open);
+        assert_eq!(fresh.ui.offer_ttl_min, 60);
 
         let mut cfg = Config::default();
         cfg.ui.theme = "dark".into();

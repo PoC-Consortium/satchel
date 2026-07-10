@@ -76,6 +76,13 @@ export const fi: Bundle = {
       medium: "Keskipitkä — tasapainoinen palautusikkuna (~24 h / 12 h).",
       long: "Pitkä (turvallisin) — laajin turvamarginaali; automaattinen palautus ~36 h / 18 h kuluttua, jos kauppa jumiutuu.",
     },
+    validForTitle: "Voimassa",
+    ttl1h: "1 h",
+    ttl4h: "4 h",
+    ttl8h: "8 h",
+    ttl24h: "24 h",
+    ttl1w: "1 viikko",
+    ttlCustom: "Mukautettu",
     validFor: "Voimassa (minuuttia)",
     validForMins: "{mins} min",
     validForHint:
@@ -708,6 +715,7 @@ export const fi: Bundle = {
     ifItStalls: "(jos se jumiutuu)",
   },
   funds: {
+    checking: "Tarkistetaan varoja…",
     insufficient:
       "Ei tarpeeksi {sym} tämän swapin rahoittamiseen — tarvitaan ~{need} {sym} (määrä + rahoitusmaksu), lompakossa on {have} {sym}.",
   },
@@ -747,6 +755,7 @@ export const fi: Bundle = {
     offerWithdrawn: "tarjous {id} vedetty pois",
     withdrawError: "vedä pois: {err}",
     postedOffer: "julkaistu tarjous {id} — vedä pois milloin tahansa; mitään ei lukita",
+    postOfferError: "tarjouksen julkaisu: {err}",
     createdSlip: "luotu yksityinen tarjouslipuke — lähetä se ystävällesi",
     tookPrivateOffer: "otettu yksityinen tarjous {id} — se näkyy nyt aktiivisissa swapeissasi",
     cancelledPrivateOffer: "peruutettu yksityinen tarjous {id}",

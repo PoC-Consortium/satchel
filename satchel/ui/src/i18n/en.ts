@@ -84,6 +84,15 @@ export const en = {
       medium: "Medium — balanced refund window (~24h / 12h).",
       long: "Long (safest) — widest safety margin; auto-refund after ~36h / 18h if the trade stalls.",
     },
+    // Offer-lifetime presets (chips); Custom reveals the minutes field. The
+    // last choice persists across restarts (satchel.json ui.offer_ttl_min).
+    validForTitle: "Valid for",
+    ttl1h: "1 h",
+    ttl4h: "4 h",
+    ttl8h: "8 h",
+    ttl24h: "24 h",
+    ttl1w: "1 week",
+    ttlCustom: "Custom",
     validFor: "Valid for (minutes)",
     validForMins: "{mins} min",
     validForHint:
@@ -736,6 +745,9 @@ export const en = {
     ifItStalls: "(if it stalls)",
   },
   funds: {
+    // Shown in the review dialog while the pre-flight balance/fee check streams
+    // in (the dialog opens instantly; the check resolves in place).
+    checking: "Checking funds…",
     insufficient:
       "Not enough {sym} to fund this swap — need ~{need} {sym} (amount + funding fee), wallet has {have} {sym}.",
   },
@@ -775,6 +787,7 @@ export const en = {
     offerWithdrawn: "offer {id} withdrawn",
     withdrawError: "withdraw: {err}",
     postedOffer: "posted offer {id} — withdraw any time; nothing is locked",
+    postOfferError: "post offer: {err}",
     createdSlip: "created a private offer slip — send it to your friend",
     tookPrivateOffer: "took private offer {id} — it now appears in your active swaps",
     cancelledPrivateOffer: "cancelled private offer {id}",

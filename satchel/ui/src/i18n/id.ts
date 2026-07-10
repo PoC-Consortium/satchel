@@ -76,6 +76,13 @@ export const id: Bundle = {
       medium: "Sedang — jendela refund seimbang (~24j / 12j).",
       long: "Panjang (paling aman) — margin pengaman paling lebar; auto-refund setelah ~36j / 18j jika perdagangan macet.",
     },
+    validForTitle: "Berlaku selama",
+    ttl1h: "1 j",
+    ttl4h: "4 j",
+    ttl8h: "8 j",
+    ttl24h: "24 j",
+    ttl1w: "1 minggu",
+    ttlCustom: "Kustom",
     validFor: "Berlaku selama (menit)",
     validForMins: "{mins} mnt",
     validForHint:
@@ -705,6 +712,7 @@ export const id: Bundle = {
     ifItStalls: "(jika macet)",
   },
   funds: {
+    checking: "Memeriksa dana…",
     insufficient:
       "{sym} tidak cukup untuk mendanai swap ini — butuh ~{need} {sym} (jumlah + biaya pendanaan), dompet punya {have} {sym}.",
   },
@@ -744,6 +752,7 @@ export const id: Bundle = {
     offerWithdrawn: "penawaran {id} ditarik",
     withdrawError: "tarik: {err}",
     postedOffer: "memasang penawaran {id} — tarik kapan saja; tidak ada yang dikunci",
+    postOfferError: "pasang penawaran: {err}",
     createdSlip: "membuat slip penawaran privat — kirim ke teman Anda",
     tookPrivateOffer: "mengambil penawaran privat {id} — sekarang muncul di swap aktif Anda",
     cancelledPrivateOffer: "membatalkan penawaran privat {id}",

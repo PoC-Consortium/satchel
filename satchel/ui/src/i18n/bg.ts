@@ -76,6 +76,13 @@ export const bg: Bundle = {
       medium: "Среден — балансиран прозорец за връщане (~24ч / 12ч).",
       long: "Дълъг (най-безопасен) — най-широк защитен резерв; автоматично връщане след ~36ч / 18ч, ако сделката заседне.",
     },
+    validForTitle: "Валидна за",
+    ttl1h: "1 ч",
+    ttl4h: "4 ч",
+    ttl8h: "8 ч",
+    ttl24h: "24 ч",
+    ttl1w: "1 седмица",
+    ttlCustom: "По избор",
     validFor: "Валидна за (минути)",
     validForMins: "{mins} мин",
     validForHint:
@@ -709,6 +716,7 @@ export const bg: Bundle = {
     ifItStalls: "(ако заседне)",
   },
   funds: {
+    checking: "Проверка на средствата…",
     insufficient:
       "Недостатъчно {sym} за финансиране на този суап — нужни са ~{need} {sym} (количество + такса за финансиране), портфейлът има {have} {sym}.",
   },
@@ -748,6 +756,7 @@ export const bg: Bundle = {
     offerWithdrawn: "оферта {id} оттеглена",
     withdrawError: "оттегляне: {err}",
     postedOffer: "оферта {id} публикувана — оттеглете по всяко време; нищо не е заключено",
+    postOfferError: "публикуване на оферта: {err}",
     createdSlip: "създаден личен талон за оферта — изпратете го на приятеля си",
     tookPrivateOffer: "лична оферта {id} приета — сега се появява в активните ви суапове",
     cancelledPrivateOffer: "лична оферта {id} отменена",

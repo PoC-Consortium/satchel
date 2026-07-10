@@ -5,6 +5,7 @@ import {
   Chip,
   Collapse,
   IconButton,
+  Skeleton,
   Table,
   TableBody,
   TableCell,
@@ -44,7 +45,7 @@ const STATE_COLOR: Partial<Record<SwapState, string>> = {
 const byNewest = (a: Swap, b: Swap) => (b.created_at ?? 0) - (a.created_at ?? 0);
 
 export default function SwapsScreen() {
-  const { swaps } = useApp();
+  const { swaps, swapsLoaded } = useApp();
   const t = useT();
 
   // Multi-machine (#122): the ledger is THIS machine's own history — swaps
@@ -65,7 +66,17 @@ export default function SwapsScreen() {
         {t("swaps.hint")}
       </Typography>
 
-      {empty ? (
+      {!swapsLoaded ? (
+        // First-ever load (stale-never-blank, #91/#131): the list may well have
+        // rows the first listswaps hasn't delivered yet, so show skeleton rows
+        // rather than claiming "no swaps". First paint only — steady-state
+        // refreshes never spin.
+        <Box aria-busy sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} variant="rounded" height={36} />
+          ))}
+        </Box>
+      ) : empty ? (
         <Typography sx={{ color: "text.secondary", fontSize: 13 }}>{t("swaps.none")}</Typography>
       ) : (
         <>
