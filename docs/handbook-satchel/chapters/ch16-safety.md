@@ -68,6 +68,18 @@ Here's what the passphrase does and doesn't do:
 > from your recovery phrase to set a new one. So: choose a passphrase you'll
 > remember, and keep your written recovery phrase safe as your ultimate fallback.
 
+> **Note** — Because that no-passphrase lock lives in *this computer's* secure
+> store, there's one situation where Satchel can find your stored seed but **no
+> longer unlock it**: the data folder was moved to a new machine, or the system
+> keychain was reset. Satchel doesn't fail cryptically — at startup it opens a
+> **guided re-import dialog** that explains exactly this and asks for your
+> recovery phrase. Re-entering the phrase sets the seed up again on this
+> machine, and **your funds and swaps are not affected**. (This is your
+> written-down phrase doing precisely the job it exists for.) If any swaps were
+> in flight before the move, they reappear under **Another machine** in the
+> swaps dock — one **Take over** resumes them; see *"One seed on more than one
+> machine"* below.
+
 ## What the engine holds, and what never leaves your machine
 
 Behind Satchel runs *the engine* (its technical name is `pactd`). The engine is
@@ -126,6 +138,31 @@ caution:
 > comfortable having exposed. Treat your trading balance like the cash in your
 > pocket, not your life savings. Keep long-term holdings in cold storage (an
 > offline wallet), and move funds to your trading machine as you need them.
+
+## One seed on more than one machine
+
+You can restore the same recovery phrase on a **second machine** — a warm
+standby, a backup box, a replacement laptop — and that is now **safe**. Each
+install gets its own short identity: open **Settings → About** and you'll see
+**This machine · M-xxxx**, this computer's label. Each machine drives only its
+own swaps:
+
+- **Another machine's swaps show up read-only.** In the active-swaps dock they
+  appear grouped under **Another machine · M-xxxx**. This machine watches them
+  on-chain but never acts on them, and they stay out of its Swaps ledger.
+- **Take over only when the other machine is really stopped.** Each group
+  carries one **Take over** button, behind a confirmation that spells out the
+  condition: *only if that machine is stopped*. Confirm, and this machine
+  adopts those swaps and drives them to completion — the standby becoming the
+  main, in one click. Make absolutely sure the dead machine is genuinely off
+  first: two machines driving the same swap at once can lose money, and the
+  confirmation is your promise that it can't happen.
+
+> **Warning** — Machines sharing a seed share **one balance**. This is a
+> failover arrangement, not doubled liquidity: running two machines does not
+> give you two pots of funds to trade from, and trading actively from both at
+> once means they compete for the same coins. Use the second machine as a
+> standby and a safety net, not a second trading desk.
 
 ## If your machine dies mid-swap
 

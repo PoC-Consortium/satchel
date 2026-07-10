@@ -1,6 +1,6 @@
 # JSON-RPC API
 
-[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 65 methods, grouped below by area with a one-line purpose each. This is an index; the daemon itself serves the authoritative catalog via the `help` method (`pact-cli help`). For full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
+[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 66 methods, grouped below by area with a one-line purpose each. This is an index; the daemon itself serves the authoritative catalog via the `help` method (`pact-cli help`). For full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
 
 ## Conventions
 
@@ -15,10 +15,10 @@
 
 | Method | Purpose |
 |---|---|
-| `getinfo` | Daemon name/version/protocol/network, identity, seed status, and coin ids. |
+| `getinfo` | Daemon name/version/protocol/network, identity, seed status, coin ids, `machine_label` (short one-way label of this install's derive scope, e.g. `M-7f3a`), and `needs_reimport` (seed wrap unreadable — re-import the recovery phrase, see [Security Model](Security-Model)). |
 | `help` | Plain-text method catalog by category; `help <method>` explains one method. |
 | `listmethods` | Machine-readable array of every method name. |
-| `walletstatus` | `{ seed_exists, encrypted, locked }`. |
+| `walletstatus` | `{ seed_exists, encrypted, locked, needs_reimport }`. |
 | `getfeepolicy` | Active merchant's fee-bump policy `{ max_feerate_sat_vb, reservation_mult }`. |
 | `setfeepolicy` | Update the fee-bump policy — positional, all optional `[max_feerate_sat_vb?, reservation_mult?]`; returns the updated policy; persisted per-merchant. The fee-bump itself is automatic market-tracking (no manual step knob). |
 | `stop` | Trigger graceful shutdown. |
@@ -32,14 +32,15 @@
 | `importseed` | Import a mnemonic (optional passphrase); returns identity. |
 | `unlock` | Unlock an encrypted seed by trial-decrypt; holds the passphrase in memory. |
 
-## Seed-only rescue
+## Rescue / takeover
 
-A machine restored from the seed alone can rediscover in-flight swaps from encrypted-to-self relay snapshots. Adoption is always explicit — `pactd` only ever detects and warns on its own (boot/unlock/merchant-load).
+A machine restored from the seed alone can rediscover in-flight swaps from encrypted-to-self relay snapshots; a machine sharing the seed with a stopped one can adopt its swaps. Adoption is always explicit — `pactd` only ever detects and warns on its own (boot/unlock/merchant-load).
 
 | Method | Purpose |
 |---|---|
 | `restorefromrelay` | Adopt every rescuable relay snapshot not already held locally; `{ restored, seen }`. |
 | `rescuestatus` | Read-only preview — how many *would* be adopted, plus a two-machines double-fund warning; `{ pending, seen, warning? }`. |
+| `takeover` | Adopt a followed swap (another machine's on the same seed, or one recovered after re-import) so this machine drives it — only once that machine is stopped (`swap_id`). |
 
 ## Merchants
 
@@ -65,7 +66,7 @@ A machine restored from the seed alone can rediscover in-flight swaps from encry
 
 | Method | Purpose |
 |---|---|
-| `listswaps` | All v1 swap records. |
+| `listswaps` | All v1 swap records; each carries `source` (`local` = driven here, `foreign` = another machine's, followed read-only) and the `machine_label` of its owning machine. |
 | `getswap` | One swap record by id. |
 | `listpendingtakes` | Takes awaiting maker initiation. |
 | `listmyoffers` | My posted offers with expiry/state. |
@@ -84,7 +85,7 @@ v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed). T
 
 | Method | Purpose |
 |---|---|
-| `listadaptorswaps` | All v2 swap records. |
+| `listadaptorswaps` | All v2 swap records; same `source` / `machine_label` fields as `listswaps`. |
 | `adaptorinit` | Start a v2 swap as initiator. |
 | `adaptoraccept` | Accept a v2 offer. |
 | `adaptorrecv` | Ingest a v2 envelope. |

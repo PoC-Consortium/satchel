@@ -22,6 +22,12 @@ covered below). It's split into two sections, newest first:
 
 ![The Swaps page: in-flight swaps above, finished trades below.](images/processed/ch10-swaps.png){width=90%}
 
+> **Note** — The ledger lists **this machine's** swaps. If you run the same
+> recovery phrase on more than one machine (see the *Backup, Seeds & Safety*
+> chapter), the other machine's swaps appear read-only in the active-swaps dock
+> under **Another machine** — they join this ledger only once you take them
+> over.
+
 ### The columns
 
 Each row shows:
@@ -181,6 +187,22 @@ first.
 > there for when you don't want to wait even that long.
 
 ![The active-swaps dock, with its cancel and dump-logs buttons.](images/processed/ch10-dock.png){width=85%}
+
+### Swaps from another machine
+
+If you run the same recovery phrase on more than one machine (see *"One seed on
+more than one machine"* in the *Backup, Seeds & Safety* chapter), the dock also
+shows the *other* machine's in-flight swaps, grouped per machine under a heading
+like **Another machine · M-7f3a**. Those cards are **read-only**: this machine
+watches them on-chain but never acts on them, and they don't appear in the Swaps
+ledger. Each group carries one **Take over** button. Press it — and confirm that
+the other machine really is stopped — and this machine adopts the group's swaps
+and starts driving them, ledger and all.
+
+> **Note** — Upgrading from an older Satchel needs no ceremony here: your
+> **finished** swaps stay in the ledger automatically. A swap that was still
+> **in flight** when you upgraded shows up once under **Another machine** —
+> one **Take over** and it carries on as this machine's swap.
 
 ### Dump logs: diagnostics for support
 

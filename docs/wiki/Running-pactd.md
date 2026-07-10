@@ -17,7 +17,7 @@ pactd [--data-dir <DIR>] [--coins-file <coins.toml>] [--coin <id>=<url[,url]> ..
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--data-dir <DIR>` | platform default | Data directory: seed, SQLite, `.cookie`, optional `pact.conf`. In `--merchants` mode this is the *parent* of `merchants/<id>/`. Default (bitcoind-style): `%APPDATA%\Pact` on Windows, `~/Library/Application Support/Pact` on macOS, `~/.pact` elsewhere — mainnet at the root, `testnet`/`regtest` nested beneath. `pact-cli` autodiscovers the same location. |
+| `--data-dir <DIR>` | platform default | Data directory: seed, SQLite, `.cookie`, `.lock`, `machine.json`, optional `pact.conf`. In `--merchants` mode this is the *parent* of `merchants/<id>/`. Default (bitcoind-style): `%APPDATA%\Pact` on Windows, `~/Library/Application Support/Pact` on macOS, `~/.pact` elsewhere — mainnet at the root, `testnet`/`regtest` nested beneath. `pact-cli` autodiscovers the same location. |
 | `--coin <id>=<url[,url]>` | none | Per-coin chain backend, repeatable. An `http://` first URL = wallet-qualified Core-RPC primary (the node wallet funds swaps); extra URLs may be Electrum (`tcp://`/`ssl://`) chain views. An **Electrum-only list** (no `http://`) makes the coin **nodeless** — the wallet lives on the Pact seed; mainnet requires ≥ 2 servers. See [Configuring Coins](Configuring-Coins). The coin `id` must exist in the registry. |
 | `--coin-confs <id>=<N>` | network default | Per-coin confirmation depth (reorg finality); gates auto-redeem and completion. Per-side, clamped to `2..=default` on mainnet/testnet (regtest floor 1). See the range and default heuristic in [Configuring Coins](Configuring-Coins). |
 | `--listen <addr:port>` | `127.0.0.1:9737` | JSON-RPC listen address. **Loopback only** — a non-loopback address aborts boot. |
@@ -30,6 +30,8 @@ pactd [--data-dir <DIR>] [--coins-file <coins.toml>] [--coin <id>=<url[,url]> ..
 | `--auto-fund` | off | Auto-fund our leg of swaps. The CLI flag is opt-in, but **Satchel always launches with it on** — auto-funding is the single always-on behaviour. (v2 adaptor swaps auto-fund regardless, via the autopilot.) |
 
 > **Note** — the default RPC port is `9737`. Coin P2P/RPC ports live in each coin's chain params and are unrelated to this.
+
+> **Note** — `pactd` takes an exclusive `<data-dir>/.lock` at startup (`bitcoind`-style): a second daemon on the same data dir refuses to start. `<data-dir>/machine.json` at the data-dir root holds this install's random **derive scope** — the per-machine partition that makes running one seed on several machines safe (see [Security Model](Security-Model)). It is generated on first run and safe to lose: a fresh one is created, and old swaps then show as another machine's until taken over.
 
 > **Note** — `pactd` writes a rolling daily log to `<data-dir>/logs/pactd.log.<date>` (in addition to stdout), honouring `RUST_LOG` (default `INFO`). It is **secret-free** — seeds, the v1 preimage, and MuSig2 nonces are never logged — so it is safe to share. The `dumpswap` RPC pulls the lines for a single swap out of these files.
 

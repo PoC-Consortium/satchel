@@ -53,6 +53,43 @@ The usual trigger is a stale or copied `satchel.json` whose `listen` still
 points at another network's port. The remedy is to give each network a distinct
 `listen` (the defaults above already are) or stop the colliding instance.
 
+## Multiple machines on one seed
+
+Running one BIP39 seed on more than one machine (failover, standby, recovery)
+is safe. There is no lease, heartbeat, or passive mode — every session is
+active; safety comes from **partitioning**, not from electing an owner:
+
+- **Derive scope.** Each install holds a random per-install derive scope
+  (`machine.json` at the data-dir root), injected into every initiator
+  (counter-based) derivation — two machines on one seed derive different
+  secrets and swap ids at the same counter (see the chapter "Seeds, Wallets &
+  Merchants").
+- **Take gate.** A maker serves a take only if this machine owns the offer;
+  another machine on the same seed ignores it silently.
+- **Drive rule.** A record is driven only if its scope matches this machine
+  (or it was explicitly adopted). Another machine's swap shows as **followed**
+  — read-only chain monitoring, never broadcast; the engine funnels every
+  broadcast through one belt that refuses followed records.
+- **Takeover.** If a machine dies, another adopts its swaps behind one
+  explicit confirm ("confirm that machine is stopped") — the `takeover` RPC or
+  the dock's "Take over" button.
+- **Upgrade path.** Pre-upgrade records carry the legacy scope. Terminal
+  legacy records are auto-claimed as this machine's history on the first tick
+  (they stay in the Swaps ledger); active legacy swaps appear under "Another
+  machine" and need one Take-over confirm. Legacy records are never
+  auto-purged.
+
+> **Warning** — Concurrency is **safe, not coherent**: N machines on one seed
+> share ONE wallet balance — N interchangeable drivers, not N× liquidity.
+> Shared-wallet races (input-race errors, address reuse, a stale standby
+> balance until a rescan) are documented in the design doc. Withdraw/receive
+> is never gated. And a takeover asserts dead-is-dead: reconciling a machine
+> that was taken over and later restarted is the operator's responsibility.
+
+The full design — the partitioning model, the followed-swap auto-purge at deep
+terminal, the scope-rotation self-heal on re-import — is
+`docs/MULTI_MACHINE_122.md`.
+
 ## Protocol selection prefers HTLC
 
 When a pair could run either version, the engine **prefers v1 HTLC**

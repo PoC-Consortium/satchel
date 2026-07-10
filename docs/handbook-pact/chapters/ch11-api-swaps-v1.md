@@ -51,7 +51,12 @@ blocks (initiator and counterparty legs respectively).
 | `listpendingtakes` | — | outstanding takes awaiting maker init | no |
 | `listmyoffers` | — | `[{ offer_id, offer, state, created, valid_for, current_expiry, final_expiry, now }]` | no |
 
-- `listswaps` — every v1 swap record for the active merchant.
+- `listswaps` — every v1 swap record for the active merchant. Each entry
+  carries `source` — `"local"` (driven by this machine: own scope, or taken
+  over) or `"foreign"` (another machine's swap on the same seed, followed
+  read-only) — and `machine_label`, the short one-way label of the record's
+  originating machine (for foreign swaps, which machine owns it). Both are
+  computed server-side; the raw derive scope is never exposed.
 - `getswap` — a single record by `swap_id`.
 - `listpendingtakes` — takes that have arrived but for which the maker has not
   yet initiated a swap (no `SwapRecord` exists yet — the UI's "initiating"
@@ -72,6 +77,7 @@ blocks (initiator and counterparty legs respectively).
 | `redeem` | `swap_id` | `{ record }` | yes (broadcasts) | Redeem the counterparty HTLC (reveals secret). |
 | `refund` | `swap_id` | `{ record }` | yes (broadcasts) | Reclaim our funded HTLC after timeout. |
 | `abort` | `swap_id`, `reason?` | `{ record }` or `{ cancelled_pending_take }` | yes | Cancel an unfunded swap, a v2 adaptor swap, or an unanswered pending take. |
+| `takeover` | `swap_id` | `{ taken_over, swap_id }` | yes | Adopt another machine's swap (same seed). |
 | `tick` | — | `{ events:[…] }` | yes | Advance the scheduler one pass. |
 
 - `offer` — initiates a swap with the given terms and returns the signed
@@ -95,6 +101,12 @@ blocks (initiator and counterparty legs respectively).
   pending take best-effort notifies the maker with an `abort` envelope keyed by
   the offer id, so the maker's served-offer marker resolves it even though no
   `SwapRecord` ever existed on that side.
+- `takeover` — starts driving a *followed* swap on this machine: another
+  machine's swap on the same seed, or this machine's own after a
+  scope-rotating re-import. Only call it once that machine is confirmed
+  stopped — two live drivers can double-fund a swap. Dispatch covers v1 and v2
+  ids alike. See "One seed on more than one machine" in the chapter "Seeds,
+  Wallets & Merchants".
 - `tick` — runs one scheduler pass (board sync + engine tick) and returns the
   resulting `events`, each `{ swap_id, action, detail }`.
 

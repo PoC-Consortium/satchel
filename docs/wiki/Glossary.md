@@ -20,6 +20,8 @@ One line each, for both users and developers.
 - **Nostr / relay** — the default transport; offers are Nostr events and a *relay* is a server that stores and forwards them.
 - **Merchant** — one trading identity = one seed = one data dir; the Bitcoin-Core-wallet analog inside the engine.
 - **Seed / recovery phrase** — the BIP39 mnemonic from which all keys are derived; back it up.
+- **Machine label** — the short one-way tag (e.g. `M-7f3a`) of an install's key-derivation scope; identifies which machine a swap belongs to when one seed runs on several.
+- **Followed swap** — another machine's swap on the same seed: this machine monitors it read-only and never broadcasts, until an explicit **Take over** adopts it.
 - **Passphrase** — optional secret that encrypts the seed at rest, entered per session to unlock it.
 - **Timelock** — a deadline (`t1`/`t2`) after which a leg's refund path becomes spendable; the taker's is always earlier than the maker's.
 - **Refund / redeem** — *redeem* claims the counterparty's leg (the trade succeeds); *refund* reclaims your own leg after the timelock (the trade is unwound).
