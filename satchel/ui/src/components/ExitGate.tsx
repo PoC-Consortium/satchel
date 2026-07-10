@@ -53,6 +53,8 @@ export default function ExitGate() {
   swapsRef.current = swaps;
   const idRef = useRef(identity);
   idRef.current = identity;
+  // A quiet exit already tearing down — ignore further X presses meanwhile.
+  const closingRef = useRef(false);
 
   useEffect(() => {
     if (!inTauri()) return;
@@ -63,33 +65,50 @@ export default function ExitGate() {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const win = getCurrentWindow();
       unlisten = await win.onCloseRequested(async (event) => {
-        // Our own open offers, if any (best-effort — no board / unreachable is fine).
+        // PREVENT FIRST, synchronously — Tauri holds the close request until
+        // this handler resolves, so an awaited RPC before preventDefault left
+        // the X press dead for as long as the engine lock was busy with slow
+        // chain calls (observed live: ~40s, or seemingly forever). Answer the
+        // event immediately, decide what to do asynchronously after.
+        event.preventDefault();
+        if (closingRef.current) return; // teardown already in flight
+        // Our own open offers, if any — best-effort AND time-boxed: no board,
+        // an unreachable relay, or a busy engine must not stall the exit
+        // decision (worst case we skip the revoke shortcut; posted offers
+        // expire via their TTL anyway).
         let mine: Offer[] = [];
         try {
-          const list = (await rpc<{ offers?: Offer[] }>("boardlistoffers")).offers || [];
+          const list = await Promise.race([
+            rpc<{ offers?: Offer[] }>("boardlistoffers"),
+            new Promise<{ offers?: Offer[] }>((_, reject) =>
+              setTimeout(() => reject(new Error("exit-gate offers lookup timed out")), 2000),
+            ),
+          ]);
           const me = idRef.current;
-          mine = list.filter((o) => o.from === me && !o.revoked);
+          mine = (list.offers || []).filter((o) => o.from === me && !o.revoked);
         } catch {
-          /* no board / unreachable — nothing to revoke */
+          /* no board / unreachable / busy — nothing to revoke */
         }
 
         const live = swapsRef.current.filter(isActive);
         if (live.length > 0) {
           // Live swap dominates (timelocks): never auto-stop pactd.
-          event.preventDefault();
           setConfirmText("");
           setPending({ kind: "live", count: live.length, offers: mine });
           return;
         }
         if (mine.length > 0) {
           // Offers but no live swap: ask before leaving them posted / stopping.
-          event.preventDefault();
           setPending({ kind: "offers", offers: mine });
           return;
         }
         // Nothing active → quiet exit: stop pactd gracefully, then close.
-        event.preventDefault();
-        await quit(false, false);
+        closingRef.current = true;
+        try {
+          await quit(false, false);
+        } finally {
+          closingRef.current = false; // quit failed/aborted — X must work again
+        }
       });
       if (disposed) unlisten?.();
     })();
