@@ -50,7 +50,6 @@ import {
 import FeePreview from "./FeePreview";
 import { LockFundsGate } from "./InsufficientFunds";
 import { C } from "../theme";
-import type { Pair } from "../api/types";
 
 // Timelock presets — raw T1/T2 hours are too low-level (and dangerous) to ask a
 // user for, so we offer Short/Medium/Long with safe 2:1 gaps (T1 = 2×T2). Every
@@ -116,8 +115,25 @@ export default function OfferForm({
   const { prefs, update: updatePrefs } = usePrefs();
   const configured = useMemo(() => coins.filter((c) => c.configured), [coins]);
 
-  // Tradable pairs (capability-derived, from listpairs) → canonical base/quote.
-  const [pairs, setPairs] = useState<{ key: string; base: string; quote: string }[]>([]);
+  // Tradable pairs, derived CLIENT-SIDE from the configured coins — the same
+  // rule as the engine's derive_pairs (`both configured AND a protocol
+  // resolves`), reusing offerProtocols over the capabilities the coins list
+  // already carries. A listpairs RPC here queued behind the slow
+  // chain-touching startup calls on the engine lock, leaving the pair
+  // selector empty for seconds after the form was otherwise ready.
+  const pairs = useMemo(() => {
+    const opts: { key: string; base: string; quote: string }[] = [];
+    for (let i = 0; i < configured.length; i++) {
+      for (let j = i + 1; j < configured.length; j++) {
+        const a = configured[i];
+        const b = configured[j];
+        if (!offerProtocols(a.capabilities, b.capabilities).preferred) continue;
+        const { base, quote } = baseQuote(a.id, b.id);
+        opts.push({ key: pairKey(a.id, b.id), base, quote });
+      }
+    }
+    return opts.sort((x, y) => symOf(x.base).localeCompare(symOf(y.base)));
+  }, [configured, symOf]);
   const [pairKeySel, setPairKeySel] = useState<string>(() => {
     try {
       return localStorage.getItem(CORKBOARD_PAIR_KEY) || "";
@@ -143,29 +159,6 @@ export default function OfferForm({
   );
   const [validMin, setValidMin] = useState(String(storedTtl)); // custom minutes
   const [balances, setBalances] = useState<Record<string, string>>({});
-
-  // Load the capability-derived pairs (same source as the Corkboard).
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const r = await rpc<{ pairs: Pair[] }>("listpairs");
-        const opts = r.pairs
-          .filter((p) => p.available)
-          .map((p) => {
-            const { base, quote } = baseQuote(p.coin_a, p.coin_b);
-            return { key: pairKey(p.coin_a, p.coin_b), base, quote };
-          })
-          .sort((x, y) => symOf(x.base).localeCompare(symOf(y.base)));
-        if (alive) setPairs(opts);
-      } catch {
-        /* none yet */
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [symOf]);
 
   // Default to the Corkboard's pair; fall back to the first if it's gone.
   useEffect(() => {
