@@ -223,6 +223,8 @@ export const id: Bundle = {
     enterTitle: "Impor frasa pemulihan Anda",
     enterBody:
       "Ketik tiap kata — terisi otomatis sambil Anda mengetik — atau tempel seluruh frasa. Kami memeriksanya sebelum Anda lanjut.",
+    reimportBanner:
+      "Mesin ini tidak lagi dapat membuka seed yang tersimpan — kunci keystore sistemnya hilang (folder data dipindahkan ke mesin baru, atau keychain direset). Masukkan kembali frasa pemulihan Anda untuk menyiapkannya lagi di mesin ini. Dana dan swap Anda tidak terpengaruh.",
     wordCount: "{n} kata",
     wordCountHint:
       "12 kata sudah lebih dari cukup — ini dompet transit panas, bukan penyimpanan dingin. Pilih 24 jika Anda lebih suka frasa yang lebih panjang.",

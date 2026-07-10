@@ -223,6 +223,8 @@ export const lt: Bundle = {
     enterTitle: "Įveskite savo atkūrimo frazę",
     enterBody:
       "Įveskite kiekvieną žodį — jie automatiškai užbaigiami jums rašant — arba įklijuokite visą frazę. Prieš tęsiant ją patikriname.",
+    reimportBanner:
+      "Šis kompiuteris nebegali atrakinti išsaugoto seed — trūksta sistemos raktinės rakto (duomenų aplankas perkeltas į naują kompiuterį arba raktinė buvo atstatyta). Dar kartą įveskite savo atkūrimo frazę, kad iš naujo jį sukonfigūruotumėte šiame kompiuteryje. Jūsų lėšos ir swap sandoriai nepaveikti.",
     wordCount: "{n} žodžių",
     wordCountHint:
       "12 žodžių visiškai pakanka — tai karšta tranzito piniginė, ne šaltoji saugykla. Rinkitės 24, jei norite ilgesnės frazės.",

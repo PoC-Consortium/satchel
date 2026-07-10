@@ -223,6 +223,8 @@ export const fr: Bundle = {
     enterTitle: "Importez votre phrase de récupération",
     enterBody:
       "Tapez chaque mot — ils se complètent automatiquement à mesure — ou collez la phrase entière. Nous la vérifions avant que vous continuiez.",
+    reimportBanner:
+      "Cette machine ne peut plus déverrouiller la seed enregistrée — la clé du trousseau système est manquante (le dossier de données a été déplacé vers une nouvelle machine, ou le trousseau a été réinitialisé). Saisissez à nouveau votre phrase de récupération pour la reconfigurer sur cette machine. Vos fonds et vos swaps ne sont pas affectés.",
     wordCount: "{n} mots",
     wordCountHint:
       "12 mots suffisent largement — c'est un portefeuille de transit chaud, pas du stockage à froid. Choisissez 24 si vous préférez la phrase plus longue.",

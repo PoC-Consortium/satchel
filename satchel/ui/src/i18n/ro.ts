@@ -223,6 +223,8 @@ export const ro: Bundle = {
     enterTitle: "Importă-ți fraza de recuperare",
     enterBody:
       "Scrie fiecare cuvânt — se completează automat pe măsură ce avansezi — sau lipește întreaga frază. O verificăm înainte să continui.",
+    reimportBanner:
+      "Acest computer nu mai poate debloca seed-ul stocat — lipsește cheia din depozitul de chei al sistemului (dosarul de date a fost mutat pe un computer nou sau brelocul de chei a fost resetat). Reintrodu fraza ta de recuperare pentru a-l configura din nou pe acest computer. Fondurile și swap-urile tale nu sunt afectate.",
     wordCount: "{n} cuvinte",
     wordCountHint:
       "12 cuvinte sunt de ajuns — acesta este un portofel fierbinte de tranzit, nu stocare la rece. Alege 24 dacă preferi fraza mai lungă.",

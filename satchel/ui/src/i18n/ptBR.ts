@@ -223,6 +223,8 @@ export const ptBR: Bundle = {
     enterTitle: "Importe sua frase de recuperação",
     enterBody:
       "Digite cada palavra — elas se autocompletam conforme você digita — ou cole a frase inteira. Verificamos antes de você continuar.",
+    reimportBanner:
+      "Esta máquina não consegue mais desbloquear a seed armazenada — a chave do keystore do sistema está ausente (a pasta de dados foi movida para uma nova máquina ou o chaveiro foi redefinido). Digite novamente sua frase de recuperação para configurá-la de novo nesta máquina. Seus fundos e swaps não são afetados.",
     wordCount: "{n} palavras",
     wordCountHint:
       "12 palavras já bastam — esta é uma carteira quente de trânsito, não armazenamento frio. Escolha 24 se preferir a frase mais longa.",

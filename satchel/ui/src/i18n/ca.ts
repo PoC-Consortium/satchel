@@ -223,6 +223,8 @@ export const ca: Bundle = {
     enterTitle: "Importa la teva frase de recuperació",
     enterBody:
       "Escriu cada paraula — s'autocompleten a mesura que avances — o enganxa la frase sencera. La comprovem abans de continuar.",
+    reimportBanner:
+      "Aquest equip ja no pot desbloquejar la llavor emmagatzemada — falta la clau del magatzem de claus del sistema (la carpeta de dades s'ha mogut a un equip nou o s'ha restablert el clauer). Torna a introduir la teva frase de recuperació per configurar-la de nou en aquest equip. Els teus fons i swaps no es veuen afectats.",
     wordCount: "{n} paraules",
     wordCountHint:
       "Amb 12 paraules n'hi ha de sobres — aquesta és una cartera de trànsit calenta, no emmagatzematge en fred. Tria 24 si prefereixes la frase més llarga.",

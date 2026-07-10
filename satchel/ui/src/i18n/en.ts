@@ -231,6 +231,9 @@ export const en = {
     enterTitle: "Import your recovery phrase",
     enterBody:
       "Type each word — they autocomplete as you go — or paste the whole phrase. We check it before you continue.",
+    // #133: keyring seed exists on disk but this machine can no longer decrypt it.
+    reimportBanner:
+      "This machine can no longer unlock the stored seed — its system-keystore key is missing (the data folder was moved to a new machine, or the keychain was reset). Re-enter your recovery phrase to set it up again on this machine. Your funds and swaps are not affected.",
     wordCount: "{n} words",
     wordCountHint:
       "12 words is plenty — this is a hot transit wallet, not cold storage. Pick 24 if you prefer the longer phrase.",

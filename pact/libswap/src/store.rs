@@ -380,6 +380,15 @@ impl Store {
         existing.trim().starts_with("PACTSEEDv2-keyring") && self.seed_store.mnemonic().is_err()
     }
 
+    /// #133: the seed on disk is a keyring wrap THIS machine can no longer
+    /// decrypt (data dir moved to a new machine / OS keychain reset). The GUI
+    /// routes this to the guided recovery-phrase re-import — exactly the one
+    /// overwrite [`Self::import_seed`] permits. Not part of [`WalletStatus`]
+    /// (that stays a cheap prefix probe); this does one keystore round-trip.
+    pub fn seed_needs_reimport(&self) -> bool {
+        self.seed_install_would_recover()
+    }
+
     /// Drain the pending machine-scope-rotation latch set by a #120 copy-heal
     /// re-import (see [`Self::create_seed`] / [`Self::import_seed`]). Returns
     /// true at most once per event; pactd rotates the install's scope when it

@@ -179,6 +179,10 @@ export interface Info {
   identity?: string | null;
   seed_exists?: boolean;
   locked?: boolean;
+  /** #133: the stored seed is an OS-keystore wrap this machine can no longer
+   *  decrypt (data dir moved / keychain reset) — the app routes to the guided
+   *  recovery-phrase re-import instead of failing on the first seed use. */
+  needs_reimport?: boolean;
   /** Wire-compatibility epoch this pactd speaks per protocol family (rc10),
    *  e.g. { "pact-htlc-v1": 1, "pact-htlc-v2": 2 }. Offers whose signed
    *  `wire` differs are badged un-takeable. */

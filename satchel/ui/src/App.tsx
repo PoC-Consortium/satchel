@@ -77,6 +77,9 @@ export default function App() {
   const showFirstRun = app.phase === "wizard" && modal === null;
   const showSeedGate = app.phase === "seed" && modal === null;
   const showUnlockGate = app.phase === "unlock" && modal === null;
+  // #133: keyring seed exists but this machine can't decrypt it anymore —
+  // guided recovery-phrase re-import (import-only SeedProvision).
+  const showReimportGate = app.phase === "reimport" && modal === null;
   // First-run coin setup (#119): once the merchant + seed are ready, offer the
   // coin-setup dialog exactly once (the persisted `onboarded` flag), then never
   // again. It is a nudge, not a wall — "Later" proceeds with zero coins and
@@ -160,6 +163,13 @@ export default function App() {
             />
           )}
           {showUnlockGate && <Unlock onDone={app.boot} onSwitch={openers.openMerchants} />}
+          {showReimportGate && (
+            <SeedProvision
+              reimport
+              label={app.activeMerchant?.label ?? t("merchants.thisMerchant")}
+              onDone={app.boot}
+            />
+          )}
           {showCoinSetup && <CoinWizard onDone={() => update({ onboarded: true })} />}
 
           {/* User-triggered dialogs. */}

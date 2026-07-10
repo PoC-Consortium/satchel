@@ -223,6 +223,8 @@ export const cs: Bundle = {
     enterTitle: "Importujte svou obnovovací frázi",
     enterBody:
       "Pište každé slovo — během psaní se automaticky doplňují — nebo vložte celou frázi. Než budete pokračovat, zkontrolujeme ji.",
+    reimportBanner:
+      "Tento počítač už nedokáže odemknout uložený seed — chybí klíč v systémovém úložišti klíčů (datová složka byla přesunuta na nový počítač nebo byla klíčenka resetována). Zadejte znovu svou obnovovací frázi a nastavte jej na tomto počítači znovu. Vaše prostředky a swapy nejsou dotčeny.",
     wordCount: "{n} slov",
     wordCountHint:
       "12 slov bohatě stačí — toto je horká tranzitní peněženka, ne studené úložiště. Pokud dáváte přednost delší frázi, zvolte 24.",

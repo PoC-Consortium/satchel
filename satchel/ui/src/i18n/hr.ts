@@ -223,6 +223,8 @@ export const hr: Bundle = {
     enterTitle: "Uvezite svoju recovery frazu",
     enterBody:
       "Upišite svaku riječ — automatski se dovršavaju dok pišete — ili zalijepite cijelu frazu. Provjeravamo je prije nego što nastavite.",
+    reimportBanner:
+      "Ovo računalo više ne može otključati spremljeni seed — nedostaje ključ iz sistemskog spremišta ključeva (mapa s podacima premještena je na novo računalo ili je privjesak ključeva resetiran). Ponovno unesite svoju recovery frazu da biste ga iznova postavili na ovom računalu. Vaša sredstva i swapovi nisu pogođeni.",
     wordCount: "{n} riječi",
     wordCountHint:
       "12 riječi sasvim je dovoljno — ovo je vrući tranzitni novčanik, a ne hladna pohrana. Odaberite 24 ako vam je draža dulja fraza.",
