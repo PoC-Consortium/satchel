@@ -16,7 +16,7 @@ import { C } from "../theme";
 import { EmptyState } from "../components/StatusViews";
 
 export default function PrivateCreateScreen() {
-  const { log, coins } = useApp();
+  const { log, coins, coinsLoaded } = useApp();
   const navigate = useNavigate();
   const t = useT();
   const [busy, setBusy] = useState(false);
@@ -56,6 +56,12 @@ export default function PrivateCreateScreen() {
     } catch {
       /* clipboard blocked — the box is selectable as a fallback */
     }
+  }
+
+  // #139: never decide before coins have loaded once — gating on the initial
+  // empty array flashed the setup nudge on every first navigation.
+  if (!coinsLoaded) {
+    return null;
   }
 
   // Per-action gate (#119): drafting a slip needs two connected coins for the
