@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Box, Chip, Tooltip, Typography } from "@mui/material";
+import { Box, Chip, Skeleton, Tooltip, Typography } from "@mui/material";
 import { rpc } from "../api/tauri";
 import { useApp } from "../AppContext";
 import { useT } from "../i18n";
@@ -59,12 +59,23 @@ export default function FeePreview({
           <FeeSideRows side={fees.give} symbol={symOf(fees.give.coin_id)} />
           <FeeSideRows side={fees.get} symbol={symOf(fees.get.coin_id)} />
         </Box>
+      ) : failed ? (
+        <Typography sx={{ fontSize: 11, color: "text.secondary", mt: 0.75, fontStyle: "italic" }}>
+          {t("fees.provisionalNote")}
+        </Typography>
       ) : (
-        failed && (
-          <Typography sx={{ fontSize: 11, color: "text.secondary", mt: 0.75, fontStyle: "italic" }}>
-            {t("fees.provisionalNote")}
-          </Typography>
-        )
+        // #140: reserve the resolved-rows footprint while estimateswapfees is
+        // in flight, so the box doesn't grow (layout shift) when fees land —
+        // the numbers appear in place instead of pushing the form around.
+        <Box aria-busy sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 0.75 }}>
+          {[0, 1].map((i) => (
+            <Box key={i}>
+              <Skeleton width={120} sx={{ fontSize: 10.5 }} />
+              <Skeleton width="100%" sx={{ fontSize: 12 }} />
+              <Skeleton width="100%" sx={{ fontSize: 12 }} />
+            </Box>
+          ))}
+        </Box>
       )}
     </Box>
   );

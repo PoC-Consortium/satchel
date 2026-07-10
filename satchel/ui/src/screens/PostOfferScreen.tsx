@@ -14,7 +14,7 @@ import { useT } from "../i18n";
 import { EmptyState } from "../components/StatusViews";
 
 export default function PostOfferScreen() {
-  const { log, coins } = useApp();
+  const { log, coins, coinsLoaded } = useApp();
   const navigate = useNavigate();
   const t = useT();
   const [busy, setBusy] = useState(false);
@@ -45,6 +45,13 @@ export default function PostOfferScreen() {
     },
     [log, navigate],
   );
+
+  // #139: don't decide anything before coins have loaded once — the context
+  // starts with an empty array, and gating on it would flash the setup
+  // nudge at every first navigation even with coins fully configured.
+  if (!coinsLoaded) {
+    return null;
+  }
 
   // Per-action gate (#119): posting needs two connected coins to form a pair.
   // Instead of a hard app-wide wall, this screen shows a soft nudge to set them

@@ -49,13 +49,36 @@ pub struct Apply {
     deletions_since: u64,
 }
 
+/// Ceiling for cursor advancement: local now + this skew. `created_at` is
+/// peer-controlled, and the public relays' future-timestamp clamp is POLICY,
+/// not protocol — one far-future event (e.g. a kind-1059 anyone can #p-tag to
+/// us) would otherwise drag a persisted `since` cursor into the future and
+/// leave the node permanently deaf on that subscription (#146).
+const CURSOR_FUTURE_SKEW_SECS: u64 = 15 * 60;
+
+/// Advance a `since` cursor to `created`, clamped to `now + skew`: a
+/// future-dated event still gets processed this round, but can never poison
+/// the cursor (#146). Never moves the cursor backward.
+fn advance_cursor(cursor: u64, created: u64, now: u64) -> u64 {
+    cursor.max(created.min(now + CURSOR_FUTURE_SKEW_SECS))
+}
+
 fn since(store: &Store, key: &str) -> u64 {
-    store
+    let stored: u64 = store
         .meta_get(key)
         .ok()
         .flatten()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(0)
+        .unwrap_or(0);
+    // Self-heal (#146): a cursor persisted beyond now+skew was poisoned by a
+    // future-dated event under a pre-clamp build — reset it to now so the node
+    // hears again (the next apply() persists the healed value).
+    let now = unix_now();
+    if stored > now + CURSOR_FUTURE_SKEW_SECS {
+        now
+    } else {
+        stored
+    }
 }
 
 /// Step A: read identity, pending outbox and cursors. Returns `None` when
@@ -201,6 +224,9 @@ impl NostrService {
             }
         }
 
+        // Cursor-advance basis for this round — see `advance_cursor` (#146).
+        let now = unix_now();
+
         // ---- fetch offers (public, by kind) ----
         if let Ok(events) = self
             .fetch(pn::offers_filter().since(Timestamp::from(prep.offers_since)))
@@ -219,7 +245,7 @@ impl NostrService {
                         ));
                     }
                 }
-                out.offers_since = out.offers_since.max(created);
+                out.offers_since = advance_cursor(out.offers_since, created, now);
             }
         }
 
@@ -234,7 +260,7 @@ impl NostrService {
                     if let Ok(blob) = pn::unwrap_giftwrap(&ev) {
                         out.inbox.push((ev.id.to_hex(), blob, created));
                     }
-                    out.mailbox_since = out.mailbox_since.max(created);
+                    out.mailbox_since = advance_cursor(out.mailbox_since, created, now);
                 }
             }
         }
@@ -254,7 +280,7 @@ impl NostrService {
                 if let Some(swap_id) = pn::revoked_offer_from_event(&ev) {
                     out.revoked.push(swap_id);
                 }
-                out.deletions_since = out.deletions_since.max(created);
+                out.deletions_since = advance_cursor(out.deletions_since, created, now);
             }
         }
 
@@ -609,5 +635,40 @@ mod tests {
         let taker_kp = taker.store.seed().unwrap().identity_keypair().unwrap();
         let opened = libswap::board::open_envelope(&taker_kp, &mail[0].1).unwrap();
         assert_eq!(opened, payload_env);
+    }
+
+    #[test]
+    fn cursor_never_poisoned_by_future_dated_events() {
+        // #146: created_at is peer-controlled — a far-future event must not
+        // drag the cursor with it (deafness), while normal advance still works.
+        let now = 1_700_000_000u64;
+        // Normal advance, and never backward.
+        assert_eq!(advance_cursor(10, 20, now), 20);
+        assert_eq!(advance_cursor(30, 20, now), 30);
+        // Small (legal) clock skew still advances as-is.
+        assert_eq!(advance_cursor(10, now + 60, now), now + 60);
+        // A far-future event advances at most to now + skew.
+        assert_eq!(
+            advance_cursor(10, now + 999_999_999, now),
+            now + CURSOR_FUTURE_SKEW_SECS
+        );
+    }
+
+    #[test]
+    fn poisoned_cursor_self_heals_on_load() {
+        // #146: an already-poisoned persisted cursor (pre-clamp build) resets
+        // to now on read, so an installed node recovers by itself.
+        let p = party("cursor-heal");
+        let key = "nostr_since:mailbox";
+        let sane = unix_now();
+        p.store.meta_set(key, &sane.to_string()).unwrap();
+        assert_eq!(since(&p.store, key), sane, "sane cursor loads unchanged");
+        let poisoned = unix_now() + 10 * 365 * 24 * 3600;
+        p.store.meta_set(key, &poisoned.to_string()).unwrap();
+        let healed = since(&p.store, key);
+        assert!(
+            healed <= unix_now() + CURSOR_FUTURE_SKEW_SECS,
+            "poisoned cursor ({poisoned}) must heal to ~now, got {healed}"
+        );
     }
 }

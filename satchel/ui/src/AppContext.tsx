@@ -75,6 +75,9 @@ interface AppCtx {
   /** Live `listcoins` (registry + configured + probed status), shared so the
    *  header status row + screens don't each re-poll. Empty until connected. */
   coins: CoinInfo[];
+  /** True once a `listcoins` has resolved at least once — distinguishes
+   *  "coins not loaded yet" from "loaded, none configured" (#139). */
+  coinsLoaded: boolean;
   refreshCoins: () => Promise<void>;
 
   /** coin_id → last-known wallet balance, cached app-wide so the Wallets page
@@ -124,6 +127,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [network, setNetwork] = useState<string | null>(null);
   const [swaps, setSwaps] = useState<Swap[]>([]);
   const [coins, setCoins] = useState<CoinInfo[]>([]);
+  const [coinsLoaded, setCoinsLoaded] = useState(false);
   const [balances, setBalances] = useState<Record<string, Bal>>({});
   const [coinIcons, setCoinIcons] = useState<Record<string, string | null>>({});
   const [relays, setRelays] = useState<RelayStatus[]>([]);
@@ -228,6 +232,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const r = await rpc<{ coins: CoinInfo[] }>("listcoins");
       setCoins(r.coins);
+      setCoinsLoaded(true);
       r.coins.forEach((c) => setSymbol(c.id, c.symbol));
       setConn(true);
     } catch {
@@ -328,6 +333,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const cl = await rpc<{ coins: CoinInfo[] }>("listcoins");
       setCoins(cl.coins);
+      setCoinsLoaded(true);
       cl.coins.forEach((c) => setSymbol(c.id, c.symbol));
     } catch (e) {
       log(tr("log.listcoinsError", { err: errMsg(e) }));
@@ -395,6 +401,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     swaps,
     refreshSwaps,
     coins,
+    coinsLoaded,
     refreshCoins,
     balances,
     refreshBalances,
