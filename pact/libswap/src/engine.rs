@@ -278,7 +278,54 @@ const PURGED_FOREIGN_PREFIX: &str = "purged_foreign:";
 /// Meta-key prefix (§5): the chain tip height at which a followed swap was FIRST
 /// observed with both legs resolved (spent). The reorg-safe purge waits until
 /// the tip is ≥ finality-depth blocks past this before deleting the record.
+/// Tier-L only since STATE_RECONSTRUCTION: history-capable backends measure
+/// depth on the spend itself instead of tip drift.
 const FOREIGN_RESOLVED_AT_PREFIX: &str = "foreign_resolved_at:";
+/// Meta-key prefix: cached spend classification of a FOLLOWED leg
+/// (`follow_spend:<swap_id>:<leg>` → [`FollowSpendCache`] JSON). Written once
+/// a spend is CONFIRMED, so steady-state follow ticks cost one tip read
+/// instead of a history scan; the terminal purge re-verifies FRESH from the
+/// chain (reorg safety), so the cache can accelerate but never decide.
+const FOLLOW_SPEND_PREFIX: &str = "follow_spend:";
+
+/// A followed leg's freshly discovered funding pointer (+ height when
+/// confirmed), for the caller to persist as a status-only record update.
+struct FollowLegHint {
+    txid: String,
+    vout: u32,
+    height: Option<u64>,
+}
+
+/// The persisted shape behind [`FOLLOW_SPEND_PREFIX`] keys.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct FollowSpendCache {
+    /// The spending txid — kept for the activity trail / debugging.
+    #[allow(dead_code)]
+    txid: String,
+    /// Spend block height (only CONFIRMED spends are cached).
+    height: u64,
+    kind: crate::reconstruct::SpendKind,
+}
+
+/// One followed leg's verdict, reduced to what the terminal decision needs.
+enum LegVerdict {
+    /// Chain error / no capable view — keep the record untouched, retry.
+    Unknown,
+    Unfunded,
+    FundedLive {
+        #[allow(dead_code)]
+        confs: u64,
+    },
+    /// Funding existed and is spent (history-classified, depth measurable).
+    Spent {
+        kind: crate::reconstruct::SpendKind,
+        spend_confs: u64,
+    },
+    /// Tier L: the recorded pointer vanished from the UTXO set — an
+    /// unambiguous spend, but with no script history its depth is
+    /// unknowable; terminal only via the legacy tip-drift buffer.
+    ResolvedNoDepth,
+}
 
 /// Marker context for handshake errors that are DETERMINISTIC given the same
 /// envelope — validation and parse failures that can never succeed on retry.
@@ -1522,6 +1569,7 @@ impl Engine {
             htlc_a_vout: None,
             htlc_b_txid: None,
             htlc_b_vout: None,
+            htlc_a_height: None,
             htlc_b_height: None,
             preimage: None,
             refund_tx_hex: None,
@@ -1642,6 +1690,7 @@ impl Engine {
             htlc_a_vout: None,
             htlc_b_txid: None,
             htlc_b_vout: None,
+            htlc_a_height: None,
             htlc_b_height: None,
             preimage: None,
             refund_tx_hex: None,
@@ -1795,6 +1844,8 @@ impl Engine {
             final_tx_a_hex: None,
             final_tx_b_hex: None,
             last_action_height: 0,
+            funding_a_height: None,
+            funding_b_height: None,
             funding_b_tx_hex: None,
             funding_b_broadcast: false,
             // Scope the keys were derived under (immutable); locally driven.
@@ -1969,6 +2020,8 @@ impl Engine {
             final_tx_a_hex: None,
             final_tx_b_hex: None,
             last_action_height: 0,
+            funding_a_height: None,
+            funding_b_height: None,
             funding_b_tx_hex: None,
             funding_b_broadcast: false,
             // Participant keys are anchored; stamp OUR scope as the machine tag
@@ -2124,14 +2177,25 @@ impl Engine {
     /// chain-free recorder so it is unit-testable.
     pub fn adaptor_funding_ready(&self, swap: &str, txid: &str, vout: u32) -> Result<Envelope> {
         let mut rec = self.store.get_adaptor(swap)?;
+        // Spend-scan start for followers/takeovers, who cannot recover the
+        // funding height from the funding wallet (best-effort: a missing tip
+        // read just leaves the pre-existing scan-bound behavior).
+        let height = match rec.role {
+            Role::Initiator => self.backend(&rec.chain_a),
+            Role::Participant => self.backend(&rec.chain_b),
+        }
+        .and_then(|b| b.tip_height())
+        .ok();
         match rec.role {
             Role::Initiator => {
                 rec.funding_a_txid = Some(txid.into());
                 rec.funding_a_vout = Some(vout);
+                rec.funding_a_height = height.or(rec.funding_a_height);
             }
             Role::Participant => {
                 rec.funding_b_txid = Some(txid.into());
                 rec.funding_b_vout = Some(vout);
+                rec.funding_b_height = height.or(rec.funding_b_height);
             }
         }
         self.store.put_adaptor(&rec)?;
@@ -2367,10 +2431,20 @@ impl Engine {
                     "a" => {
                         rec.funding_a_txid = Some(b.txid);
                         rec.funding_a_vout = Some(b.vout);
+                        rec.funding_a_height = self
+                            .backend(&rec.chain_a)
+                            .and_then(|be| be.tip_height())
+                            .ok()
+                            .or(rec.funding_a_height);
                     }
                     "b" => {
                         rec.funding_b_txid = Some(b.txid);
                         rec.funding_b_vout = Some(b.vout);
+                        rec.funding_b_height = self
+                            .backend(&rec.chain_b)
+                            .and_then(|be| be.tip_height())
+                            .ok()
+                            .or(rec.funding_b_height);
                     }
                     other => bail!("funding_ready for unknown chain {other:?}"),
                 }
@@ -2443,6 +2517,20 @@ impl Engine {
                 return self.adaptor_funding_ready(swap, &op.txid.to_string(), op.vout);
             }
         }
+        // Idempotency guard 3 (historical, docs/STATE_RECONSTRUCTION.md §5.1):
+        // the live reads above cannot see a funding that was already SPENT — a
+        // rescued/taken-over record of a settled swap must never fund "again".
+        if let Some(crate::reconstruct::LegClass::Spent(s)) =
+            self.classify_v2_legs(&rec).map(|(a, _)| a)
+        {
+            bail!(
+                "refusing to fund leg A of swap {swap}: its funding {} was already spent \
+                 on-chain by {} ({:?}) — the swap settled; nothing to fund",
+                s.outpoint,
+                s.spend_txid,
+                s.kind
+            );
+        }
 
         // Initiator: broadcast leg A now. Safe — leg A is only claimable after the
         // initiator reveals `t` (which only it can do) and its refund is intact.
@@ -2482,6 +2570,20 @@ impl Engine {
             if info.value_sat == rec.amount_b {
                 return self.adaptor_funding_ready(swap, &op.txid.to_string(), op.vout);
             }
+        }
+        // Historical guard (docs/STATE_RECONSTRUCTION.md §5.1): a leg-B funding
+        // that was already spent is invisible to the live reads above — never
+        // build/reserve inputs for a swap that settled.
+        if let Some(crate::reconstruct::LegClass::Spent(s)) =
+            self.classify_v2_legs(&rec).map(|(_, b)| b)
+        {
+            bail!(
+                "refusing to build leg B of swap {swap}: its funding {} was already spent \
+                 on-chain by {} ({:?}) — the swap settled; nothing to fund",
+                s.outpoint,
+                s.spend_txid,
+                s.kind
+            );
         }
         let address = leg.address(&secp, backend.params())?;
         let (txid, vout, tx_hex) = backend.wallet_build_funding(&address, rec.amount_b)?;
@@ -2557,7 +2659,8 @@ impl Engine {
             if backend.get_txout(&op, &spk_b)?.is_some() {
                 return Ok(false); // live on chain or in the mempool
             }
-            let from = self.funding_scan_from_height(&backend, txid, &spk_b)?;
+            let from =
+                self.funding_scan_from_height(&backend, txid, &spk_b, rec.funding_b_height)?;
             Ok(backend.find_spend_witness(&op, &spk_b, from)?.is_none())
         })()
         .unwrap_or(false)
@@ -2593,10 +2696,21 @@ impl Engine {
         backend: &MultiBackend,
         funding_txid: &str,
         spk: &ScriptBuf,
+        recorded_height: Option<u64>,
     ) -> Result<u64> {
         let tip = backend.tip_height()?;
         let confs = backend.tx_confirmations(funding_txid, Some(spk))?;
-        Ok(tip.saturating_sub(confs.saturating_sub(1)))
+        if confs > 0 {
+            return Ok(tip.saturating_sub(confs - 1));
+        }
+        // The backend doesn't know the tx — on a TAKEN-OVER swap over Core RPC
+        // the funding is another machine's wallet tx (`gettransaction` misses,
+        // `getrawtransaction` needs -txindex), so `confs = 0` here does NOT
+        // mean unconfirmed. Fall back to the height persisted when the pointer
+        // was recorded (docs/STATE_RECONSTRUCTION.md §5.3) so a mined spend
+        // below the tip stays visible to the block scan; tip as the last
+        // resort (the pre-reconstruction behavior).
+        Ok(recorded_height.unwrap_or(tip))
     }
 
     /// Redeem: the initiator adapts leg B with her secret `t` and broadcasts
@@ -2692,6 +2806,7 @@ impl Engine {
                     &backend_b,
                     rec.funding_b_txid.as_deref().context("no leg-B funding")?,
                     &leg_b_spk,
+                    rec.funding_b_height,
                 )?;
                 let witness = backend_b
                     .find_spend_witness(&outpoint_b, &leg_b_spk, from_b)?
@@ -2957,6 +3072,53 @@ impl Engine {
                     }
                 }
             }
+            // Historical rediscovery (docs/STATE_RECONSTRUCTION.md §5.1): the
+            // live scan above cannot see a funding that is ALREADY SPENT — a
+            // taken-over participant whose counterparty revealed while we were
+            // down would never find leg B, so it could never extract `t` and
+            // claim leg A. History classification recovers the pointer (and
+            // its height, the spend-scan bound) whether the output is live or
+            // spent; the existing claim/refund arms take it from there.
+            if owned.funding_a_txid.is_none() || owned.funding_b_txid.is_none() {
+                if let Some((class_a, class_b)) = self.classify_v2_legs(&owned) {
+                    use crate::reconstruct::LegClass;
+                    let mut dirty = false;
+                    let mut adopt = |class: &LegClass,
+                                     txid: &mut Option<String>,
+                                     vout: &mut Option<u32>,
+                                     height: &mut Option<u64>| {
+                        if txid.is_some() {
+                            return;
+                        }
+                        let (op, h) = match class {
+                            LegClass::Funded {
+                                outpoint, height, ..
+                            } => (outpoint, *height),
+                            LegClass::Spent(s) => (&s.outpoint, s.funding_height),
+                            LegClass::Unfunded => return,
+                        };
+                        *txid = Some(op.txid.to_string());
+                        *vout = Some(op.vout);
+                        *height = (h > 0).then_some(h).or(*height);
+                        dirty = true;
+                    };
+                    adopt(
+                        &class_a,
+                        &mut owned.funding_a_txid,
+                        &mut owned.funding_a_vout,
+                        &mut owned.funding_a_height,
+                    );
+                    adopt(
+                        &class_b,
+                        &mut owned.funding_b_txid,
+                        &mut owned.funding_b_vout,
+                        &mut owned.funding_b_height,
+                    );
+                    if dirty {
+                        self.store.put_adaptor(&owned)?;
+                    }
+                }
+            }
         }
         let rec = &owned;
 
@@ -3209,6 +3371,7 @@ impl Engine {
                             &backend_b,
                             rec.funding_b_txid.as_deref().context("no leg-B funding")?,
                             &spk_b,
+                            rec.funding_b_height,
                         )?;
                         if backend_b
                             .find_spend_witness(&op_b, &spk_b, from_b)?
@@ -3775,7 +3938,11 @@ impl Engine {
                         && txout.confirmations >= u64::from(min_conf)
                     {
                         match body.chain.as_str() {
-                            "a" => rec.state = State::FundedA,
+                            "a" => {
+                                rec.htlc_a_height =
+                                    Some(backend.tip_height()?.saturating_sub(txout.confirmations));
+                                rec.state = State::FundedA;
+                            }
                             _ => {
                                 rec.htlc_b_height =
                                     Some(backend.tip_height()?.saturating_sub(txout.confirmations));
@@ -3893,6 +4060,27 @@ impl Engine {
         let (txid, vout) = match self.locate_funding(&rec, leg)? {
             Some((op, _)) => (op.txid.to_string(), op.vout),
             None => {
+                // Historical guard (docs/STATE_RECONSTRUCTION.md §5.1): the
+                // live reads above cannot see a funding that is ALREADY SPENT
+                // — for a rescued or taken-over record of a swap that settled
+                // long ago, funding "again" here would be a real double-fund.
+                // One history classification when the live view finds nothing;
+                // tier-L backends (no script index) return None and keep the
+                // pre-reconstruction behavior.
+                if let Some(crate::reconstruct::LegClass::Spent(s)) =
+                    self.classify_v1_legs(&rec).map(|(a, b)| match leg {
+                        "a" => a,
+                        _ => b,
+                    })
+                {
+                    bail!(
+                        "refusing to fund leg {leg} of swap {swap}: its funding {} was already \
+                         spent on-chain by {} ({:?}) — the swap settled; nothing to fund",
+                        s.outpoint,
+                        s.spend_txid,
+                        s.kind
+                    );
+                }
                 let address = htlc.address(backend.params())?;
                 let txid = backend.wallet_send(
                     &address,
@@ -3914,6 +4102,7 @@ impl Engine {
             "a" => {
                 rec.htlc_a_txid = Some(txid.clone());
                 rec.htlc_a_vout = Some(vout);
+                rec.htlc_a_height = Some(backend.tip_height()?);
                 rec.state = State::FundedA;
             }
             _ => {
@@ -5178,45 +5367,709 @@ impl Engine {
     // state never advances). Everything is guarded: any chain error or ambiguity
     // leaves the record untouched (a lingering row is harmless — we drive
     // nothing), so a bug here can never delete a live swap's money.
+    //
+    // STATE_RECONSTRUCTION (docs/STATE_RECONSTRUCTION.md): every evaluation is
+    // an idempotent reconstruction from chain ground truth. On a history-capable
+    // backend ([`ChainBackend::spk_history`], Electrum) a leg classifies
+    // front-to-back — including swaps that were ALREADY OVER when first
+    // observed, which the old live-UTXO evaluation could never resolve (the
+    // 2026-07-12 permanent-ghost field bug). History-less backends (Core-only,
+    // tier L) keep the live evaluation plus the timelock age-out. There is no
+    // history/live mode switch: a restart or observation gap converges on the
+    // next tick.
 
-    /// Observe one leg of a followed swap by its derived spk. Returns:
-    /// `Some(true)` = RESOLVED (funding was seen and its output is now spent),
-    /// `Some(false)` = funded-but-live or not-yet-funded, `None` = unknown
-    /// (no backend / chain error → caller keeps the swap). A freshly-discovered
-    /// funding outpoint is written to `new_ptr` for the caller to persist.
-    fn follow_leg(
+    /// Observe one leg of a followed swap, chain-minimal:
+    /// - a cached CONFIRMED spend costs one tip read;
+    /// - a live recorded pointer costs one `get_txout`;
+    /// - everything else costs one history classification, whose confirmed
+    ///   spend result is cached (so it is paid once per transition).
+    ///
+    /// A freshly discovered funding outpoint(+height) is written to `hint_out`
+    /// for the caller to persist (status-only). Never touches record state.
+    #[allow(clippy::too_many_arguments)]
+    fn follow_eval_leg(
         &self,
+        swap_id: &str,
+        leg: &str,
         chain: &ChainRef,
         spk: &ScriptBuf,
         amount: u64,
         ptr_txid: &Option<String>,
         ptr_vout: Option<u32>,
-        new_ptr: &mut Option<(String, u32)>,
-    ) -> Option<bool> {
-        let backend = self.backend(chain).ok()?;
-        // Known funding pointer → still a UTXO (locked) or gone (spent)? We only
-        // ever record a pointer we saw as a live UTXO, so a later `None` on that
-        // exact outpoint is an unambiguous spend (redeem or refund).
-        if let (Some(txid), Some(vout)) = (ptr_txid.as_deref(), ptr_vout) {
-            let op = OutPoint {
-                txid: bitcoin::Txid::from_str(txid).ok()?,
-                vout,
-            };
-            return match backend.get_txout(&op, spk) {
-                Ok(Some(_)) => Some(false), // still locked
-                Ok(None) => Some(true),     // spent → resolved
-                Err(_) => None,
-            };
-        }
-        // No pointer yet → scan for the funding UTXO (amount-checked).
-        match backend.find_funding(spk) {
-            Ok(Some((op, info))) if info.value_sat == amount => {
-                *new_ptr = Some((op.txid.to_string(), op.vout));
-                Some(false) // just seen funded — not resolved yet
+        classify_spend: &dyn Fn(&[Vec<u8>]) -> crate::reconstruct::SpendKind,
+        hint_out: &mut Option<FollowLegHint>,
+    ) -> LegVerdict {
+        use crate::reconstruct::{classify_leg, LegClass};
+        let Ok(backend) = self.backend(chain) else {
+            return LegVerdict::Unknown;
+        };
+        // 0. Cached confirmed spend → depth refresh from the tip alone. The
+        //    cache accelerates; the terminal purge re-verifies fresh.
+        let cache_key = format!("{FOLLOW_SPEND_PREFIX}{swap_id}:{leg}");
+        if let Ok(Some(json)) = self.store.meta_get(&cache_key) {
+            if let Ok(c) = serde_json::from_str::<FollowSpendCache>(&json) {
+                let Ok(tip) = backend.tip_height() else {
+                    return LegVerdict::Unknown;
+                };
+                let confs = if c.height > 0 && tip >= c.height {
+                    tip - c.height + 1
+                } else {
+                    0
+                };
+                return LegVerdict::Spent {
+                    kind: c.kind,
+                    spend_confs: confs,
+                };
             }
-            Ok(_) => Some(false), // not funded yet (or unrelated)
-            Err(_) => None,
         }
+        // 1. Live pointer fast path — one UTXO read while the leg sits locked.
+        if let (Some(txid), Some(vout)) = (ptr_txid.as_deref(), ptr_vout) {
+            if let Ok(txid) = bitcoin::Txid::from_str(txid) {
+                match backend.get_txout(&OutPoint { txid, vout }, spk) {
+                    Ok(Some(info)) => {
+                        return LegVerdict::FundedLive {
+                            confs: info.confirmations,
+                        }
+                    }
+                    Ok(None) => {} // spent (or reorged) — reconstruct below
+                    Err(_) => return LegVerdict::Unknown,
+                }
+            }
+        }
+        // 2. Full reconstruction from script history — answers identically for
+        //    an in-flight leg and one that was spent long before we looked.
+        match classify_leg(&backend, spk, amount, classify_spend) {
+            Ok(Some(LegClass::Unfunded)) => LegVerdict::Unfunded,
+            Ok(Some(LegClass::Funded {
+                outpoint,
+                height,
+                confs,
+            })) => {
+                *hint_out = Some(FollowLegHint {
+                    txid: outpoint.txid.to_string(),
+                    vout: outpoint.vout,
+                    height: (height > 0).then_some(height),
+                });
+                LegVerdict::FundedLive { confs }
+            }
+            Ok(Some(LegClass::Spent(s))) => {
+                *hint_out = Some(FollowLegHint {
+                    txid: s.outpoint.txid.to_string(),
+                    vout: s.outpoint.vout,
+                    height: (s.funding_height > 0).then_some(s.funding_height),
+                });
+                if s.spend_height > 0 {
+                    let cache = FollowSpendCache {
+                        txid: s.spend_txid.clone(),
+                        height: s.spend_height,
+                        kind: s.kind,
+                    };
+                    if let Ok(json) = serde_json::to_string(&cache) {
+                        let _ = self.store.meta_set(&cache_key, &json);
+                    }
+                }
+                LegVerdict::Spent {
+                    kind: s.kind,
+                    spend_confs: s.spend_confs,
+                }
+            }
+            // Tier L — no script index on any view: live-only degradation,
+            // exactly the pre-reconstruction behavior.
+            Ok(None) => {
+                if ptr_txid.is_some() && ptr_vout.is_some() {
+                    // We reached here through `get_txout → None` on a pointer
+                    // we once saw live — an unambiguous spend, depth
+                    // unknowable without history (legacy tip-drift buffer).
+                    return LegVerdict::ResolvedNoDepth;
+                }
+                match backend.find_funding(spk) {
+                    Ok(Some((op, info))) if info.value_sat == amount => {
+                        let height = (info.confirmations > 0)
+                            .then(|| backend.tip_height().ok())
+                            .flatten()
+                            .map(|tip| tip.saturating_sub(info.confirmations - 1));
+                        *hint_out = Some(FollowLegHint {
+                            txid: op.txid.to_string(),
+                            vout: op.vout,
+                            height,
+                        });
+                        LegVerdict::FundedLive {
+                            confs: info.confirmations,
+                        }
+                    }
+                    Ok(_) => LegVerdict::Unfunded,
+                    Err(_) => LegVerdict::Unknown,
+                }
+            }
+            Err(_) => LegVerdict::Unknown,
+        }
+    }
+
+    /// Whether a followed swap is provably past every rational continuation:
+    /// its LAST refund timelock plus a safety margin has passed on the
+    /// laggiest responding view of BOTH chains (conservative purge clock —
+    /// MTP is consensus-monotone, so a reorg cannot un-pass it by more than
+    /// the margin). The wall-clock prefilter keeps the common case free of
+    /// chain I/O.
+    fn follow_aged_out(
+        &self,
+        chain_a: &ChainRef,
+        chain_b: &ChainRef,
+        t1: u32,
+        t2: u32,
+        needed_confs: u32,
+    ) -> bool {
+        let last_t = u64::from(t1.max(t2));
+        let mut margin = 0u64;
+        for chain in [chain_a, chain_b] {
+            let Ok(backend) = self.backend(chain) else {
+                return false;
+            };
+            let p = backend.params();
+            margin = margin.max(crate::reconstruct::age_out_margin_secs(
+                p.network,
+                needed_confs,
+                p.target_spacing_secs,
+            ));
+        }
+        if local_now() < last_t.saturating_add(margin) {
+            return false; // cheap prefilter — no chain reads for young swaps
+        }
+        for chain in [chain_a, chain_b] {
+            match self.backend(chain).and_then(|b| b.tip_median_time_min()) {
+                Ok(mtp) if mtp >= last_t.saturating_add(margin) => {}
+                _ => return false,
+            }
+        }
+        true
+    }
+
+    /// Delete a followed record that reached a terminal decision: record row,
+    /// legacy resolution memo and spend caches go; the `purged_foreign` memo
+    /// stays so the swap's lingering relay snapshot never re-imports.
+    fn purge_followed(
+        &self,
+        swap_id: &str,
+        is_v2: bool,
+        action: &str,
+        detail: String,
+    ) -> Result<TickEvent> {
+        if is_v2 {
+            self.store.delete_adaptor(swap_id)?;
+        } else {
+            self.store.delete(swap_id)?;
+        }
+        let _ = self
+            .store
+            .meta_del(&format!("{FOREIGN_RESOLVED_AT_PREFIX}{swap_id}"));
+        let _ = self
+            .store
+            .meta_del(&format!("{FOLLOW_SPEND_PREFIX}{swap_id}:a"));
+        let _ = self
+            .store
+            .meta_del(&format!("{FOLLOW_SPEND_PREFIX}{swap_id}:b"));
+        self.store
+            .meta_set(&format!("{PURGED_FOREIGN_PREFIX}{swap_id}"), "1")?;
+        Ok(TickEvent {
+            swap_id: swap_id.to_string(),
+            action: action.into(),
+            detail,
+        })
+    }
+
+    /// The follower's terminal decision — a pure function of both legs'
+    /// verdicts, shared verbatim by v1 and v2 so their behavior cannot
+    /// diverge. Any inconclusive or anomalous leg parks the record untouched
+    /// (harmless — we drive nothing); a live funded leg parks it EVEN past
+    /// the age-out (visible money is the takeover-worthy case, never purged).
+    #[allow(clippy::too_many_arguments)]
+    fn follow_settle(
+        &self,
+        swap_id: &str,
+        is_v2: bool,
+        chain_a: &ChainRef,
+        chain_b: &ChainRef,
+        t1: u32,
+        t2: u32,
+        needed_confs: u32,
+        va: LegVerdict,
+        vb: LegVerdict,
+        fresh_verify: &dyn Fn() -> bool,
+    ) -> Result<Option<TickEvent>> {
+        use crate::reconstruct::SpendKind;
+        use LegVerdict::*;
+        let needed = u64::from(needed_confs.max(1));
+        let inconclusive = |v: &LegVerdict| {
+            matches!(v, Unknown)
+                || matches!(
+                    v,
+                    Spent {
+                        kind: SpendKind::Unknown,
+                        ..
+                    }
+                )
+        };
+        // Unknown = chain error (retry later); Spent-with-unclassifiable-
+        // witness = anomaly (never a terminal signal). Both also reset the
+        // legacy tier-L buffer, exactly like the pre-reconstruction code.
+        if inconclusive(&va) || inconclusive(&vb) {
+            return self.purge_followed_if_deep(swap_id, chain_a, needed_confs, false, is_v2);
+        }
+        if matches!(va, FundedLive { .. }) || matches!(vb, FundedLive { .. }) {
+            return self.purge_followed_if_deep(swap_id, chain_a, needed_confs, false, is_v2);
+        }
+        // Legs are now ∈ {Unfunded, Spent(redeem|refund), ResolvedNoDepth}.
+        let resolved = |v: &LegVerdict| matches!(v, Spent { .. }) || matches!(v, ResolvedNoDepth);
+        if resolved(&va) && resolved(&vb) {
+            // Tier-L depth is unknowable → the legacy tip-drift buffer.
+            if matches!(va, ResolvedNoDepth) || matches!(vb, ResolvedNoDepth) {
+                return self.purge_followed_if_deep(swap_id, chain_a, needed_confs, true, is_v2);
+            }
+            let (
+                Spent {
+                    spend_confs: ca,
+                    kind: ka,
+                },
+                Spent {
+                    spend_confs: cb,
+                    kind: kb,
+                },
+            ) = (&va, &vb)
+            else {
+                unreachable!("resolved legs are Spent here");
+            };
+            if *ca >= needed && *cb >= needed {
+                // Reorg belt: the decision that DELETES re-derives fresh from
+                // the chain (never from the cache) before acting.
+                if !fresh_verify() {
+                    return Ok(None);
+                }
+                let detail = match (ka, kb) {
+                    (SpendKind::Redeem, SpendKind::Redeem) =>
+                        "another machine's swap completed on-chain; removed from this machine's view",
+                    (SpendKind::Refund, SpendKind::Refund) =>
+                        "another machine's swap refunded on-chain; removed from this machine's view",
+                    _ =>
+                        "another machine's swap settled on-chain (mixed redeem/refund — §7.4 window, check history); removed from this machine's view",
+                };
+                return Ok(Some(self.purge_followed(
+                    swap_id,
+                    is_v2,
+                    "followed-purged",
+                    detail.into(),
+                )?));
+            }
+            return Ok(None); // wait for spend depth
+        }
+        // At least one leg never funded: only the timelock age-out may end
+        // this (any funded-and-spent co-leg must itself be deep first).
+        let deep_ok = |v: &LegVerdict| match v {
+            Spent { spend_confs, .. } => *spend_confs >= needed,
+            Unfunded => true,
+            _ => false,
+        };
+        if deep_ok(&va)
+            && deep_ok(&vb)
+            && self.follow_aged_out(chain_a, chain_b, t1, t2, needed_confs)
+        {
+            return Ok(Some(self.purge_followed(
+                swap_id,
+                is_v2,
+                "followed-aged-out",
+                "another machine's swap is past every timelock with no funds on-chain; removed from this machine's view"
+                    .into(),
+            )?));
+        }
+        Ok(None)
+    }
+
+    /// Fresh (cache-free) classification of a v1 record's two legs from chain
+    /// history. `None` on any inconclusiveness — handshake incomplete, no
+    /// history-capable view (tier L), chain error.
+    fn classify_v1_legs(
+        &self,
+        rec: &SwapRecord,
+    ) -> Option<(crate::reconstruct::LegClass, crate::reconstruct::LegClass)> {
+        use crate::reconstruct::{classify_leg, classify_v1_spend};
+        let params = self.swap_params(rec).ok()?;
+        let spk_a = params.htlc_a().ok()?.script_pubkey();
+        let spk_b = params.htlc_b().ok()?.script_pubkey();
+        let hash_h = params.hash_h;
+        let classify = |w: &[Vec<u8>]| classify_v1_spend(w, &hash_h);
+        let a = classify_leg(
+            &self.backend(&rec.chain_a).ok()?,
+            &spk_a,
+            rec.amount_a,
+            &classify,
+        )
+        .ok()??;
+        let b = classify_leg(
+            &self.backend(&rec.chain_b).ok()?,
+            &spk_b,
+            rec.amount_b,
+            &classify,
+        )
+        .ok()??;
+        Some((a, b))
+    }
+
+    /// Fresh classification of a v2 record's two legs — see
+    /// [`Engine::classify_v1_legs`]. Witness classification is per-leg (each
+    /// leg has its own refund tapleaf).
+    fn classify_v2_legs(
+        &self,
+        rec: &AdaptorSwapRecord,
+    ) -> Option<(crate::reconstruct::LegClass, crate::reconstruct::LegClass)> {
+        use crate::reconstruct::{classify_leg, classify_v2_spend};
+        let secp = bitcoin::secp256k1::Secp256k1::new();
+        let p = self.adaptor_params(rec).ok()?;
+        let leg_a = p.leg_a(&secp).ok()?;
+        let leg_b = p.leg_b(&secp).ok()?;
+        let spk_a = leg_a.script_pubkey(&secp).ok()?;
+        let spk_b = leg_b.script_pubkey(&secp).ok()?;
+        let refund_a = leg_a.refund_script();
+        let refund_b = leg_b.refund_script();
+        let a = classify_leg(
+            &self.backend(&rec.chain_a).ok()?,
+            &spk_a,
+            rec.amount_a,
+            &|w: &[Vec<u8>]| classify_v2_spend(w, &refund_a),
+        )
+        .ok()??;
+        let b = classify_leg(
+            &self.backend(&rec.chain_b).ok()?,
+            &spk_b,
+            rec.amount_b,
+            &|w: &[Vec<u8>]| classify_v2_spend(w, &refund_b),
+        )
+        .ok()??;
+        Some((a, b))
+    }
+
+    /// Do freshly classified legs PROVE the swap is over? Every funded leg
+    /// must be spent through a classifiable witness and finality-deep; a
+    /// never-funded leg additionally needs the timelock age-out (a young
+    /// swap's empty leg may simply not be funded YET).
+    #[allow(clippy::too_many_arguments)]
+    fn legs_prove_resolved(
+        &self,
+        chain_a: &ChainRef,
+        chain_b: &ChainRef,
+        t1: u32,
+        t2: u32,
+        needed_confs: u32,
+        a: &crate::reconstruct::LegClass,
+        b: &crate::reconstruct::LegClass,
+    ) -> bool {
+        use crate::reconstruct::{LegClass, SpendKind};
+        let needed = u64::from(needed_confs.max(1));
+        let settled = |c: &LegClass| match c {
+            LegClass::Spent(s) => s.kind != SpendKind::Unknown && s.spend_confs >= needed,
+            LegClass::Unfunded => true,
+            LegClass::Funded { .. } => false,
+        };
+        if !(settled(a) && settled(b)) {
+            return false;
+        }
+        let any_unfunded = matches!(a, LegClass::Unfunded) || matches!(b, LegClass::Unfunded);
+        !any_unfunded || self.follow_aged_out(chain_a, chain_b, t1, t2, needed_confs)
+    }
+
+    /// Best-effort: is this snapshot's swap already settled on-chain? Any
+    /// inconclusiveness reads as "no" — the caller imports/keeps the record
+    /// and the follow evaluator decides on later ticks.
+    fn rescued_record_resolved(&self, rec: &RescuedRecord) -> bool {
+        match rec {
+            RescuedRecord::V1(r) => self.classify_v1_legs(r).is_some_and(|(a, b)| {
+                self.legs_prove_resolved(
+                    &r.chain_a,
+                    &r.chain_b,
+                    r.t1,
+                    r.t2,
+                    r.n_a.max(r.n_b).max(1),
+                    &a,
+                    &b,
+                )
+            }),
+            RescuedRecord::V2(r) => self.classify_v2_legs(r).is_some_and(|(a, b)| {
+                self.legs_prove_resolved(
+                    &r.chain_a,
+                    &r.chain_b,
+                    r.t1,
+                    r.t2,
+                    r.n_a.max(r.n_b).max(1),
+                    &a,
+                    &b,
+                )
+            }),
+        }
+    }
+
+    // ---- adoption fast-forward (docs/STATE_RECONSTRUCTION.md §5.2) --------
+    //
+    // A snapshot freezes the record at accept (v1) / Signed (v2); a takeover
+    // or #54 rescue that adopts it long after may be adopting a swap whose
+    // chain reality has moved on — funded, revealed, or entirely settled. The
+    // driver's arms act on `rec.state`, so the ONE-SHOT mapping below aligns
+    // it with a fresh reconstruction before the first driving tick. It is
+    // conservative by construction: state only ever moves FORWARD, only on
+    // conclusive classifications, and any inconclusiveness (tier L, chain
+    // error) changes nothing — the drive arms' own self-heal seams (leg
+    // rediscovery, locate-first funding, the new historical fund guards)
+    // remain the backstop.
+
+    /// Fast-forward a v1 record to its chain reality at adoption. Returns a
+    /// human-readable note when something moved.
+    fn fast_forward_v1(&self, rec: &mut SwapRecord) -> Option<String> {
+        use crate::reconstruct::{LegClass, SpendKind};
+        if matches!(
+            rec.state,
+            State::Completed | State::Refunded | State::Aborted
+        ) {
+            return None; // terminal history is never touched
+        }
+        let (a, b) = self.classify_v1_legs(rec)?;
+        // Adopt pointers/heights from the reconstruction (fresh chain truth).
+        let adopt = |class: &LegClass,
+                     txid: &mut Option<String>,
+                     vout: &mut Option<u32>,
+                     height: &mut Option<u64>| {
+            let (op, h) = match class {
+                LegClass::Funded {
+                    outpoint, height, ..
+                } => (outpoint, *height),
+                LegClass::Spent(s) => (&s.outpoint, s.funding_height),
+                LegClass::Unfunded => return,
+            };
+            *txid = Some(op.txid.to_string());
+            *vout = Some(op.vout);
+            *height = (h > 0).then_some(h).or(*height);
+        };
+        adopt(
+            &a,
+            &mut rec.htlc_a_txid,
+            &mut rec.htlc_a_vout,
+            &mut rec.htlc_a_height,
+        );
+        adopt(
+            &b,
+            &mut rec.htlc_b_txid,
+            &mut rec.htlc_b_vout,
+            &mut rec.htlc_b_height,
+        );
+        let rank = |s: State| match s {
+            State::Created => 0,
+            State::Accepted => 1,
+            State::FundedA => 2,
+            State::FundedB => 3,
+            State::RedeemedB => 4,
+            State::Completed | State::Refunded | State::Aborted => 5,
+        };
+        let conclusive = |s: &crate::reconstruct::SpentLeg| s.kind != SpendKind::Unknown;
+        // Our own settled spend becomes our `final_*` so the existing
+        // confirmation nurses converge on it (never clobber local data).
+        let adopt_final = |rec: &mut SwapRecord, s: &crate::reconstruct::SpentLeg| {
+            if rec.final_txid.is_none() {
+                rec.final_txid = Some(s.spend_txid.clone());
+                rec.final_tx_hex = Some(s.spend_tx_hex.clone());
+            }
+        };
+        let target: Option<(State, String)> = match (&a, &b) {
+            (LegClass::Spent(sa), LegClass::Spent(sb))
+                if conclusive(sa)
+                    && conclusive(sb)
+                    && sa.spend_confs >= 1
+                    && sb.spend_confs >= 1 =>
+            {
+                let completed = sa.kind == SpendKind::Redeem || sb.kind == SpendKind::Redeem;
+                let (state, ours) = if completed {
+                    // Initiator's claim is the leg-B redeem, participant's leg A.
+                    match rec.role {
+                        Role::Initiator => (State::Completed, sb),
+                        Role::Participant => (State::Completed, sa),
+                    }
+                } else {
+                    match rec.role {
+                        Role::Initiator => (State::Refunded, sa),
+                        Role::Participant => (State::Refunded, sb),
+                    }
+                };
+                adopt_final(rec, ours);
+                Some((
+                    state,
+                    format!(
+                        "both legs settled on-chain (A {:?}, B {:?})",
+                        sa.kind, sb.kind
+                    ),
+                ))
+            }
+            (LegClass::Funded { .. }, LegClass::Spent(sb)) if sb.kind == SpendKind::Redeem => {
+                match rec.role {
+                    // The preimage is public — the FundedB arm extracts it and
+                    // claims leg A on the next tick.
+                    Role::Participant => Some((
+                        State::FundedB,
+                        "leg B redeemed — preimage on chain; resuming the leg-A claim".into(),
+                    )),
+                    // Our (past incarnation's) reveal: nurse it to depth.
+                    Role::Initiator if sb.spend_confs >= 1 => {
+                        adopt_final(rec, sb);
+                        Some((
+                            State::RedeemedB,
+                            "our leg-B redeem is on-chain; resuming confirmation watch".into(),
+                        ))
+                    }
+                    Role::Initiator => None,
+                }
+            }
+            (LegClass::Spent(sa), LegClass::Funded { .. })
+                if sa.kind == SpendKind::Refund && rec.role == Role::Participant =>
+            {
+                // Alice refunded leg A while our leg B sits locked — the
+                // FundedB arm reclaims it after T2.
+                Some((
+                    State::FundedB,
+                    "leg A refunded by the counterparty; resuming the leg-B refund watch".into(),
+                ))
+            }
+            (LegClass::Funded { .. }, LegClass::Funded { .. }) => {
+                Some((State::FundedB, "both legs are funded on-chain".into()))
+            }
+            (LegClass::Funded { .. }, LegClass::Unfunded) => {
+                Some((State::FundedA, "leg A is funded on-chain".into()))
+            }
+            _ => None,
+        };
+        let (state, note) = target?;
+        if rank(state) > rank(rec.state) {
+            rec.state = state;
+            return Some(format!("fast-forwarded to {state:?}: {note}"));
+        }
+        None
+    }
+
+    /// Fast-forward a v2 record to its chain reality at adoption. v2's drive
+    /// arms all key off `Signed`, so in-flight records are left there (only
+    /// pointers/heights are adopted) — the mapping only jumps to the
+    /// post-broadcast nurse states and terminals.
+    fn fast_forward_v2(&self, rec: &mut AdaptorSwapRecord) -> Option<String> {
+        use crate::reconstruct::{LegClass, SpendKind};
+        if matches!(
+            rec.state,
+            AdaptorState::Completed | AdaptorState::Refunded | AdaptorState::Aborted
+        ) {
+            return None;
+        }
+        let (a, b) = self.classify_v2_legs(rec)?;
+        let adopt = |class: &LegClass,
+                     txid: &mut Option<String>,
+                     vout: &mut Option<u32>,
+                     height: &mut Option<u64>| {
+            let (op, h) = match class {
+                LegClass::Funded {
+                    outpoint, height, ..
+                } => (outpoint, *height),
+                LegClass::Spent(s) => (&s.outpoint, s.funding_height),
+                LegClass::Unfunded => return,
+            };
+            *txid = Some(op.txid.to_string());
+            *vout = Some(op.vout);
+            *height = (h > 0).then_some(h).or(*height);
+        };
+        adopt(
+            &a,
+            &mut rec.funding_a_txid,
+            &mut rec.funding_a_vout,
+            &mut rec.funding_a_height,
+        );
+        adopt(
+            &b,
+            &mut rec.funding_b_txid,
+            &mut rec.funding_b_vout,
+            &mut rec.funding_b_height,
+        );
+        let rank = |s: AdaptorState| match s {
+            AdaptorState::Created => 0,
+            AdaptorState::Accepted => 1,
+            AdaptorState::NoncesExchanged => 2,
+            AdaptorState::Signed => 3,
+            AdaptorState::FundedA => 4,
+            AdaptorState::FundedB => 5,
+            AdaptorState::RedeemedB => 6,
+            AdaptorState::Completed | AdaptorState::Refunded | AdaptorState::Aborted => 7,
+        };
+        let conclusive = |s: &crate::reconstruct::SpentLeg| s.kind != SpendKind::Unknown;
+        let target: Option<(AdaptorState, String)> = match (&a, &b) {
+            (LegClass::Spent(sa), LegClass::Spent(sb))
+                if conclusive(sa)
+                    && conclusive(sb)
+                    && sa.spend_confs >= 1
+                    && sb.spend_confs >= 1 =>
+            {
+                let completed = sa.kind == SpendKind::Redeem || sb.kind == SpendKind::Redeem;
+                if completed {
+                    match rec.role {
+                        Role::Initiator if rec.final_txid_b.is_none() => {
+                            rec.final_txid_b = Some(sb.spend_txid.clone());
+                            rec.final_tx_b_hex = Some(sb.spend_tx_hex.clone());
+                        }
+                        Role::Participant if rec.final_txid_a.is_none() => {
+                            rec.final_txid_a = Some(sa.spend_txid.clone());
+                            rec.final_tx_a_hex = Some(sa.spend_tx_hex.clone());
+                        }
+                        _ => {}
+                    }
+                } else {
+                    match rec.role {
+                        Role::Initiator if rec.final_txid_a.is_none() => {
+                            rec.final_txid_a = Some(sa.spend_txid.clone());
+                            rec.final_tx_a_hex = Some(sa.spend_tx_hex.clone());
+                        }
+                        Role::Participant if rec.final_txid_b.is_none() => {
+                            rec.final_txid_b = Some(sb.spend_txid.clone());
+                            rec.final_tx_b_hex = Some(sb.spend_tx_hex.clone());
+                        }
+                        _ => {}
+                    }
+                }
+                let state = if completed {
+                    AdaptorState::Completed
+                } else {
+                    AdaptorState::Refunded
+                };
+                Some((
+                    state,
+                    format!(
+                        "both legs settled on-chain (A {:?}, B {:?})",
+                        sa.kind, sb.kind
+                    ),
+                ))
+            }
+            (LegClass::Funded { .. }, LegClass::Spent(sb))
+                if sb.kind == SpendKind::Redeem
+                    && rec.role == Role::Initiator
+                    && sb.spend_confs >= 1 =>
+            {
+                // Our (past incarnation's) reveal — nurse it to depth; the
+                // participant twin stays `Signed` (its claim arm extracts `t`
+                // from the pointer this fast-forward just persisted).
+                if rec.final_txid_b.is_none() {
+                    rec.final_txid_b = Some(sb.spend_txid.clone());
+                    rec.final_tx_b_hex = Some(sb.spend_tx_hex.clone());
+                }
+                Some((
+                    AdaptorState::RedeemedB,
+                    "our leg-B redeem is on-chain; resuming confirmation watch".into(),
+                ))
+            }
+            _ => None,
+        };
+        let (state, note) = target?;
+        if rank(state) > rank(rec.state) {
+            rec.state = state;
+            return Some(format!("fast-forwarded to {state:?}: {note}"));
+        }
+        None
     }
 
     /// Purge a followed swap once BOTH legs have been resolved (spent) and the
@@ -5250,28 +6103,20 @@ impl Engine {
                 let _ = self.store.meta_set(&memo, &tip.to_string());
                 Ok(None)
             }
-            Some(seen) if tip.saturating_sub(seen) >= needed => {
-                if is_v2 {
-                    self.store.delete_adaptor(swap_id)?;
-                } else {
-                    self.store.delete(swap_id)?;
-                }
-                let _ = self.store.meta_del(&memo);
-                // Remember it so the lingering shared snapshot never re-imports.
-                self.store
-                    .meta_set(&format!("{PURGED_FOREIGN_PREFIX}{swap_id}"), "1")?;
-                Ok(Some(TickEvent {
-                    swap_id: swap_id.to_string(),
-                    action: "followed-purged".into(),
-                    detail: "another machine's swap reached deep terminal; removed from this machine's view".into(),
-                }))
-            }
+            Some(seen) if tip.saturating_sub(seen) >= needed => Ok(Some(self.purge_followed(
+                swap_id,
+                is_v2,
+                "followed-purged",
+                "another machine's swap reached deep terminal; removed from this machine's view"
+                    .into(),
+            )?)),
             Some(_) => Ok(None), // buffering — wait for depth
         }
     }
 
     /// Read-only chain evaluator for a followed v1 record.
     fn follow_one(&self, rec: &SwapRecord) -> Result<Option<TickEvent>> {
+        use crate::reconstruct::{classify_v1_spend, LegClass, SpendKind};
         let params = match self.swap_params(rec) {
             Ok(p) => p,
             Err(_) => return Ok(None), // handshake incomplete → nothing to observe yet
@@ -5280,33 +6125,43 @@ impl Engine {
             (Ok(a), Ok(b)) => (a.script_pubkey(), b.script_pubkey()),
             _ => return Ok(None),
         };
-        let mut new_a = None;
-        let mut new_b = None;
-        let res_a = self.follow_leg(
+        let hash_h = params.hash_h;
+        let classify = |w: &[Vec<u8>]| classify_v1_spend(w, &hash_h);
+        let mut hint_a = None;
+        let mut hint_b = None;
+        let va = self.follow_eval_leg(
+            &rec.swap_id,
+            "a",
             &rec.chain_a,
             &spk_a,
             rec.amount_a,
             &rec.htlc_a_txid,
             rec.htlc_a_vout,
-            &mut new_a,
+            &classify,
+            &mut hint_a,
         );
-        let res_b = self.follow_leg(
+        let vb = self.follow_eval_leg(
+            &rec.swap_id,
+            "b",
             &rec.chain_b,
             &spk_b,
             rec.amount_b,
             &rec.htlc_b_txid,
             rec.htlc_b_vout,
-            &mut new_b,
+            &classify,
+            &mut hint_b,
         );
-        if new_a.is_some() || new_b.is_some() {
+        if hint_a.is_some() || hint_b.is_some() {
             let mut updated = rec.clone();
-            if let Some((t, v)) = new_a {
-                updated.htlc_a_txid = Some(t);
-                updated.htlc_a_vout = Some(v);
+            if let Some(h) = hint_a {
+                updated.htlc_a_txid = Some(h.txid);
+                updated.htlc_a_vout = Some(h.vout);
+                updated.htlc_a_height = h.height.or(updated.htlc_a_height);
             }
-            if let Some((t, v)) = new_b {
-                updated.htlc_b_txid = Some(t);
-                updated.htlc_b_vout = Some(v);
+            if let Some(h) = hint_b {
+                updated.htlc_b_txid = Some(h.txid);
+                updated.htlc_b_vout = Some(h.vout);
+                updated.htlc_b_height = h.height.or(updated.htlc_b_height);
             }
             let _ = self.store.put(&updated); // status-only write (never a tx)
         }
@@ -5316,57 +6171,97 @@ impl Engine {
         if rec.derive_scope == 0 {
             return Ok(None);
         }
-        let both = matches!((res_a, res_b), (Some(true), Some(true)));
-        self.purge_followed_if_deep(
+        let needed = rec.n_a.max(rec.n_b).max(1);
+        // The purge's fresh re-verification — bypasses every cache and hint.
+        let fresh_verify = || {
+            let deep_spent = |chain: &ChainRef, spk: &ScriptBuf, amount: u64| {
+                self.backend(chain)
+                    .ok()
+                    .and_then(|b| {
+                        crate::reconstruct::classify_leg(&b, spk, amount, &classify)
+                            .ok()
+                            .flatten()
+                    })
+                    .is_some_and(|c| {
+                        matches!(c, LegClass::Spent(ref s)
+                            if s.kind != SpendKind::Unknown
+                                && s.spend_confs >= u64::from(needed))
+                    })
+            };
+            deep_spent(&rec.chain_a, &spk_a, rec.amount_a)
+                && deep_spent(&rec.chain_b, &spk_b, rec.amount_b)
+        };
+        self.follow_settle(
             &rec.swap_id,
-            &rec.chain_a,
-            rec.n_a.max(rec.n_b),
-            both,
             false,
+            &rec.chain_a,
+            &rec.chain_b,
+            rec.t1,
+            rec.t2,
+            needed,
+            va,
+            vb,
+            &fresh_verify,
         )
     }
 
     /// Read-only chain evaluator for a followed v2 (adaptor) record.
     fn follow_adaptor_one(&self, rec: &AdaptorSwapRecord) -> Result<Option<TickEvent>> {
+        use crate::reconstruct::{classify_v2_spend, LegClass, SpendKind};
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let p = match self.adaptor_params(rec) {
             Ok(p) => p,
             Err(_) => return Ok(None),
         };
-        let (spk_a, spk_b) = match (
-            p.leg_a(&secp).and_then(|l| l.script_pubkey(&secp)),
-            p.leg_b(&secp).and_then(|l| l.script_pubkey(&secp)),
-        ) {
+        let (leg_a, leg_b) = match (p.leg_a(&secp), p.leg_b(&secp)) {
             (Ok(a), Ok(b)) => (a, b),
             _ => return Ok(None),
         };
-        let mut new_a = None;
-        let mut new_b = None;
-        let res_a = self.follow_leg(
+        let (spk_a, spk_b) = match (leg_a.script_pubkey(&secp), leg_b.script_pubkey(&secp)) {
+            (Ok(a), Ok(b)) => (a, b),
+            _ => return Ok(None),
+        };
+        // Witness classification is per-leg: each leg reveals ITS refund
+        // tapleaf, which we rebuild locally and byte-compare.
+        let refund_a = leg_a.refund_script();
+        let refund_b = leg_b.refund_script();
+        let classify_a = |w: &[Vec<u8>]| classify_v2_spend(w, &refund_a);
+        let classify_b = |w: &[Vec<u8>]| classify_v2_spend(w, &refund_b);
+        let mut hint_a = None;
+        let mut hint_b = None;
+        let va = self.follow_eval_leg(
+            &rec.swap_id,
+            "a",
             &rec.chain_a,
             &spk_a,
             rec.amount_a,
             &rec.funding_a_txid,
             rec.funding_a_vout,
-            &mut new_a,
+            &classify_a,
+            &mut hint_a,
         );
-        let res_b = self.follow_leg(
+        let vb = self.follow_eval_leg(
+            &rec.swap_id,
+            "b",
             &rec.chain_b,
             &spk_b,
             rec.amount_b,
             &rec.funding_b_txid,
             rec.funding_b_vout,
-            &mut new_b,
+            &classify_b,
+            &mut hint_b,
         );
-        if new_a.is_some() || new_b.is_some() {
+        if hint_a.is_some() || hint_b.is_some() {
             let mut updated = rec.clone();
-            if let Some((t, v)) = new_a {
-                updated.funding_a_txid = Some(t);
-                updated.funding_a_vout = Some(v);
+            if let Some(h) = hint_a {
+                updated.funding_a_txid = Some(h.txid);
+                updated.funding_a_vout = Some(h.vout);
+                updated.funding_a_height = h.height.or(updated.funding_a_height);
             }
-            if let Some((t, v)) = new_b {
-                updated.funding_b_txid = Some(t);
-                updated.funding_b_vout = Some(v);
+            if let Some(h) = hint_b {
+                updated.funding_b_txid = Some(h.txid);
+                updated.funding_b_vout = Some(h.vout);
+                updated.funding_b_height = h.height.or(updated.funding_b_height);
             }
             let _ = self.store.put_adaptor(&updated);
         }
@@ -5374,8 +6269,41 @@ impl Engine {
         if rec.derive_scope == 0 {
             return Ok(None);
         }
-        let both = matches!((res_a, res_b), (Some(true), Some(true)));
-        self.purge_followed_if_deep(&rec.swap_id, &rec.chain_a, rec.n_a.max(rec.n_b), both, true)
+        let needed = rec.n_a.max(rec.n_b).max(1);
+        let fresh_verify = || {
+            let deep_spent =
+                |chain: &ChainRef,
+                 spk: &ScriptBuf,
+                 amount: u64,
+                 classify: &dyn Fn(&[Vec<u8>]) -> SpendKind| {
+                    self.backend(chain)
+                        .ok()
+                        .and_then(|b| {
+                            crate::reconstruct::classify_leg(&b, spk, amount, classify)
+                                .ok()
+                                .flatten()
+                        })
+                        .is_some_and(|c| {
+                            matches!(c, LegClass::Spent(ref s)
+                                if s.kind != SpendKind::Unknown
+                                    && s.spend_confs >= u64::from(needed))
+                        })
+                };
+            deep_spent(&rec.chain_a, &spk_a, rec.amount_a, &classify_a)
+                && deep_spent(&rec.chain_b, &spk_b, rec.amount_b, &classify_b)
+        };
+        self.follow_settle(
+            &rec.swap_id,
+            true,
+            &rec.chain_a,
+            &rec.chain_b,
+            rec.t1,
+            rec.t2,
+            needed,
+            va,
+            vb,
+            &fresh_verify,
+        )
     }
 
     fn tick_one(&self, rec: &SwapRecord) -> Result<Option<TickEvent>> {
@@ -5585,6 +6513,11 @@ impl Engine {
                         let mut updated = rec.clone();
                         updated.htlc_a_txid = Some(outpoint.txid.to_string());
                         updated.htlc_a_vout = Some(outpoint.vout);
+                        updated.htlc_a_height = Some(
+                            self.backend(&rec.chain_a)?
+                                .tip_height()?
+                                .saturating_sub(confs),
+                        );
                         updated.state = State::FundedA;
                         self.store.put(&updated)?;
                         if self.auto_fund {
@@ -5666,18 +6599,27 @@ impl Engine {
                     Role::Initiator => "a",
                     Role::Participant => "b",
                 };
-                if let Some((outpoint, _confs)) = self.locate_funding(rec, our_leg)? {
+                if let Some((outpoint, confs)) = self.locate_funding(rec, our_leg)? {
                     let mut updated = rec.clone();
                     match rec.role {
                         Role::Initiator => {
                             updated.htlc_a_txid = Some(outpoint.txid.to_string());
                             updated.htlc_a_vout = Some(outpoint.vout);
+                            updated.htlc_a_height = Some(
+                                self.backend(&rec.chain_a)?
+                                    .tip_height()?
+                                    .saturating_sub(confs),
+                            );
                             updated.state = State::FundedA;
                         }
                         Role::Participant => {
                             updated.htlc_b_txid = Some(outpoint.txid.to_string());
                             updated.htlc_b_vout = Some(outpoint.vout);
-                            updated.htlc_b_height = Some(self.backend(&rec.chain_b)?.tip_height()?);
+                            updated.htlc_b_height = Some(
+                                self.backend(&rec.chain_b)?
+                                    .tip_height()?
+                                    .saturating_sub(confs),
+                            );
                             updated.state = State::FundedB;
                         }
                     }
@@ -6268,9 +7210,25 @@ impl Engine {
                         // travel). An own-scope record then drives via the drive
                         // rule; a foreign-scope one stays FOLLOWED until an
                         // explicit, confirm-gated take-over sets `adopted`.
+                        // §5.2: fast-forward the snapshot-frozen state to chain
+                        // reality first — an own-scope record starts DRIVING on
+                        // the next tick, and driving a settled/moved-on past is
+                        // exactly the re-fund hazard the reconstruction closes.
+                        // Best-effort: inconclusive classification restores the
+                        // record as-is (the drive arms self-heal).
                         match rec.with_adopted_cleared() {
-                            RescuedRecord::V1(r) => self.store.put(&r)?,
-                            RescuedRecord::V2(r) => self.store.put_adaptor(&r)?,
+                            RescuedRecord::V1(mut r) => {
+                                if let Some(note) = self.fast_forward_v1(&mut r) {
+                                    eprintln!("rescue {}: {note}", r.swap_id);
+                                }
+                                self.store.put(&r)?
+                            }
+                            RescuedRecord::V2(mut r) => {
+                                if let Some(note) = self.fast_forward_v2(&mut r) {
+                                    eprintln!("rescue {}: {note}", r.swap_id);
+                                }
+                                self.store.put_adaptor(&r)?
+                            }
                         }
                         restored += 1;
                     }
@@ -6298,11 +7256,21 @@ impl Engine {
     pub fn take_over_swap(&self, swap_id: &str) -> Result<()> {
         if let Ok(mut rec) = self.store.get(swap_id) {
             rec.adopted = true;
+            // §5.2 (docs/STATE_RECONSTRUCTION.md): align the snapshot-frozen
+            // state with fresh chain reality BEFORE the first driving tick —
+            // an already-settled swap becomes history (never re-driven, never
+            // re-funded), an in-flight one resumes at the right arm.
+            if let Some(note) = self.fast_forward_v1(&mut rec) {
+                eprintln!("takeover {swap_id}: {note}");
+            }
             self.store.put(&rec)?;
             return Ok(());
         }
         if let Ok(mut rec) = self.store.get_adaptor(swap_id) {
             rec.adopted = true;
+            if let Some(note) = self.fast_forward_v2(&mut rec) {
+                eprintln!("takeover {swap_id}: {note}");
+            }
             self.store.put_adaptor(&rec)?;
             return Ok(());
         }
@@ -6382,6 +7350,28 @@ impl Engine {
             let scope = rec.derive_scope();
             if self.drives(scope, false) || scope == 0 {
                 continue; // ours-to-drive or legacy — both stay confirm-gated
+            }
+            // Import-time reconstruction (docs/STATE_RECONSTRUCTION.md): a
+            // snapshot whose swap is provably settled on-chain must not enter
+            // the dock as a ghost (the 2026-07-12 "Locking your BTC… forever"
+            // field bug — the snapshot lingers because only the owner
+            // tombstones it). Mark it purged so it never re-imports, and say
+            // why once. Best-effort: any inconclusiveness imports as usual and
+            // the follow evaluator settles it on a later tick.
+            if self.rescued_record_resolved(&rec) {
+                let swap_id = rec.swap_id().to_string();
+                let _ = self
+                    .store
+                    .meta_set(&format!("{PURGED_FOREIGN_PREFIX}{swap_id}"), "1");
+                if announced.insert(swap_id.clone()) {
+                    events.push(TickEvent {
+                        swap_id,
+                        action: "followed-skipped-terminal".into(),
+                        detail: "another machine's swap is already settled on-chain; not importing"
+                            .into(),
+                    });
+                }
+                continue;
             }
             let swap_id = rec.swap_id().to_string();
             match rec.with_adopted_cleared() {

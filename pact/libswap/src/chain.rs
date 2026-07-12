@@ -132,6 +132,32 @@ pub trait ChainBackend: Send + Sync {
         from_height: u64,
     ) -> Result<Option<Vec<Vec<u8>>>>;
 
+    /// Full transaction history of a script — funding AND spends, past or
+    /// present, confirmed or mempool — as `(txid, height)` pairs in server
+    /// order (oldest first, mempool entries last with `height <= 0`). This is
+    /// what lets swap state be reconstructed for outputs that are ALREADY
+    /// SPENT, which no live-UTXO read (`find_funding`/`get_txout`) can see.
+    ///
+    /// `Ok(None)` = this backend has no script index (Core RPC — `txindex`
+    /// is txid→tx only, there is no address index), the capability floor
+    /// callers degrade from: live reads while in flight + the timelock
+    /// age-out for terminal decisions. Like every backend read the entries
+    /// are hints — callers verify the referenced transactions against
+    /// locally reconstructed scripts/amounts.
+    fn spk_history(&self, _spk: &ScriptBuf) -> Result<Option<Vec<(String, i64)>>> {
+        Ok(None)
+    }
+
+    /// Fetch a full transaction by txid, for inspecting the outputs/witnesses
+    /// of history entries discovered via [`Self::spk_history`]. `Ok(None)`
+    /// when the backend cannot see the tx (transport hiccup, or Core without
+    /// `-txindex` once a tx leaves the mempool); callers treat that as
+    /// inconclusive, never as evidence. Answers are self-verifying — the
+    /// caller re-checks `tx.compute_txid()` and the scripts it cares about.
+    fn fetch_tx(&self, _txid: &str) -> Result<Option<Transaction>> {
+        Ok(None)
+    }
+
     fn tip_height(&self) -> Result<u64>;
 
     /// Median-time-past of the tip — what CLTV is evaluated against.
@@ -393,6 +419,12 @@ impl<T: ChainBackend + ?Sized> ChainBackend for std::sync::Arc<T> {
         from_height: u64,
     ) -> Result<Option<Vec<Vec<u8>>>> {
         (**self).find_spend_witness(outpoint, watch_spk, from_height)
+    }
+    fn spk_history(&self, spk: &ScriptBuf) -> Result<Option<Vec<(String, i64)>>> {
+        (**self).spk_history(spk)
+    }
+    fn fetch_tx(&self, txid: &str) -> Result<Option<Transaction>> {
+        (**self).fetch_tx(txid)
     }
     fn tip_height(&self) -> Result<u64> {
         (**self).tip_height()
@@ -1214,6 +1246,19 @@ impl ChainBackend for ElectrumBackend {
         ElectrumBackend::find_spend_witness(self, outpoint, watch_spk)
     }
 
+    fn spk_history(&self, spk: &ScriptBuf) -> Result<Option<Vec<(String, i64)>>> {
+        // `blockchain.scripthash.get_history`: funding + spends, confirmed +
+        // mempool — the full per-script record swap reconstruction needs.
+        Ok(Some(ElectrumBackend::history(self, spk)?))
+    }
+
+    fn fetch_tx(&self, txid: &str) -> Result<Option<Transaction>> {
+        // A fetch failure (unknown tx, transport hiccup) reads as "cannot
+        // see it" — the caller treats `None` as inconclusive and retries,
+        // exactly the conservative direction.
+        Ok(ElectrumBackend::get_raw_tx(self, txid).ok())
+    }
+
     fn tip_height(&self) -> Result<u64> {
         ElectrumBackend::tip_height(self)
     }
@@ -1601,6 +1646,49 @@ impl ChainBackend for MultiBackend {
             self.fan_out(|b| b.find_spend_witness(outpoint, watch_spk, from_height)),
         )?;
         Ok(hits.into_iter().flatten().next())
+    }
+
+    fn spk_history(&self, spk: &ScriptBuf) -> Result<Option<Vec<(String, i64)>>> {
+        // Discovery — the first CAPABLE view's history wins (entries are
+        // hints; the caller verifies every referenced tx against local
+        // bytes). `Ok(None)` from a view means "no script index" (Core),
+        // which must not mask a capable-but-erroring Electrum view: with
+        // zero positive answers and any error, report the error so an
+        // outage reads as an outage, not as tier-L (issue #98 discipline).
+        let (hits, errors, skipped) = self.fan_out(|b| b.spk_history(spk));
+        let mut saw_responder = false;
+        for h in hits {
+            saw_responder = true;
+            if h.is_some() {
+                return Ok(h);
+            }
+        }
+        if let Some(err) = errors.into_iter().next() {
+            return Err(err.context("script history"));
+        }
+        if !saw_responder && skipped > 0 {
+            bail!(
+                "script history: all {} chain view(s) are in failure backoff",
+                self.backends.len()
+            );
+        }
+        Ok(None)
+    }
+
+    fn fetch_tx(&self, txid: &str) -> Result<Option<Transaction>> {
+        // Any view's positive answer wins, hash-verified — a lying server
+        // cannot substitute a different tx for the requested txid.
+        let want = Txid::from_str(txid)?;
+        let (hits, errors, _) = self.fan_out(|b| b.fetch_tx(txid));
+        for tx in hits.into_iter().flatten() {
+            if tx.compute_txid() == want {
+                return Ok(Some(tx));
+            }
+        }
+        if let Some(err) = errors.into_iter().next() {
+            return Err(err.context("fetch tx"));
+        }
+        Ok(None)
     }
 
     fn tip_height(&self) -> Result<u64> {

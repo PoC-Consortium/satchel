@@ -34,6 +34,7 @@ pub mod machine;
 pub mod messages;
 pub mod musig;
 pub mod nostr_board;
+pub mod reconstruct;
 pub mod registry;
 pub mod rpc;
 pub mod store;
