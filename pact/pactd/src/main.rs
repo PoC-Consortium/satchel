@@ -1767,6 +1767,12 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             let oid = offer_id.clone();
             blocking(app, move |e| e.revoke_board_offer(&offer_id)).await?;
             tracing::info!(offer = %oid, "offer withdrawn (boardrevoke)");
+            // Publish the queued NIP-09 deletion NOW instead of waiting up to a
+            // full scheduler tick: the UI drops the offer locally at once, but a
+            // remote observer only learns via the relay, and a withdraw is often
+            // immediately followed by a quit (`ExitGate` withdraw & exit) that
+            // stops pactd before the next tick would have flushed it.
+            kick_nostr(app);
             Ok(json!({ "revoked": true }))
         }
         "revokeoffersforcoin" => {
@@ -2398,6 +2404,22 @@ async fn main() -> Result<()> {
             Ok(n) if n > 0 => tracing::info!(count = n, "de-list-on-close: paused live offers"),
             Ok(_) => {}
             Err(err) => tracing::warn!("de-list-on-close failed: {err:#}"),
+        }
+    }
+
+    // Drain the Nostr outbox one last time before we exit. `boardrevoke` (manual
+    // withdraw) and the soft de-list above only QUEUE their NIP-09 kind-5
+    // deletions; the scheduler that would publish them has already stopped, so
+    // without this final pass a queued withdrawal never reaches the relay and a
+    // remote same-seed observer keeps listing the offer until its NIP-40 TTL
+    // lapses. Best-effort and time-boxed so a dead/slow relay can't wedge the
+    // exit (a relay we can't reach never got the offer's refresh either, so its
+    // listing lapses on its own).
+    if let Some(svc) = app.nostr.clone() {
+        match tokio::time::timeout(Duration::from_secs(10), nostr_pass(&app, &svc)).await {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => tracing::warn!("shutdown outbox flush failed: {err:#}"),
+            Err(_) => tracing::warn!("shutdown outbox flush timed out"),
         }
     }
 
