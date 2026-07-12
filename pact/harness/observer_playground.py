@@ -256,21 +256,20 @@ def main():
                     except Exception as e:  # noqa: BLE001
                         print(f"[obs-pg] mine skipped ({wallet}): {e}")
 
-                # Seed both Satchels' pactd (once each is reachable) with the
-                # SAME mnemonic — Alice drives, the observer follows. importseed
-                # needs an ACTIVE MERCHANT first (what the wizard does), so
-                # create one, then import; both are best-effort (a re-run over
-                # an already-seeded pactd just no-ops).
-                if not alice_seeded and rpc(ALICE_PORT, "getinfo") is not None:
-                    rpc(ALICE_PORT, "createmerchant", "Alice")
-                    if rpc(ALICE_PORT, "importseed", FOLLOW_MNEMONIC, "") is not None:
+                # Onboarding is USER-DRIVEN (the Satchel wizard runs its own
+                # merchant+seed flow; an RPC importseed behind its back does not
+                # reflect in the UI). We just WATCH for each window to be seeded
+                # (identity present) — you import FOLLOW_MNEMONIC in BOTH wizards.
+                if not alice_seeded:
+                    info = rpc(ALICE_PORT, "getinfo")
+                    if info and info.get("identity"):
                         alice_seeded = True
-                        print("[obs-pg] Alice (MAIN :9739) seeded")
-                if not observer_seeded and rpc(OBSERVER_PORT, "getinfo") is not None:
-                    rpc(OBSERVER_PORT, "createmerchant", "Alice-backup")
-                    if rpc(OBSERVER_PORT, "importseed", FOLLOW_MNEMONIC, "") is not None:
+                        print("[obs-pg] Alice (MAIN :9739) seeded by the wizard")
+                if not observer_seeded:
+                    info = rpc(OBSERVER_PORT, "getinfo")
+                    if info and info.get("identity"):
                         observer_seeded = True
-                        print("[obs-pg] Alice-observer (:9740) seeded — following")
+                        print("[obs-pg] observer (:9740) seeded — now following Alice")
 
                 # Fund Alice's nodeless (seed) wallets so she can fund swaps;
                 # the observer shares them (same seed) but never spends.

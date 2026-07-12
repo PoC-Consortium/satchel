@@ -177,23 +177,35 @@ Write-Host "[obs-pg] stack up; launching the two Satchel windows ..." -Foregroun
 
 # --- launch BOTH Satchel windows (built binary, no vite) -------------------
 # MAIN "Alice": default config dir. OBSERVER: isolated dir via SATCHEL_DATA_DIR.
+# Each gets its OWN WebView2 user-data folder (else two instances fight over one
+# and the second window won't render); both are playground-local so neither
+# touches your real Satchel's WebView2 state.
 $env:SATCHEL_NETWORK = "regtest"
-$alice = Start-Process -FilePath $SatchelExe -PassThru `
-    -RedirectStandardOutput (Join-Path $LogDir "satchel-alice.out.log") `
-    -RedirectStandardError  (Join-Path $LogDir "satchel-alice.err.log")
+$env:WEBVIEW2_USER_DATA_FOLDER = Join-Path $AliceNet "webview2"
+try {
+    $alice = Start-Process -FilePath $SatchelExe -PassThru `
+        -RedirectStandardOutput (Join-Path $LogDir "satchel-alice.out.log") `
+        -RedirectStandardError  (Join-Path $LogDir "satchel-alice.err.log")
+} finally {
+    Remove-Item Env:\WEBVIEW2_USER_DATA_FOLDER -ErrorAction SilentlyContinue
+}
 Add-Content -Path $PidFile -Value $alice.Id
 
-# The observer overrides the base config dir via SATCHEL_DATA_DIR. Windows
-# PowerShell 5.1's Start-Process has no -Environment, so set it in THIS session
-# just before launching the observer (Alice already launched without it), then
-# clear it so nothing else inherits it.
+# The observer overrides the base config dir via SATCHEL_DATA_DIR, AND needs its
+# OWN WebView2 user-data folder: two instances of the same exe share one WebView2
+# data dir by default and the SECOND fails to create its webview (folder locked),
+# so the observer window never renders. WEBVIEW2_USER_DATA_FOLDER gives it a
+# private one. PS 5.1's Start-Process has no -Environment, so set both in THIS
+# session just before launching (Alice already launched without them), then clear.
 $env:SATCHEL_DATA_DIR = $ObsBase
+$env:WEBVIEW2_USER_DATA_FOLDER = Join-Path $ObsBase "webview2"
 try {
     $obs = Start-Process -FilePath $SatchelExe -PassThru `
         -RedirectStandardOutput (Join-Path $LogDir "satchel-observer.out.log") `
         -RedirectStandardError  (Join-Path $LogDir "satchel-observer.err.log")
 } finally {
     Remove-Item Env:\SATCHEL_DATA_DIR -ErrorAction SilentlyContinue
+    Remove-Item Env:\WEBVIEW2_USER_DATA_FOLDER -ErrorAction SilentlyContinue
 }
 Add-Content -Path $PidFile -Value $obs.Id
 
@@ -204,10 +216,17 @@ Write-Host ""
 Write-Host "  Two Satchel windows, SAME seed, over one local relay:"
 Write-Host "    MAIN 'Alice'  (pactd :9739) - you drive make/take here."
 Write-Host "    OBSERVER      (pactd :9740) - follows Alice read-only."
-Write-Host "  The driver seeds both and funds Alice; give it ~20-40s after the"
-Write-Host "  windows open (watch the driver log for 'seeded' / 'faucet')."
-Write-Host "  If a window still shows the setup wizard, import the seed printed"
-Write-Host "  in the driver log (observer-playground.out.log) into BOTH windows."
+Write-Host ""
+Write-Host "  SEED BOTH WINDOWS with the SAME phrase (the wizard runs its own"
+Write-Host "  onboarding, so import - do not create - in EACH window):"
+Write-Host "    1. In each window's wizard: create a merchant, then IMPORT this"
+Write-Host "       recovery phrase (identical in both):"
+Write-Host ""
+Write-Host "       legal winner thank year wave sausage worth useful legal winner thank yellow" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "    2. The driver then auto-funds Alice (watch the log for 'faucet')."
+Write-Host "  Same phrase -> same identity -> the observer follows Alice; each"
+Write-Host "  window's own data dir gives it a distinct machine scope (foreign)."
 Write-Host ""
 Write-Host "  TEST (watch BOTH docks track, then the observer's row self-purge):"
 Write-Host "    TAKE : on Alice, Corkboard -> take a Bob/Carol offer (v1 AND v2 are"
