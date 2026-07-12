@@ -158,6 +158,24 @@ pub trait ChainBackend: Send + Sync {
         Ok(None)
     }
 
+    /// The NODE WALLET's own transactions (full, decoded) with their block
+    /// heights (0 = unconfirmed), from `since_height` to the tip — the
+    /// wallet-assisted reconstruction source (#171, docs/STATE_RECONSTRUCTION.md
+    /// §4). The multi-machine backup-session contract makes this history
+    /// SHARED across a merchant's machines (a backup MUST point at the same
+    /// wallet — takeovers fund from it and v2 sweeps pay into it), so it
+    /// covers every transaction the merchant side ever made: fundings we
+    /// sent, claims/refunds we received — even long after the outputs are
+    /// spent, which no live-UTXO read can see.
+    ///
+    /// POSITIVE-ONLY evidence: the counterparty's transactions are not
+    /// wallet transactions, so absence here proves nothing — callers may use
+    /// returned data to prove a funding/spend happened, never to conclude
+    /// one didn't. `Ok(None)` = this backend has no wallet.
+    fn wallet_txs_since(&self, _since_height: u64) -> Result<Option<Vec<(Transaction, u64)>>> {
+        Ok(None)
+    }
+
     fn tip_height(&self) -> Result<u64>;
 
     /// Median-time-past of the tip — what CLTV is evaluated against.
@@ -425,6 +443,9 @@ impl<T: ChainBackend + ?Sized> ChainBackend for std::sync::Arc<T> {
     }
     fn fetch_tx(&self, txid: &str) -> Result<Option<Transaction>> {
         (**self).fetch_tx(txid)
+    }
+    fn wallet_txs_since(&self, since_height: u64) -> Result<Option<Vec<(Transaction, u64)>>> {
+        (**self).wallet_txs_since(since_height)
     }
     fn tip_height(&self) -> Result<u64> {
         (**self).tip_height()
@@ -1083,6 +1104,48 @@ impl ChainBackend for CoreRpcBackend {
         Ok(info.get("unlocked_until").and_then(|v| v.as_u64()) == Some(0))
     }
 
+    fn wallet_txs_since(&self, since_height: u64) -> Result<Option<Vec<(Transaction, u64)>>> {
+        // One `listsinceblock` + one `gettransaction` per unique wallet tx —
+        // callers bound `since_height` to the swap's era, and the follow
+        // evaluator caches/throttles so this is a transition cost, not a
+        // per-tick one (#171).
+        let tip = self.tip_height()?;
+        let hash = self
+            .rpc
+            .call("getblockhash", &[json!(since_height.min(tip))])?;
+        let res = self.rpc.call("listsinceblock", &[hash])?;
+        let mut seen = std::collections::BTreeMap::<String, u64>::new();
+        for entry in res["transactions"].as_array().cloned().unwrap_or_default() {
+            let Some(txid) = entry["txid"].as_str() else {
+                continue;
+            };
+            let height = entry["blockheight"].as_u64().unwrap_or(0);
+            seen.entry(txid.to_string()).or_insert(height);
+        }
+        // A wallet busier than this since the swap started is no longer a
+        // swap-era scan — inconclusive beats silently truncated evidence.
+        anyhow::ensure!(
+            seen.len() <= 512,
+            "wallet has {} transactions since height {since_height} — refusing an unbounded scan",
+            seen.len()
+        );
+        let mut out = Vec::with_capacity(seen.len());
+        for (txid, height) in seen {
+            let tx = self.rpc.call("gettransaction", &[json!(txid)])?;
+            let Some(hex_str) = tx["hex"].as_str() else {
+                continue;
+            };
+            let Ok(raw) = hex::decode(hex_str) else {
+                continue;
+            };
+            let Ok(decoded) = bitcoin::consensus::encode::deserialize::<Transaction>(&raw) else {
+                continue;
+            };
+            out.push((decoded, height));
+        }
+        Ok(Some(out))
+    }
+
     fn wallet_sign_send(
         &self,
         tx: &Transaction,
@@ -1689,6 +1752,11 @@ impl ChainBackend for MultiBackend {
             return Err(err.context("fetch tx"));
         }
         Ok(None)
+    }
+
+    fn wallet_txs_since(&self, since_height: u64) -> Result<Option<Vec<(Transaction, u64)>>> {
+        // Wallet reads go to the primary, like every wallet operation.
+        self.primary().wallet_txs_since(since_height)
     }
 
     fn tip_height(&self) -> Result<u64> {
