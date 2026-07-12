@@ -1,13 +1,23 @@
 # Swap state reconstruction from chain ground truth — design (follow / rescue / takeover)
 
-Status: IMPLEMENTED (branch `follow-reconstruction`) — §1–§5 and §7 items 1–9
-shipped; deferred: dock derived-phase UI (§7.10), subscription pokes and the
-tier-L scan throttle (§7.11/P5). Companion to `MULTI_MACHINE_122.md`
-(#122/#134/#163/#164) and the #54 rescue path. Triggered by the 2026-07-12
-mainnet field bug: a follower that first sees a swap *after* completion is a
-permanent `state=accepted` ghost. Verified by `libswap::reconstruct` unit
-tests and `harness/test_follow_e2e.py` (observe-after-completion +
-dormant-observer takeover, both legs on Core+electrs multi-backends).
+Status: IMPLEMENTED — #167 (§1–§5, §7 items 1–9), #168 (follower progress
+line, was §7.10) and #171 (wallet-assisted tier L+, see §4.1a below);
+deferred: subscription pokes and the tier-L scan throttle (§7.11/P5).
+Companion to `MULTI_MACHINE_122.md` (#122/#134/#163/#164) and the #54 rescue
+path. Triggered by the 2026-07-12 mainnet field bug: a follower that first
+sees a swap *after* completion is a permanent `state=accepted` ghost.
+Verified by `libswap::reconstruct` unit tests and
+`harness/test_follow_e2e.py` (observe-after-completion, dormant-observer
+takeover, and a Core-only observer resolving via the shared wallet).
+
+**Amendment (#171, 2026-07-12).** The tier framing below originally treated
+Core-RPC coins as history-blind. Field review corrected the deployment
+contract: a multi-machine **backup session MUST point at the same node
+wallet** as the primary (a takeover funds from it; v2 sweeps pay into it) —
+so on Core-RPC coins the wallet's own history is shared evidence covering
+every transaction the merchant side made. See §4.1a; escalation E6 is
+retired by the same contract (sweeps land in the shared wallet by
+definition — the requirement is now documented instead of escalated).
 
 ---
 
@@ -211,7 +221,8 @@ inherit a follower-fabricated driving state.
 | tier | backends | guarantee |
 |---|---|---|
 | **H — history** | any coin with ≥1 Electrum view: all nodeless coins (`wallet_bdk.rs` delegates to the pool), and Core-primary coins with Electrum views configured in the MultiBackend | full front-to-back reconstruction, §1 |
-| **L — live-only** | Core-RPC-only coins | in-flight detection exactly as today (live UTXO + pointer + bounded spend scan) + **age-out** as the only terminal fallback |
+| **L+ — wallet-assisted** (#171) | Core-RPC-only coins, via the SHARED node wallet (the backup-session contract) | everything the merchant side did: fundings we sent (pointer survives the spend), claims/refunds we received (full spend classification incl. witness). Counterparty-only history stays invisible → resolved via the pointer-vanished tip-drift buffer |
+| **L — live-only** | Core-RPC-only coins, wallet inconclusive (fresh node, oversized scan) | in-flight detection (live UTXO + pointer + bounded spend scan) + **age-out** as the terminal fallback |
 
 Detection is structural, not probed: a new trait method returns `Ok(None)` where
 unsupported (§7 item 2), and MultiBackend fans out to capable views — the tier is
@@ -219,6 +230,22 @@ simply "did any view answer". Important floor fact: Core has **no**
 script→history index at all — `txindex=1` is txid→tx only, so Tier L cannot be
 upgraded by txindex for *funding* discovery of an already-spent spk; only the
 spend-of-known-outpoint scan benefits (`chain.rs:732-782` block-scan fallback).
+
+### 4.1a Wallet-assisted evidence (#171)
+
+The backup-session contract — a second machine on the same seed MUST use the
+same node wallet URL — turns the Core wallet into shared, positive-only
+evidence: `ChainBackend::wallet_txs_since` (one `listsinceblock` + a
+`gettransaction` per wallet tx, bounded to the swap's era) feeds
+`reconstruct::classify_leg_wallet`, which proves fundings the wallet sent and
+classifies spends the wallet received. Claims of counterparty-funded legs are
+identified by probe: v1 — the revealed witness script byte-equals the locally
+rebuilt one; v2 — the refund leaf byte-equals, or a key-path spend sweeps to
+the record's negotiated per-swap sweep address. Absence proves NOTHING (the
+counterparty's transactions never touch our wallet): the evidence augments
+classification (`LegClass::Vanished` for proven-funded-but-gone), it never
+implements `spk_history`. Follow-evaluator scans are throttled to block
+cadence (`follow_wallet_tip:` memo) and end once evidence is cached.
 
 ### 4.2 Timelock age-out (universal fallback — needs zero new chain capability)
 

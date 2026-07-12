@@ -287,6 +287,12 @@ const FOREIGN_RESOLVED_AT_PREFIX: &str = "foreign_resolved_at:";
 /// instead of a history scan; the terminal purge re-verifies FRESH from the
 /// chain (reorg safety), so the cache can accelerate but never decide.
 const FOLLOW_SPEND_PREFIX: &str = "follow_spend:";
+/// Meta-key prefix: tip height at the last wallet-evidence scan of a FOLLOWED
+/// leg that found nothing (`follow_wallet_tip:<swap_id>:<leg>`). Wallet scans
+/// (#171: one `listsinceblock` + a `gettransaction` per wallet tx) re-run at
+/// block cadence instead of every 30s tick while a tier-L leg stays
+/// unresolved; a positive result is cached/persisted and ends the scanning.
+const FOLLOW_WALLET_TIP_PREFIX: &str = "follow_wallet_tip:";
 
 /// A followed leg's freshly discovered funding pointer (+ height when
 /// confirmed), for the caller to persist as a status-only record update.
@@ -2520,16 +2526,20 @@ impl Engine {
         // Idempotency guard 3 (historical, docs/STATE_RECONSTRUCTION.md §5.1):
         // the live reads above cannot see a funding that was already SPENT — a
         // rescued/taken-over record of a settled swap must never fund "again".
-        if let Some(crate::reconstruct::LegClass::Spent(s)) =
-            self.classify_v2_legs(&rec).map(|(a, _)| a)
-        {
-            bail!(
+        match self.classify_v2_legs(&rec).map(|(a, _)| a) {
+            Some(crate::reconstruct::LegClass::Spent(s)) => bail!(
                 "refusing to fund leg A of swap {swap}: its funding {} was already spent \
                  on-chain by {} ({:?}) — the swap settled; nothing to fund",
                 s.outpoint,
                 s.spend_txid,
                 s.kind
-            );
+            ),
+            Some(crate::reconstruct::LegClass::Vanished { outpoint, .. }) => bail!(
+                "refusing to fund leg A of swap {swap}: the wallet proves funding {} existed \
+                 and its output is spent — the swap settled; nothing to fund",
+                outpoint
+            ),
+            _ => {}
         }
 
         // Initiator: broadcast leg A now. Safe — leg A is only claimable after the
@@ -2574,16 +2584,20 @@ impl Engine {
         // Historical guard (docs/STATE_RECONSTRUCTION.md §5.1): a leg-B funding
         // that was already spent is invisible to the live reads above — never
         // build/reserve inputs for a swap that settled.
-        if let Some(crate::reconstruct::LegClass::Spent(s)) =
-            self.classify_v2_legs(&rec).map(|(_, b)| b)
-        {
-            bail!(
+        match self.classify_v2_legs(&rec).map(|(_, b)| b) {
+            Some(crate::reconstruct::LegClass::Spent(s)) => bail!(
                 "refusing to build leg B of swap {swap}: its funding {} was already spent \
                  on-chain by {} ({:?}) — the swap settled; nothing to fund",
                 s.outpoint,
                 s.spend_txid,
                 s.kind
-            );
+            ),
+            Some(crate::reconstruct::LegClass::Vanished { outpoint, .. }) => bail!(
+                "refusing to build leg B of swap {swap}: the wallet proves funding {} existed \
+                 and its output is spent — the swap settled; nothing to fund",
+                outpoint
+            ),
+            _ => {}
         }
         let address = leg.address(&secp, backend.params())?;
         let (txid, vout, tx_hex) = backend.wallet_build_funding(&address, rec.amount_b)?;
@@ -3095,6 +3109,10 @@ impl Engine {
                                 outpoint, height, ..
                             } => (outpoint, *height),
                             LegClass::Spent(s) => (&s.outpoint, s.funding_height),
+                            LegClass::Vanished {
+                                outpoint,
+                                funding_height,
+                            } => (outpoint, *funding_height),
                             LegClass::Unfunded => return,
                         };
                         *txid = Some(op.txid.to_string());
@@ -4067,19 +4085,23 @@ impl Engine {
                 // One history classification when the live view finds nothing;
                 // tier-L backends (no script index) return None and keep the
                 // pre-reconstruction behavior.
-                if let Some(crate::reconstruct::LegClass::Spent(s)) =
-                    self.classify_v1_legs(&rec).map(|(a, b)| match leg {
-                        "a" => a,
-                        _ => b,
-                    })
-                {
-                    bail!(
+                match self.classify_v1_legs(&rec).map(|(a, b)| match leg {
+                    "a" => a,
+                    _ => b,
+                }) {
+                    Some(crate::reconstruct::LegClass::Spent(s)) => bail!(
                         "refusing to fund leg {leg} of swap {swap}: its funding {} was already \
                          spent on-chain by {} ({:?}) — the swap settled; nothing to fund",
                         s.outpoint,
                         s.spend_txid,
                         s.kind
-                    );
+                    ),
+                    Some(crate::reconstruct::LegClass::Vanished { outpoint, .. }) => bail!(
+                        "refusing to fund leg {leg} of swap {swap}: the wallet proves funding {} \
+                         existed and its output is spent — the swap settled; nothing to fund",
+                        outpoint
+                    ),
+                    _ => {}
                 }
                 let address = htlc.address(backend.params())?;
                 let txid = backend.wallet_send(
@@ -5496,7 +5518,9 @@ impl Engine {
     /// - a cached CONFIRMED spend costs one tip read;
     /// - a live recorded pointer costs one `get_txout`;
     /// - everything else costs one history classification, whose confirmed
-    ///   spend result is cached (so it is paid once per transition).
+    ///   spend result is cached (so it is paid once per transition);
+    /// - tier L falls back to wallet evidence (#171, block-cadence
+    ///   throttled) before the live scan.
     ///
     /// A freshly discovered funding outpoint(+height) is written to `hint_out`
     /// for the caller to persist (status-only). Never touches record state.
@@ -5511,9 +5535,10 @@ impl Engine {
         ptr_txid: &Option<String>,
         ptr_vout: Option<u32>,
         classify_spend: &dyn Fn(&[Vec<u8>]) -> crate::reconstruct::SpendKind,
+        wallet_evidence: &dyn Fn() -> Option<crate::reconstruct::WalletEvidence>,
         hint_out: &mut Option<FollowLegHint>,
     ) -> LegVerdict {
-        use crate::reconstruct::{classify_leg, LegClass};
+        use crate::reconstruct::{classify_leg, LegClass, WalletEvidence};
         let Ok(backend) = self.backend(chain) else {
             return LegVerdict::Unknown;
         };
@@ -5587,9 +5612,79 @@ impl Engine {
                     spend_confs: s.spend_confs,
                 }
             }
-            // Tier L — no script index on any view: live-only degradation,
-            // exactly the pre-reconstruction behavior.
+            // History classification never yields Vanished (that shape only
+            // comes from wallet evidence) — but keep the compiler honest.
+            Ok(Some(LegClass::Vanished { outpoint, .. })) => {
+                *hint_out = Some(FollowLegHint {
+                    txid: outpoint.txid.to_string(),
+                    vout: outpoint.vout,
+                    height: None,
+                });
+                LegVerdict::ResolvedNoDepth
+            }
+            // Tier L — no script index on any view. Wallet-assisted evidence
+            // first (#171: the shared node wallet proves fundings we sent and
+            // claims we received, even long-spent), throttled to block
+            // cadence; then the live-only degradation, exactly the
+            // pre-reconstruction behavior.
             Ok(None) => {
+                let throttle_key = format!("{FOLLOW_WALLET_TIP_PREFIX}{swap_id}:{leg}");
+                let tip = backend.tip_height().ok();
+                let last_scanned = self
+                    .store
+                    .meta_get(&throttle_key)
+                    .ok()
+                    .flatten()
+                    .and_then(|s| s.parse::<u64>().ok());
+                if tip.is_some() && tip != last_scanned {
+                    if let Some(ev) = wallet_evidence() {
+                        match ev {
+                            WalletEvidence::Spent(s) => {
+                                *hint_out = Some(FollowLegHint {
+                                    txid: s.outpoint.txid.to_string(),
+                                    vout: s.outpoint.vout,
+                                    height: (s.funding_height > 0).then_some(s.funding_height),
+                                });
+                                if s.spend_height > 0 {
+                                    let cache = FollowSpendCache {
+                                        txid: s.spend_txid.clone(),
+                                        height: s.spend_height,
+                                        kind: s.kind,
+                                    };
+                                    if let Ok(json) = serde_json::to_string(&cache) {
+                                        let _ = self.store.meta_set(&cache_key, &json);
+                                    }
+                                }
+                                return LegVerdict::Spent {
+                                    kind: s.kind,
+                                    spend_confs: s.spend_confs,
+                                };
+                            }
+                            WalletEvidence::FundingPointer { outpoint, height } => {
+                                *hint_out = Some(FollowLegHint {
+                                    txid: outpoint.txid.to_string(),
+                                    vout: outpoint.vout,
+                                    height: (height > 0).then_some(height),
+                                });
+                                match backend.get_txout(&outpoint, spk) {
+                                    Ok(Some(info)) => {
+                                        return LegVerdict::FundedLive {
+                                            confs: info.confirmations,
+                                        }
+                                    }
+                                    // We PROVED the funding; the output is
+                                    // gone → unambiguous spend, depth
+                                    // unknowable (tip-drift buffer).
+                                    Ok(None) => return LegVerdict::ResolvedNoDepth,
+                                    Err(_) => return LegVerdict::Unknown,
+                                }
+                            }
+                        }
+                    }
+                    if let Some(t) = tip {
+                        let _ = self.store.meta_set(&throttle_key, &t.to_string());
+                    }
+                }
                 if ptr_txid.is_some() && ptr_vout.is_some() {
                     // We reached here through `get_txout → None` on a pointer
                     // we once saw live — an unambiguous spend, depth
@@ -5682,6 +5777,12 @@ impl Engine {
         let _ = self
             .store
             .meta_del(&format!("{FOLLOW_SPEND_PREFIX}{swap_id}:b"));
+        let _ = self
+            .store
+            .meta_del(&format!("{FOLLOW_WALLET_TIP_PREFIX}{swap_id}:a"));
+        let _ = self
+            .store
+            .meta_del(&format!("{FOLLOW_WALLET_TIP_PREFIX}{swap_id}:b"));
         self.store
             .meta_set(&format!("{PURGED_FOREIGN_PREFIX}{swap_id}"), "1")?;
         Ok(TickEvent {
@@ -5797,6 +5898,59 @@ impl Engine {
         Ok(None)
     }
 
+    /// Wallet-assisted evidence for one leg (#171): what the shared node
+    /// wallet's own history proves. POSITIVE-ONLY — used to establish that a
+    /// funding/spend happened, never that one didn't. `None` on any
+    /// inconclusiveness (no wallet on this coin, scan too large, chain
+    /// error). The scan is bounded to the swap's era: blocks since
+    /// `created_at` plus a day of slack.
+    fn wallet_leg_evidence(
+        &self,
+        chain: &ChainRef,
+        spk: &ScriptBuf,
+        amount: u64,
+        created_at: u64,
+        classify_spend: &dyn Fn(&[Vec<u8>]) -> crate::reconstruct::SpendKind,
+        claim_probe: &dyn Fn(&bitcoin::Transaction, usize) -> bool,
+    ) -> Option<crate::reconstruct::WalletEvidence> {
+        let backend = self.backend(chain).ok()?;
+        let tip = backend.tip_height().ok()?;
+        let spacing = u64::from(backend.params().target_spacing_secs.max(1));
+        let blocks = local_now().saturating_sub(created_at) / spacing + 144;
+        let since = tip.saturating_sub(blocks);
+        let txs = backend.wallet_txs_since(since).ok()??;
+        crate::reconstruct::classify_leg_wallet(&txs, tip, spk, amount, classify_spend, claim_probe)
+    }
+
+    /// Map wallet evidence onto a [`LegClass`], resolving the one open
+    /// question a funding pointer leaves: is the output still live? A
+    /// vanished pointer is an unambiguous spend with unknowable depth.
+    fn wallet_evidence_class(
+        &self,
+        chain: &ChainRef,
+        spk: &ScriptBuf,
+        evidence: crate::reconstruct::WalletEvidence,
+    ) -> Option<crate::reconstruct::LegClass> {
+        use crate::reconstruct::{LegClass, WalletEvidence};
+        match evidence {
+            WalletEvidence::Spent(s) => Some(LegClass::Spent(s)),
+            WalletEvidence::FundingPointer { outpoint, height } => {
+                match self.backend(chain).ok()?.get_txout(&outpoint, spk) {
+                    Ok(Some(info)) => Some(LegClass::Funded {
+                        outpoint,
+                        height,
+                        confs: info.confirmations,
+                    }),
+                    Ok(None) => Some(LegClass::Vanished {
+                        outpoint,
+                        funding_height: height,
+                    }),
+                    Err(_) => None,
+                }
+            }
+        }
+    }
+
     /// Fresh (cache-free) classification of a v1 record's two legs from chain
     /// history. `None` on any inconclusiveness — handshake incomplete, no
     /// history-capable view (tier L), chain error.
@@ -5804,26 +5958,42 @@ impl Engine {
         &self,
         rec: &SwapRecord,
     ) -> Option<(crate::reconstruct::LegClass, crate::reconstruct::LegClass)> {
-        use crate::reconstruct::{classify_leg, classify_v1_spend};
+        use crate::reconstruct::{classify_leg, classify_v1_spend, LegClass};
         let params = self.swap_params(rec).ok()?;
-        let spk_a = params.htlc_a().ok()?.script_pubkey();
-        let spk_b = params.htlc_b().ok()?.script_pubkey();
+        let htlc_a = params.htlc_a().ok()?;
+        let htlc_b = params.htlc_b().ok()?;
         let hash_h = params.hash_h;
         let classify = |w: &[Vec<u8>]| classify_v1_spend(w, &hash_h);
-        let a = classify_leg(
-            &self.backend(&rec.chain_a).ok()?,
-            &spk_a,
-            rec.amount_a,
-            &classify,
-        )
-        .ok()??;
-        let b = classify_leg(
-            &self.backend(&rec.chain_b).ok()?,
-            &spk_b,
-            rec.amount_b,
-            &classify,
-        )
-        .ok()??;
+        let leg = |chain: &ChainRef, htlc: &crate::htlc::Htlc, amount: u64| -> Option<LegClass> {
+            let spk = htlc.script_pubkey();
+            match classify_leg(&self.backend(chain).ok()?, &spk, amount, &classify) {
+                Ok(Some(c)) => Some(c),
+                // Tier L → wallet-assisted (#171): a v1 claim/refund of our
+                // leg reveals the exact witness script we can rebuild.
+                Ok(None) => {
+                    let ws = htlc.witness_script();
+                    let probe = |tx: &bitcoin::Transaction, idx: usize| {
+                        tx.input[idx]
+                            .witness
+                            .last()
+                            .map(|w| w == ws.as_bytes())
+                            .unwrap_or(false)
+                    };
+                    let ev = self.wallet_leg_evidence(
+                        chain,
+                        &spk,
+                        amount,
+                        rec.created_at,
+                        &classify,
+                        &probe,
+                    )?;
+                    self.wallet_evidence_class(chain, &spk, ev)
+                }
+                Err(_) => None,
+            }
+        };
+        let a = leg(&rec.chain_a, &htlc_a, rec.amount_a)?;
+        let b = leg(&rec.chain_b, &htlc_b, rec.amount_b)?;
         Some((a, b))
     }
 
@@ -5834,7 +6004,7 @@ impl Engine {
         &self,
         rec: &AdaptorSwapRecord,
     ) -> Option<(crate::reconstruct::LegClass, crate::reconstruct::LegClass)> {
-        use crate::reconstruct::{classify_leg, classify_v2_spend};
+        use crate::reconstruct::{classify_leg, classify_v2_spend, LegClass};
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let p = self.adaptor_params(rec).ok()?;
         let leg_a = p.leg_a(&secp).ok()?;
@@ -5843,20 +6013,59 @@ impl Engine {
         let spk_b = leg_b.script_pubkey(&secp).ok()?;
         let refund_a = leg_a.refund_script();
         let refund_b = leg_b.refund_script();
-        let a = classify_leg(
-            &self.backend(&rec.chain_a).ok()?,
-            &spk_a,
-            rec.amount_a,
-            &|w: &[Vec<u8>]| classify_v2_spend(w, &refund_a),
-        )
-        .ok()??;
-        let b = classify_leg(
-            &self.backend(&rec.chain_b).ok()?,
-            &spk_b,
-            rec.amount_b,
-            &|w: &[Vec<u8>]| classify_v2_spend(w, &refund_b),
-        )
-        .ok()??;
+        // Wallet-probe context (#171): a v2 refund reveals its leaf script;
+        // a cooperative key-path claim is recognized by sweeping to the
+        // record's per-swap negotiated sweep address.
+        let sweep_spk = |chain: &ChainRef, addr: &Option<String>| -> Option<ScriptBuf> {
+            let addr = addr.as_deref()?;
+            self.backend(chain).ok()?.params().parse_address(addr).ok()
+        };
+        let sweep_a = sweep_spk(&rec.chain_a, &rec.sweep_a);
+        let sweep_b = sweep_spk(&rec.chain_b, &rec.sweep_b);
+        let leg = |chain: &ChainRef,
+                   spk: &ScriptBuf,
+                   amount: u64,
+                   refund_script: &ScriptBuf,
+                   sweep: &Option<ScriptBuf>|
+         -> Option<LegClass> {
+            let classify = |w: &[Vec<u8>]| classify_v2_spend(w, refund_script);
+            match classify_leg(&self.backend(chain).ok()?, spk, amount, &classify) {
+                Ok(Some(c)) => Some(c),
+                Ok(None) => {
+                    let probe = |tx: &bitcoin::Transaction, idx: usize| {
+                        let win = &tx.input[idx].witness;
+                        match win.len() {
+                            1 => {
+                                win.nth(0)
+                                    .map(|s| s.len() == 64 || s.len() == 65)
+                                    .unwrap_or(false)
+                                    && sweep
+                                        .as_ref()
+                                        .map(|s| tx.output.iter().any(|o| &o.script_pubkey == s))
+                                        .unwrap_or(false)
+                            }
+                            3 => win
+                                .nth(1)
+                                .map(|s| s == refund_script.as_bytes())
+                                .unwrap_or(false),
+                            _ => false,
+                        }
+                    };
+                    let ev = self.wallet_leg_evidence(
+                        chain,
+                        spk,
+                        amount,
+                        rec.created_at,
+                        &classify,
+                        &probe,
+                    )?;
+                    self.wallet_evidence_class(chain, spk, ev)
+                }
+                Err(_) => None,
+            }
+        };
+        let a = leg(&rec.chain_a, &spk_a, rec.amount_a, &refund_a, &sweep_a)?;
+        let b = leg(&rec.chain_b, &spk_b, rec.amount_b, &refund_b, &sweep_b)?;
         Some((a, b))
     }
 
@@ -5880,7 +6089,10 @@ impl Engine {
         let settled = |c: &LegClass| match c {
             LegClass::Spent(s) => s.kind != SpendKind::Unknown && s.spend_confs >= needed,
             LegClass::Unfunded => true,
-            LegClass::Funded { .. } => false,
+            // A vanished funding is certainly spent, but with no spending tx
+            // its depth (and kind) are unknowable — never PROOF of resolution
+            // (the follower's tip-drift buffer handles it instead).
+            LegClass::Funded { .. } | LegClass::Vanished { .. } => false,
         };
         if !(settled(a) && settled(b)) {
             return false;
@@ -5953,6 +6165,10 @@ impl Engine {
                     outpoint, height, ..
                 } => (outpoint, *height),
                 LegClass::Spent(s) => (&s.outpoint, s.funding_height),
+                LegClass::Vanished {
+                    outpoint,
+                    funding_height,
+                } => (outpoint, *funding_height),
                 LegClass::Unfunded => return,
             };
             *txid = Some(op.txid.to_string());
@@ -6084,6 +6300,10 @@ impl Engine {
                     outpoint, height, ..
                 } => (outpoint, *height),
                 LegClass::Spent(s) => (&s.outpoint, s.funding_height),
+                LegClass::Vanished {
+                    outpoint,
+                    funding_height,
+                } => (outpoint, *funding_height),
                 LegClass::Unfunded => return,
             };
             *txid = Some(op.txid.to_string());
@@ -6235,12 +6455,32 @@ impl Engine {
             Ok(p) => p,
             Err(_) => return Ok(None), // handshake incomplete → nothing to observe yet
         };
-        let (spk_a, spk_b) = match (params.htlc_a(), params.htlc_b()) {
-            (Ok(a), Ok(b)) => (a.script_pubkey(), b.script_pubkey()),
+        let (htlc_a, htlc_b) = match (params.htlc_a(), params.htlc_b()) {
+            (Ok(a), Ok(b)) => (a, b),
             _ => return Ok(None),
         };
+        let (spk_a, spk_b) = (htlc_a.script_pubkey(), htlc_b.script_pubkey());
         let hash_h = params.hash_h;
         let classify = |w: &[Vec<u8>]| classify_v1_spend(w, &hash_h);
+        // Wallet evidence per leg (#171, tier-L fallback): a v1 claim/refund
+        // reveals the exact witness script we can rebuild locally.
+        let wallet_for = |chain: &ChainRef, spk: &ScriptBuf, amount: u64, ws: ScriptBuf| {
+            let chain = chain.clone();
+            let spk = spk.clone();
+            let created_at = rec.created_at;
+            move || {
+                let probe = |tx: &bitcoin::Transaction, idx: usize| {
+                    tx.input[idx]
+                        .witness
+                        .last()
+                        .map(|w| w == ws.as_bytes())
+                        .unwrap_or(false)
+                };
+                self.wallet_leg_evidence(&chain, &spk, amount, created_at, &classify, &probe)
+            }
+        };
+        let wallet_a = wallet_for(&rec.chain_a, &spk_a, rec.amount_a, htlc_a.witness_script());
+        let wallet_b = wallet_for(&rec.chain_b, &spk_b, rec.amount_b, htlc_b.witness_script());
         let mut hint_a = None;
         let mut hint_b = None;
         let va = self.follow_eval_leg(
@@ -6252,6 +6492,7 @@ impl Engine {
             &rec.htlc_a_txid,
             rec.htlc_a_vout,
             &classify,
+            &wallet_a,
             &mut hint_a,
         );
         let vb = self.follow_eval_leg(
@@ -6263,6 +6504,7 @@ impl Engine {
             &rec.htlc_b_txid,
             rec.htlc_b_vout,
             &classify,
+            &wallet_b,
             &mut hint_b,
         );
         if hint_a.is_some() || hint_b.is_some() {
@@ -6288,22 +6530,29 @@ impl Engine {
         let needed = rec.n_a.max(rec.n_b).max(1);
         // The purge's fresh re-verification — bypasses every cache and hint.
         let fresh_verify = || {
-            let deep_spent = |chain: &ChainRef, spk: &ScriptBuf, amount: u64| {
-                self.backend(chain)
-                    .ok()
-                    .and_then(|b| {
-                        crate::reconstruct::classify_leg(&b, spk, amount, &classify)
-                            .ok()
-                            .flatten()
-                    })
-                    .is_some_and(|c| {
-                        matches!(c, LegClass::Spent(ref s)
-                            if s.kind != SpendKind::Unknown
-                                && s.spend_confs >= u64::from(needed))
-                    })
+            let deep = |s: &crate::reconstruct::SpentLeg| {
+                s.kind != SpendKind::Unknown && s.spend_confs >= u64::from(needed)
             };
-            deep_spent(&rec.chain_a, &spk_a, rec.amount_a)
-                && deep_spent(&rec.chain_b, &spk_b, rec.amount_b)
+            let deep_spent =
+                |chain: &ChainRef,
+                 spk: &ScriptBuf,
+                 amount: u64,
+                 wallet: &dyn Fn() -> Option<crate::reconstruct::WalletEvidence>| {
+                    let Ok(backend) = self.backend(chain) else {
+                        return false;
+                    };
+                    match crate::reconstruct::classify_leg(&backend, spk, amount, &classify) {
+                        Ok(Some(LegClass::Spent(ref s))) => deep(s),
+                        // Tier L: re-derive the wallet evidence fresh (#171).
+                        Ok(None) => matches!(
+                            wallet(),
+                            Some(crate::reconstruct::WalletEvidence::Spent(ref s)) if deep(s)
+                        ),
+                        _ => false,
+                    }
+                };
+            deep_spent(&rec.chain_a, &spk_a, rec.amount_a, &wallet_a)
+                && deep_spent(&rec.chain_b, &spk_b, rec.amount_b, &wallet_b)
         };
         self.follow_settle(
             &rec.swap_id,
@@ -6341,6 +6590,59 @@ impl Engine {
         let refund_b = leg_b.refund_script();
         let classify_a = |w: &[Vec<u8>]| classify_v2_spend(w, &refund_a);
         let classify_b = |w: &[Vec<u8>]| classify_v2_spend(w, &refund_b);
+        // Wallet evidence per leg (#171, tier-L fallback): a v2 refund
+        // reveals its leaf script; a cooperative key-path claim sweeps to
+        // the record's per-swap negotiated sweep address.
+        let sweep_spk = |chain: &ChainRef, addr: &Option<String>| -> Option<ScriptBuf> {
+            let addr = addr.as_deref()?;
+            self.backend(chain).ok()?.params().parse_address(addr).ok()
+        };
+        let wallet_for = |chain: &ChainRef,
+                          spk: &ScriptBuf,
+                          amount: u64,
+                          refund_script: ScriptBuf,
+                          sweep: Option<ScriptBuf>| {
+            let chain = chain.clone();
+            let spk = spk.clone();
+            let created_at = rec.created_at;
+            move || {
+                let classify = |w: &[Vec<u8>]| classify_v2_spend(w, &refund_script);
+                let probe = |tx: &bitcoin::Transaction, idx: usize| {
+                    let win = &tx.input[idx].witness;
+                    match win.len() {
+                        1 => {
+                            win.nth(0)
+                                .map(|s| s.len() == 64 || s.len() == 65)
+                                .unwrap_or(false)
+                                && sweep
+                                    .as_ref()
+                                    .map(|s| tx.output.iter().any(|o| &o.script_pubkey == s))
+                                    .unwrap_or(false)
+                        }
+                        3 => win
+                            .nth(1)
+                            .map(|s| s == refund_script.as_bytes())
+                            .unwrap_or(false),
+                        _ => false,
+                    }
+                };
+                self.wallet_leg_evidence(&chain, &spk, amount, created_at, &classify, &probe)
+            }
+        };
+        let wallet_a = wallet_for(
+            &rec.chain_a,
+            &spk_a,
+            rec.amount_a,
+            refund_a.clone(),
+            sweep_spk(&rec.chain_a, &rec.sweep_a),
+        );
+        let wallet_b = wallet_for(
+            &rec.chain_b,
+            &spk_b,
+            rec.amount_b,
+            refund_b.clone(),
+            sweep_spk(&rec.chain_b, &rec.sweep_b),
+        );
         let mut hint_a = None;
         let mut hint_b = None;
         let va = self.follow_eval_leg(
@@ -6352,6 +6654,7 @@ impl Engine {
             &rec.funding_a_txid,
             rec.funding_a_vout,
             &classify_a,
+            &wallet_a,
             &mut hint_a,
         );
         let vb = self.follow_eval_leg(
@@ -6363,6 +6666,7 @@ impl Engine {
             &rec.funding_b_txid,
             rec.funding_b_vout,
             &classify_b,
+            &wallet_b,
             &mut hint_b,
         );
         if hint_a.is_some() || hint_b.is_some() {
@@ -6385,26 +6689,30 @@ impl Engine {
         }
         let needed = rec.n_a.max(rec.n_b).max(1);
         let fresh_verify = || {
+            let deep = |s: &crate::reconstruct::SpentLeg| {
+                s.kind != SpendKind::Unknown && s.spend_confs >= u64::from(needed)
+            };
             let deep_spent =
                 |chain: &ChainRef,
                  spk: &ScriptBuf,
                  amount: u64,
-                 classify: &dyn Fn(&[Vec<u8>]) -> SpendKind| {
-                    self.backend(chain)
-                        .ok()
-                        .and_then(|b| {
-                            crate::reconstruct::classify_leg(&b, spk, amount, classify)
-                                .ok()
-                                .flatten()
-                        })
-                        .is_some_and(|c| {
-                            matches!(c, LegClass::Spent(ref s)
-                                if s.kind != SpendKind::Unknown
-                                    && s.spend_confs >= u64::from(needed))
-                        })
+                 classify: &dyn Fn(&[Vec<u8>]) -> SpendKind,
+                 wallet: &dyn Fn() -> Option<crate::reconstruct::WalletEvidence>| {
+                    let Ok(backend) = self.backend(chain) else {
+                        return false;
+                    };
+                    match crate::reconstruct::classify_leg(&backend, spk, amount, classify) {
+                        Ok(Some(LegClass::Spent(ref s))) => deep(s),
+                        // Tier L: re-derive the wallet evidence fresh (#171).
+                        Ok(None) => matches!(
+                            wallet(),
+                            Some(crate::reconstruct::WalletEvidence::Spent(ref s)) if deep(s)
+                        ),
+                        _ => false,
+                    }
                 };
-            deep_spent(&rec.chain_a, &spk_a, rec.amount_a, &classify_a)
-                && deep_spent(&rec.chain_b, &spk_b, rec.amount_b, &classify_b)
+            deep_spent(&rec.chain_a, &spk_a, rec.amount_a, &classify_a, &wallet_a)
+                && deep_spent(&rec.chain_b, &spk_b, rec.amount_b, &classify_b, &wallet_b)
         };
         self.follow_settle(
             &rec.swap_id,

@@ -42,6 +42,8 @@ FOLLOW_MNEMONIC_S1 = ("scheme spot photo card baby mountain device kick "
                       "cradle pact join borrow")
 FOLLOW_MNEMONIC_S2 = ("cat swing flag economy stadium alone churn speed "
                       "unique patch report train")
+FOLLOW_MNEMONIC_S3 = ("vessel ladder alter error federal sibling chat "
+                      "ability sun glass valve picture")
 
 TERMINAL_FOLLOW_EVENTS = ("followed-skipped-terminal", "followed-purged",
                           "followed-aged-out")
@@ -312,6 +314,96 @@ def scenario_dormant_observer_takeover(h, ep, eb):
         relay.stop()
 
 
+def scenario_wallet_assisted_core_only(h, ep, eb):
+    """Cell 3 (#171): the observer's btcx backend is CORE-ONLY (no electrs) —
+    the exact mainnet shape of the 2026-07-12 ghost. The backup-session
+    contract shares the node wallet, so the observer must still resolve a
+    followed swap that settles: the taker's claim of the btcx leg is a
+    wallet receive (witness-script probed), the btc leg classifies from
+    electrs — the record purges promptly via `followed-purged`, NOT the
+    24h age-out."""
+    relay = NostrRelay(h.workdir)
+    mk_bx, mk_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
+    tk_bx, tk_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
+    maker = Party("fmk3", h, h.workdir, "alice_pocx", "alice_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True,
+                  pocx_url=mk_bx, btc_url=mk_bt)
+    taker = Party("ftk3", h, h.workdir, "bob_pocx", "bob_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
+                  pocx_url=tk_bx, btc_url=tk_bt)
+    obs = None
+    try:
+        relay.start()
+        maker.start()
+        taker.start()
+        taker.setup_seed(mnemonic=FOLLOW_MNEMONIC_S3)
+
+        # Drive mid-flight (both legs committed), then activate the observer:
+        # bob's SAME node wallet for btcx, but Core-RPC ONLY — tier L.
+        def both_funded():
+            m, t = swap_of(maker), swap_of(taker)
+            return (m is not None and m.get("htlc_a_txid")
+                    and t is not None and t.get("htlc_b_txid"))
+
+        sid = drive_swap_over_relay(h, ep, eb, maker, taker, both_funded)
+        obs = Party("fob3", h, h.workdir, "bob_pocx", "bob_btc",
+                    nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
+                    pocx_url=h.pocx.rpc_url(wallet="bob_pocx"),  # Core-only!
+                    btc_url=tk_bt)
+        obs.start()
+        obs.setup_seed(mnemonic=FOLLOW_MNEMONIC_S3)
+        rec = None
+        for _ in range(30):
+            tick_all("import3", obs)
+            rec = swap_of(obs, sid)
+            if rec is not None:
+                break
+            time.sleep(0.5)
+        assert rec is not None, "cell3: snapshot never imported as followed"
+        assert rec.get("source") == "foreign"
+
+        # The primary (taker) completes the swap with the maker — the
+        # observer only watches.
+        for _ in range(40):
+            tick_all("settle3", maker, taker)
+            m, t = swap_of(maker, sid), swap_of(taker, sid)
+            if m and t and m["state"] == "completed" and t["state"] == "completed":
+                break
+            mine_and_sync(h, ep, eb)
+        else:
+            raise AssertionError("cell3: swap never completed")
+        mine_and_sync(h, ep, eb, n=2)  # bury the claims past needed depth
+
+        # The observer must resolve the followed record from the SHARED
+        # WALLET (btcx leg: the taker's claim is a bob_pocx receive) + electrs
+        # (btc leg) — a prompt followed-purged, never the age-out. The purge
+        # is an ENGINE tick event (rides the tick RPC), unlike the async
+        # import-scan events that go to the log.
+        seen = []
+        for _ in range(30):
+            seen += tick_all("resolve3", obs)
+            if swap_of(obs, sid) is None:
+                break
+            mine_and_sync(h, ep, eb)
+            time.sleep(0.3)
+        assert swap_of(obs, sid) is None, \
+            "cell3: followed record never resolved on a Core-only btcx backend"
+        assert "followed-purged" in seen, \
+            f"cell3: expected a wallet-evidence purge, tick events: {seen}"
+        assert "followed-aged-out" not in seen, \
+            "cell3: resolution must come from wallet evidence, not the age-out"
+        print("[follow-e2e] cell3 OK: Core-only observer resolved the settled "
+              "swap via the shared wallet")
+    finally:
+        for p in (maker, taker, obs):
+            if p is not None:
+                try:
+                    p.stop()
+                except Exception:  # noqa: BLE001
+                    pass
+        relay.stop()
+
+
 def main():
     build_workspace()
     keep = "--keep" in sys.argv
@@ -330,6 +422,7 @@ def main():
             print("[follow-e2e] both electrs synced")
             scenario_observe_after_completion(h, ep, eb)
             scenario_dormant_observer_takeover(h, ep, eb)
+            scenario_wallet_assisted_core_only(h, ep, eb)
             print("[follow-e2e] ALL CELLS GREEN")
         finally:
             ep.stop()

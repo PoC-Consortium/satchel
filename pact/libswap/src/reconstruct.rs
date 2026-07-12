@@ -82,6 +82,16 @@ pub enum LegClass {
     /// The funding output existed and is spent — the historical fact no
     /// live-UTXO read can see.
     Spent(SpentLeg),
+    /// The funding is PROVEN (wallet evidence, #171) and the output is gone
+    /// from the UTXO set — an unambiguous spend whose spending tx we cannot
+    /// retrieve (tier L, spent by the counterparty). Enough to refuse a
+    /// re-fund and to resolve a follower via the tip-drift buffer; never
+    /// enough for a depth-verified terminal.
+    Vanished {
+        outpoint: OutPoint,
+        /// Funding block height (0 = unknown/unconfirmed at recording).
+        funding_height: u64,
+    },
 }
 
 /// Classify a v1 (P2WSH HTLC) spend from its witness. The spk match already
@@ -239,6 +249,108 @@ pub fn age_out_margin_secs(network: Network, needed_confs: u32, target_spacing_s
         return 0;
     }
     86_400u64.max(6 * u64::from(needed_confs.max(1)) * u64::from(target_spacing_secs))
+}
+
+/// What the NODE WALLET's own history can prove about a swap leg (#171).
+/// POSITIVE-ONLY: the backup-session contract shares the wallet across a
+/// merchant's machines, so this sees every transaction the merchant SIDE
+/// made — but never the counterparty's. Absence proves nothing.
+#[derive(Debug, Clone)]
+pub enum WalletEvidence {
+    /// The leg's funding output was spent, and the wallet holds the spending
+    /// tx (our claim/refund — it pays the wallet), fully classified.
+    Spent(SpentLeg),
+    /// The wallet FUNDED this leg (our own send) — the pointer survives the
+    /// output being spent, unlike any live-UTXO read. Liveness is NOT
+    /// implied: the caller must ask the chain (`get_txout`) whether the
+    /// output still exists; a vanished pointer is an unambiguous spend
+    /// (depth unknowable without the spending tx).
+    FundingPointer { outpoint: OutPoint, height: u64 },
+}
+
+/// Extract wallet evidence for one leg from the wallet's decoded
+/// transactions ([`crate::chain::ChainBackend::wallet_txs_since`]).
+///
+/// Three positive shapes, strongest first:
+/// - a wallet tx SPENDS a funding we can also see the wallet make → full
+///   [`SpentLeg`] (kind from the witness, both heights known);
+/// - a wallet tx is OUR CLAIM of a counterparty-funded leg (`claim_probe`
+///   matches an input — v1: the revealed witness script byte-equals ours;
+///   v2: the refund leaf byte-equals, or a key-path spend sweeping to the
+///   record's negotiated sweep address) → [`SpentLeg`] with the funding
+///   outpoint recovered from the claim's input (funding height unknown);
+/// - a wallet tx FUNDS the leg (output pays `(spk, amount)`) with no
+///   wallet-visible spend → [`WalletEvidence::FundingPointer`].
+pub fn classify_leg_wallet(
+    wallet_txs: &[(bitcoin::Transaction, u64)],
+    tip: u64,
+    spk: &ScriptBuf,
+    amount_sat: u64,
+    classify_spend: &dyn Fn(&[Vec<u8>]) -> SpendKind,
+    claim_probe: &dyn Fn(&bitcoin::Transaction, usize) -> bool,
+) -> Option<WalletEvidence> {
+    let confs_of = |height: u64| -> u64 {
+        if height > 0 && tip >= height {
+            tip - height + 1
+        } else {
+            0
+        }
+    };
+    // Fundings the wallet itself made.
+    let mut fundings: Vec<(OutPoint, u64)> = Vec::new();
+    for (tx, height) in wallet_txs {
+        for (vout, out) in tx.output.iter().enumerate() {
+            if out.script_pubkey == *spk && out.value.to_sat() == amount_sat {
+                fundings.push((
+                    OutPoint {
+                        txid: tx.compute_txid(),
+                        vout: vout as u32,
+                    },
+                    *height,
+                ));
+            }
+        }
+    }
+    let spent_leg = |outpoint: OutPoint,
+                     funding_height: u64,
+                     tx: &bitcoin::Transaction,
+                     height: u64,
+                     witness: Vec<Vec<u8>>| {
+        WalletEvidence::Spent(SpentLeg {
+            outpoint,
+            funding_height,
+            spend_txid: tx.compute_txid().to_string(),
+            spend_height: height,
+            spend_confs: confs_of(height),
+            kind: classify_spend(&witness),
+            spend_tx_hex: bitcoin::consensus::encode::serialize_hex(tx),
+        })
+    };
+    // Wallet-visible spends of those fundings (our own refunds, and claims
+    // of legs we also funded — not a real v1/v2 shape, but cheap to cover).
+    for (tx, height) in wallet_txs {
+        for input in &tx.input {
+            if let Some((op, fh)) = fundings.iter().find(|(op, _)| input.previous_output == *op) {
+                let witness: Vec<Vec<u8>> = input.witness.iter().map(|i| i.to_vec()).collect();
+                return Some(spent_leg(*op, *fh, tx, *height, witness));
+            }
+        }
+    }
+    // Our claim of a COUNTERPARTY-funded leg: the claim pays our wallet, so
+    // it is a wallet tx; the probe identifies which input spends OUR leg,
+    // and its prevout IS the funding outpoint we never saw live.
+    for (tx, height) in wallet_txs {
+        for (idx, input) in tx.input.iter().enumerate() {
+            if claim_probe(tx, idx) {
+                let witness: Vec<Vec<u8>> = input.witness.iter().map(|i| i.to_vec()).collect();
+                return Some(spent_leg(input.previous_output, 0, tx, *height, witness));
+            }
+        }
+    }
+    fundings
+        .into_iter()
+        .next()
+        .map(|(outpoint, height)| WalletEvidence::FundingPointer { outpoint, height })
 }
 
 #[cfg(test)]
@@ -608,5 +720,112 @@ mod tests {
         assert_eq!(age_out_margin_secs(Network::Mainnet, 1, 600), 86_400);
         // …and scales with the finality budget on slow/deep configs.
         assert_eq!(age_out_margin_secs(Network::Mainnet, 30, 600), 108_000);
+    }
+
+    // ---- wallet-assisted evidence (#171) -----------------------------------
+
+    fn no_probe(_tx: &Transaction, _idx: usize) -> bool {
+        false
+    }
+
+    #[test]
+    fn wallet_funding_only_yields_pointer() {
+        let spk = spk();
+        let f = funding_tx(&spk, 100_000);
+        let txs = vec![(f.clone(), 90u64)];
+        match classify_leg_wallet(
+            &txs,
+            100,
+            &spk,
+            100_000,
+            &kind_always(SpendKind::Unknown),
+            &no_probe,
+        ) {
+            Some(WalletEvidence::FundingPointer { outpoint, height }) => {
+                assert_eq!(outpoint.txid, f.compute_txid());
+                assert_eq!(height, 90);
+            }
+            other => panic!("expected FundingPointer, got {other:?}"),
+        }
+        // Wrong amount → the wallet proves nothing about THIS leg.
+        assert!(classify_leg_wallet(
+            &txs,
+            100,
+            &spk,
+            55_555,
+            &kind_always(SpendKind::Unknown),
+            &no_probe
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn wallet_funding_plus_spend_is_fully_classified() {
+        let spk = spk();
+        let f = funding_tx(&spk, 100_000);
+        let sp = spend_tx(
+            &f,
+            &[vec![0x30; 71], vec![0x02; 33], vec![], vec![0xAA; 40]],
+        );
+        let txs = vec![(f.clone(), 90u64), (sp.clone(), 95u64)];
+        match classify_leg_wallet(
+            &txs,
+            100,
+            &spk,
+            100_000,
+            &kind_always(SpendKind::Refund),
+            &no_probe,
+        ) {
+            Some(WalletEvidence::Spent(leg)) => {
+                assert_eq!(leg.outpoint.txid, f.compute_txid());
+                assert_eq!(leg.spend_txid, sp.compute_txid().to_string());
+                assert_eq!(leg.funding_height, 90);
+                assert_eq!(leg.spend_confs, 6);
+                assert_eq!(leg.kind, SpendKind::Refund);
+            }
+            other => panic!("expected Spent, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn wallet_claim_of_counterparty_funding_recovers_the_outpoint() {
+        // The user's ghost shape: the counterparty funded the leg (invisible
+        // to the wallet), OUR claim swept it to the wallet — the claim's
+        // input IS the funding outpoint we never saw.
+        let spk = spk();
+        let s = [9u8; 32];
+        let h = hash_of(&s);
+        let ws = vec![0xAB; 40]; // the leg's witness script bytes (probe target)
+        let foreign_funding = funding_tx(&spk, 100_000); // NOT in the wallet set
+        let claim = spend_tx(
+            &foreign_funding,
+            &[
+                vec![0x30; 71],
+                vec![0x02; 33],
+                s.to_vec(),
+                vec![1],
+                ws.clone(),
+            ],
+        );
+        let txs = vec![(claim.clone(), 95u64)];
+        let classify = |w: &[Vec<u8>]| classify_v1_spend(w, &h);
+        let probe = |tx: &Transaction, idx: usize| {
+            tx.input[idx]
+                .witness
+                .last()
+                .map(|w| w == ws.as_slice())
+                .unwrap_or(false)
+        };
+        match classify_leg_wallet(&txs, 100, &spk, 100_000, &classify, &probe) {
+            Some(WalletEvidence::Spent(leg)) => {
+                assert_eq!(leg.outpoint.txid, foreign_funding.compute_txid());
+                assert_eq!(leg.funding_height, 0, "funding height unknowable");
+                assert_eq!(leg.kind, SpendKind::Redeem, "preimage verified");
+                assert_eq!(leg.spend_confs, 6);
+            }
+            other => panic!("expected Spent via claim probe, got {other:?}"),
+        }
+        // Without the probe the wallet proves nothing (positive-only).
+        assert!(classify_leg_wallet(&txs, 100, &spk, 100_000, &classify, &no_probe).is_none());
     }
 }
