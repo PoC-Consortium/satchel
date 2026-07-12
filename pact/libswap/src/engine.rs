@@ -4773,15 +4773,6 @@ impl Engine {
         their_n_b: Option<u32>,
         prev: &HashMap<String, SwapProgress>,
     ) -> Option<SwapProgress> {
-        for leg in ["a", "b"] {
-            if matches!(
-                self.store
-                    .meta_get(&format!("{FOLLOW_SPEND_PREFIX}{swap_id}:{leg}")),
-                Ok(Some(_))
-            ) {
-                return None; // settling → about to purge
-            }
-        }
         let entry = |chain: &ChainRef, watching: &str, confs: u32, needed: u32| SwapProgress {
             swap_id: swap_id.to_string(),
             watching: watching.into(),
@@ -4795,6 +4786,69 @@ impl Engine {
             updated_at: local_now(),
             awaiting_since_height: None,
         };
+        // Settlement: the merchant's own claim landing. On SUCCESS we secure the
+        // leg we RECEIVE (participant → A, initiator → B — the redeem); on a
+        // REFUND we reclaim the leg we FUNDED (participant → B, initiator → A).
+        // Show "Securing your <coin>" tracking that spend's burial, matching the
+        // owner — instead of dropping the line (which regressed narrate to the
+        // frozen snapshot state). The record purges itself once both are deep.
+        let read_spend = |leg: &str| -> Option<FollowSpendCache> {
+            self.store
+                .meta_get(&format!("{FOLLOW_SPEND_PREFIX}{swap_id}:{leg}"))
+                .ok()
+                .flatten()
+                .and_then(|j| serde_json::from_str(&j).ok())
+        };
+        let (funded_leg, secured_leg) = match role {
+            Role::Participant => ("b", "a"),
+            Role::Initiator => ("a", "b"),
+        };
+        let leg_chain = |leg: &str| if leg == "a" { chain_a } else { chain_b };
+        let leg_n = |leg: &str| if leg == "a" { n_a } else { n_b };
+        let settle_confs = |chain: &ChainRef, c: &FollowSpendCache| -> u32 {
+            self.backend(chain)
+                .and_then(|b| b.tip_height())
+                .ok()
+                .map(|tip| {
+                    if c.height > 0 && tip >= c.height {
+                        (tip - c.height + 1).min(u64::from(u32::MAX)) as u32
+                    } else {
+                        0
+                    }
+                })
+                .unwrap_or(0)
+        };
+        use crate::reconstruct::SpendKind;
+        if let Some(c) = read_spend(secured_leg).filter(|c| c.kind == SpendKind::Redeem) {
+            let chain = leg_chain(secured_leg);
+            return Some(entry(
+                chain,
+                "settlement",
+                settle_confs(chain, &c),
+                leg_n(secured_leg).max(1),
+            ));
+        }
+        if let Some(c) = read_spend(funded_leg).filter(|c| c.kind == SpendKind::Refund) {
+            let chain = leg_chain(funded_leg);
+            return Some(entry(
+                chain,
+                "settlement",
+                settle_confs(chain, &c),
+                leg_n(funded_leg).max(1),
+            ));
+        }
+        // Reveal window: our funded leg was claimed by the counterparty (the
+        // secret is on chain) but our own claim isn't yet — our settlement is
+        // imminent. Show the awaiting-claim liveness cue rather than a stale
+        // lock count on the now-spent funding.
+        if read_spend(funded_leg).is_some() {
+            return self.progress_awaiting_anchored(
+                swap_id,
+                leg_chain(secured_leg),
+                "awaiting_claim",
+                0,
+            );
+        }
         // Leg B gates the swap's resolution (the reveal happens once leg B is
         // deep), so it takes precedence once discovered.
         if let (Some(txid), vout, spk) = ptr_b {
@@ -4826,6 +4880,135 @@ impl Engine {
             );
         }
         self.progress_awaiting(swap_id, chain_a, "awaiting_lock", prev)
+    }
+
+    /// Advance a FOLLOWED v1 record's DISPLAY state to chain reality, from the
+    /// leg verdicts the follow evaluator already computed (no extra chain
+    /// reads). A followed record's state is otherwise frozen at its snapshot,
+    /// so the narrate STORY (which is state-driven) would read "Terms agreed"
+    /// for the swap's whole life while the progress line moved beneath it. The
+    /// mapping is phase-only (what narrate needs) and monotonic — it never
+    /// regresses on a transient/ reorg-flickered verdict. Never drives: a
+    /// followed record's state is display-only (drive routing is gated on
+    /// `drives()`, not state).
+    fn followed_display_state_v1(cur: State, va: &LegVerdict, vb: &LegVerdict) -> State {
+        use crate::reconstruct::SpendKind;
+        let funded = |v: &LegVerdict| {
+            matches!(
+                v,
+                LegVerdict::FundedLive { .. }
+                    | LegVerdict::Spent { .. }
+                    | LegVerdict::ResolvedNoDepth
+            )
+        };
+        let redeemed = |v: &LegVerdict| {
+            matches!(
+                v,
+                LegVerdict::Spent {
+                    kind: SpendKind::Redeem,
+                    ..
+                }
+            )
+        };
+        let refunded = |v: &LegVerdict| {
+            matches!(
+                v,
+                LegVerdict::Spent {
+                    kind: SpendKind::Refund,
+                    ..
+                }
+            )
+        };
+        let derived = if refunded(va) || refunded(vb) {
+            State::Refunded
+        } else if redeemed(va) && redeemed(vb) {
+            State::Completed
+        } else if redeemed(va) || redeemed(vb) {
+            State::RedeemedB // a claim revealed the secret — settlement underway
+        } else if funded(va) && funded(vb) {
+            State::FundedB
+        } else if funded(va) || funded(vb) {
+            State::FundedA
+        } else {
+            return cur; // nothing on-chain yet — keep the snapshot state
+        };
+        let rank = |s: State| match s {
+            State::Created => 0,
+            State::Accepted => 1,
+            State::FundedA => 2,
+            State::FundedB => 3,
+            State::RedeemedB => 4,
+            State::Completed | State::Refunded | State::Aborted => 5,
+        };
+        if rank(derived) > rank(cur) {
+            derived
+        } else {
+            cur
+        }
+    }
+
+    /// Advance a FOLLOWED v2 record's DISPLAY state to chain reality — the v2
+    /// twin of [`Engine::followed_display_state_v1`].
+    fn followed_display_state_v2(
+        cur: AdaptorState,
+        va: &LegVerdict,
+        vb: &LegVerdict,
+    ) -> AdaptorState {
+        use crate::reconstruct::SpendKind;
+        let funded = |v: &LegVerdict| {
+            matches!(
+                v,
+                LegVerdict::FundedLive { .. }
+                    | LegVerdict::Spent { .. }
+                    | LegVerdict::ResolvedNoDepth
+            )
+        };
+        let redeemed = |v: &LegVerdict| {
+            matches!(
+                v,
+                LegVerdict::Spent {
+                    kind: SpendKind::Redeem,
+                    ..
+                }
+            )
+        };
+        let refunded = |v: &LegVerdict| {
+            matches!(
+                v,
+                LegVerdict::Spent {
+                    kind: SpendKind::Refund,
+                    ..
+                }
+            )
+        };
+        let derived = if refunded(va) || refunded(vb) {
+            AdaptorState::Refunded
+        } else if redeemed(va) && redeemed(vb) {
+            AdaptorState::Completed
+        } else if redeemed(va) || redeemed(vb) {
+            AdaptorState::RedeemedB
+        } else if funded(va) && funded(vb) {
+            AdaptorState::FundedB
+        } else if funded(va) || funded(vb) {
+            AdaptorState::FundedA
+        } else {
+            return cur;
+        };
+        let rank = |s: AdaptorState| match s {
+            AdaptorState::Created => 0,
+            AdaptorState::Accepted => 1,
+            AdaptorState::NoncesExchanged => 2,
+            AdaptorState::Signed => 3,
+            AdaptorState::FundedA => 4,
+            AdaptorState::FundedB => 5,
+            AdaptorState::RedeemedB => 6,
+            AdaptorState::Completed | AdaptorState::Refunded | AdaptorState::Aborted => 7,
+        };
+        if rank(derived) > rank(cur) {
+            derived
+        } else {
+            cur
+        }
     }
 
     /// The (voice, depth) a FOLLOWED swap's progress line shows for one leg,
@@ -6550,7 +6733,12 @@ impl Engine {
             &wallet_b,
             &mut hint_b,
         );
-        if hint_a.is_some() || hint_b.is_some() {
+        // Advance the DISPLAY state to chain reality so the observer's narrate
+        // story tracks the owner ("locking → securing → coins secured"); the
+        // followed state is otherwise frozen at the snapshot. Display-only —
+        // never drives (routing is gated on `drives()`, not state).
+        let new_state = Self::followed_display_state_v1(rec.state, &va, &vb);
+        if hint_a.is_some() || hint_b.is_some() || new_state != rec.state {
             let mut updated = rec.clone();
             if let Some(h) = hint_a {
                 updated.htlc_a_txid = Some(h.txid);
@@ -6562,6 +6750,7 @@ impl Engine {
                 updated.htlc_b_vout = Some(h.vout);
                 updated.htlc_b_height = h.height.or(updated.htlc_b_height);
             }
+            updated.state = new_state;
             let _ = self.store.put(&updated); // status-only write (never a tx)
         }
         // Legacy belt: a derive_scope-0 record is pre-upgrade history (claimed
@@ -6712,7 +6901,9 @@ impl Engine {
             &wallet_b,
             &mut hint_b,
         );
-        if hint_a.is_some() || hint_b.is_some() {
+        // Advance the DISPLAY state to chain reality (see follow_one).
+        let new_state = Self::followed_display_state_v2(rec.state, &va, &vb);
+        if hint_a.is_some() || hint_b.is_some() || new_state != rec.state {
             let mut updated = rec.clone();
             if let Some(h) = hint_a {
                 updated.funding_a_txid = Some(h.txid);
@@ -6724,6 +6915,7 @@ impl Engine {
                 updated.funding_b_vout = Some(h.vout);
                 updated.funding_b_height = h.height.or(updated.funding_b_height);
             }
+            updated.state = new_state;
             let _ = self.store.put_adaptor(&updated);
         }
         // Legacy belt: same as follow_one — pre-upgrade history is never purged.
@@ -11474,6 +11666,81 @@ mod tests {
             )
             .unwrap();
         rec
+    }
+
+    #[test]
+    fn followed_display_state_tracks_chain_phases() {
+        use crate::reconstruct::SpendKind;
+        use LegVerdict::*;
+        let unf = Unfunded;
+        let fund = FundedLive { confs: 1 };
+        let redeem = Spent {
+            kind: SpendKind::Redeem,
+            spend_confs: 1,
+        };
+        let refund = Spent {
+            kind: SpendKind::Refund,
+            spend_confs: 1,
+        };
+        let s = Engine::followed_display_state_v1;
+        // Snapshot state (accepted) advances with the chain.
+        assert_eq!(
+            s(State::Accepted, &unf, &unf),
+            State::Accepted,
+            "nothing on chain"
+        );
+        assert_eq!(
+            s(State::Accepted, &fund, &unf),
+            State::FundedA,
+            "one leg funded"
+        );
+        assert_eq!(
+            s(State::Accepted, &fund, &fund),
+            State::FundedB,
+            "both funded"
+        );
+        assert_eq!(
+            s(State::Accepted, &fund, &redeem),
+            State::RedeemedB,
+            "a claim revealed s"
+        );
+        assert_eq!(
+            s(State::Accepted, &redeem, &redeem),
+            State::Completed,
+            "both claimed"
+        );
+        assert_eq!(
+            s(State::Accepted, &refund, &unf),
+            State::Refunded,
+            "a refund"
+        );
+        // Monotonic — never regress on a flickered/partial verdict.
+        assert_eq!(
+            s(State::FundedB, &fund, &unf),
+            State::FundedB,
+            "no regress to FundedA"
+        );
+        assert_eq!(
+            s(State::Completed, &unf, &unf),
+            State::Completed,
+            "terminal is sticky"
+        );
+
+        // v2 twin: snapshot is usually `Signed`.
+        let s2 = Engine::followed_display_state_v2;
+        assert_eq!(
+            s2(AdaptorState::Signed, &fund, &fund),
+            AdaptorState::FundedB
+        );
+        assert_eq!(
+            s2(AdaptorState::Signed, &redeem, &redeem),
+            AdaptorState::Completed
+        );
+        assert_eq!(
+            s2(AdaptorState::FundedB, &unf, &unf),
+            AdaptorState::FundedB,
+            "no regress"
+        );
     }
 
     #[test]
