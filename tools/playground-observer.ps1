@@ -12,11 +12,11 @@
     * regtest PoCX + BTC nodes, two electrs, a local Nostr relay, and two
       node-backed counterparties (Bob/Carol) that post a book AND auto-take
       Alice's own offers (so you can MAKE, not just take).  [observer_playground.py]
-    * MAIN Satchel "Alice"      — managed pactd :9739, default config dir.
-    * OBSERVER Satchel           — managed pactd :9740, ISOLATED config dir via
+    * MAIN Satchel "Alice"      - managed pactd :9739, default config dir.
+    * OBSERVER Satchel           - managed pactd :9740, ISOLATED config dir via
       SATCHEL_DATA_DIR (%LOCALAPPDATA%\org.pocx.satchel-observer). Same seed
-      (imported by the driver) → sees Alice's snapshots; own data dir → own
-      machine.json scope → Alice's swaps read source=foreign and it FOLLOWS.
+      (imported by the driver) -> sees Alice's snapshots; own data dir -> own
+      machine.json scope -> Alice's swaps read source=foreign and it FOLLOWS.
 
   Both windows run the BUILT satchel.exe (frontendDist = ui/dist), so there is
   no vite dev-server and the two GUIs don't collide. The driver seeds both
@@ -26,7 +26,7 @@
   + electrs) down. -Down force-tears a stale run.
 
 .NOTES
-  SAFETY: teardown is PID/PORT-ONLY — never Stop-Process by name, so a live
+  SAFETY: teardown is PID/PORT-ONLY - never Stop-Process by name, so a live
   MAINNET pocx-bitcoind / Satchel is untouched. None of these ports is mainnet.
 #>
 param([switch]$Down, [switch]$NoBuild)
@@ -43,7 +43,7 @@ $PidFile = Join-Path $LogDir "observer-pids.txt"
 # Alice pactd :9739, observer pactd :9740, PoCX/BTC REST nodes :18443/:18332,
 # electrs :19750/:19751 (btcx) + :19760/:19761 (btc), relay :19788, plus the
 # default regtest RPC ports and vite (in case a prior run left one).
-# NEVER 9737/9738 — those are the user's mainnet/testnet pactd.
+# NEVER 9737/9738 - those are the user's mainnet/testnet pactd.
 $Ports = 9739, 9740, 18443, 18332, 19443, 19543, 19750, 19751, 19760, 19761, 19788, 5173
 
 function Kill-Tree([int]$procId) {
@@ -195,8 +195,8 @@ Write-Host "====================================================================
 Write-Host "  OBSERVER PLAYGROUND IS UP"
 Write-Host ""
 Write-Host "  Two Satchel windows, SAME seed, over one local relay:"
-Write-Host "    MAIN 'Alice'  (pactd :9739) — you drive make/take here."
-Write-Host "    OBSERVER      (pactd :9740) — follows Alice read-only."
+Write-Host "    MAIN 'Alice'  (pactd :9739) - you drive make/take here."
+Write-Host "    OBSERVER      (pactd :9740) - follows Alice read-only."
 Write-Host "  The driver seeds both and funds Alice; give it ~20-40s after the"
 Write-Host "  windows open (watch the driver log for 'seeded' / 'faucet')."
 Write-Host "  If a window still shows the setup wizard, import the seed printed"
@@ -211,7 +211,7 @@ Write-Host "  On the OBSERVER window, the same swap appears under 'Another machi
 Write-Host "  and its narrate + progress should mirror Alice's, step for step."
 Write-Host "  You can also 'Take over' on the observer after closing Alice."
 Write-Host ""
-Write-Host "  Pace: btcx blocks ~8s / btc ~12s, confs 6/4 — states linger to watch."
+Write-Host "  Pace: btcx blocks ~8s / btc ~12s, confs 6/4 - states linger to watch."
 Write-Host "  CLOSE THE MAIN (Alice) WINDOW to tear the whole stack down."
 Write-Host "  Logs:  $LogDir  (driver, satchel-alice, satchel-observer)"
 Write-Host "======================================================================"
@@ -220,7 +220,7 @@ try {
     $alice.WaitForExit()
 } finally {
     Write-Host ""
-    Write-Host "[obs-pg] Alice closed — tearing down (PID + port only) ..."
+    Write-Host "[obs-pg] Alice closed - tearing down (PID + port only) ..."
     Stop-Playground
     if ($obs -and -not $obs.HasExited) { Kill-Tree ([int]$obs.Id) }
     Write-Host "[obs-pg] down."
