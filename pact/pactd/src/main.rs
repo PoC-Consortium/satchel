@@ -321,6 +321,28 @@ fn kick_nostr(app: &App) {
     });
 }
 
+/// Flush the Nostr outbox right now (best-effort, FIRE-AND-FORGET) — called
+/// straight after any RPC that queues an outbound message (offer, take,
+/// revocation) so it reaches the relays promptly instead of waiting up to a
+/// full scheduler tick. Outbound Pact traffic is low-volume, so publishing per
+/// action rather than batching per tick is cheap and keeps peers (and same-seed
+/// observers) current. Unlike [`kick_nostr`] this skips the rescue-detection
+/// scan, which is only relevant on merchant load/unlock. The scheduler tick
+/// still drains the outbox as a backstop, and the graceful-shutdown path awaits
+/// a final drain (a fire-and-forget send can be cut off if the user quits
+/// immediately after — e.g. withdraw & exit).
+fn flush_nostr(app: &App) {
+    let Some(svc) = app.nostr.clone() else {
+        return;
+    };
+    let app = app.clone();
+    tokio::spawn(async move {
+        if let Err(err) = nostr_pass(&app, &svc).await {
+            tracing::warn!("nostr: outbox flush failed: {err:#}");
+        }
+    });
+}
+
 /// The standing #54 warning attached to every rescue surface: detection log,
 /// `rescuestatus` RPC and the CLI. One string so the wording never diverges.
 const RESCUE_PENDING_WARNING: &str = "in-flight swap snapshot(s) found on the relays but NOT \
@@ -1755,11 +1777,13 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 e.post_board_offer(net, give, get, t1s, t2s, ttl, proto.as_deref())
             })
             .await?;
+            flush_nostr(app); // publish the offer now, don't wait for a tick
             Ok(json!({ "offer_id": offer_id }))
         }
         "boardtake" => {
             let offer_id = p.str(0, "offer_id")?;
             blocking(app, move |e| e.take_board_offer(&offer_id)).await?;
+            flush_nostr(app); // send the giftwrapped take now, don't wait for a tick
             Ok(json!({ "taken": true }))
         }
         "boardrevoke" => {
@@ -1770,9 +1794,8 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             // Publish the queued NIP-09 deletion NOW instead of waiting up to a
             // full scheduler tick: the UI drops the offer locally at once, but a
             // remote observer only learns via the relay, and a withdraw is often
-            // immediately followed by a quit (`ExitGate` withdraw & exit) that
-            // stops pactd before the next tick would have flushed it.
-            kick_nostr(app);
+            // immediately followed by a quit (`ExitGate` withdraw & exit).
+            flush_nostr(app);
             Ok(json!({ "revoked": true }))
         }
         "revokeoffersforcoin" => {
@@ -1784,6 +1807,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             let revoked = blocking(app, move |e| e.revoke_offers_for_coin(&coin_id)).await?;
             if !revoked.is_empty() {
                 tracing::info!(coin = %cid, count = revoked.len(), "revoked offers for removed coin");
+                flush_nostr(app); // publish the deletions now, don't wait for a tick
             }
             Ok(json!({ "revoked": revoked }))
         }
@@ -1810,6 +1834,7 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             // boardtake, offer sourced from the slip instead of the board).
             let slip = p.str(0, "slip")?;
             blocking(app, move |e| e.take_offer_slip(&slip)).await?;
+            flush_nostr(app); // send the giftwrapped take now, don't wait for a tick
             Ok(json!({ "taken": true }))
         }
         "listprivateoffers" => {
