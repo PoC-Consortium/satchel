@@ -81,6 +81,11 @@ pub struct SwapRecord {
     pub htlc_a_vout: Option<u32>,
     pub htlc_b_txid: Option<String>,
     pub htlc_b_vout: Option<u32>,
+    /// Height when the chain-A HTLC was recorded — spend-scan start for a
+    /// follower/takeover, which (unlike the funder) cannot recover the
+    /// funding height from a wallet. `None` on pre-existing records.
+    #[serde(default)]
+    pub htlc_a_height: Option<u64>,
     /// Tip height when the chain-B HTLC was recorded — spend-scan start.
     pub htlc_b_height: Option<u64>,
     /// The preimage, once known. For the initiator this is derivable from
@@ -188,6 +193,13 @@ pub struct AdaptorSwapRecord {
     pub funding_a_vout: Option<u32>,
     pub funding_b_txid: Option<String>,
     pub funding_b_vout: Option<u32>,
+    /// Heights when each funding was recorded — spend-scan starts for a
+    /// follower/takeover (the wallet-based scan bound only works for the
+    /// machine that funded). `None` on pre-existing records.
+    #[serde(default)]
+    pub funding_a_height: Option<u64>,
+    #[serde(default)]
+    pub funding_b_height: Option<u64>,
     // Counterparty handshake material (hex), per redeem session.
     pub their_pubnonce_a: Option<String>,
     pub their_pubnonce_b: Option<String>,
@@ -1111,6 +1123,7 @@ mod tests {
             htlc_a_vout: None,
             htlc_b_txid: None,
             htlc_b_vout: None,
+            htlc_a_height: None,
             htlc_b_height: None,
             preimage: None,
             refund_tx_hex: None,

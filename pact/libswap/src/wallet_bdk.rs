@@ -115,6 +115,16 @@ impl ChainBackend for BdkWalletBackend {
         self.chain().find_spend_witness(outpoint, watch_spk)
     }
 
+    fn spk_history(&self, spk: &ScriptBuf) -> Result<Option<Vec<(String, i64)>>> {
+        Ok(Some(self.chain().history(spk)?))
+    }
+
+    fn fetch_tx(&self, txid: &str) -> Result<Option<Transaction>> {
+        // Fetch failures read as "cannot see it" (inconclusive) — see the
+        // ElectrumBackend trait impl.
+        Ok(self.chain().get_raw_tx(txid).ok())
+    }
+
     fn tip_height(&self) -> Result<u64> {
         self.chain().tip_height()
     }
