@@ -4725,6 +4725,81 @@ impl Engine {
             .unwrap_or_default()
     }
 
+    /// Progress for a FOLLOWED swap — another machine's, observed read-only
+    /// (§5 / docs/STATE_RECONSTRUCTION.md §7.10), shared by v1 and v2. Every
+    /// wait here is the OTHER machine's work, so both legs surface in the
+    /// counterparty voice using EXISTING display keys (no new locale strings):
+    /// a discovered lock burying → `their_lock` with the same `confs/needed`
+    /// count the owner shows; a buried leg B → `awaiting_claim` (+N blocks,
+    /// anchored to the lock's depth so it survives restarts); a buried leg A
+    /// alone → `awaiting_lock` on chain B; nothing discovered → `awaiting_lock`
+    /// on chain A. Once the follow evaluator has cached a spend the swap is
+    /// settling toward its purge — no line (better silent than stale).
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    fn swap_progress_followed(
+        &self,
+        swap_id: &str,
+        chain_a: &ChainRef,
+        chain_b: &ChainRef,
+        ptr_a: (Option<&str>, Option<u32>, Option<ScriptBuf>),
+        ptr_b: (Option<&str>, Option<u32>, Option<ScriptBuf>),
+        n_a: u32,
+        n_b: u32,
+        prev: &HashMap<String, SwapProgress>,
+    ) -> Option<SwapProgress> {
+        for leg in ["a", "b"] {
+            if matches!(
+                self.store
+                    .meta_get(&format!("{FOLLOW_SPEND_PREFIX}{swap_id}:{leg}")),
+                Ok(Some(_))
+            ) {
+                return None; // settling → about to purge
+            }
+        }
+        let entry = |chain: &ChainRef, confs: u32, needed: u32| SwapProgress {
+            swap_id: swap_id.to_string(),
+            watching: "their_lock".into(),
+            coin: coin_symbol(chain),
+            confs,
+            needed,
+            blocks_elapsed: None,
+            feerate_sat_vb: None,
+            last_action: None,
+            last_detail: None,
+            updated_at: local_now(),
+            awaiting_since_height: None,
+        };
+        // Leg B gates the swap's resolution (the owner reveals once it is
+        // deep), so it takes precedence once discovered.
+        if let (Some(txid), vout, spk) = ptr_b {
+            let confs = self.lock_confs(chain_b, txid, vout, spk)?;
+            let needed = n_b.max(1);
+            if confs < needed {
+                return Some(entry(chain_b, confs, needed));
+            }
+            return self.progress_awaiting_anchored(
+                swap_id,
+                chain_b,
+                "awaiting_claim",
+                confs - needed,
+            );
+        }
+        if let (Some(txid), vout, spk) = ptr_a {
+            let confs = self.lock_confs(chain_a, txid, vout, spk)?;
+            let needed = n_a.max(1);
+            if confs < needed {
+                return Some(entry(chain_a, confs, needed));
+            }
+            return self.progress_awaiting_anchored(
+                swap_id,
+                chain_b,
+                "awaiting_lock",
+                confs - needed,
+            );
+        }
+        self.progress_awaiting(swap_id, chain_a, "awaiting_lock", prev)
+    }
+
     /// Progress for one v1 swap. Surfaces only waits that are OURS: the
     /// counterparty's lock burying toward `n` (our gate before we act) and our
     /// own claim burying (settlement). One nuance for the maker after it locks
@@ -4752,6 +4827,24 @@ impl Engine {
                 })
                 .map(|h| h.script_pubkey())
         };
+        // A FOLLOWED record's state is frozen at its snapshot (the follower
+        // advances by chain only), so the driven (role, state) derivations
+        // below would show the import-time phase forever — the "locking… with
+        // no block count" observer gap. Derive from the chain pointers the
+        // follow evaluator persists instead (docs/STATE_RECONSTRUCTION.md
+        // §7.10), so the dock counts confirmations exactly like the owner.
+        if !self.drives(rec.derive_scope, rec.adopted) {
+            return self.swap_progress_followed(
+                &rec.swap_id,
+                &rec.chain_a,
+                &rec.chain_b,
+                (rec.htlc_a_txid.as_deref(), rec.htlc_a_vout, htlc_spk(true)),
+                (rec.htlc_b_txid.as_deref(), rec.htlc_b_vout, htlc_spk(false)),
+                rec.n_a,
+                rec.n_b,
+                prev,
+            );
+        }
         match (rec.role, rec.state) {
             // Maker: once the taker's B lock is in, wait for it to bury, then
             // secure our B redeem. Before that, the taker won't lock B until our
@@ -4942,6 +5035,27 @@ impl Engine {
                 p.leg_b(&secp).ok()?.script_pubkey(&secp).ok()
             }
         };
+        // Followed record → chain-derived progress (see swap_progress_v1).
+        if !self.drives(rec.derive_scope, rec.adopted) {
+            return self.swap_progress_followed(
+                &rec.swap_id,
+                &rec.chain_a,
+                &rec.chain_b,
+                (
+                    rec.funding_a_txid.as_deref(),
+                    rec.funding_a_vout,
+                    leg_spk(true),
+                ),
+                (
+                    rec.funding_b_txid.as_deref(),
+                    rec.funding_b_vout,
+                    leg_spk(false),
+                ),
+                rec.n_a,
+                rec.n_b,
+                prev,
+            );
+        }
         match (rec.role, rec.state) {
             // Maker: wait for the taker's B lock to bury, then secure our B redeem.
             // Leg B's txid is BUILT at accept (two-phase, spec §7), so it exists

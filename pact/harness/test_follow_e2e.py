@@ -261,6 +261,25 @@ def scenario_dormant_observer_takeover(h, ep, eb):
         assert rec.get("htlc_b_txid"), \
             f"leg-B pointer not reconstructed from chain: {rec}"
 
+        # The observer's dock line must COUNT like the owner's (the "locking…
+        # with no block count" observer gap): the followed swap gets a
+        # chain-derived SwapProgress entry — a burying lock (their_lock,
+        # confs/needed) or, once a leg is deep, an awaiting liveness count.
+        line = None
+        for _ in range(10):
+            tick_all("progress", obs)
+            line = next((q for q in obs.rpc("swapprogress")
+                         if q["swap_id"] == sid), None)
+            if line is not None:
+                break
+            time.sleep(0.3)
+        assert line is not None, "no progress line for the followed swap"
+        assert line["watching"] in ("their_lock", "awaiting_claim",
+                                    "awaiting_lock"), \
+            f"unexpected followed progress phase: {line}"
+        assert line["watching"] != "their_lock" or line["needed"] > 0, \
+            f"followed their_lock line has no counting target: {line}"
+
         # Take over (the owner is provably stopped) and drive to completion
         # with the live taker.
         obs.rpc("takeover", sid)
