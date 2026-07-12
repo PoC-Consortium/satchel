@@ -4758,15 +4758,19 @@ impl Engine {
     /// on chain A. Once the follow evaluator has cached a spend the swap is
     /// settling toward its purge — no line (better silent than stale).
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    #[allow(clippy::too_many_arguments)]
     fn swap_progress_followed(
         &self,
         swap_id: &str,
+        role: Role,
         chain_a: &ChainRef,
         chain_b: &ChainRef,
         ptr_a: (Option<&str>, Option<u32>, Option<ScriptBuf>),
         ptr_b: (Option<&str>, Option<u32>, Option<ScriptBuf>),
         n_a: u32,
         n_b: u32,
+        their_n_a: Option<u32>,
+        their_n_b: Option<u32>,
         prev: &HashMap<String, SwapProgress>,
     ) -> Option<SwapProgress> {
         for leg in ["a", "b"] {
@@ -4778,9 +4782,9 @@ impl Engine {
                 return None; // settling → about to purge
             }
         }
-        let entry = |chain: &ChainRef, confs: u32, needed: u32| SwapProgress {
+        let entry = |chain: &ChainRef, watching: &str, confs: u32, needed: u32| SwapProgress {
             swap_id: swap_id.to_string(),
-            watching: "their_lock".into(),
+            watching: watching.into(),
             coin: coin_symbol(chain),
             confs,
             needed,
@@ -4791,13 +4795,14 @@ impl Engine {
             updated_at: local_now(),
             awaiting_since_height: None,
         };
-        // Leg B gates the swap's resolution (the owner reveals once it is
+        // Leg B gates the swap's resolution (the reveal happens once leg B is
         // deep), so it takes precedence once discovered.
         if let (Some(txid), vout, spk) = ptr_b {
             let confs = self.lock_confs(chain_b, txid, vout, spk)?;
-            let needed = n_b.max(1);
+            let (watching, needed) =
+                Self::followed_leg_display(role, true, n_a, n_b, their_n_a, their_n_b);
             if confs < needed {
-                return Some(entry(chain_b, confs, needed));
+                return Some(entry(chain_b, watching, confs, needed));
             }
             return self.progress_awaiting_anchored(
                 swap_id,
@@ -4808,9 +4813,10 @@ impl Engine {
         }
         if let (Some(txid), vout, spk) = ptr_a {
             let confs = self.lock_confs(chain_a, txid, vout, spk)?;
-            let needed = n_a.max(1);
+            let (watching, needed) =
+                Self::followed_leg_display(role, false, n_a, n_b, their_n_a, their_n_b);
             if confs < needed {
-                return Some(entry(chain_a, confs, needed));
+                return Some(entry(chain_a, watching, confs, needed));
             }
             return self.progress_awaiting_anchored(
                 swap_id,
@@ -4820,6 +4826,37 @@ impl Engine {
             );
         }
         self.progress_awaiting(swap_id, chain_a, "awaiting_lock", prev)
+    }
+
+    /// The (voice, depth) a FOLLOWED swap's progress line shows for one leg,
+    /// mirroring the owner's `swap_progress_v1/v2`. The followed record is the
+    /// SAME merchant's swap (driven by another of its machines), so its own
+    /// funded leg is `our_lock` ("Your lock confirming"), not `their_lock`:
+    /// participant (taker) funds leg B → ours = B, theirs = A; initiator
+    /// (maker) funds leg A → ours = A, theirs = B. Depth is what the party WHO
+    /// ACTS NEXT waits for: our own lock buries toward the COUNTERPARTY's depth
+    /// (`their_n` — they act once it is deep), the counterparty's lock buries
+    /// toward OUR depth (`n`). A missing advisory `their_n` falls back to our
+    /// own (pre-exchange records). Pure, so the mapping is unit-testable.
+    fn followed_leg_display(
+        role: Role,
+        leg_is_b: bool,
+        n_a: u32,
+        n_b: u32,
+        their_n_a: Option<u32>,
+        their_n_b: Option<u32>,
+    ) -> (&'static str, u32) {
+        let ours = leg_is_b == (role == Role::Participant);
+        if ours {
+            let their_n = if leg_is_b {
+                their_n_b.unwrap_or(n_b)
+            } else {
+                their_n_a.unwrap_or(n_a)
+            };
+            ("our_lock", their_n.max(1))
+        } else {
+            ("their_lock", if leg_is_b { n_b } else { n_a }.max(1))
+        }
     }
 
     /// Progress for one v1 swap. Surfaces only waits that are OURS: the
@@ -4858,12 +4895,15 @@ impl Engine {
         if !self.drives(rec.derive_scope, rec.adopted) {
             return self.swap_progress_followed(
                 &rec.swap_id,
+                rec.role,
                 &rec.chain_a,
                 &rec.chain_b,
                 (rec.htlc_a_txid.as_deref(), rec.htlc_a_vout, htlc_spk(true)),
                 (rec.htlc_b_txid.as_deref(), rec.htlc_b_vout, htlc_spk(false)),
                 rec.n_a,
                 rec.n_b,
+                rec.their_n_a,
+                rec.their_n_b,
                 prev,
             );
         }
@@ -5061,6 +5101,7 @@ impl Engine {
         if !self.drives(rec.derive_scope, rec.adopted) {
             return self.swap_progress_followed(
                 &rec.swap_id,
+                rec.role,
                 &rec.chain_a,
                 &rec.chain_b,
                 (
@@ -5075,6 +5116,8 @@ impl Engine {
                 ),
                 rec.n_a,
                 rec.n_b,
+                rec.their_n_a,
+                rec.their_n_b,
                 prev,
             );
         }
@@ -11431,6 +11474,47 @@ mod tests {
             )
             .unwrap();
         rec
+    }
+
+    #[test]
+    fn followed_progress_mirrors_the_owners_voice_and_per_side_depth() {
+        // Regression for the observer/owner mismatch (main "your lock · 1/2" vs
+        // observer "their lock · 1/3"): a followed swap shows the merchant's
+        // OWN funded leg as `our_lock` at the counterparty's acting depth
+        // (`their_n`), and the counterparty's leg as `their_lock` at our depth.
+        use Role::*;
+        // Taker (participant): ours = leg B, theirs = leg A. Maker requires 2
+        // confs on leg B (their_n_b), taker's own config wants 3 (n_b), 5 on A.
+        let d = |leg_b| Engine::followed_leg_display(Participant, leg_b, 5, 3, Some(4), Some(2));
+        assert_eq!(
+            d(true),
+            ("our_lock", 2),
+            "taker's own leg B → our_lock · their_n_b"
+        );
+        assert_eq!(
+            d(false),
+            ("their_lock", 5),
+            "maker's leg A → their_lock · our n_a"
+        );
+
+        // Maker (initiator): ours = leg A, theirs = leg B.
+        let d = |leg_b| Engine::followed_leg_display(Initiator, leg_b, 5, 3, Some(4), Some(2));
+        assert_eq!(
+            d(false),
+            ("our_lock", 4),
+            "maker's own leg A → our_lock · their_n_a"
+        );
+        assert_eq!(
+            d(true),
+            ("their_lock", 3),
+            "taker's leg B → their_lock · our n_b"
+        );
+
+        // Missing advisory their_n → fall back to our own depth.
+        assert_eq!(
+            Engine::followed_leg_display(Participant, true, 5, 3, None, None),
+            ("our_lock", 3)
+        );
     }
 
     #[test]
