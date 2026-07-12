@@ -87,18 +87,25 @@ if ($Down) {
 Write-Host "[obs-pg] cleaning up any prior run ..."
 Stop-Playground
 
-# --- build: fresh UI dist + satchel.exe (prod frontend, no vite) + pactd ---
+# --- build: pactd + a STANDALONE satchel.exe -------------------------------
+# The webview frontend must be EMBEDDED (frontendDist = ui/dist), NOT the vite
+# dev URL: a plain `cargo build -p satchel` yields a dev binary that fails with
+# ERR_CONNECTION_REFUSED (no vite server). `cargo tauri build` embeds ui/dist
+# (running `npm run build` for us via beforeBuildCommand); --debug keeps it in
+# target/debug, --no-bundle skips the installer. Two such binaries run side by
+# side with no vite dev server.
 if (-not $NoBuild) {
-    Write-Host "[obs-pg] building UI (npm run build) ..." -ForegroundColor Cyan
-    Push-Location (Join-Path $Repo "satchel\ui")
-    try { npm run build; if ($LASTEXITCODE -ne 0) { throw "npm run build failed" } } finally { Pop-Location }
-    Write-Host "[obs-pg] building satchel.exe + pactd (debug) ..." -ForegroundColor Cyan
+    Write-Host "[obs-pg] building pactd (debug) ..." -ForegroundColor Cyan
     Push-Location $Repo
     try {
         cargo build -p pactd --manifest-path pact\Cargo.toml
         if ($LASTEXITCODE -ne 0) { throw "pactd build failed" }
-        cargo build -p satchel --manifest-path satchel\Cargo.toml
-        if ($LASTEXITCODE -ne 0) { throw "satchel build failed" }
+    } finally { Pop-Location }
+    Write-Host "[obs-pg] building satchel.exe (cargo tauri build --debug --no-bundle) ..." -ForegroundColor Cyan
+    Push-Location (Join-Path $Repo "satchel")
+    try {
+        cargo tauri build --debug --no-bundle
+        if ($LASTEXITCODE -ne 0) { throw "satchel (tauri build) failed" }
     } finally { Pop-Location }
 }
 $SatchelExe = Join-Path $Repo "satchel\target\debug\satchel.exe"
