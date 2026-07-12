@@ -7689,6 +7689,28 @@ impl Engine {
             return Ok(());
         }
         if let Ok(mut rec) = self.store.get_adaptor(swap_id) {
+            // Payout-custody gate (multi-machine): a v2 cooperative redeem is
+            // pinned to the sweep address fixed in the MuSig2 sighash at init.
+            // If THIS machine's wallet doesn't own that address, driving the
+            // redeem would send the proceeds to the ORIGINATING machine's
+            // wallet — and on a txindex-less Core node we couldn't even track
+            // completion (the settlement isn't a wallet tx). So SKIP such a
+            // swap: the group takeover loop adopts the rest and logs this, and
+            // the user can point this machine at the owning wallet (or add an
+            // Electrum view) and take over again. v1 pins no destination
+            // (redeem/refund sweep to a fresh current-wallet address), so it is
+            // never gated; a sweep-unset v2 falls back to a seed-derived
+            // destination, always ours.
+            if let Some((addr, chain)) = Self::v2_takeover_payout(&rec) {
+                if self.backend(chain)?.wallet_owns_address(addr)? != Some(true) {
+                    bail!(
+                        "skipping swap {swap_id}: its payout pays a wallet this machine does not \
+                         control — the coin is served by another node's wallet. Point this \
+                         machine at that wallet (or add an Electrum view for the coin) and take \
+                         over again."
+                    );
+                }
+            }
             rec.adopted = true;
             if let Some(note) = self.fast_forward_v2(&mut rec) {
                 eprintln!("takeover {swap_id}: {note}");
@@ -7697,6 +7719,21 @@ impl Engine {
             return Ok(());
         }
         bail!("unknown swap {swap_id} — nothing to take over");
+    }
+
+    /// The (sweep address, chain) a v2 takeover must own to COMPLETE the swap:
+    /// the pinned destination of the cooperative redeem for the leg this
+    /// record's role would claim (initiator → leg B / `sweep_b`, participant →
+    /// leg A / `sweep_a`). `None` when the sweep is unset — the redeem then
+    /// falls back to a seed-derived destination, which every same-seed machine
+    /// owns, so there is nothing to gate. Pure (role + record fields only), so
+    /// the role→leg mapping is unit-testable without a backend.
+    fn v2_takeover_payout(rec: &AdaptorSwapRecord) -> Option<(&str, &ChainRef)> {
+        let (sweep, chain) = match rec.role {
+            Role::Initiator => (rec.sweep_b.as_deref(), &rec.chain_b),
+            Role::Participant => (rec.sweep_a.as_deref(), &rec.chain_a),
+        };
+        sweep.filter(|s| !s.is_empty()).map(|s| (s, chain))
     }
 
     /// Read-only twin of [`Engine::rescue_from_blobs`]: count the snapshots
@@ -11394,6 +11431,35 @@ mod tests {
             )
             .unwrap();
         rec
+    }
+
+    #[test]
+    fn v2_takeover_payout_picks_the_redeemed_legs_sweep() {
+        // The payout-custody gate must check the sweep of the leg THIS role
+        // would redeem (initiator → leg B, participant → leg A), and skip the
+        // check when the sweep is unset (seed-derived destination, always ours).
+        let (engine, dir) = engine_with("v2-payout-sel", None);
+        let mut rec = v2_record(&engine);
+        rec.sweep_a = Some("addr_a".into());
+        rec.sweep_b = Some("addr_b".into());
+
+        rec.role = Role::Initiator;
+        let (addr, chain) = Engine::v2_takeover_payout(&rec).expect("initiator has a sweep");
+        assert_eq!(addr, "addr_b", "initiator redeems leg B");
+        assert_eq!(chain.coin_id, rec.chain_b.coin_id);
+
+        rec.role = Role::Participant;
+        let (addr, chain) = Engine::v2_takeover_payout(&rec).expect("participant has a sweep");
+        assert_eq!(addr, "addr_a", "participant redeems leg A");
+        assert_eq!(chain.coin_id, rec.chain_a.coin_id);
+
+        // Unset / empty sweep → nothing to gate (fallback dest is seed-derived).
+        rec.sweep_a = None;
+        assert!(Engine::v2_takeover_payout(&rec).is_none());
+        rec.role = Role::Initiator;
+        rec.sweep_b = Some(String::new());
+        assert!(Engine::v2_takeover_payout(&rec).is_none());
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

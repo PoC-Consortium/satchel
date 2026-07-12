@@ -176,6 +176,19 @@ pub trait ChainBackend: Send + Sync {
         Ok(None)
     }
 
+    /// Whether THIS machine's wallet controls `address` — the v2-takeover
+    /// payout-custody gate (multi-machine). A v2 cooperative redeem is pinned
+    /// to a sweep address fixed in the MuSig2 sighash at init; a machine that
+    /// doesn't own that address would drive the redeem but send the proceeds
+    /// to the ORIGINATING machine's wallet (and, on a txindex-less Core node,
+    /// couldn't even track completion). So takeover checks ownership here and
+    /// skips a swap it can't receive. `Some(true)`/`Some(false)` when the
+    /// backend can decide; `Ok(None)` when it can't (no wallet, unreachable)
+    /// — callers treat anything but `Some(true)` as "not ours, skip".
+    fn wallet_owns_address(&self, _address: &str) -> Result<Option<bool>> {
+        Ok(None)
+    }
+
     fn tip_height(&self) -> Result<u64>;
 
     /// Median-time-past of the tip — what CLTV is evaluated against.
@@ -446,6 +459,9 @@ impl<T: ChainBackend + ?Sized> ChainBackend for std::sync::Arc<T> {
     }
     fn wallet_txs_since(&self, since_height: u64) -> Result<Option<Vec<(Transaction, u64)>>> {
         (**self).wallet_txs_since(since_height)
+    }
+    fn wallet_owns_address(&self, address: &str) -> Result<Option<bool>> {
+        (**self).wallet_owns_address(address)
     }
     fn tip_height(&self) -> Result<u64> {
         (**self).tip_height()
@@ -1104,6 +1120,17 @@ impl ChainBackend for CoreRpcBackend {
         Ok(info.get("unlocked_until").and_then(|v| v.as_u64()) == Some(0))
     }
 
+    fn wallet_owns_address(&self, address: &str) -> Result<Option<bool>> {
+        // `getaddressinfo.ismine` — true for any address this node wallet can
+        // sign for (incl. unused `getnewaddress` outputs like a swap sweep),
+        // false for a foreign address. A failed call (address unparseable to
+        // this node, RPC down) is inconclusive, not "foreign".
+        match self.rpc.call("getaddressinfo", &[json!(address)]) {
+            Ok(info) => Ok(info["ismine"].as_bool()),
+            Err(_) => Ok(None),
+        }
+    }
+
     fn wallet_txs_since(&self, since_height: u64) -> Result<Option<Vec<(Transaction, u64)>>> {
         // One `listsinceblock` + one `gettransaction` per unique wallet tx —
         // callers bound `since_height` to the swap's era, and the follow
@@ -1757,6 +1784,11 @@ impl ChainBackend for MultiBackend {
     fn wallet_txs_since(&self, since_height: u64) -> Result<Option<Vec<(Transaction, u64)>>> {
         // Wallet reads go to the primary, like every wallet operation.
         self.primary().wallet_txs_since(since_height)
+    }
+
+    fn wallet_owns_address(&self, address: &str) -> Result<Option<bool>> {
+        // The wallet lives on the primary (Core RPC or the nodeless bdk).
+        self.primary().wallet_owns_address(address)
     }
 
     fn tip_height(&self) -> Result<u64> {
