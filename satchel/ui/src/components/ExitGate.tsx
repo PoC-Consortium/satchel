@@ -76,6 +76,16 @@ export default function ExitGate() {
         // an unreachable relay, or a busy engine must not stall the exit
         // decision (worst case we skip the revoke shortcut; posted offers
         // expire via their TTL anyway).
+        //
+        // "Our own" is per MACHINE, not per identity: on a same-seed observer
+        // (multi-machine, #122) the board's `from` matches the MAIN machine's
+        // offers too — gating on those would block the observer's exit, and
+        // "Withdraw & exit" would revoke the PRIMARY's live offers from the
+        // wrong machine. An offer this machine posted has a driven local
+        // record (`source !== "foreign"`) under its swap id; require that.
+        const localIds = new Set(
+          swapsRef.current.filter((s) => s.source !== "foreign").map((s) => s.swap_id),
+        );
         let mine: Offer[] = [];
         try {
           const list = await Promise.race([
@@ -85,12 +95,17 @@ export default function ExitGate() {
             ),
           ]);
           const me = idRef.current;
-          mine = (list.offers || []).filter((o) => o.from === me && !o.revoked);
+          mine = (list.offers || []).filter(
+            (o) => o.from === me && !o.revoked && localIds.has(o.swap_id),
+          );
         } catch {
           /* no board / unreachable / busy — nothing to revoke */
         }
 
-        const live = swapsRef.current.filter(isActive);
+        // Gate only on swaps THIS machine drives (own scope or taken over).
+        // A FOLLOWED swap is another machine's — read-only here, its owner
+        // completes it whether or not this observer keeps running.
+        const live = swapsRef.current.filter((s) => isActive(s) && s.source !== "foreign");
         if (live.length > 0) {
           // Live swap dominates (timelocks): never auto-stop pactd.
           setConfirmText("");
