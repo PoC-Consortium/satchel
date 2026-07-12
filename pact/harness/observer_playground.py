@@ -49,12 +49,11 @@ from regtest_harness import (  # noqa: E402
 )
 from test_swap_e2e import build_workspace, Party, COINS_TOML  # noqa: E402
 
-# Alice's (and the observer's) shared Pact seed. A fixed BIP39 test vector so
-# both Satchels import the SAME identity with no copy-paste — distinct from the
-# other playgrounds' seeds so relay history never crosses over. NOT for funds.
+# Alice's (and the observer's) shared Pact seed. A CHECKSUM-VALID BIP39 test
+# vector so both Satchels import the SAME identity with no copy-paste. Local
+# ephemeral relay → no cross-talk with other playgrounds' seeds. NOT for funds.
 FOLLOW_MNEMONIC = (
-    "record scan drift bundle observe mirror echo patch "
-    "ozone ladder gadget alter"
+    "legal winner thank year wave sausage worth useful legal winner thank yellow"
 )
 
 # Managed-Satchel pactd ports (regtest offset): MAIN 9739, OBSERVER 9740.
@@ -258,13 +257,18 @@ def main():
                         print(f"[obs-pg] mine skipped ({wallet}): {e}")
 
                 # Seed both Satchels' pactd (once each is reachable) with the
-                # SAME mnemonic — Alice drives, the observer follows.
+                # SAME mnemonic — Alice drives, the observer follows. importseed
+                # needs an ACTIVE MERCHANT first (what the wizard does), so
+                # create one, then import; both are best-effort (a re-run over
+                # an already-seeded pactd just no-ops).
                 if not alice_seeded and rpc(ALICE_PORT, "getinfo") is not None:
-                    if rpc(ALICE_PORT, "importseed", FOLLOW_MNEMONIC) is not None:
+                    rpc(ALICE_PORT, "createmerchant", "Alice")
+                    if rpc(ALICE_PORT, "importseed", FOLLOW_MNEMONIC, "") is not None:
                         alice_seeded = True
                         print("[obs-pg] Alice (MAIN :9739) seeded")
                 if not observer_seeded and rpc(OBSERVER_PORT, "getinfo") is not None:
-                    if rpc(OBSERVER_PORT, "importseed", FOLLOW_MNEMONIC) is not None:
+                    rpc(OBSERVER_PORT, "createmerchant", "Alice-backup")
+                    if rpc(OBSERVER_PORT, "importseed", FOLLOW_MNEMONIC, "") is not None:
                         observer_seeded = True
                         print("[obs-pg] Alice-observer (:9740) seeded — following")
 
