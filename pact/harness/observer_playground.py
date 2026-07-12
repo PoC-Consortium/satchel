@@ -38,7 +38,10 @@ import urllib.request  # noqa: E402
 
 import sys  # noqa: E402
 
-sys.stdout.reconfigure(line_buffering=True)
+# Force UTF-8: prints below contain non-ASCII (arrows/ellipses). When Satchel's
+# launcher redirects this driver's stdout to a file, Windows would otherwise use
+# the locale codepage (cp1252) and raise UnicodeEncodeError mid-run, killing it.
+sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
 
 from regtest_harness import (  # noqa: E402
     BTC_ELECTRS_ELECTRUM_PORT,

@@ -15,12 +15,13 @@
     * MAIN Satchel "Alice"      - managed pactd :9739, default config dir.
     * OBSERVER Satchel           - managed pactd :9740, ISOLATED config dir via
       SATCHEL_DATA_DIR (%LOCALAPPDATA%\org.pocx.satchel-observer). Same seed
-      (imported by the driver) -> sees Alice's snapshots; own data dir -> own
+      (imported in the wizard) -> sees Alice's snapshots; own data dir -> own
       machine.json scope -> Alice's swaps read source=foreign and it FOLLOWS.
 
   Both windows run the BUILT satchel.exe (frontendDist = ui/dist), so there is
-  no vite dev-server and the two GUIs don't collide. The driver seeds both
-  pactd with one fixed mnemonic and funds Alice's (seed-derived, shared) wallets.
+  no vite dev-server and the two GUIs don't collide. Each Satchel spawns its OWN
+  managed pactd from its satchel.json; you seed both in the wizard with one fixed
+  mnemonic and the driver then funds Alice's (seed-derived, shared) wallets.
 
   Close the MAIN window to tear the whole stack (both Satchels + nodes + relay
   + electrs) down. -Down force-tears a stale run.
@@ -141,7 +142,7 @@ function Write-SatchelJson([string]$netDir, [int]$listenPort) {
   "listen": "127.0.0.1:$listenPort",
   "auto_fund": true,
   "tick_secs": 5,
-  "ui": { "theme": "system", "language": "en", "nav_open": true }
+  "ui": { "theme": "system", "language": "en", "nav_open": true, "onboarded": true }
 }
 "@
     [System.IO.File]::WriteAllText((Join-Path $netDir "satchel.json"), $json,
@@ -155,7 +156,7 @@ $env:POCX_BITCOIND = Join-Path $Repo "pact\harness\bin\pocx-bitcoind.exe"
 $env:BTC_BITCOIND  = Join-Path $Repo "pact\harness\bin\btc-bitcoind.exe"
 if (-not $env:RUST_LOG) { $env:RUST_LOG = "pactd=info,libswap=info" }
 
-# --- run the stack driver (nodes + electrs + relay + bots + seeding) -------
+# --- run the stack driver (nodes + electrs + relay + bots + faucet) --------
 Write-Host "[obs-pg] starting regtest stack + electrs + relay + Bob/Carol ..." -ForegroundColor Cyan
 $pg = Start-Process -FilePath "python" -ArgumentList "observer_playground.py" `
     -WorkingDirectory (Join-Path $Repo "pact\harness") `
@@ -173,14 +174,36 @@ while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 1
 }
 if (-not $up) { throw "driver did not come up within 5 min. See $pgOut" }
-Write-Host "[obs-pg] stack up; launching the two Satchel windows ..." -ForegroundColor Green
+Write-Host "[obs-pg] stack up." -ForegroundColor Green
 
 # --- launch BOTH Satchel windows (built binary, no vite) -------------------
+# Each Satchel SPAWNS ITS OWN managed pactd on its configured `listen` port (the
+# normal app path: nothing on the port -> spawn from satchel.json). We launch
+# them STAGGERED and wait for each backend's /health before the next, so the two
+# never race and we fail loudly if a backend doesn't come up. (Do NOT pre-spawn
+# pactd here: Satchel only ADOPTS a pactd it detached itself via running-pactd.json
+# and REFUSES a foreign one on its port -- "already serving a different engine".)
+#
 # MAIN "Alice": default config dir. OBSERVER: isolated dir via SATCHEL_DATA_DIR.
-# Each gets its OWN WebView2 user-data folder (else two instances fight over one
-# and the second window won't render); both are playground-local so neither
-# touches your real Satchel's WebView2 state.
+# Each also gets its OWN WebView2 user-data folder -- two instances of the same
+# exe share one WebView2 dir by default and the SECOND window fails to create its
+# webview (folder locked) and renders blank/stuck. Both are playground-local so
+# neither touches your real Satchel's WebView2 state. PS 5.1's Start-Process has
+# no -Environment, so set env in THIS session just before each launch, then clear.
+function Wait-Health([int]$port, [int]$sec = 45) {
+    $deadline = (Get-Date).AddSeconds($sec)
+    while ((Get-Date) -lt $deadline) {
+        try {
+            if ((Invoke-WebRequest -Uri "http://127.0.0.1:$port/health" -TimeoutSec 2 -UseBasicParsing).StatusCode -eq 200) { return $true }
+        } catch {}
+        Start-Sleep -Milliseconds 500
+    }
+    return $false
+}
+
 $env:SATCHEL_NETWORK = "regtest"
+
+# MAIN "Alice" - default config dir, own WebView2 folder.
 $env:WEBVIEW2_USER_DATA_FOLDER = Join-Path $AliceNet "webview2"
 try {
     $alice = Start-Process -FilePath $SatchelExe -PassThru `
@@ -190,13 +213,11 @@ try {
     Remove-Item Env:\WEBVIEW2_USER_DATA_FOLDER -ErrorAction SilentlyContinue
 }
 Add-Content -Path $PidFile -Value $alice.Id
+Write-Host "[obs-pg] Alice launched; waiting for its managed pactd on :9739 ..." -ForegroundColor Cyan
+if (-not (Wait-Health 9739)) { throw "Alice pactd did not come up on :9739 (see $LogDir\satchel-alice.err.log)" }
+Write-Host "[obs-pg] Alice backend up." -ForegroundColor Green
 
-# The observer overrides the base config dir via SATCHEL_DATA_DIR, AND needs its
-# OWN WebView2 user-data folder: two instances of the same exe share one WebView2
-# data dir by default and the SECOND fails to create its webview (folder locked),
-# so the observer window never renders. WEBVIEW2_USER_DATA_FOLDER gives it a
-# private one. PS 5.1's Start-Process has no -Environment, so set both in THIS
-# session just before launching (Alice already launched without them), then clear.
+# OBSERVER - isolated config dir (SATCHEL_DATA_DIR) + own WebView2 folder.
 $env:SATCHEL_DATA_DIR = $ObsBase
 $env:WEBVIEW2_USER_DATA_FOLDER = Join-Path $ObsBase "webview2"
 try {
@@ -208,6 +229,9 @@ try {
     Remove-Item Env:\WEBVIEW2_USER_DATA_FOLDER -ErrorAction SilentlyContinue
 }
 Add-Content -Path $PidFile -Value $obs.Id
+Write-Host "[obs-pg] Observer launched; waiting for its managed pactd on :9740 ..." -ForegroundColor Cyan
+if (-not (Wait-Health 9740)) { throw "Observer pactd did not come up on :9740 (see $LogDir\satchel-observer.err.log)" }
+Write-Host "[obs-pg] Observer backend up." -ForegroundColor Green
 
 Write-Host ""
 Write-Host "======================================================================"
@@ -218,13 +242,12 @@ Write-Host "    MAIN 'Alice'  (pactd :9739) - you drive make/take here."
 Write-Host "    OBSERVER      (pactd :9740) - follows Alice read-only."
 Write-Host ""
 Write-Host "  SEED BOTH WINDOWS with the SAME phrase (the wizard runs its own"
-Write-Host "  onboarding, so import - do not create - in EACH window):"
-Write-Host "    1. In each window's wizard: create a merchant, then IMPORT this"
-Write-Host "       recovery phrase (identical in both):"
+Write-Host "  onboarding, so create a merchant then IMPORT - do not generate - in"
+Write-Host "  EACH window):"
 Write-Host ""
 Write-Host "       legal winner thank year wave sausage worth useful legal winner thank yellow" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "    2. The driver then auto-funds Alice (watch the log for 'faucet')."
+Write-Host "    The driver then auto-funds Alice (watch the log for 'faucet')."
 Write-Host "  Same phrase -> same identity -> the observer follows Alice; each"
 Write-Host "  window's own data dir gives it a distinct machine scope (foreign)."
 Write-Host ""
@@ -246,9 +269,7 @@ try {
     $alice.WaitForExit()
 } finally {
     Write-Host ""
-    Write-Host "[obs-pg] Alice closed - tearing down (PID + port only) ..."
+    Write-Host "[obs-pg] main window closed - tearing down (PID + port only) ..."
     Stop-Playground
-    if ($obs -and -not $obs.HasExited) { Kill-Tree ([int]$obs.Id) }
     Write-Host "[obs-pg] down."
 }
-exit 0
