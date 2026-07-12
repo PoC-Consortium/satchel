@@ -6096,39 +6096,45 @@ impl Engine {
     /// (harmless — we drive nothing); a live funded leg parks it EVEN past
     /// the age-out (visible money is the takeover-worthy case, never purged).
     #[allow(clippy::too_many_arguments)]
-    /// The confirmation depth that gates a FOLLOWED swap's terminal purge: OUR
-    /// settlement leg's, not the counterparty's. On a cooperative redeem our leg
-    /// is the one we RECEIVE (participant→A, initiator→B); on a refund it's the
-    /// one we FUNDED (participant→B, initiator→A) — mirrors `settlementLeg` in
-    /// the UI. Once ours is reorg-deep our money is final; the co-leg is already
-    /// spent (the caller only reaches this over two non-live legs) so its depth
-    /// is the counterparty's concern. A mixed redeem/refund (§7.4 window) is
-    /// ambiguous → gate on the SHALLOWER leg (both must be deep). Pure/testable.
-    fn follow_purge_confs(
+    /// Whether a FOLLOWED swap may terminally purge: OUR settlement leg is spent
+    /// `n`-deep at ITS OWN confirmation target, not the counterparty's. On a
+    /// cooperative redeem our leg is the one we RECEIVE (participant→A,
+    /// initiator→B) at that leg's target; on a refund it's the one we FUNDED
+    /// (participant→B, initiator→A) — mirrors `settlementLeg`/`leg_n` in the UI,
+    /// so the row clears exactly when its "securing N/N" completes. Once ours is
+    /// reorg-deep our money is final; the co-leg is already spent (the caller
+    /// only reaches this over two non-live legs) so neither its depth NOR its own
+    /// (possibly deeper) target is ours to wait on. A mixed redeem/refund (§7.4
+    /// window) is ambiguous → gate on the SHALLOWER leg at the stricter target.
+    /// Pure/testable.
+    fn follow_purge_ok(
         role: Role,
         ka: &crate::reconstruct::SpendKind,
         kb: &crate::reconstruct::SpendKind,
         ca: u64,
         cb: u64,
-    ) -> u64 {
+        n_a: u32,
+        n_b: u32,
+    ) -> bool {
         use crate::reconstruct::SpendKind::*;
-        match (ka, kb) {
+        let (our_confs, our_needed) = match (ka, kb) {
             (Redeem, Redeem) => {
                 if role == Role::Participant {
-                    ca
+                    (ca, n_a)
                 } else {
-                    cb
+                    (cb, n_b)
                 }
             }
             (Refund, Refund) => {
                 if role == Role::Participant {
-                    cb
+                    (cb, n_b)
                 } else {
-                    ca
+                    (ca, n_a)
                 }
             }
-            _ => ca.min(cb),
-        }
+            _ => (ca.min(cb), n_a.max(n_b)),
+        };
+        our_confs >= u64::from(our_needed.max(1))
     }
 
     fn follow_settle(
@@ -6140,13 +6146,18 @@ impl Engine {
         chain_b: &ChainRef,
         t1: u32,
         t2: u32,
-        needed_confs: u32,
+        n_a: u32,
+        n_b: u32,
         va: LegVerdict,
         vb: LegVerdict,
         fresh_verify: &dyn Fn() -> bool,
     ) -> Result<Option<TickEvent>> {
         use crate::reconstruct::SpendKind;
         use LegVerdict::*;
+        // The age-out and tier-L / inconclusive fallbacks have no per-leg notion,
+        // so they use the STRICTER of the two targets (conservative). The
+        // our-leg purge below gates on the SPECIFIC leg's own target instead.
+        let needed_confs = n_a.max(n_b);
         let needed = u64::from(needed_confs.max(1));
         let inconclusive = |v: &LegVerdict| {
             matches!(v, Unknown)
@@ -6187,13 +6198,12 @@ impl Engine {
             else {
                 unreachable!("resolved legs are Spent here");
             };
-            // The follower's OWN money is safe once OUR settlement leg is
-            // reorg-deep; the co-leg's depth is the COUNTERPARTY's concern, so we
-            // don't hold the row hostage to it. (We never purge over LIVE money —
-            // the `FundedLive` guard above already parked that case — so here the
-            // co-leg is spent; only its depth is being disregarded.)
-            let our_confs = Self::follow_purge_confs(role, ka, kb, *ca, *cb);
-            if our_confs >= needed {
+            // The follower's OWN money is safe once OUR settlement leg is spent
+            // deep at its OWN target; the co-leg's depth (and its possibly deeper
+            // target) is the COUNTERPARTY's concern, so we don't hold the row
+            // hostage to it. (We never purge over LIVE money — the `FundedLive`
+            // guard above already parked that case — so here the co-leg is spent.)
+            if Self::follow_purge_ok(role, ka, kb, *ca, *cb, n_a, n_b) {
                 // Reorg belt: the decision that DELETES re-derives fresh from
                 // the chain (never from the cache) before acting.
                 if !fresh_verify() {
@@ -6873,32 +6883,41 @@ impl Engine {
         if rec.derive_scope == 0 {
             return Ok(None);
         }
-        let needed = rec.n_a.max(rec.n_b).max(1);
-        // The purge's fresh re-verification — bypasses every cache and hint.
+        // The purge's fresh re-verification — bypasses every cache and hint, and
+        // applies the SAME our-leg gate as the cached decision (OUR settlement leg
+        // spent deep at ITS OWN target; the co-leg need only be spent).
         let fresh_verify = || {
-            let deep = |s: &crate::reconstruct::SpentLeg| {
-                s.kind != SpendKind::Unknown && s.spend_confs >= u64::from(needed)
-            };
-            let deep_spent =
-                |chain: &ChainRef,
-                 spk: &ScriptBuf,
-                 amount: u64,
-                 wallet: &dyn Fn() -> Option<crate::reconstruct::WalletEvidence>| {
-                    let Ok(backend) = self.backend(chain) else {
-                        return false;
-                    };
-                    match crate::reconstruct::classify_leg(&backend, spk, amount, &classify) {
-                        Ok(Some(LegClass::Spent(ref s))) => deep(s),
-                        // Tier L: re-derive the wallet evidence fresh (#171).
-                        Ok(None) => matches!(
-                            wallet(),
-                            Some(crate::reconstruct::WalletEvidence::Spent(ref s)) if deep(s)
-                        ),
-                        _ => false,
+            let spent_leg = |chain: &ChainRef,
+                             spk: &ScriptBuf,
+                             amount: u64,
+                             wallet: &dyn Fn() -> Option<crate::reconstruct::WalletEvidence>|
+             -> Option<(SpendKind, u64)> {
+                let backend = self.backend(chain).ok()?;
+                match crate::reconstruct::classify_leg(&backend, spk, amount, &classify) {
+                    Ok(Some(LegClass::Spent(s))) if s.kind != SpendKind::Unknown => {
+                        Some((s.kind, s.spend_confs))
                     }
-                };
-            deep_spent(&rec.chain_a, &spk_a, rec.amount_a, &wallet_a)
-                && deep_spent(&rec.chain_b, &spk_b, rec.amount_b, &wallet_b)
+                    // Tier L: re-derive the wallet evidence fresh (#171).
+                    Ok(None) => match wallet() {
+                        Some(crate::reconstruct::WalletEvidence::Spent(s))
+                            if s.kind != SpendKind::Unknown =>
+                        {
+                            Some((s.kind, s.spend_confs))
+                        }
+                        _ => None,
+                    },
+                    _ => None,
+                }
+            };
+            match (
+                spent_leg(&rec.chain_a, &spk_a, rec.amount_a, &wallet_a),
+                spent_leg(&rec.chain_b, &spk_b, rec.amount_b, &wallet_b),
+            ) {
+                (Some((ka, ca)), Some((kb, cb))) => {
+                    Self::follow_purge_ok(rec.role, &ka, &kb, ca, cb, rec.n_a, rec.n_b)
+                }
+                _ => false,
+            }
         };
         self.follow_settle(
             &rec.swap_id,
@@ -6908,7 +6927,8 @@ impl Engine {
             &rec.chain_b,
             rec.t1,
             rec.t2,
-            needed,
+            rec.n_a,
+            rec.n_b,
             va,
             vb,
             &fresh_verify,
@@ -7037,32 +7057,41 @@ impl Engine {
         if rec.derive_scope == 0 {
             return Ok(None);
         }
-        let needed = rec.n_a.max(rec.n_b).max(1);
+        // Fresh re-verification applying the same our-leg gate as the cached
+        // decision (OUR settlement leg spent deep at ITS OWN target; co-leg spent).
         let fresh_verify = || {
-            let deep = |s: &crate::reconstruct::SpentLeg| {
-                s.kind != SpendKind::Unknown && s.spend_confs >= u64::from(needed)
-            };
-            let deep_spent =
-                |chain: &ChainRef,
-                 spk: &ScriptBuf,
-                 amount: u64,
-                 classify: &dyn Fn(&[Vec<u8>]) -> SpendKind,
-                 wallet: &dyn Fn() -> Option<crate::reconstruct::WalletEvidence>| {
-                    let Ok(backend) = self.backend(chain) else {
-                        return false;
-                    };
-                    match crate::reconstruct::classify_leg(&backend, spk, amount, classify) {
-                        Ok(Some(LegClass::Spent(ref s))) => deep(s),
-                        // Tier L: re-derive the wallet evidence fresh (#171).
-                        Ok(None) => matches!(
-                            wallet(),
-                            Some(crate::reconstruct::WalletEvidence::Spent(ref s)) if deep(s)
-                        ),
-                        _ => false,
+            let spent_leg = |chain: &ChainRef,
+                             spk: &ScriptBuf,
+                             amount: u64,
+                             classify: &dyn Fn(&[Vec<u8>]) -> SpendKind,
+                             wallet: &dyn Fn() -> Option<crate::reconstruct::WalletEvidence>|
+             -> Option<(SpendKind, u64)> {
+                let backend = self.backend(chain).ok()?;
+                match crate::reconstruct::classify_leg(&backend, spk, amount, classify) {
+                    Ok(Some(LegClass::Spent(s))) if s.kind != SpendKind::Unknown => {
+                        Some((s.kind, s.spend_confs))
                     }
-                };
-            deep_spent(&rec.chain_a, &spk_a, rec.amount_a, &classify_a, &wallet_a)
-                && deep_spent(&rec.chain_b, &spk_b, rec.amount_b, &classify_b, &wallet_b)
+                    // Tier L: re-derive the wallet evidence fresh (#171).
+                    Ok(None) => match wallet() {
+                        Some(crate::reconstruct::WalletEvidence::Spent(s))
+                            if s.kind != SpendKind::Unknown =>
+                        {
+                            Some((s.kind, s.spend_confs))
+                        }
+                        _ => None,
+                    },
+                    _ => None,
+                }
+            };
+            match (
+                spent_leg(&rec.chain_a, &spk_a, rec.amount_a, &classify_a, &wallet_a),
+                spent_leg(&rec.chain_b, &spk_b, rec.amount_b, &classify_b, &wallet_b),
+            ) {
+                (Some((ka, ca)), Some((kb, cb))) => {
+                    Self::follow_purge_ok(rec.role, &ka, &kb, ca, cb, rec.n_a, rec.n_b)
+                }
+                _ => false,
+            }
         };
         self.follow_settle(
             &rec.swap_id,
@@ -7072,7 +7101,8 @@ impl Engine {
             &rec.chain_b,
             rec.t1,
             rec.t2,
-            needed,
+            rec.n_a,
+            rec.n_b,
             va,
             vb,
             &fresh_verify,
@@ -11934,42 +11964,62 @@ mod tests {
     }
 
     #[test]
-    fn follow_purge_gates_on_our_settlement_leg_not_the_counterpartys() {
-        // A followed row must clear once OUR leg is reorg-deep — we don't wait on
-        // the counterparty's co-leg depth (it's already spent; its burial is
-        // their concern). Redeem→received leg, refund→funded leg (settlementLeg).
+    fn follow_purge_gates_on_our_settlement_leg_at_its_own_target() {
+        // A followed row must clear once OUR leg is spent deep at ITS OWN target —
+        // never waiting on the counterparty's co-leg depth OR its (possibly
+        // deeper) target. Redeem→received leg, refund→funded leg (settlementLeg).
         use crate::reconstruct::SpendKind::*;
         use Role::*;
-        // Success (both redeem): participant receives A → gate on ca; initiator
-        // receives B → gate on cb. A shallow co-leg must NOT hold it back.
-        assert_eq!(
-            Engine::follow_purge_confs(Participant, &Redeem, &Redeem, 6, 1),
-            6,
-            "participant success gates on received leg A"
+        // Per-side targets: leg A needs 4, leg B needs 6 (btc/btcx in the field).
+        let (na, nb) = (4u32, 6u32);
+        // Success (both redeem): participant receives A (target 4), initiator
+        // receives B (target 6). THE FIX: our leg at its own target clears even
+        // though the co-leg has NOT reached its deeper target.
+        assert!(
+            Engine::follow_purge_ok(Participant, &Redeem, &Redeem, 4, 4, na, nb),
+            "participant clears at received-leg-A target 4, not co-leg B's 6"
         );
-        assert_eq!(
-            Engine::follow_purge_confs(Initiator, &Redeem, &Redeem, 1, 6),
-            6,
-            "initiator success gates on received leg B"
+        assert!(
+            !Engine::follow_purge_ok(Participant, &Redeem, &Redeem, 3, 6, na, nb),
+            "participant NOT cleared while received leg A is shallow (3<4)"
         );
-        // Refund (both refund): participant funded B → gate on cb; initiator
-        // funded A → gate on ca.
-        assert_eq!(
-            Engine::follow_purge_confs(Participant, &Refund, &Refund, 1, 6),
-            6,
-            "participant refund gates on funded leg B"
+        assert!(
+            Engine::follow_purge_ok(Initiator, &Redeem, &Redeem, 1, 6, na, nb),
+            "initiator clears at received-leg-B target 6 regardless of co-leg A"
         );
-        assert_eq!(
-            Engine::follow_purge_confs(Initiator, &Refund, &Refund, 6, 1),
+        // Refund (both refund): participant funded B (target 6), initiator funded
+        // A (target 4).
+        assert!(Engine::follow_purge_ok(
+            Participant,
+            &Refund,
+            &Refund,
+            1,
             6,
-            "initiator refund gates on funded leg A"
-        );
-        // Mixed (§7.4) is ambiguous → the shallower leg (both must be deep).
-        assert_eq!(
-            Engine::follow_purge_confs(Participant, &Redeem, &Refund, 6, 2),
+            na,
+            nb
+        ));
+        assert!(Engine::follow_purge_ok(
+            Initiator, &Refund, &Refund, 4, 1, na, nb
+        ));
+        // Mixed (§7.4) is ambiguous → shallower leg at the stricter target.
+        assert!(!Engine::follow_purge_ok(
+            Participant,
+            &Redeem,
+            &Refund,
+            6,
             2,
-            "mixed gates on the shallower leg"
-        );
+            na,
+            nb
+        ));
+        assert!(Engine::follow_purge_ok(
+            Participant,
+            &Redeem,
+            &Refund,
+            6,
+            6,
+            na,
+            nb
+        ));
     }
 
     #[test]
