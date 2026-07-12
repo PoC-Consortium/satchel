@@ -805,6 +805,7 @@ export const hi: Bundle = {
   },
   progress: {
     awaitingLock: "उनके लॉक की प्रतीक्षा",
+    awaitingOurLock: "आपके लॉक की प्रतीक्षा",
     awaitingClaim: "उनके दावे की प्रतीक्षा",
     theirLock: "उनका लॉक पुष्टि हो रहा",
     ourLock: "आपका लॉक पुष्टि हो रहा",

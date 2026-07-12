@@ -805,6 +805,7 @@ export const ru: Bundle = {
   },
   progress: {
     awaitingLock: "Ожидание их блокировки",
+    awaitingOurLock: "Ожидание вашей блокировки",
     awaitingClaim: "Ожидание их получения",
     theirLock: "Подтверждение их блокировки",
     ourLock: "Подтверждение вашей блокировки",

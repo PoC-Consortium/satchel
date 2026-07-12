@@ -808,6 +808,7 @@ export const de: Bundle = {
   },
   progress: {
     awaitingLock: "Warten auf deren Sperre",
+    awaitingOurLock: "Warten auf deine Sperre",
     awaitingClaim: "Warten auf deren Einlösung",
     theirLock: "Deren Sperre wird bestätigt",
     ourLock: "Deine Sperre wird bestätigt",

@@ -803,6 +803,7 @@ export const gl: Bundle = {
   },
   progress: {
     awaitingLock: "Agardando o seu bloqueo",
+    awaitingOurLock: "Agardando o teu bloqueo",
     awaitingClaim: "Agardando a súa reclamación",
     theirLock: "Confirmando o seu bloqueo",
     ourLock: "Confirmando o teu bloqueo",

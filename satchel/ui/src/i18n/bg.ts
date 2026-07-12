@@ -809,6 +809,7 @@ export const bg: Bundle = {
   },
   progress: {
     awaitingLock: "Изчакване на тяхното заключване",
+    awaitingOurLock: "Изчакване на вашето заключване",
     awaitingClaim: "Изчакване на тяхното вземане",
     theirLock: "Потвърждаване на тяхното заключване",
     ourLock: "Потвърждаване на вашето заключване",

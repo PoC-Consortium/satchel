@@ -4819,22 +4819,28 @@ impl Engine {
                 .unwrap_or(0)
         };
         use crate::reconstruct::SpendKind;
+        // Cap the settlement depth at `needed`: the row lingers until BOTH legs'
+        // spends bury (`follow_settle` purges on `ca >= needed && cb >= needed`),
+        // so an asymmetric burial would otherwise show the faster leg counting
+        // past its target ("5/4", "7/6"). Hold at needed/needed until purge.
         if let Some(c) = read_spend(secured_leg).filter(|c| c.kind == SpendKind::Redeem) {
             let chain = leg_chain(secured_leg);
+            let needed = leg_n(secured_leg).max(1);
             return Some(entry(
                 chain,
                 "settlement",
-                settle_confs(chain, &c),
-                leg_n(secured_leg).max(1),
+                settle_confs(chain, &c).min(needed),
+                needed,
             ));
         }
         if let Some(c) = read_spend(funded_leg).filter(|c| c.kind == SpendKind::Refund) {
             let chain = leg_chain(funded_leg);
+            let needed = leg_n(funded_leg).max(1);
             return Some(entry(
                 chain,
                 "settlement",
-                settle_confs(chain, &c),
-                leg_n(funded_leg).max(1),
+                settle_confs(chain, &c).min(needed),
+                needed,
             ));
         }
         // Reveal window: our funded leg was claimed by the counterparty (the
@@ -4842,6 +4848,47 @@ impl Engine {
         // imminent. Show the awaiting-claim liveness cue rather than a stale
         // lock count on the now-spent funding.
         if read_spend(funded_leg).is_some() {
+            return self.progress_awaiting_anchored(
+                swap_id,
+                leg_chain(secured_leg),
+                "awaiting_claim",
+                0,
+            );
+        }
+        // Uncached settling window (fixes the redeem-transition flicker): a
+        // discovered funding whose output has VANISHED was spent — the swap has
+        // moved to settlement. Until the follow evaluator caches the CONFIRMED
+        // spend (≤1 tick, and never while the spend still sits in the mempool),
+        // the raw lock read snaps to 0 — which would otherwise render a backwards
+        // "lock 0/needed" or fall through to "awaiting lock". Detect the vanish
+        // and show the forward cue the cache is about to confirm. `Ok(None)` =
+        // gone (spent); any chain error stays `false` so we never flip on a hiccup.
+        let vanished =
+            |chain: &ChainRef, ptr: &(Option<&str>, Option<u32>, Option<ScriptBuf>)| -> bool {
+                match (ptr.0, ptr.1, ptr.2.as_ref()) {
+                    (Some(txid), Some(vout), Some(spk)) => bitcoin::Txid::from_str(txid)
+                        .ok()
+                        .and_then(|txid| {
+                            self.backend(chain)
+                                .ok()?
+                                .get_txout(&OutPoint { txid, vout }, spk)
+                                .ok()
+                        })
+                        .map(|o| o.is_none())
+                        .unwrap_or(false),
+                    _ => false,
+                }
+            };
+        let secured_ptr = if secured_leg == "b" { &ptr_b } else { &ptr_a };
+        let funded_ptr = if funded_leg == "b" { &ptr_b } else { &ptr_a };
+        if vanished(leg_chain(secured_leg), secured_ptr) {
+            // Our own claim of the leg we RECEIVE has landed → securing.
+            let needed = leg_n(secured_leg).max(1);
+            return Some(entry(leg_chain(secured_leg), "settlement", 0, needed));
+        }
+        if vanished(leg_chain(funded_leg), funded_ptr) {
+            // The counterparty claimed the leg we FUNDED (secret now on chain) →
+            // our own claim is imminent — the reveal-window liveness cue.
             return self.progress_awaiting_anchored(
                 swap_id,
                 leg_chain(secured_leg),
@@ -4872,14 +4919,23 @@ impl Engine {
             if confs < needed {
                 return Some(entry(chain_a, watching, confs, needed));
             }
+            // Leg A is buried; the next lock is leg B — ours (participant) or
+            // theirs (initiator).
             return self.progress_awaiting_anchored(
                 swap_id,
                 chain_b,
-                "awaiting_lock",
+                Self::followed_await_lock_voice(role, true),
                 confs - needed,
             );
         }
-        self.progress_awaiting(swap_id, chain_a, "awaiting_lock", prev)
+        // Nothing discovered yet: the first lock is leg A — ours (initiator) or
+        // theirs (participant).
+        self.progress_awaiting(
+            swap_id,
+            chain_a,
+            Self::followed_await_lock_voice(role, false),
+            prev,
+        )
     }
 
     /// Advance a FOLLOWED v1 record's DISPLAY state to chain reality, from the
@@ -5039,6 +5095,21 @@ impl Engine {
             ("our_lock", their_n.max(1))
         } else {
             ("their_lock", if leg_is_b { n_b } else { n_a }.max(1))
+        }
+    }
+
+    /// Voice for an AWAITED (not-yet-broadcast) lock on a FOLLOWED swap: it is
+    /// OUR OWN (`awaiting_our_lock` → "Awaiting your lock") when the awaited leg
+    /// is ours — the same merchant's driving machine must still broadcast it —
+    /// otherwise the counterparty's (`awaiting_lock` → "Awaiting their lock").
+    /// Ownership matches [`Engine::followed_leg_display`]'s `ours` test
+    /// (participant funds B, initiator funds A) so the awaiting phase names the
+    /// same side the confirming phase then shows. Pure, so it is unit-testable.
+    fn followed_await_lock_voice(role: Role, leg_is_b: bool) -> &'static str {
+        if leg_is_b == (role == Role::Participant) {
+            "awaiting_our_lock"
+        } else {
+            "awaiting_lock"
         }
     }
 
@@ -11781,6 +11852,39 @@ mod tests {
         assert_eq!(
             Engine::followed_leg_display(Participant, true, 5, 3, None, None),
             ("our_lock", 3)
+        );
+    }
+
+    #[test]
+    fn followed_await_lock_voice_names_the_side_that_must_act() {
+        // Regression for the observer showing "awaiting their lock" where the
+        // owner would show "awaiting your lock": the awaited (not-yet-broadcast)
+        // lock is OURS when the awaited leg is ours — participant funds B,
+        // initiator funds A — mirroring `followed_leg_display`'s ownership.
+        use Role::*;
+        // Taker (participant): the FIRST lock (leg A) is the maker's → theirs;
+        // the SECOND (leg B, after A buries) is the taker's OWN → ours.
+        assert_eq!(
+            Engine::followed_await_lock_voice(Participant, false),
+            "awaiting_lock",
+            "participant awaits the maker's leg A first"
+        );
+        assert_eq!(
+            Engine::followed_await_lock_voice(Participant, true),
+            "awaiting_our_lock",
+            "participant then awaits its OWN leg B"
+        );
+        // Maker (initiator): the FIRST lock (leg A) is its OWN → ours; leg B is
+        // the taker's → theirs.
+        assert_eq!(
+            Engine::followed_await_lock_voice(Initiator, false),
+            "awaiting_our_lock",
+            "initiator awaits its OWN leg A first"
+        );
+        assert_eq!(
+            Engine::followed_await_lock_voice(Initiator, true),
+            "awaiting_lock",
+            "initiator then awaits the taker's leg B"
         );
     }
 

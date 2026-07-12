@@ -17,6 +17,7 @@ import type { SwapProgress } from "../api/types";
 // no-literal-string rule.
 const LABELS: Record<SwapProgress["watching"], string> = {
   awaiting_lock: "progress.awaitingLock",
+  awaiting_our_lock: "progress.awaitingOurLock",
   awaiting_claim: "progress.awaitingClaim",
   their_lock: "progress.theirLock",
   our_lock: "progress.ourLock",
@@ -33,6 +34,7 @@ export default function SwapProgressLine({ p }: { p: SwapProgress }) {
   // #3): an indeterminate bar + "+N blocks", where a growing count flags a stall.
   const awaiting =
     p.watching === "awaiting_lock" ||
+    p.watching === "awaiting_our_lock" ||
     p.watching === "awaiting_claim" ||
     p.watching === "funding";
 

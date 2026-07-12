@@ -805,6 +805,7 @@ export const sr: Bundle = {
   },
   progress: {
     awaitingLock: "Чекање на њихово закључавање",
+    awaitingOurLock: "Чекање на ваше закључавање",
     awaitingClaim: "Чекање на њихово преузимање",
     theirLock: "Потврђивање њиховог закључавања",
     ourLock: "Потврђивање вашег закључавања",

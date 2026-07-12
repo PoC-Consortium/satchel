@@ -808,6 +808,7 @@ export const fi: Bundle = {
   },
   progress: {
     awaitingLock: "Odotetaan heidän lukitustaan",
+    awaitingOurLock: "Odotetaan sinun lukitustasi",
     awaitingClaim: "Odotetaan heidän lunastustaan",
     theirLock: "Vahvistetaan heidän lukitustaan",
     ourLock: "Vahvistetaan sinun lukitustasi",
