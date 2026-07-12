@@ -4948,7 +4948,13 @@ impl Engine {
     /// regresses on a transient/ reorg-flickered verdict. Never drives: a
     /// followed record's state is display-only (drive routing is gated on
     /// `drives()`, not state).
-    fn followed_display_state_v1(cur: State, va: &LegVerdict, vb: &LegVerdict) -> State {
+    fn followed_display_state_v1(
+        cur: State,
+        role: Role,
+        va: &LegVerdict,
+        vb: &LegVerdict,
+        n_a: u32,
+    ) -> State {
         use crate::reconstruct::SpendKind;
         let funded = |v: &LegVerdict| {
             matches!(
@@ -4957,6 +4963,11 @@ impl Engine {
                     | LegVerdict::Spent { .. }
                     | LegVerdict::ResolvedNoDepth
             )
+        };
+        let funded_deep = |v: &LegVerdict, n: u32| match v {
+            LegVerdict::FundedLive { confs } => *confs >= u64::from(n),
+            LegVerdict::Spent { .. } | LegVerdict::ResolvedNoDepth => true,
+            _ => false,
         };
         let redeemed = |v: &LegVerdict| {
             matches!(
@@ -4976,6 +4987,15 @@ impl Engine {
                 }
             )
         };
+        // Leg A "established" for the FundedA story: the MAKER established it by
+        // funding its OWN leg A (any depth). The TAKER's FundedA narrate says
+        // "their lock is verified, next lock yours", so it only counts once leg A
+        // is n_a-DEEP — mirroring the owner, which stays `accepted`
+        // (their-lock-confirming) until then rather than jumping ahead.
+        let leg_a_established = match role {
+            Role::Initiator => funded(va),
+            Role::Participant => funded_deep(va, n_a),
+        };
         let derived = if refunded(va) || refunded(vb) {
             State::Refunded
         } else if redeemed(va) && redeemed(vb) {
@@ -4984,10 +5004,10 @@ impl Engine {
             State::RedeemedB // a claim revealed the secret — settlement underway
         } else if funded(va) && funded(vb) {
             State::FundedB
-        } else if funded(va) || funded(vb) {
+        } else if leg_a_established || funded(vb) {
             State::FundedA
         } else {
-            return cur; // nothing on-chain yet — keep the snapshot state
+            return cur; // nothing on-chain (or taker's leg A not yet deep) — hold
         };
         let rank = |s: State| match s {
             State::Created => 0,
@@ -5044,10 +5064,14 @@ impl Engine {
             AdaptorState::Completed
         } else if redeemed(va) || redeemed(vb) {
             AdaptorState::RedeemedB
-        } else if funded(va) && funded(vb) {
-            AdaptorState::FundedB
         } else if funded(va) || funded(vb) {
-            AdaptorState::FundedA
+            // v2 executes ENTIRELY within `Signed` — the owner's own state
+            // machine never enters FundedA/FundedB (narrate sub-divides `Signed`
+            // by the progress watching instead). So a followed record advances
+            // only to `Signed` while funding/locking; jumping to FundedA/FundedB
+            // would tell the story AHEAD of the owner ("their lock verified, next
+            // lock yours" while its lock is still confirming).
+            AdaptorState::Signed
         } else {
             return cur;
         };
@@ -6861,7 +6885,7 @@ impl Engine {
         // story tracks the owner ("locking → securing → coins secured"); the
         // followed state is otherwise frozen at the snapshot. Display-only —
         // never drives (routing is gated on `drives()`, not state).
-        let new_state = Self::followed_display_state_v1(rec.state, &va, &vb);
+        let new_state = Self::followed_display_state_v1(rec.state, rec.role, &va, &vb, rec.n_a);
         if hint_a.is_some() || hint_b.is_some() || new_state != rec.state {
             let mut updated = rec.clone();
             if let Some(h) = hint_a {
@@ -11829,62 +11853,85 @@ mod tests {
             spend_confs: 1,
         };
         let s = Engine::followed_display_state_v1;
-        // Snapshot state (accepted) advances with the chain.
+        // n_a = 4: a taker only reaches FundedA once the maker's leg A is that
+        // deep (its FundedA narrate claims the lock is "verified").
+        let fund_deep = FundedLive { confs: 4 };
+        // Nothing on chain — hold the snapshot state.
         assert_eq!(
-            s(State::Accepted, &unf, &unf),
-            State::Accepted,
-            "nothing on chain"
+            s(State::Accepted, Role::Initiator, &unf, &unf, 4),
+            State::Accepted
         );
+        // MAKER funded its OWN leg A → FundedA at any depth.
         assert_eq!(
-            s(State::Accepted, &fund, &unf),
+            s(State::Accepted, Role::Initiator, &fund, &unf, 4),
             State::FundedA,
-            "one leg funded"
+            "maker funded its own leg A"
         );
+        // TAKER holds at `accepted` while the maker's leg A is still shallow …
         assert_eq!(
-            s(State::Accepted, &fund, &fund),
+            s(State::Accepted, Role::Participant, &fund, &unf, 4),
+            State::Accepted,
+            "taker waits for leg A to be n_a-deep"
+        );
+        // … then advances once leg A is n_a-deep (verified).
+        assert_eq!(
+            s(State::Accepted, Role::Participant, &fund_deep, &unf, 4),
+            State::FundedA,
+            "taker: leg A verified"
+        );
+        // Both legs funded → FundedB (either role).
+        assert_eq!(
+            s(State::Accepted, Role::Participant, &fund, &fund, 4),
             State::FundedB,
             "both funded"
         );
         assert_eq!(
-            s(State::Accepted, &fund, &redeem),
+            s(State::Accepted, Role::Initiator, &fund, &redeem, 4),
             State::RedeemedB,
             "a claim revealed s"
         );
         assert_eq!(
-            s(State::Accepted, &redeem, &redeem),
+            s(State::Accepted, Role::Initiator, &redeem, &redeem, 4),
             State::Completed,
             "both claimed"
         );
         assert_eq!(
-            s(State::Accepted, &refund, &unf),
+            s(State::Accepted, Role::Initiator, &refund, &unf, 4),
             State::Refunded,
             "a refund"
         );
         // Monotonic — never regress on a flickered/partial verdict.
         assert_eq!(
-            s(State::FundedB, &fund, &unf),
+            s(State::FundedB, Role::Initiator, &fund, &unf, 4),
             State::FundedB,
             "no regress to FundedA"
         );
         assert_eq!(
-            s(State::Completed, &unf, &unf),
+            s(State::Completed, Role::Participant, &unf, &unf, 4),
             State::Completed,
             "terminal is sticky"
         );
 
-        // v2 twin: snapshot is usually `Signed`.
+        // v2 twin: the owner executes entirely within `Signed`, so funding
+        // advances the follower ONLY to Signed — never FundedA/FundedB.
         let s2 = Engine::followed_display_state_v2;
         assert_eq!(
+            s2(AdaptorState::Accepted, &fund, &unf),
+            AdaptorState::Signed,
+            "v2 funding → Signed, not FundedA"
+        );
+        assert_eq!(
             s2(AdaptorState::Signed, &fund, &fund),
-            AdaptorState::FundedB
+            AdaptorState::Signed,
+            "v2 both funded stays Signed, not FundedB"
         );
         assert_eq!(
             s2(AdaptorState::Signed, &redeem, &redeem),
             AdaptorState::Completed
         );
         assert_eq!(
-            s2(AdaptorState::FundedB, &unf, &unf),
-            AdaptorState::FundedB,
+            s2(AdaptorState::RedeemedB, &unf, &unf),
+            AdaptorState::RedeemedB,
             "no regress"
         );
     }
