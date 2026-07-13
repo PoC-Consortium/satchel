@@ -15,11 +15,11 @@ libswap = { path = "libswap" }
 # registry, wallet key derivation, seed-at-rest storage, the Electrum
 # connection layer, and the BDK on-chain wallet. Pinned by rev — bump
 # deliberately, never track a branch.
-params-btcx = { git = "https://github.com/PoC-Consortium/btcx", rev = "f1e216897bae629a251f4bd83f95bb71b4ffb06e" }
-keys-btcx = { git = "https://github.com/PoC-Consortium/btcx", rev = "f1e216897bae629a251f4bd83f95bb71b4ffb06e" }
-seedstore = { git = "https://github.com/PoC-Consortium/btcx", rev = "f1e216897bae629a251f4bd83f95bb71b4ffb06e" }
-electrum-btcx = { git = "https://github.com/PoC-Consortium/btcx", rev = "f1e216897bae629a251f4bd83f95bb71b4ffb06e" }
-wallet-btcx = { git = "https://github.com/PoC-Consortium/btcx", rev = "f1e216897bae629a251f4bd83f95bb71b4ffb06e", features = ["swap-support"] }
+params-btcx = { git = "https://github.com/PoC-Consortium/btcx", rev = "292fcc3e9d7853407099666271e5947bc08165d9" }
+keys-btcx = { git = "https://github.com/PoC-Consortium/btcx", rev = "292fcc3e9d7853407099666271e5947bc08165d9" }
+seedstore = { git = "https://github.com/PoC-Consortium/btcx", rev = "292fcc3e9d7853407099666271e5947bc08165d9" }
+electrum-btcx = { git = "https://github.com/PoC-Consortium/btcx", rev = "292fcc3e9d7853407099666271e5947bc08165d9" }
+wallet-btcx = { git = "https://github.com/PoC-Consortium/btcx", rev = "292fcc3e9d7853407099666271e5947bc08165d9", features = ["swap-support"] }
 
 # Bitcoin stack — versions must stay mutually compatible (all on bitcoin 0.32).
 bitcoin = { version = "0.32", features = ["serde", "rand-std"] }
