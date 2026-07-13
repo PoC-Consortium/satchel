@@ -6169,6 +6169,7 @@ impl Engine {
         our_confs >= u64::from(our_needed.max(1))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn follow_settle(
         &self,
         swap_id: &str,
