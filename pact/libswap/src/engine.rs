@@ -5030,6 +5030,7 @@ impl Engine {
         cur: AdaptorState,
         va: &LegVerdict,
         vb: &LegVerdict,
+        n_a: u32,
     ) -> AdaptorState {
         use crate::reconstruct::SpendKind;
         let funded = |v: &LegVerdict| {
@@ -5039,6 +5040,11 @@ impl Engine {
                     | LegVerdict::Spent { .. }
                     | LegVerdict::ResolvedNoDepth
             )
+        };
+        let funded_deep = |v: &LegVerdict, n: u32| match v {
+            LegVerdict::FundedLive { confs } => *confs >= u64::from(n),
+            LegVerdict::Spent { .. } | LegVerdict::ResolvedNoDepth => true,
+            _ => false,
         };
         let redeemed = |v: &LegVerdict| {
             matches!(
@@ -5064,13 +5070,15 @@ impl Engine {
             AdaptorState::Completed
         } else if redeemed(va) || redeemed(vb) {
             AdaptorState::RedeemedB
-        } else if funded(va) || funded(vb) {
-            // v2 executes ENTIRELY within `Signed` — the owner's own state
-            // machine never enters FundedA/FundedB (narrate sub-divides `Signed`
-            // by the progress watching instead). So a followed record advances
-            // only to `Signed` while funding/locking; jumping to FundedA/FundedB
-            // would tell the story AHEAD of the owner ("their lock verified, next
-            // lock yours" while its lock is still confirming).
+        } else if funded_deep(va, n_a) || (funded(va) && funded(vb)) {
+            // v2 executes ENTIRELY within `Signed` (narrate sub-divides it by the
+            // progress watching), never FundedA/FundedB. But advance there ONLY
+            // once leg A is VERIFIED — n_a-deep, or both legs already funded
+            // (which proves signing finished). The off-chain signing round is NOT
+            // chain-observable, so while leg A is merely CONFIRMING we must not
+            // claim "both signed": we hold the imported handshake state, whose
+            // honest story is "your lock is confirming, waiting" — matching the
+            // owner, which is still `accepted` then.
             AdaptorState::Signed
         } else {
             return cur;
@@ -7061,7 +7069,7 @@ impl Engine {
             &mut hint_b,
         );
         // Advance the DISPLAY state to chain reality (see follow_one).
-        let new_state = Self::followed_display_state_v2(rec.state, &va, &vb);
+        let new_state = Self::followed_display_state_v2(rec.state, &va, &vb, rec.n_a);
         if hint_a.is_some() || hint_b.is_some() || new_state != rec.state {
             let mut updated = rec.clone();
             if let Some(h) = hint_a {
@@ -11912,25 +11920,34 @@ mod tests {
             "terminal is sticky"
         );
 
-        // v2 twin: the owner executes entirely within `Signed`, so funding
-        // advances the follower ONLY to Signed — never FundedA/FundedB.
+        // v2 twin: the owner executes entirely within `Signed` (never
+        // FundedA/FundedB), but the off-chain signing round is NOT chain-visible.
         let s2 = Engine::followed_display_state_v2;
+        // Leg A only CONFIRMING (shallow) → hold the imported handshake state; we
+        // can't claim "both signed" while the chain still shows it confirming.
         assert_eq!(
-            s2(AdaptorState::Accepted, &fund, &unf),
+            s2(AdaptorState::Accepted, &fund, &unf, 4),
+            AdaptorState::Accepted,
+            "v2: leg A confirming → not yet Signed"
+        );
+        // Leg A VERIFIED (n_a-deep) → the executing phase (Signed).
+        assert_eq!(
+            s2(AdaptorState::Accepted, &fund_deep, &unf, 4),
             AdaptorState::Signed,
-            "v2 funding → Signed, not FundedA"
+            "v2: leg A n_a-deep → Signed"
+        );
+        // Both legs funded proves signing finished → Signed (even if A shallow).
+        assert_eq!(
+            s2(AdaptorState::Accepted, &fund, &fund, 4),
+            AdaptorState::Signed,
+            "v2: both funded → Signed"
         );
         assert_eq!(
-            s2(AdaptorState::Signed, &fund, &fund),
-            AdaptorState::Signed,
-            "v2 both funded stays Signed, not FundedB"
-        );
-        assert_eq!(
-            s2(AdaptorState::Signed, &redeem, &redeem),
+            s2(AdaptorState::Signed, &redeem, &redeem, 4),
             AdaptorState::Completed
         );
         assert_eq!(
-            s2(AdaptorState::RedeemedB, &unf, &unf),
+            s2(AdaptorState::RedeemedB, &unf, &unf, 4),
             AdaptorState::RedeemedB,
             "no regress"
         );
