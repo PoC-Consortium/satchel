@@ -30,7 +30,40 @@
 use anyhow::Result;
 use bitcoin::secp256k1::{Keypair, PublicKey, SecretKey, XOnlyPublicKey};
 
+use crate::params::Network;
+
 pub use keys_btcx::{DescriptorKind, WalletSeed, COIN_BTC, COIN_BTCX};
+
+/// The shared SLIP-44 **testnet** coin type (`1'`) — used by Bitcoin Core,
+/// Phoenix, and every Core-style wallet for *all* test networks regardless of
+/// asset. See [`btcx_coin_type`].
+pub const COIN_TESTNET: u32 = 1;
+
+/// BIP-32 coin type for the **Bitcoin-PoCX (BTCX)** asset, network-aware — the
+/// single source of truth for `coin(c)` on this asset (spec §4.1).
+///
+/// | network         | coin type                   |
+/// |-----------------|-----------------------------|
+/// | mainnet         | [`COIN_BTCX`] (`0x504F4358`) |
+/// | testnet/regtest | [`COIN_TESTNET`] (`1'`)      |
+///
+/// Mainnet keeps the registered per-asset coin type, so a seed's mainnet funds
+/// stay portable Phoenix↔Satchel. Testnet and regtest deliberately fall back to
+/// the shared SLIP-44 testnet coin type `1'`: the network params (tpub/tprv,
+/// `tb1`/`bcrt1`) already separate the keys, so a per-asset testnet coin type
+/// buys nothing and breaks portability with Core-style wallets. This is a spec
+/// §4.1 deviation scoped to the test networks — mainnet is unchanged.
+///
+/// Only the BTCX asset routes through here; every other coin (BTC included)
+/// keeps its own SLIP-44 registry mapping on all networks. Phoenix adopted the
+/// same rule, and the shared on-chain wallet path (`wallet-btcx`) applies it
+/// too, so wallet and swap keys agree on every network.
+pub fn btcx_coin_type(network: Network) -> u32 {
+    match network {
+        Network::Mainnet => COIN_BTCX,
+        Network::Testnet | Network::Regtest => COIN_TESTNET,
+    }
+}
 
 // Protocol hashes live in pact-proto now; re-exported so existing
 // `crate::keys::{tagged_hash, hash_preimage, swap_id}` callers are unchanged.
@@ -311,6 +344,18 @@ mod tests {
             a.swap_pubkey(COIN_BTCX, LEG, 0).unwrap(),
             a.swap_pubkey(COIN_BTC, LEG, 0).unwrap()
         );
+    }
+
+    #[test]
+    fn btcx_coin_type_is_network_aware() {
+        // Mainnet keeps the registered per-asset coin type (Phoenix↔Satchel
+        // portable); the test networks fall back to SLIP-44 1' (Core parity).
+        assert_eq!(btcx_coin_type(Network::Mainnet), COIN_BTCX);
+        assert_eq!(btcx_coin_type(Network::Testnet), COIN_TESTNET);
+        assert_eq!(btcx_coin_type(Network::Regtest), COIN_TESTNET);
+        assert_eq!(COIN_TESTNET, 1);
+        // Only BTCX deviates on test nets — mainnet stays on the canonical value.
+        assert_ne!(btcx_coin_type(Network::Regtest), COIN_BTCX);
     }
 
     #[test]

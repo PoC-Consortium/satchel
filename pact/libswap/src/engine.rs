@@ -193,7 +193,16 @@ fn fresh_nonce_seed() -> [u8; 32] {
 }
 
 /// BIP32 coin-type for a chain leg (spec §4.1 `coin(c)`).
+///
+/// The **BTCX** asset is network-aware: mainnet keeps the registered per-asset
+/// coin type, testnet/regtest use SLIP-44 `1'` (parity with Bitcoin Core and
+/// Phoenix) — see [`crate::keys::btcx_coin_type`], the single source of truth.
+/// Every other coin (BTC included) keeps its registry SLIP-44 mapping on all
+/// networks.
 fn coin_of(chain: &ChainRef) -> Result<u32> {
+    if chain.coin_id == registry::BTCX.id {
+        return Ok(crate::keys::btcx_coin_type(chain.network));
+    }
     registry::bip32_coin_type(&chain.coin_id)
 }
 
