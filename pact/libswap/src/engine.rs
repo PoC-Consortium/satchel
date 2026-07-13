@@ -4819,22 +4819,29 @@ impl Engine {
                 .unwrap_or(0)
         };
         use crate::reconstruct::SpendKind;
+        // Cap the settlement depth at `needed`: `follow_settle` purges once OUR
+        // settlement leg is `needed`-deep, but the row is shown until then, and a
+        // fast spend can read one deeper than the purge clock for a tick — which
+        // would otherwise flash the target being exceeded ("5/4", "7/6"). Hold at
+        // needed/needed until purge.
         if let Some(c) = read_spend(secured_leg).filter(|c| c.kind == SpendKind::Redeem) {
             let chain = leg_chain(secured_leg);
+            let needed = leg_n(secured_leg).max(1);
             return Some(entry(
                 chain,
                 "settlement",
-                settle_confs(chain, &c),
-                leg_n(secured_leg).max(1),
+                settle_confs(chain, &c).min(needed),
+                needed,
             ));
         }
         if let Some(c) = read_spend(funded_leg).filter(|c| c.kind == SpendKind::Refund) {
             let chain = leg_chain(funded_leg);
+            let needed = leg_n(funded_leg).max(1);
             return Some(entry(
                 chain,
                 "settlement",
-                settle_confs(chain, &c),
-                leg_n(funded_leg).max(1),
+                settle_confs(chain, &c).min(needed),
+                needed,
             ));
         }
         // Reveal window: our funded leg was claimed by the counterparty (the
@@ -4842,6 +4849,47 @@ impl Engine {
         // imminent. Show the awaiting-claim liveness cue rather than a stale
         // lock count on the now-spent funding.
         if read_spend(funded_leg).is_some() {
+            return self.progress_awaiting_anchored(
+                swap_id,
+                leg_chain(secured_leg),
+                "awaiting_claim",
+                0,
+            );
+        }
+        // Uncached settling window (fixes the redeem-transition flicker): a
+        // discovered funding whose output has VANISHED was spent — the swap has
+        // moved to settlement. Until the follow evaluator caches the CONFIRMED
+        // spend (≤1 tick, and never while the spend still sits in the mempool),
+        // the raw lock read snaps to 0 — which would otherwise render a backwards
+        // "lock 0/needed" or fall through to "awaiting lock". Detect the vanish
+        // and show the forward cue the cache is about to confirm. `Ok(None)` =
+        // gone (spent); any chain error stays `false` so we never flip on a hiccup.
+        let vanished =
+            |chain: &ChainRef, ptr: &(Option<&str>, Option<u32>, Option<ScriptBuf>)| -> bool {
+                match (ptr.0, ptr.1, ptr.2.as_ref()) {
+                    (Some(txid), Some(vout), Some(spk)) => bitcoin::Txid::from_str(txid)
+                        .ok()
+                        .and_then(|txid| {
+                            self.backend(chain)
+                                .ok()?
+                                .get_txout(&OutPoint { txid, vout }, spk)
+                                .ok()
+                        })
+                        .map(|o| o.is_none())
+                        .unwrap_or(false),
+                    _ => false,
+                }
+            };
+        let secured_ptr = if secured_leg == "b" { &ptr_b } else { &ptr_a };
+        let funded_ptr = if funded_leg == "b" { &ptr_b } else { &ptr_a };
+        if vanished(leg_chain(secured_leg), secured_ptr) {
+            // Our own claim of the leg we RECEIVE has landed → securing.
+            let needed = leg_n(secured_leg).max(1);
+            return Some(entry(leg_chain(secured_leg), "settlement", 0, needed));
+        }
+        if vanished(leg_chain(funded_leg), funded_ptr) {
+            // The counterparty claimed the leg we FUNDED (secret now on chain) →
+            // our own claim is imminent — the reveal-window liveness cue.
             return self.progress_awaiting_anchored(
                 swap_id,
                 leg_chain(secured_leg),
@@ -4872,14 +4920,23 @@ impl Engine {
             if confs < needed {
                 return Some(entry(chain_a, watching, confs, needed));
             }
+            // Leg A is buried; the next lock is leg B — ours (participant) or
+            // theirs (initiator).
             return self.progress_awaiting_anchored(
                 swap_id,
                 chain_b,
-                "awaiting_lock",
+                Self::followed_await_lock_voice(role, true),
                 confs - needed,
             );
         }
-        self.progress_awaiting(swap_id, chain_a, "awaiting_lock", prev)
+        // Nothing discovered yet: the first lock is leg A — ours (initiator) or
+        // theirs (participant).
+        self.progress_awaiting(
+            swap_id,
+            chain_a,
+            Self::followed_await_lock_voice(role, false),
+            prev,
+        )
     }
 
     /// Advance a FOLLOWED v1 record's DISPLAY state to chain reality, from the
@@ -4891,7 +4948,13 @@ impl Engine {
     /// regresses on a transient/ reorg-flickered verdict. Never drives: a
     /// followed record's state is display-only (drive routing is gated on
     /// `drives()`, not state).
-    fn followed_display_state_v1(cur: State, va: &LegVerdict, vb: &LegVerdict) -> State {
+    fn followed_display_state_v1(
+        cur: State,
+        role: Role,
+        va: &LegVerdict,
+        vb: &LegVerdict,
+        n_a: u32,
+    ) -> State {
         use crate::reconstruct::SpendKind;
         let funded = |v: &LegVerdict| {
             matches!(
@@ -4900,6 +4963,11 @@ impl Engine {
                     | LegVerdict::Spent { .. }
                     | LegVerdict::ResolvedNoDepth
             )
+        };
+        let funded_deep = |v: &LegVerdict, n: u32| match v {
+            LegVerdict::FundedLive { confs } => *confs >= u64::from(n),
+            LegVerdict::Spent { .. } | LegVerdict::ResolvedNoDepth => true,
+            _ => false,
         };
         let redeemed = |v: &LegVerdict| {
             matches!(
@@ -4919,6 +4987,15 @@ impl Engine {
                 }
             )
         };
+        // Leg A "established" for the FundedA story: the MAKER established it by
+        // funding its OWN leg A (any depth). The TAKER's FundedA narrate says
+        // "their lock is verified, next lock yours", so it only counts once leg A
+        // is n_a-DEEP — mirroring the owner, which stays `accepted`
+        // (their-lock-confirming) until then rather than jumping ahead.
+        let leg_a_established = match role {
+            Role::Initiator => funded(va),
+            Role::Participant => funded_deep(va, n_a),
+        };
         let derived = if refunded(va) || refunded(vb) {
             State::Refunded
         } else if redeemed(va) && redeemed(vb) {
@@ -4927,10 +5004,10 @@ impl Engine {
             State::RedeemedB // a claim revealed the secret — settlement underway
         } else if funded(va) && funded(vb) {
             State::FundedB
-        } else if funded(va) || funded(vb) {
+        } else if leg_a_established || funded(vb) {
             State::FundedA
         } else {
-            return cur; // nothing on-chain yet — keep the snapshot state
+            return cur; // nothing on-chain (or taker's leg A not yet deep) — hold
         };
         let rank = |s: State| match s {
             State::Created => 0,
@@ -4953,6 +5030,7 @@ impl Engine {
         cur: AdaptorState,
         va: &LegVerdict,
         vb: &LegVerdict,
+        n_a: u32,
     ) -> AdaptorState {
         use crate::reconstruct::SpendKind;
         let funded = |v: &LegVerdict| {
@@ -4962,6 +5040,11 @@ impl Engine {
                     | LegVerdict::Spent { .. }
                     | LegVerdict::ResolvedNoDepth
             )
+        };
+        let funded_deep = |v: &LegVerdict, n: u32| match v {
+            LegVerdict::FundedLive { confs } => *confs >= u64::from(n),
+            LegVerdict::Spent { .. } | LegVerdict::ResolvedNoDepth => true,
+            _ => false,
         };
         let redeemed = |v: &LegVerdict| {
             matches!(
@@ -4987,10 +5070,16 @@ impl Engine {
             AdaptorState::Completed
         } else if redeemed(va) || redeemed(vb) {
             AdaptorState::RedeemedB
-        } else if funded(va) && funded(vb) {
-            AdaptorState::FundedB
-        } else if funded(va) || funded(vb) {
-            AdaptorState::FundedA
+        } else if funded_deep(va, n_a) || (funded(va) && funded(vb)) {
+            // v2 executes ENTIRELY within `Signed` (narrate sub-divides it by the
+            // progress watching), never FundedA/FundedB. But advance there ONLY
+            // once leg A is VERIFIED — n_a-deep, or both legs already funded
+            // (which proves signing finished). The off-chain signing round is NOT
+            // chain-observable, so while leg A is merely CONFIRMING we must not
+            // claim "both signed": we hold the imported handshake state, whose
+            // honest story is "your lock is confirming, waiting" — matching the
+            // owner, which is still `accepted` then.
+            AdaptorState::Signed
         } else {
             return cur;
         };
@@ -5039,6 +5128,21 @@ impl Engine {
             ("our_lock", their_n.max(1))
         } else {
             ("their_lock", if leg_is_b { n_b } else { n_a }.max(1))
+        }
+    }
+
+    /// Voice for an AWAITED (not-yet-broadcast) lock on a FOLLOWED swap: it is
+    /// OUR OWN (`awaiting_our_lock` → "Awaiting your lock") when the awaited leg
+    /// is ours — the same merchant's driving machine must still broadcast it —
+    /// otherwise the counterparty's (`awaiting_lock` → "Awaiting their lock").
+    /// Ownership matches [`Engine::followed_leg_display`]'s `ours` test
+    /// (participant funds B, initiator funds A) so the awaiting phase names the
+    /// same side the confirming phase then shows. Pure, so it is unit-testable.
+    fn followed_await_lock_voice(role: Role, leg_is_b: bool) -> &'static str {
+        if leg_is_b == (role == Role::Participant) {
+            "awaiting_our_lock"
+        } else {
+            "awaiting_lock"
         }
     }
 
@@ -6024,21 +6128,69 @@ impl Engine {
     /// (harmless — we drive nothing); a live funded leg parks it EVEN past
     /// the age-out (visible money is the takeover-worthy case, never purged).
     #[allow(clippy::too_many_arguments)]
+    /// Whether a FOLLOWED swap may terminally purge: OUR settlement leg is spent
+    /// `n`-deep at ITS OWN confirmation target, not the counterparty's. On a
+    /// cooperative redeem our leg is the one we RECEIVE (participant→A,
+    /// initiator→B) at that leg's target; on a refund it's the one we FUNDED
+    /// (participant→B, initiator→A) — mirrors `settlementLeg`/`leg_n` in the UI,
+    /// so the row clears exactly when its "securing N/N" completes. Once ours is
+    /// reorg-deep our money is final; the co-leg is already spent (the caller
+    /// only reaches this over two non-live legs) so neither its depth NOR its own
+    /// (possibly deeper) target is ours to wait on. A mixed redeem/refund (§7.4
+    /// window) is ambiguous → gate on the SHALLOWER leg at the stricter target.
+    /// Pure/testable.
+    fn follow_purge_ok(
+        role: Role,
+        ka: &crate::reconstruct::SpendKind,
+        kb: &crate::reconstruct::SpendKind,
+        ca: u64,
+        cb: u64,
+        n_a: u32,
+        n_b: u32,
+    ) -> bool {
+        use crate::reconstruct::SpendKind::*;
+        let (our_confs, our_needed) = match (ka, kb) {
+            (Redeem, Redeem) => {
+                if role == Role::Participant {
+                    (ca, n_a)
+                } else {
+                    (cb, n_b)
+                }
+            }
+            (Refund, Refund) => {
+                if role == Role::Participant {
+                    (cb, n_b)
+                } else {
+                    (ca, n_a)
+                }
+            }
+            _ => (ca.min(cb), n_a.max(n_b)),
+        };
+        our_confs >= u64::from(our_needed.max(1))
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn follow_settle(
         &self,
         swap_id: &str,
         is_v2: bool,
+        role: Role,
         chain_a: &ChainRef,
         chain_b: &ChainRef,
         t1: u32,
         t2: u32,
-        needed_confs: u32,
+        n_a: u32,
+        n_b: u32,
         va: LegVerdict,
         vb: LegVerdict,
         fresh_verify: &dyn Fn() -> bool,
     ) -> Result<Option<TickEvent>> {
         use crate::reconstruct::SpendKind;
         use LegVerdict::*;
+        // The age-out and tier-L / inconclusive fallbacks have no per-leg notion,
+        // so they use the STRICTER of the two targets (conservative). The
+        // our-leg purge below gates on the SPECIFIC leg's own target instead.
+        let needed_confs = n_a.max(n_b);
         let needed = u64::from(needed_confs.max(1));
         let inconclusive = |v: &LegVerdict| {
             matches!(v, Unknown)
@@ -6079,7 +6231,12 @@ impl Engine {
             else {
                 unreachable!("resolved legs are Spent here");
             };
-            if *ca >= needed && *cb >= needed {
+            // The follower's OWN money is safe once OUR settlement leg is spent
+            // deep at its OWN target; the co-leg's depth (and its possibly deeper
+            // target) is the COUNTERPARTY's concern, so we don't hold the row
+            // hostage to it. (We never purge over LIVE money — the `FundedLive`
+            // guard above already parked that case — so here the co-leg is spent.)
+            if Self::follow_purge_ok(role, ka, kb, *ca, *cb, n_a, n_b) {
                 // Reorg belt: the decision that DELETES re-derives fresh from
                 // the chain (never from the cache) before acting.
                 if !fresh_verify() {
@@ -6737,7 +6894,7 @@ impl Engine {
         // story tracks the owner ("locking → securing → coins secured"); the
         // followed state is otherwise frozen at the snapshot. Display-only —
         // never drives (routing is gated on `drives()`, not state).
-        let new_state = Self::followed_display_state_v1(rec.state, &va, &vb);
+        let new_state = Self::followed_display_state_v1(rec.state, rec.role, &va, &vb, rec.n_a);
         if hint_a.is_some() || hint_b.is_some() || new_state != rec.state {
             let mut updated = rec.clone();
             if let Some(h) = hint_a {
@@ -6759,41 +6916,52 @@ impl Engine {
         if rec.derive_scope == 0 {
             return Ok(None);
         }
-        let needed = rec.n_a.max(rec.n_b).max(1);
-        // The purge's fresh re-verification — bypasses every cache and hint.
+        // The purge's fresh re-verification — bypasses every cache and hint, and
+        // applies the SAME our-leg gate as the cached decision (OUR settlement leg
+        // spent deep at ITS OWN target; the co-leg need only be spent).
         let fresh_verify = || {
-            let deep = |s: &crate::reconstruct::SpentLeg| {
-                s.kind != SpendKind::Unknown && s.spend_confs >= u64::from(needed)
-            };
-            let deep_spent =
-                |chain: &ChainRef,
-                 spk: &ScriptBuf,
-                 amount: u64,
-                 wallet: &dyn Fn() -> Option<crate::reconstruct::WalletEvidence>| {
-                    let Ok(backend) = self.backend(chain) else {
-                        return false;
-                    };
-                    match crate::reconstruct::classify_leg(&backend, spk, amount, &classify) {
-                        Ok(Some(LegClass::Spent(ref s))) => deep(s),
-                        // Tier L: re-derive the wallet evidence fresh (#171).
-                        Ok(None) => matches!(
-                            wallet(),
-                            Some(crate::reconstruct::WalletEvidence::Spent(ref s)) if deep(s)
-                        ),
-                        _ => false,
+            let spent_leg = |chain: &ChainRef,
+                             spk: &ScriptBuf,
+                             amount: u64,
+                             wallet: &dyn Fn() -> Option<crate::reconstruct::WalletEvidence>|
+             -> Option<(SpendKind, u64)> {
+                let backend = self.backend(chain).ok()?;
+                match crate::reconstruct::classify_leg(&backend, spk, amount, &classify) {
+                    Ok(Some(LegClass::Spent(s))) if s.kind != SpendKind::Unknown => {
+                        Some((s.kind, s.spend_confs))
                     }
-                };
-            deep_spent(&rec.chain_a, &spk_a, rec.amount_a, &wallet_a)
-                && deep_spent(&rec.chain_b, &spk_b, rec.amount_b, &wallet_b)
+                    // Tier L: re-derive the wallet evidence fresh (#171).
+                    Ok(None) => match wallet() {
+                        Some(crate::reconstruct::WalletEvidence::Spent(s))
+                            if s.kind != SpendKind::Unknown =>
+                        {
+                            Some((s.kind, s.spend_confs))
+                        }
+                        _ => None,
+                    },
+                    _ => None,
+                }
+            };
+            match (
+                spent_leg(&rec.chain_a, &spk_a, rec.amount_a, &wallet_a),
+                spent_leg(&rec.chain_b, &spk_b, rec.amount_b, &wallet_b),
+            ) {
+                (Some((ka, ca)), Some((kb, cb))) => {
+                    Self::follow_purge_ok(rec.role, &ka, &kb, ca, cb, rec.n_a, rec.n_b)
+                }
+                _ => false,
+            }
         };
         self.follow_settle(
             &rec.swap_id,
             false,
+            rec.role,
             &rec.chain_a,
             &rec.chain_b,
             rec.t1,
             rec.t2,
-            needed,
+            rec.n_a,
+            rec.n_b,
             va,
             vb,
             &fresh_verify,
@@ -6902,7 +7070,7 @@ impl Engine {
             &mut hint_b,
         );
         // Advance the DISPLAY state to chain reality (see follow_one).
-        let new_state = Self::followed_display_state_v2(rec.state, &va, &vb);
+        let new_state = Self::followed_display_state_v2(rec.state, &va, &vb, rec.n_a);
         if hint_a.is_some() || hint_b.is_some() || new_state != rec.state {
             let mut updated = rec.clone();
             if let Some(h) = hint_a {
@@ -6922,41 +7090,52 @@ impl Engine {
         if rec.derive_scope == 0 {
             return Ok(None);
         }
-        let needed = rec.n_a.max(rec.n_b).max(1);
+        // Fresh re-verification applying the same our-leg gate as the cached
+        // decision (OUR settlement leg spent deep at ITS OWN target; co-leg spent).
         let fresh_verify = || {
-            let deep = |s: &crate::reconstruct::SpentLeg| {
-                s.kind != SpendKind::Unknown && s.spend_confs >= u64::from(needed)
-            };
-            let deep_spent =
-                |chain: &ChainRef,
-                 spk: &ScriptBuf,
-                 amount: u64,
-                 classify: &dyn Fn(&[Vec<u8>]) -> SpendKind,
-                 wallet: &dyn Fn() -> Option<crate::reconstruct::WalletEvidence>| {
-                    let Ok(backend) = self.backend(chain) else {
-                        return false;
-                    };
-                    match crate::reconstruct::classify_leg(&backend, spk, amount, classify) {
-                        Ok(Some(LegClass::Spent(ref s))) => deep(s),
-                        // Tier L: re-derive the wallet evidence fresh (#171).
-                        Ok(None) => matches!(
-                            wallet(),
-                            Some(crate::reconstruct::WalletEvidence::Spent(ref s)) if deep(s)
-                        ),
-                        _ => false,
+            let spent_leg = |chain: &ChainRef,
+                             spk: &ScriptBuf,
+                             amount: u64,
+                             classify: &dyn Fn(&[Vec<u8>]) -> SpendKind,
+                             wallet: &dyn Fn() -> Option<crate::reconstruct::WalletEvidence>|
+             -> Option<(SpendKind, u64)> {
+                let backend = self.backend(chain).ok()?;
+                match crate::reconstruct::classify_leg(&backend, spk, amount, classify) {
+                    Ok(Some(LegClass::Spent(s))) if s.kind != SpendKind::Unknown => {
+                        Some((s.kind, s.spend_confs))
                     }
-                };
-            deep_spent(&rec.chain_a, &spk_a, rec.amount_a, &classify_a, &wallet_a)
-                && deep_spent(&rec.chain_b, &spk_b, rec.amount_b, &classify_b, &wallet_b)
+                    // Tier L: re-derive the wallet evidence fresh (#171).
+                    Ok(None) => match wallet() {
+                        Some(crate::reconstruct::WalletEvidence::Spent(s))
+                            if s.kind != SpendKind::Unknown =>
+                        {
+                            Some((s.kind, s.spend_confs))
+                        }
+                        _ => None,
+                    },
+                    _ => None,
+                }
+            };
+            match (
+                spent_leg(&rec.chain_a, &spk_a, rec.amount_a, &classify_a, &wallet_a),
+                spent_leg(&rec.chain_b, &spk_b, rec.amount_b, &classify_b, &wallet_b),
+            ) {
+                (Some((ka, ca)), Some((kb, cb))) => {
+                    Self::follow_purge_ok(rec.role, &ka, &kb, ca, cb, rec.n_a, rec.n_b)
+                }
+                _ => false,
+            }
         };
         self.follow_settle(
             &rec.swap_id,
             true,
+            rec.role,
             &rec.chain_a,
             &rec.chain_b,
             rec.t1,
             rec.t2,
-            needed,
+            rec.n_a,
+            rec.n_b,
             va,
             vb,
             &fresh_verify,
@@ -8038,7 +8217,23 @@ impl Engine {
                     continue;
                 }
             };
-            if have.contains(rec.swap_id()) || rec.terminal() {
+            if rec.terminal() {
+                continue;
+            }
+            if have.contains(rec.swap_id()) {
+                // Already following this swap. A LATER (Signed) snapshot can carry
+                // the v2 adaptor MATERIAL a pre-sign import lacked (nonces, partial
+                // sigs, assembled adaptor sigs) — refresh JUST that so a takeover
+                // can COMPLETE the cooperative redeem, not only refund. The
+                // followed record's STATE stays chain-derived (never taken from a
+                // snapshot — chain-only); v1 carries no such material.
+                if let RescuedRecord::V2(snap) = &rec {
+                    if let Some(ev) = self.refresh_followed_material_v2(snap)? {
+                        if announced.insert(snap.swap_id.clone()) {
+                            events.push(ev);
+                        }
+                    }
+                }
                 continue;
             }
             let scope = rec.derive_scope();
@@ -8084,6 +8279,66 @@ impl Engine {
             }
         }
         Ok(events)
+    }
+
+    /// A followed v2 record first seen PRE-SIGN (accept snapshot) holds the
+    /// swap's scripts but not the adaptor MATERIAL (nonces, partial sigs,
+    /// assembled adaptor sigs) — enough to observe and, on takeover, REFUND a
+    /// stalled leg, but not to COMPLETE the cooperative redeem. When the owner's
+    /// later Signed snapshot surfaces, fill that material in — POSITIVE-ONLY (only
+    /// gaps, never overwrite) — so a takeover can finish the swap. Deliberately
+    /// leaves the record's STATE and chain-discovered funding pointers untouched:
+    /// the followed story stays CHAIN-derived (the material is drive data, not
+    /// state). No-op for records we drive (ours/adopted) or that already hold it.
+    fn refresh_followed_material_v2(&self, snap: &AdaptorSwapRecord) -> Result<Option<TickEvent>> {
+        let Ok(mut rec) = self.store.get_adaptor(&snap.swap_id) else {
+            return Ok(None);
+        };
+        // Only a genuinely FOLLOWED record (foreign scope, not adopted); never
+        // touch a swap we drive or a legacy scope.
+        if self.drives(rec.derive_scope, rec.adopted) || rec.derive_scope == 0 {
+            return Ok(None);
+        }
+        // The snapshot must actually carry material, and we only fill what we lack.
+        let snap_has_material = snap.adaptor_sig_a.is_some() || snap.adaptor_sig_b.is_some();
+        let we_have_material = rec.adaptor_sig_a.is_some() && rec.adaptor_sig_b.is_some();
+        if !snap_has_material || we_have_material {
+            return Ok(None);
+        }
+        // Positive-only gap fill: set an absent field from the snapshot, never
+        // overwrite one we already hold, never null one out.
+        let fill = |dst: &mut Option<String>, src: &Option<String>| -> bool {
+            if dst.is_none() && src.is_some() {
+                dst.clone_from(src);
+                true
+            } else {
+                false
+            }
+        };
+        let mut changed = false;
+        changed |= fill(&mut rec.their_pubnonce_a, &snap.their_pubnonce_a);
+        changed |= fill(&mut rec.their_pubnonce_b, &snap.their_pubnonce_b);
+        changed |= fill(&mut rec.their_partial_a, &snap.their_partial_a);
+        changed |= fill(&mut rec.their_partial_b, &snap.their_partial_b);
+        changed |= fill(&mut rec.adaptor_sig_a, &snap.adaptor_sig_a);
+        changed |= fill(&mut rec.adaptor_sig_b, &snap.adaptor_sig_b);
+        changed |= fill(&mut rec.counterparty_identity, &snap.counterparty_identity);
+        changed |= fill(&mut rec.bob_swap_a, &snap.bob_swap_a);
+        changed |= fill(&mut rec.bob_swap_b, &snap.bob_swap_b);
+        changed |= fill(&mut rec.bob_refund_b, &snap.bob_refund_b);
+        changed |= fill(&mut rec.sweep_a, &snap.sweep_a);
+        changed |= fill(&mut rec.sweep_b, &snap.sweep_b);
+        if !changed {
+            return Ok(None);
+        }
+        self.store.put_adaptor(&rec)?; // status-only write — never a broadcast
+        Ok(Some(TickEvent {
+            swap_id: snap.swap_id.clone(),
+            action: "followed-material-refreshed".into(),
+            detail:
+                "picked up the signing material from another machine's Signed backup — a takeover can now complete this swap, not just refund"
+                    .into(),
+        }))
     }
 
     /// Shared setup for a rescue pass: identity keypair + pubkey and the set
@@ -10200,6 +10455,87 @@ mod tests {
     }
 
     #[test]
+    fn followed_v2_material_refreshes_from_a_later_signed_snapshot() {
+        // A pre-sign (accept) import holds the scripts but not the adaptor
+        // material — enough to observe/refund, not to COMPLETE. A later Signed
+        // snapshot fills the material in (positive-only) so a takeover can finish
+        // the swap — WITHOUT moving the chain-derived state.
+        let (mut engine, dir) = engine_with("follow-material", None);
+        engine.machine_scope = crate::keys::DeriveScope(0xAAAA);
+        let mut rec = v2_record(&engine);
+        engine.store.delete_adaptor(&rec.swap_id).unwrap();
+        rec.derive_scope = 0xBBBB;
+        rec.adopted = false;
+        rec.state = AdaptorState::Accepted;
+        rec.their_partial_a = None;
+        rec.their_partial_b = None;
+        rec.adaptor_sig_a = None;
+        rec.adaptor_sig_b = None;
+        let accept_blob = sealed_snapshot(
+            &engine,
+            2,
+            &rec.swap_id,
+            serde_json::to_value(&rec).unwrap(),
+            0,
+        );
+        let ev = engine.follow_foreign_from_blobs(&[accept_blob]).unwrap();
+        assert_eq!(ev[0].action, "followed-imported");
+        assert!(
+            engine
+                .store
+                .get_adaptor(&rec.swap_id)
+                .unwrap()
+                .adaptor_sig_b
+                .is_none(),
+            "no material from the pre-sign import"
+        );
+
+        // The owner's later Signed backup, carrying the material.
+        let mut signed = rec.clone();
+        signed.state = AdaptorState::Signed;
+        signed.their_partial_a = Some("aa".into());
+        signed.their_partial_b = Some("bb".into());
+        signed.adaptor_sig_a = Some("cc".into());
+        signed.adaptor_sig_b = Some("dd".into());
+        let signed_blob = sealed_snapshot(
+            &engine,
+            2,
+            &rec.swap_id,
+            serde_json::to_value(&signed).unwrap(),
+            1,
+        );
+        let ev2 = engine.follow_foreign_from_blobs(&[signed_blob]).unwrap();
+        assert_eq!(ev2.len(), 1);
+        assert_eq!(ev2[0].action, "followed-material-refreshed");
+        let refreshed = engine.store.get_adaptor(&rec.swap_id).unwrap();
+        assert_eq!(
+            refreshed.adaptor_sig_b.as_deref(),
+            Some("dd"),
+            "material filled from the Signed backup"
+        );
+        assert_eq!(refreshed.their_partial_a.as_deref(), Some("aa"));
+        assert_eq!(
+            refreshed.state,
+            AdaptorState::Accepted,
+            "STATE stays chain-derived — never taken from the snapshot"
+        );
+
+        // Idempotent: re-seeing the pre-sign snapshot (no material) does nothing.
+        let accept_again = sealed_snapshot(
+            &engine,
+            2,
+            &rec.swap_id,
+            serde_json::to_value(&rec).unwrap(),
+            0,
+        );
+        assert!(engine
+            .follow_foreign_from_blobs(&[accept_again])
+            .unwrap()
+            .is_empty());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
     fn own_scope_legacy_and_terminal_snapshots_never_auto_import() {
         // #163: only FOREIGN NONZERO scopes auto-follow. Own-scope stays the
         // confirm-gated #54 self-rescue; legacy (0) is foreign to everyone and
@@ -11683,62 +12019,94 @@ mod tests {
             spend_confs: 1,
         };
         let s = Engine::followed_display_state_v1;
-        // Snapshot state (accepted) advances with the chain.
+        // n_a = 4: a taker only reaches FundedA once the maker's leg A is that
+        // deep (its FundedA narrate claims the lock is "verified").
+        let fund_deep = FundedLive { confs: 4 };
+        // Nothing on chain — hold the snapshot state.
         assert_eq!(
-            s(State::Accepted, &unf, &unf),
-            State::Accepted,
-            "nothing on chain"
+            s(State::Accepted, Role::Initiator, &unf, &unf, 4),
+            State::Accepted
         );
+        // MAKER funded its OWN leg A → FundedA at any depth.
         assert_eq!(
-            s(State::Accepted, &fund, &unf),
+            s(State::Accepted, Role::Initiator, &fund, &unf, 4),
             State::FundedA,
-            "one leg funded"
+            "maker funded its own leg A"
         );
+        // TAKER holds at `accepted` while the maker's leg A is still shallow …
         assert_eq!(
-            s(State::Accepted, &fund, &fund),
+            s(State::Accepted, Role::Participant, &fund, &unf, 4),
+            State::Accepted,
+            "taker waits for leg A to be n_a-deep"
+        );
+        // … then advances once leg A is n_a-deep (verified).
+        assert_eq!(
+            s(State::Accepted, Role::Participant, &fund_deep, &unf, 4),
+            State::FundedA,
+            "taker: leg A verified"
+        );
+        // Both legs funded → FundedB (either role).
+        assert_eq!(
+            s(State::Accepted, Role::Participant, &fund, &fund, 4),
             State::FundedB,
             "both funded"
         );
         assert_eq!(
-            s(State::Accepted, &fund, &redeem),
+            s(State::Accepted, Role::Initiator, &fund, &redeem, 4),
             State::RedeemedB,
             "a claim revealed s"
         );
         assert_eq!(
-            s(State::Accepted, &redeem, &redeem),
+            s(State::Accepted, Role::Initiator, &redeem, &redeem, 4),
             State::Completed,
             "both claimed"
         );
         assert_eq!(
-            s(State::Accepted, &refund, &unf),
+            s(State::Accepted, Role::Initiator, &refund, &unf, 4),
             State::Refunded,
             "a refund"
         );
         // Monotonic — never regress on a flickered/partial verdict.
         assert_eq!(
-            s(State::FundedB, &fund, &unf),
+            s(State::FundedB, Role::Initiator, &fund, &unf, 4),
             State::FundedB,
             "no regress to FundedA"
         );
         assert_eq!(
-            s(State::Completed, &unf, &unf),
+            s(State::Completed, Role::Participant, &unf, &unf, 4),
             State::Completed,
             "terminal is sticky"
         );
 
-        // v2 twin: snapshot is usually `Signed`.
+        // v2 twin: the owner executes entirely within `Signed` (never
+        // FundedA/FundedB), but the off-chain signing round is NOT chain-visible.
         let s2 = Engine::followed_display_state_v2;
+        // Leg A only CONFIRMING (shallow) → hold the imported handshake state; we
+        // can't claim "both signed" while the chain still shows it confirming.
         assert_eq!(
-            s2(AdaptorState::Signed, &fund, &fund),
-            AdaptorState::FundedB
+            s2(AdaptorState::Accepted, &fund, &unf, 4),
+            AdaptorState::Accepted,
+            "v2: leg A confirming → not yet Signed"
+        );
+        // Leg A VERIFIED (n_a-deep) → the executing phase (Signed).
+        assert_eq!(
+            s2(AdaptorState::Accepted, &fund_deep, &unf, 4),
+            AdaptorState::Signed,
+            "v2: leg A n_a-deep → Signed"
+        );
+        // Both legs funded proves signing finished → Signed (even if A shallow).
+        assert_eq!(
+            s2(AdaptorState::Accepted, &fund, &fund, 4),
+            AdaptorState::Signed,
+            "v2: both funded → Signed"
         );
         assert_eq!(
-            s2(AdaptorState::Signed, &redeem, &redeem),
+            s2(AdaptorState::Signed, &redeem, &redeem, 4),
             AdaptorState::Completed
         );
         assert_eq!(
-            s2(AdaptorState::FundedB, &unf, &unf),
-            AdaptorState::FundedB,
+            s2(AdaptorState::RedeemedB, &unf, &unf, 4),
+            AdaptorState::RedeemedB,
             "no regress"
         );
     }
@@ -11782,6 +12150,98 @@ mod tests {
             Engine::followed_leg_display(Participant, true, 5, 3, None, None),
             ("our_lock", 3)
         );
+    }
+
+    #[test]
+    fn followed_await_lock_voice_names_the_side_that_must_act() {
+        // Regression for the observer showing "awaiting their lock" where the
+        // owner would show "awaiting your lock": the awaited (not-yet-broadcast)
+        // lock is OURS when the awaited leg is ours — participant funds B,
+        // initiator funds A — mirroring `followed_leg_display`'s ownership.
+        use Role::*;
+        // Taker (participant): the FIRST lock (leg A) is the maker's → theirs;
+        // the SECOND (leg B, after A buries) is the taker's OWN → ours.
+        assert_eq!(
+            Engine::followed_await_lock_voice(Participant, false),
+            "awaiting_lock",
+            "participant awaits the maker's leg A first"
+        );
+        assert_eq!(
+            Engine::followed_await_lock_voice(Participant, true),
+            "awaiting_our_lock",
+            "participant then awaits its OWN leg B"
+        );
+        // Maker (initiator): the FIRST lock (leg A) is its OWN → ours; leg B is
+        // the taker's → theirs.
+        assert_eq!(
+            Engine::followed_await_lock_voice(Initiator, false),
+            "awaiting_our_lock",
+            "initiator awaits its OWN leg A first"
+        );
+        assert_eq!(
+            Engine::followed_await_lock_voice(Initiator, true),
+            "awaiting_lock",
+            "initiator then awaits the taker's leg B"
+        );
+    }
+
+    #[test]
+    fn follow_purge_gates_on_our_settlement_leg_at_its_own_target() {
+        // A followed row must clear once OUR leg is spent deep at ITS OWN target —
+        // never waiting on the counterparty's co-leg depth OR its (possibly
+        // deeper) target. Redeem→received leg, refund→funded leg (settlementLeg).
+        use crate::reconstruct::SpendKind::*;
+        use Role::*;
+        // Per-side targets: leg A needs 4, leg B needs 6 (btc/btcx in the field).
+        let (na, nb) = (4u32, 6u32);
+        // Success (both redeem): participant receives A (target 4), initiator
+        // receives B (target 6). THE FIX: our leg at its own target clears even
+        // though the co-leg has NOT reached its deeper target.
+        assert!(
+            Engine::follow_purge_ok(Participant, &Redeem, &Redeem, 4, 4, na, nb),
+            "participant clears at received-leg-A target 4, not co-leg B's 6"
+        );
+        assert!(
+            !Engine::follow_purge_ok(Participant, &Redeem, &Redeem, 3, 6, na, nb),
+            "participant NOT cleared while received leg A is shallow (3<4)"
+        );
+        assert!(
+            Engine::follow_purge_ok(Initiator, &Redeem, &Redeem, 1, 6, na, nb),
+            "initiator clears at received-leg-B target 6 regardless of co-leg A"
+        );
+        // Refund (both refund): participant funded B (target 6), initiator funded
+        // A (target 4).
+        assert!(Engine::follow_purge_ok(
+            Participant,
+            &Refund,
+            &Refund,
+            1,
+            6,
+            na,
+            nb
+        ));
+        assert!(Engine::follow_purge_ok(
+            Initiator, &Refund, &Refund, 4, 1, na, nb
+        ));
+        // Mixed (§7.4) is ambiguous → shallower leg at the stricter target.
+        assert!(!Engine::follow_purge_ok(
+            Participant,
+            &Redeem,
+            &Refund,
+            6,
+            2,
+            na,
+            nb
+        ));
+        assert!(Engine::follow_purge_ok(
+            Participant,
+            &Redeem,
+            &Refund,
+            6,
+            6,
+            na,
+            nb
+        ));
     }
 
     #[test]

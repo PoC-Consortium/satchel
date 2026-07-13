@@ -34,12 +34,21 @@ export default function ActiveSwaps() {
   const { swaps, refreshSwaps, log } = useApp();
   const confirm = useConfirm();
   const t = useT();
-  const active = swaps.filter(isActive);
   // Multi-machine (#122): swaps this machine drives vs. ones another machine on
   // the same seed drives (we only follow those read-only). Foreign swaps group
   // per originating machine so one "Take over" adopts all of that machine's work.
-  const local = active.filter((s) => s.source !== "foreign");
-  const foreign = active.filter((s) => s.source === "foreign");
+  //
+  // LOCAL swaps use the active/terminal split — a completed one moves to the
+  // Swaps-screen history. FOLLOWED (foreign) swaps have NO history view: pactd
+  // PURGES (deletes) the record once the swap is deep-terminal, so the record's
+  // mere existence IS its "active" signal. They must stay in the dock until that
+  // purge — NOT until a display-state flips to completed. Filtering them through
+  // isActive() made a followed row blink out for the tick where #175 advanced the
+  // followed state to completed while the settlement progress line briefly lagged.
+  const local = swaps.filter((s) => s.source !== "foreign" && isActive(s));
+  const foreign = swaps.filter((s) => s.source === "foreign");
+  // Total shown in the dock (drives the empty-check + the count badge).
+  const active = [...local, ...foreign];
   const foreignGroups = new Map<string, Swap[]>();
   for (const s of foreign) {
     const key = s.machine_label ?? "?";

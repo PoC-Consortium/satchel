@@ -805,6 +805,7 @@ export const ptBR: Bundle = {
   },
   progress: {
     awaitingLock: "Aguardando o bloqueio deles",
+    awaitingOurLock: "Aguardando o seu bloqueio",
     awaitingClaim: "Aguardando o resgate deles",
     theirLock: "Confirmando o bloqueio deles",
     ourLock: "Confirmando o seu bloqueio",

@@ -805,6 +805,7 @@ export const nl: Bundle = {
   },
   progress: {
     awaitingLock: "Wachten op hun vergrendeling",
+    awaitingOurLock: "Wachten op jouw vergrendeling",
     awaitingClaim: "Wachten op hun claim",
     theirLock: "Hun vergrendeling wordt bevestigd",
     ourLock: "Jouw vergrendeling wordt bevestigd",

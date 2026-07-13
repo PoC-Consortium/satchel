@@ -805,6 +805,7 @@ export const zhCn: Bundle = {
   },
   progress: {
     awaitingLock: "等待对方锁定",
+    awaitingOurLock: "等待您的锁定",
     awaitingClaim: "等待对方认领",
     theirLock: "正在确认对方锁定",
     ourLock: "正在确认您的锁定",

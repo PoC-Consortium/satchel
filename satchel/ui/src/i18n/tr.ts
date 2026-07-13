@@ -805,6 +805,7 @@ export const tr: Bundle = {
   },
   progress: {
     awaitingLock: "Onların kilidi bekleniyor",
+    awaitingOurLock: "Sizin kilidiniz bekleniyor",
     awaitingClaim: "Onların talebi bekleniyor",
     theirLock: "Onların kilidi onaylanıyor",
     ourLock: "Sizin kilidiniz onaylanıyor",

@@ -808,6 +808,7 @@ export const cs: Bundle = {
   },
   progress: {
     awaitingLock: "Čekání na jejich uzamčení",
+    awaitingOurLock: "Čekání na vaše uzamčení",
     awaitingClaim: "Čekání na jejich nárok",
     theirLock: "Potvrzování jejich uzamčení",
     ourLock: "Potvrzování vašeho uzamčení",

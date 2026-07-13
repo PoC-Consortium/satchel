@@ -843,6 +843,7 @@ export const en = {
   // translatable; counts, feerate and the "+N blocks" number are data.
   progress: {
     awaitingLock: "Awaiting their lock",
+    awaitingOurLock: "Awaiting your lock",
     awaitingClaim: "Awaiting their claim",
     theirLock: "Their lock confirming",
     ourLock: "Your lock confirming",

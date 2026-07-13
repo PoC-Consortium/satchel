@@ -807,6 +807,7 @@ export const fr: Bundle = {
   },
   progress: {
     awaitingLock: "En attente de leur verrouillage",
+    awaitingOurLock: "En attente de votre verrouillage",
     awaitingClaim: "En attente de leur réclamation",
     theirLock: "Confirmation de leur verrouillage",
     ourLock: "Confirmation de votre verrouillage",

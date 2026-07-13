@@ -809,6 +809,7 @@ export const el: Bundle = {
   },
   progress: {
     awaitingLock: "Αναμονή για το κλείδωμά τους",
+    awaitingOurLock: "Αναμονή για το κλείδωμά σας",
     awaitingClaim: "Αναμονή για την εξαργύρωσή τους",
     theirLock: "Επιβεβαίωση του κλειδώματός τους",
     ourLock: "Επιβεβαίωση του κλειδώματός σας",

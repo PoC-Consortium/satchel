@@ -805,6 +805,7 @@ export const lt: Bundle = {
   },
   progress: {
     awaitingLock: "Laukiama jų užrakinimo",
+    awaitingOurLock: "Laukiama jūsų užrakinimo",
     awaitingClaim: "Laukiama jų atsiėmimo",
     theirLock: "Tvirtinamas jų užrakinimas",
     ourLock: "Tvirtinamas jūsų užrakinimas",

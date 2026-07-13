@@ -805,6 +805,7 @@ export const id: Bundle = {
   },
   progress: {
     awaitingLock: "Menunggu penguncian mereka",
+    awaitingOurLock: "Menunggu penguncian Anda",
     awaitingClaim: "Menunggu klaim mereka",
     theirLock: "Mengonfirmasi penguncian mereka",
     ourLock: "Mengonfirmasi penguncian Anda",

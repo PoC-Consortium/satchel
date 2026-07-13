@@ -805,6 +805,7 @@ export const ja: Bundle = {
   },
   progress: {
     awaitingLock: "相手のロックを待機中",
+    awaitingOurLock: "自分のロックを待機中",
     awaitingClaim: "相手の請求を待機中",
     theirLock: "相手のロックを確認中",
     ourLock: "自分のロックを確認中",

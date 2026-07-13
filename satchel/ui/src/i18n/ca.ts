@@ -807,6 +807,7 @@ export const ca: Bundle = {
   },
   progress: {
     awaitingLock: "A l'espera del seu bloqueig",
+    awaitingOurLock: "A l'espera del teu bloqueig",
     awaitingClaim: "A l'espera de la seva reclamació",
     theirLock: "Confirmant el seu bloqueig",
     ourLock: "Confirmant el teu bloqueig",

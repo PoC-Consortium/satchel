@@ -805,6 +805,7 @@ export const ro: Bundle = {
   },
   progress: {
     awaitingLock: "Se așteaptă blocarea lor",
+    awaitingOurLock: "Se așteaptă blocarea ta",
     awaitingClaim: "Se așteaptă revendicarea lor",
     theirLock: "Se confirmă blocarea lor",
     ourLock: "Se confirmă blocarea ta",
