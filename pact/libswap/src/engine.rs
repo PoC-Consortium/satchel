@@ -8216,7 +8216,23 @@ impl Engine {
                     continue;
                 }
             };
-            if have.contains(rec.swap_id()) || rec.terminal() {
+            if rec.terminal() {
+                continue;
+            }
+            if have.contains(rec.swap_id()) {
+                // Already following this swap. A LATER (Signed) snapshot can carry
+                // the v2 adaptor MATERIAL a pre-sign import lacked (nonces, partial
+                // sigs, assembled adaptor sigs) — refresh JUST that so a takeover
+                // can COMPLETE the cooperative redeem, not only refund. The
+                // followed record's STATE stays chain-derived (never taken from a
+                // snapshot — chain-only); v1 carries no such material.
+                if let RescuedRecord::V2(snap) = &rec {
+                    if let Some(ev) = self.refresh_followed_material_v2(snap)? {
+                        if announced.insert(snap.swap_id.clone()) {
+                            events.push(ev);
+                        }
+                    }
+                }
                 continue;
             }
             let scope = rec.derive_scope();
@@ -8262,6 +8278,66 @@ impl Engine {
             }
         }
         Ok(events)
+    }
+
+    /// A followed v2 record first seen PRE-SIGN (accept snapshot) holds the
+    /// swap's scripts but not the adaptor MATERIAL (nonces, partial sigs,
+    /// assembled adaptor sigs) — enough to observe and, on takeover, REFUND a
+    /// stalled leg, but not to COMPLETE the cooperative redeem. When the owner's
+    /// later Signed snapshot surfaces, fill that material in — POSITIVE-ONLY (only
+    /// gaps, never overwrite) — so a takeover can finish the swap. Deliberately
+    /// leaves the record's STATE and chain-discovered funding pointers untouched:
+    /// the followed story stays CHAIN-derived (the material is drive data, not
+    /// state). No-op for records we drive (ours/adopted) or that already hold it.
+    fn refresh_followed_material_v2(&self, snap: &AdaptorSwapRecord) -> Result<Option<TickEvent>> {
+        let Ok(mut rec) = self.store.get_adaptor(&snap.swap_id) else {
+            return Ok(None);
+        };
+        // Only a genuinely FOLLOWED record (foreign scope, not adopted); never
+        // touch a swap we drive or a legacy scope.
+        if self.drives(rec.derive_scope, rec.adopted) || rec.derive_scope == 0 {
+            return Ok(None);
+        }
+        // The snapshot must actually carry material, and we only fill what we lack.
+        let snap_has_material = snap.adaptor_sig_a.is_some() || snap.adaptor_sig_b.is_some();
+        let we_have_material = rec.adaptor_sig_a.is_some() && rec.adaptor_sig_b.is_some();
+        if !snap_has_material || we_have_material {
+            return Ok(None);
+        }
+        // Positive-only gap fill: set an absent field from the snapshot, never
+        // overwrite one we already hold, never null one out.
+        let fill = |dst: &mut Option<String>, src: &Option<String>| -> bool {
+            if dst.is_none() && src.is_some() {
+                dst.clone_from(src);
+                true
+            } else {
+                false
+            }
+        };
+        let mut changed = false;
+        changed |= fill(&mut rec.their_pubnonce_a, &snap.their_pubnonce_a);
+        changed |= fill(&mut rec.their_pubnonce_b, &snap.their_pubnonce_b);
+        changed |= fill(&mut rec.their_partial_a, &snap.their_partial_a);
+        changed |= fill(&mut rec.their_partial_b, &snap.their_partial_b);
+        changed |= fill(&mut rec.adaptor_sig_a, &snap.adaptor_sig_a);
+        changed |= fill(&mut rec.adaptor_sig_b, &snap.adaptor_sig_b);
+        changed |= fill(&mut rec.counterparty_identity, &snap.counterparty_identity);
+        changed |= fill(&mut rec.bob_swap_a, &snap.bob_swap_a);
+        changed |= fill(&mut rec.bob_swap_b, &snap.bob_swap_b);
+        changed |= fill(&mut rec.bob_refund_b, &snap.bob_refund_b);
+        changed |= fill(&mut rec.sweep_a, &snap.sweep_a);
+        changed |= fill(&mut rec.sweep_b, &snap.sweep_b);
+        if !changed {
+            return Ok(None);
+        }
+        self.store.put_adaptor(&rec)?; // status-only write — never a broadcast
+        Ok(Some(TickEvent {
+            swap_id: snap.swap_id.clone(),
+            action: "followed-material-refreshed".into(),
+            detail:
+                "picked up the signing material from another machine's Signed backup — a takeover can now complete this swap, not just refund"
+                    .into(),
+        }))
     }
 
     /// Shared setup for a rescue pass: identity keypair + pubkey and the set
@@ -10374,6 +10450,87 @@ mod tests {
         let got = engine.store.get_adaptor(&rec.swap_id).unwrap();
         assert!(!got.adopted, "adopted forced false on v2 import");
         assert!(!engine.drives(got.derive_scope, got.adopted));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn followed_v2_material_refreshes_from_a_later_signed_snapshot() {
+        // A pre-sign (accept) import holds the scripts but not the adaptor
+        // material — enough to observe/refund, not to COMPLETE. A later Signed
+        // snapshot fills the material in (positive-only) so a takeover can finish
+        // the swap — WITHOUT moving the chain-derived state.
+        let (mut engine, dir) = engine_with("follow-material", None);
+        engine.machine_scope = crate::keys::DeriveScope(0xAAAA);
+        let mut rec = v2_record(&engine);
+        engine.store.delete_adaptor(&rec.swap_id).unwrap();
+        rec.derive_scope = 0xBBBB;
+        rec.adopted = false;
+        rec.state = AdaptorState::Accepted;
+        rec.their_partial_a = None;
+        rec.their_partial_b = None;
+        rec.adaptor_sig_a = None;
+        rec.adaptor_sig_b = None;
+        let accept_blob = sealed_snapshot(
+            &engine,
+            2,
+            &rec.swap_id,
+            serde_json::to_value(&rec).unwrap(),
+            0,
+        );
+        let ev = engine.follow_foreign_from_blobs(&[accept_blob]).unwrap();
+        assert_eq!(ev[0].action, "followed-imported");
+        assert!(
+            engine
+                .store
+                .get_adaptor(&rec.swap_id)
+                .unwrap()
+                .adaptor_sig_b
+                .is_none(),
+            "no material from the pre-sign import"
+        );
+
+        // The owner's later Signed backup, carrying the material.
+        let mut signed = rec.clone();
+        signed.state = AdaptorState::Signed;
+        signed.their_partial_a = Some("aa".into());
+        signed.their_partial_b = Some("bb".into());
+        signed.adaptor_sig_a = Some("cc".into());
+        signed.adaptor_sig_b = Some("dd".into());
+        let signed_blob = sealed_snapshot(
+            &engine,
+            2,
+            &rec.swap_id,
+            serde_json::to_value(&signed).unwrap(),
+            1,
+        );
+        let ev2 = engine.follow_foreign_from_blobs(&[signed_blob]).unwrap();
+        assert_eq!(ev2.len(), 1);
+        assert_eq!(ev2[0].action, "followed-material-refreshed");
+        let refreshed = engine.store.get_adaptor(&rec.swap_id).unwrap();
+        assert_eq!(
+            refreshed.adaptor_sig_b.as_deref(),
+            Some("dd"),
+            "material filled from the Signed backup"
+        );
+        assert_eq!(refreshed.their_partial_a.as_deref(), Some("aa"));
+        assert_eq!(
+            refreshed.state,
+            AdaptorState::Accepted,
+            "STATE stays chain-derived — never taken from the snapshot"
+        );
+
+        // Idempotent: re-seeing the pre-sign snapshot (no material) does nothing.
+        let accept_again = sealed_snapshot(
+            &engine,
+            2,
+            &rec.swap_id,
+            serde_json::to_value(&rec).unwrap(),
+            0,
+        );
+        assert!(engine
+            .follow_foreign_from_blobs(&[accept_again])
+            .unwrap()
+            .is_empty());
         std::fs::remove_dir_all(&dir).ok();
     }
 
