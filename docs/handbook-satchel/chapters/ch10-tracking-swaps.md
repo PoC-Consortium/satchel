@@ -197,7 +197,11 @@ like **Another machine · M-7f3a**. Those cards are **read-only**: this machine
 watches them on-chain but never acts on them, and they don't appear in the Swaps
 ledger. Each group carries one **Take over** button. Press it — and confirm that
 the other machine really is stopped — and this machine adopts the group's swaps
-and starts driving them, ledger and all.
+and starts driving them, ledger and all. The one kind it can't adopt this way is
+a **Private (v2)** swap paid out to a node wallet this machine doesn't control:
+it's skipped, with a note to point this machine at that wallet (or add an
+Electrum view for the coin) and take over again. All v1 swaps, and v2 swaps that
+pay a seed-derived address, adopt without conditions.
 
 > **Note** — Upgrading from an older Satchel needs no ceremony here: your
 > **finished** swaps stay in the ledger automatically. A swap that was still

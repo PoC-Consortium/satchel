@@ -96,8 +96,10 @@ you mean '<nearest>'? (see 'help')`, `missing param '<name>'`,
 
 ## BIP32 derivation paths
 
-All keys derive from one BIP39 seed under purpose `7228'`. `coin(c)`: BTC = `0`,
-PoCX = `0x504F4358`. See "HTLC v1 (Construction)" and "v2 Adaptor (Construction)".
+All keys derive from one BIP39 seed under purpose `7228'`. `coin(c)`: BTC = `0`
+(all networks); PoCX = `0x504F4358` on mainnet, `1'` on testnet/regtest
+(network-aware, for Bitcoin Core / Phoenix parity). See "HTLC v1 (Construction)"
+and "v2 Adaptor (Construction)".
 
 | Key | Path | Use |
 |---|---|---|
