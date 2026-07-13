@@ -42,13 +42,17 @@ key.
 > restore (see "Seeds, Wallets & Merchants"): his keys re-derive from the seed
 > plus the on-chain script alone, with no local state needed.
 
-The `coin(c)` index identifies the **asset**, not the network
-(`keys.rs:23-25`):
+The `coin(c)` index identifies the **asset** (`keys.rs`). For BTC it is
+network-independent; for PoCX (BTCX) it is **network-aware** — mainnet uses the
+registered per-asset value, while testnet and regtest use the shared SLIP-44
+testnet coin type `1'` (parity with Bitcoin Core and Phoenix). The network
+params already separate the keys, so a bespoke per-asset testnet coin type only
+breaks portability:
 
 | Asset | `coin(c)` |
 |---|---|
-| BTC | `0` |
-| PoCX (BTCX) | `0x504F4358` (ASCII `"POCX"`) |
+| BTC | `0` (all networks) |
+| PoCX (BTCX) | `0x504F4358` (ASCII `"POCX"`) on mainnet · `1` on testnet/regtest |
 
 The preimage and the swap identifier are deterministic, so both survive loss
 of the state database (`keys.rs:83-89`, `keys.rs:137-142`):

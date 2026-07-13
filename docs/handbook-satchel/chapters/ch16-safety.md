@@ -154,7 +154,13 @@ own swaps:
   carries one **Take over** button, behind a confirmation that spells out the
   condition: *only if that machine is stopped*. Confirm, and this machine
   adopts those swaps and drives them to completion — the standby becoming the
-  main, in one click. Make absolutely sure the dead machine is genuinely off
+  main, in one click. (One exception: a **Private (v2) swap** whose payout is
+  pinned to a node wallet this machine doesn't control is left untouched rather
+  than adopted — driving it would send the proceeds to the other machine's
+  wallet. Point this machine at that coin's wallet, or add an Electrum view for
+  it, and take over again. All v1 swaps, and v2 swaps that pay a seed-derived
+  address, adopt without conditions.) Make absolutely sure the dead machine is
+  genuinely off
   first: two machines driving the same swap at once can lose money, and the
   confirmation is your promise that it can't happen.
 

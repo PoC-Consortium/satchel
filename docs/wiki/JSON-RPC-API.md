@@ -40,7 +40,7 @@ A machine restored from the seed alone can rediscover in-flight swaps from encry
 |---|---|
 | `restorefromrelay` | Adopt every rescuable relay snapshot not already held locally; `{ restored, seen }`. |
 | `rescuestatus` | Read-only preview — how many *would* be adopted, plus a two-machines double-fund warning; `{ pending, seen, warning? }`. |
-| `takeover` | Adopt a followed swap (another machine's on the same seed, or one recovered after re-import) so this machine drives it — only once that machine is stopped (`swap_id`). |
+| `takeover` | Adopt a followed swap (another machine's on the same seed, or one recovered after re-import) so this machine drives it — only once that machine is stopped (`swap_id`). A v2 swap whose cooperative-redeem payout pays a wallet this machine doesn't control is refused (driving it would pay the other machine); v1 and seed-derived v2 adopt unconditionally. |
 
 ## Merchants
 

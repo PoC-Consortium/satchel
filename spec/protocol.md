@@ -125,13 +125,17 @@ The BIP32 **purpose** for Pact is `7228'` ("PACT" on a phone keypad).
 | Swap key, participant, chain *c*, anchored | `m/7228'/1'/coin(c)'/a'/b'/c'/d'` | same key type; path levels from the swap anchor (§4.2) |
 | Preimage source, swap index *i* | `m/7228'/2'/i'` | private key bytes feed §4.3; never used as a signing key |
 
-`coin(c)` constants (asset, not network — the same path is used on mainnet,
-testnet and regtest; only address encoding differs):
+`coin(c)` constants. BTC is network-independent. PoCX is **network-aware**:
+mainnet uses the registered per-asset value; testnet and regtest use the shared
+SLIP-44 testnet coin type `1'` (parity with Bitcoin Core and Phoenix — the
+network params already separate the keys, so a bespoke per-asset testnet coin
+type only breaks portability). This §4.1 deviation is scoped to the test
+networks; mainnet is unchanged:
 
-| Asset | `coin(c)` |
-|---|---|
-| BTC | `0'` |
-| PoCX | `1347371864'` (`0x504F4358`, ASCII "POCX") |
+| Asset | `coin(c)` — mainnet | `coin(c)` — testnet / regtest |
+|---|---|---|
+| BTC | `0'` | `0'` |
+| PoCX | `1347371864'` (`0x504F4358`, ASCII "POCX") | `1'` |
 
 A party uses **one swap key per chain per swap**: on the chain where they
 lock funds it is their refund key; on the chain where they claim it is
