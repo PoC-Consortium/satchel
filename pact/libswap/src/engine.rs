@@ -7444,7 +7444,21 @@ impl Engine {
                     Role::Initiator => "a",
                     Role::Participant => "b",
                 };
-                if let Some((outpoint, confs)) = self.locate_funding(rec, our_leg)? {
+                // Only a swap PAST the accept handshake has a derivable funding
+                // script; a `Created` record (no accept yet) can't build
+                // `swap_params`, so `locate_funding` errors with "no accept yet"
+                // and — via `?` — kills THIS tick before the `abort()` below ever
+                // runs. That left a stalled pre-accept swap logging the same error
+                // every tick and NEVER auto-timing-out, lingering in "active
+                // swaps" forever. Treat an unbuildable script as "nothing funded"
+                // and fall through to the clean pre-funding abort; a real backend
+                // error (params buildable) still propagates.
+                let located = if self.swap_params(rec).is_ok() {
+                    self.locate_funding(rec, our_leg)?
+                } else {
+                    None
+                };
+                if let Some((outpoint, confs)) = located {
                     let mut updated = rec.clone();
                     match rec.role {
                         Role::Initiator => {
@@ -9440,6 +9454,42 @@ impl Engine {
                         "take for an offer this machine does not own — ignored".into(),
                     );
                 }
+                // Idempotent re-take guard: a repeat `take` for an offer we have
+                // ALREADY served to THIS SAME taker is a transport duplicate —
+                // at-least-once relay delivery, an outbox re-drain (#176), or a
+                // double-click — NOT a new taker racing for a withdrawn offer.
+                // Ignore it silently. Replying is actively harmful: the only
+                // reply we would send here is the "offer withdrawn" abort below
+                // (we auto-revoke on commit), and the taker's `recv_abort`
+                // matches that abort to its still-live pending take by offer_id
+                // and DELETES it — killing the very handshake our `init` is
+                // completing, after which we hang on "no accept yet". Distinct
+                // from the `offer_served` first-take-wins reject further down,
+                // which correctly refuses a DIFFERENT taker.
+                let served_key = format!("offer_served:{}", offer.swap_id);
+                if let Some(served_swap) = self.store.meta_get(&served_key)? {
+                    let served_to_sender = self
+                        .store
+                        .get(&served_swap)
+                        .ok()
+                        .and_then(|r| r.counterparty_identity)
+                        .or_else(|| {
+                            self.store
+                                .get_adaptor(&served_swap)
+                                .ok()
+                                .and_then(|r| r.counterparty_identity)
+                        })
+                        .as_deref()
+                        == Some(envelope.from.as_str());
+                    if served_to_sender {
+                        return event(
+                            &offer.swap_id,
+                            "take-duplicate",
+                            "repeat take from the taker we already served; ignored (transport duplicate)"
+                                .into(),
+                        );
+                    }
+                }
                 // Staleness gate FIRST, before ANY side effect (serving,
                 // revoking, record creation): a take older than the taker's
                 // own pending-take prune window is a handshake the taker has
@@ -9496,8 +9546,9 @@ impl Engine {
                         format!("taker wire v{take_wire}, ours v{our_wire}; offer stays live"),
                     );
                 }
-                // Fixed-size offers, no partial fills: first take wins.
-                let served_key = format!("offer_served:{}", offer.swap_id);
+                // Fixed-size offers, no partial fills: first take wins. (A
+                // duplicate take from the taker we ALREADY served returned above;
+                // reaching here means a DIFFERENT taker, so reject.)
                 if self.store.meta_get(&served_key)?.is_some() {
                     self.reject_take(&envelope.from, &offer.swap_id, "offer no longer available")?;
                     return event(
@@ -11775,6 +11826,163 @@ mod tests {
             sig: String::new(),
         })
         .unwrap()
+    }
+
+    /// Regression for the rc14 field failure (swaps 4551a67a / 71a9ee07): a
+    /// taker's `take` reaches the maker TWICE — at-least-once relay delivery, an
+    /// outbox re-drain (#176), or a genuine re-take. The maker commits to the
+    /// first (`take->init`) and revokes the offer; the SECOND (duplicate) take
+    /// must NOT tear down the handshake it is completing.
+    ///
+    /// Both halves are deterministic — no chains, no network: `boards()` writes
+    /// the maker's outbound to the LOCAL SQLite outbox, and the duplicate-take
+    /// guard returns before `coordination_now`, so no backend is touched.
+    ///   Part A — the HARM: a maker `abort` keyed to the offer id deletes the
+    ///     taker's LIVE pending take (what a mis-sent "offer withdrawn" does).
+    ///   Part B — the FIX: a duplicate take from the taker we ALREADY served is a
+    ///     `take-duplicate` no-op that sends NO abort. Revert the guard in the
+    ///     `take` arm and Part B flips to `take-rejected` + an enqueued abort
+    ///     which, via Part A, kills the handshake — i.e. this test goes red.
+    #[test]
+    fn duplicate_take_from_served_taker_does_not_cancel_the_handshake() {
+        let (mut maker, md) = engine_with("dup-take-maker", None);
+        maker.nostr_relays = Some("wss://test.invalid".into());
+        let (taker, td) = engine_with("dup-take-taker", None);
+        let taker_id = taker.identity().unwrap();
+        let offer_id = "offer-dup-test";
+
+        // The maker's signed offer envelope — what a take echoes back.
+        let proto = crate::adaptor_swap::PROTOCOL_V2;
+        let offer_body = serde_json::json!({
+            "protocol": proto,
+            "wire": crate::wire_epoch(proto),
+            "network": "regtest",
+            "give_asset": "btcx", "give_amount": 50_000_000u64,
+            "get_asset": "btc", "get_amount": 100_000u64,
+            "t1_secs": 40_000u32, "t2_secs": 20_000u32,
+            "ttl_secs": serde_json::Value::Null,
+            "created": local_now(),
+        });
+        let offer = maker
+            .signed_envelope("offer", offer_id, offer_body)
+            .unwrap();
+
+        // ---- Part A: the harm mechanism (taker side) ----
+        taker
+            .store
+            .put_pending_take(
+                offer_id,
+                &serde_json::to_string(&offer).unwrap(),
+                local_now(),
+            )
+            .unwrap();
+        assert_eq!(taker.store.pending_takes().unwrap().len(), 1);
+        let withdrawn = maker
+            .signed_envelope(
+                "abort",
+                offer_id,
+                serde_json::json!({ "reason": "offer withdrawn" }),
+            )
+            .unwrap();
+        taker.recv_abort(&withdrawn).unwrap();
+        assert!(
+            taker.store.pending_takes().unwrap().is_empty(),
+            "a maker abort keyed to the offer id deletes the taker's LIVE pending take — \
+             so the maker must NOT send it for a duplicate of an offer it already served"
+        );
+
+        // ---- Part B: the fix (maker side) ----
+        // Post-commit state: we served THIS offer to THIS taker, then revoked it.
+        let mut served = v2_record(&maker);
+        served.counterparty_identity = Some(taker_id.clone());
+        maker.store.put_adaptor(&served).unwrap();
+        maker
+            .store
+            .meta_set(&format!("offer_served:{offer_id}"), &served.swap_id)
+            .unwrap();
+        maker
+            .store
+            .meta_set(&format!("offer_revoked:{offer_id}"), "1")
+            .unwrap();
+        maker
+            .store
+            .meta_set(&format!("private_offer:{offer_id}"), "1")
+            .unwrap();
+
+        // The duplicate take, from the SAME taker.
+        let take = taker
+            .signed_envelope(
+                "take",
+                offer_id,
+                serde_json::json!({
+                    "offer": serde_json::to_value(&offer).unwrap(),
+                    "taken_at": local_now(),
+                    "wire": crate::wire_epoch(proto),
+                }),
+            )
+            .unwrap();
+
+        let outbox_before = maker.store.nostr_outbox_pending().unwrap().len();
+        let ev = maker.handle_relay_envelope(&take).unwrap().unwrap();
+        let outbox_after = maker.store.nostr_outbox_pending().unwrap().len();
+
+        assert_eq!(
+            ev.action, "take-duplicate",
+            "a duplicate take from an already-served taker must be ignored, not rejected"
+        );
+        assert_eq!(
+            outbox_before, outbox_after,
+            "the maker must send NO abort for a duplicate take (an abort would delete \
+             the taker's live pending take — Part A)"
+        );
+
+        std::fs::remove_dir_all(&md).ok();
+        std::fs::remove_dir_all(&td).ok();
+    }
+
+    /// Regression for the stuck-in-"active-swaps" bug (v1 twin of the field
+    /// swap 71a9ee07): a v1 maker swap that never received an accept must
+    /// auto-abort at the pre-funding timeout. Before the fix, the C8 timeout
+    /// arm called `locate_funding` FIRST — which needs `swap_params`, and that
+    /// is unbuildable with no accept ("no accept yet") — so the `?` killed the
+    /// tick before `abort()` ran. The swap logged that error every tick and
+    /// never went terminal, lingering in the UI forever. The guard treats an
+    /// unbuildable script as "nothing funded" and falls through to the abort.
+    #[test]
+    fn v1_prefunding_timeout_aborts_a_created_swap_with_no_accept() {
+        let (maker, md) = engine_with("v1-prefunding-timeout", None);
+        let (mut rec, _init) = maker
+            .offer(
+                Network::Regtest,
+                ("btcx".into(), 50_000_000),
+                ("btc".into(), 100_000),
+                local_now() as u32 + 40_000,
+                local_now() as u32 + 20_000,
+                None,
+                None,
+            )
+            .unwrap();
+        // A served swap awaiting accept: counterparty pinned, aged past the
+        // pre-funding window, and NO accept (bob pubkeys stay None → the funding
+        // script is not derivable, exactly the case that used to wedge the tick).
+        rec.counterparty_identity = Some("taker-identity".into());
+        rec.created_at = local_now().saturating_sub(PRE_FUNDING_TIMEOUT_SECS + 10);
+        assert_eq!(rec.state, State::Created);
+        assert!(rec.bob_redeem_pubkey_a.is_none(), "precondition: no accept");
+        maker.store.put(&rec).unwrap();
+
+        let ev = maker
+            .tick_one(&rec)
+            .unwrap()
+            .expect("a timed-out pre-funding swap must produce an event");
+        assert_eq!(
+            ev.action, "abort-timeout",
+            "a no-accept Created swap past the pre-funding window must auto-abort, \
+             not error 'no accept yet' forever"
+        );
+        assert_eq!(maker.store.get(&rec.swap_id).unwrap().state, State::Aborted);
+
+        std::fs::remove_dir_all(&md).ok();
     }
 
     #[test]
