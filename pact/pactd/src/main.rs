@@ -285,6 +285,19 @@ async fn nostr_pass(app: &App, svc: &nostr_service::NostrService) -> Result<()> 
     })
     .await?;
     let Some(prep) = prep else { return Ok(()) }; // locked / not configured
+                                                  // TEST-ONLY hook (never set in production): widen the window between reading
+                                                  // the pending outbox (`prep`, above) and marking rows sent (`apply`, below).
+                                                  // Two concurrent passes — e.g. `flush_nostr` fired by an RPC racing a
+                                                  // scheduler-tick pass — both read the same still-unsent row and each
+                                                  // publishes it, so the recipient receives a duplicate (a fresh gift-wrap =
+                                                  // fresh event id, which event-id dedup cannot collapse). In a clean env the
+                                                  // relay ACKs instantly so this window is ~µs and the race never fires; this
+                                                  // delay makes it deterministic for the regression test.
+    if let Ok(ms) = std::env::var("PACT_TEST_OUTBOX_DRAIN_DELAY_MS") {
+        if let Ok(ms) = ms.parse::<u64>() {
+            tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+        }
+    }
     let apply = svc.round(&prep).await;
     blocking(app, move |e| nostr_service::apply(&e.store, &apply)).await
 }

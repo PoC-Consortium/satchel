@@ -333,7 +333,12 @@ impl Store {
                  recipient TEXT,                     -- x-only pubkey hex (giftwrap)
                  payload   TEXT NOT NULL,            -- offer envelope JSON, or sealed blob
                  created   INTEGER NOT NULL,
-                 sent      INTEGER NOT NULL DEFAULT 0
+                 sent      INTEGER NOT NULL DEFAULT 0,
+                 -- Unix secs of the last publish ATTEMPT; a row is (re)claimed only
+                 -- when unsent AND last_attempt is older than the resend window. The
+                 -- claim stamps this atomically under the store lock, so two
+                 -- concurrent drains can't both publish it (the #176 double-send).
+                 last_attempt INTEGER NOT NULL DEFAULT 0
              );
              CREATE TABLE IF NOT EXISTS nostr_inbox (
                  id       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -363,6 +368,14 @@ impl Store {
                  state        TEXT NOT NULL DEFAULT 'live'
              );",
         )?;
+        // Idempotent migration: add `last_attempt` to an existing `nostr_outbox`
+        // (a fresh db already has it from the CREATE above, so the duplicate-column
+        // error is expected and swallowed). Existing rows surface last_attempt = 0
+        // → immediately claimable, exactly as before this column existed.
+        let _ = conn.execute(
+            "ALTER TABLE nostr_outbox ADD COLUMN last_attempt INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
         // SeedStore::open runs the #120 at-rest migration (best-effort) —
         // exactly what Store::open did before the extraction.
         let store = Self {
@@ -634,6 +647,8 @@ impl Store {
     }
 
     /// Unsent outbox rows in insertion order: `(id, kind, recipient, payload)`.
+    /// Read-only view (tests / inspection); the relay drain uses
+    /// [`Self::nostr_outbox_claim`], which also stamps the attempt.
     pub fn nostr_outbox_pending(&self) -> Result<Vec<NostrOutboxRow>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, kind, recipient, payload FROM nostr_outbox WHERE sent = 0 ORDER BY id",
@@ -642,6 +657,37 @@ impl Store {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
         })?;
         rows.map(|r| Ok(r?)).collect()
+    }
+
+    /// Atomically CLAIM the rows to publish this drain: unsent rows whose last
+    /// publish attempt is older than `resend_secs` (or never attempted). Stamps
+    /// `last_attempt = now` on exactly those rows before returning them, so a
+    /// concurrent drain — an RPC `flush_nostr` racing a scheduler-tick pass —
+    /// sees them as freshly-attempted and does NOT re-publish (the #176
+    /// concurrent-drain double-send). Atomic because the store is accessed
+    /// single-threaded under the engine lock: the SELECT and the stamping UPDATE
+    /// cannot interleave with another drain's claim. `resend_secs` doubles as the
+    /// at-least-once retry throttle; [`Self::nostr_outbox_mark_sent`] on ACK
+    /// removes the row for good.
+    pub fn nostr_outbox_claim(&self, now: u64, resend_secs: u64) -> Result<Vec<NostrOutboxRow>> {
+        let cutoff = (now as i64).saturating_sub(resend_secs as i64);
+        let rows: Vec<NostrOutboxRow> = {
+            let mut stmt = self.conn.prepare(
+                "SELECT id, kind, recipient, payload FROM nostr_outbox
+                 WHERE sent = 0 AND last_attempt <= ?1 ORDER BY id",
+            )?;
+            let mapped = stmt.query_map([cutoff], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            })?;
+            mapped.map(|r| Ok(r?)).collect::<Result<Vec<_>>>()?
+        };
+        if !rows.is_empty() {
+            self.conn.execute(
+                "UPDATE nostr_outbox SET last_attempt = ?1 WHERE sent = 0 AND last_attempt <= ?2",
+                params![now as i64, cutoff],
+            )?;
+        }
+        Ok(rows)
     }
 
     /// Mark an outbox row published.
