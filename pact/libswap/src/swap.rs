@@ -6,7 +6,7 @@ use bitcoin::hashes::Hash;
 use bitcoin::secp256k1::{Message, Secp256k1, SecretKey};
 use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::transaction::Version;
-use bitcoin::{Amount, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Witness};
+use bitcoin::{Amount, OutPoint, Script, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Witness};
 use serde::{Deserialize, Serialize};
 
 use crate::htlc::Htlc;
@@ -16,8 +16,56 @@ use crate::params::ChainParams;
 /// (spec §6.2/§6.3).
 pub const HTLC_SPEND_SEQUENCE: u32 = 0xFFFF_FFFD;
 
-/// Conservative dust bound for the swept output (spec §6.4).
+/// Conservative dust fallback (spec §6.4) for the swept output when the exact
+/// destination script isn't known: Bitcoin Core's P2PKH threshold at the
+/// default 3 sat/vB dust-relay fee — the largest common output type, so it
+/// never under-estimates. Spend paths that DO know their destination use
+/// [`dust_threshold`] instead, which matches Core exactly for that output type
+/// (294 P2WPKH / 330 P2TR-P2WSH) and so is never *stricter* than the network.
 pub const DUST_LIMIT_SAT: u64 = 546;
+
+/// Bitcoin Core's dust threshold for `script` at the default 3 sat/vB
+/// dust-relay fee — [`bitcoin::Script::minimal_non_dust`] is a line-for-line
+/// port of Core's `GetDustThreshold`. Use this, not the [`DUST_LIMIT_SAT`]
+/// fallback, wherever the spend's real destination is known: our redeem/refund
+/// sweep to a fresh **P2WPKH** wallet address (Core default), whose true dust
+/// is 294 sat — the flat 546 rejected outputs the network would happily relay,
+/// stranding otherwise-recoverable sub-dust legs.
+pub fn dust_threshold(script: &Script) -> u64 {
+    script.minimal_non_dust().to_sat()
+}
+
+/// Planning feerate (sat/vB) behind the pre-funding minimum-leg floor: the rate
+/// a redeem/refund might have to pay to confirm before its deadline. Matches the
+/// engine's fallback feerate when it has no live estimate. It is the dominant
+/// term in [`MIN_LEG_VALUE_SAT`] — raise it to reject more marginal small swaps.
+pub const OFFER_PLANNING_FEERATE: u64 = 20;
+
+/// Minimum satoshi value for EITHER leg of an offer/take, enforced BEFORE any
+/// funding (unlike [`dust_threshold`], which fires only at spend-build time,
+/// after the coins are already committed). A viable leg must stay spendable by
+/// both redeem AND refund above dust at a plausible near-deadline feerate:
+/// segwit-conservative dust (330, P2TR/P2WSH) + one redeem's fee at
+/// [`OFFER_PLANNING_FEERATE`], using the larger v1 redeem vsize so the floor
+/// holds across output types and wire versions. NOT enforced on the
+/// swap-processing path, so an already-created sub-minimum swap can still refund.
+pub const MIN_LEG_VALUE_SAT: u64 = 330 + REDEEM_TX_VSIZE * OFFER_PLANNING_FEERATE;
+
+/// Reject an offer/take whose either leg is below [`MIN_LEG_VALUE_SAT`] — a
+/// swap that could fund but then strand, unspendable above dust once fees are
+/// paid near its deadline (spec §6.4). Labels legs from the maker's view
+/// (`give`/`get`), matching the offer body.
+pub fn ensure_leg_values_viable(give_sat: u64, get_sat: u64) -> Result<()> {
+    for (leg, amt) in [("give", give_sat), ("get", get_sat)] {
+        ensure!(
+            amt >= MIN_LEG_VALUE_SAT,
+            "{leg} leg {amt} sat is below the {MIN_LEG_VALUE_SAT}-sat minimum — \
+             too small to redeem or refund above dust once fees are paid near \
+             the deadline (spec §6.4)"
+        );
+    }
+    Ok(())
+}
 
 /// Worst-case vsizes of the 1-in/1-out HTLC spends (P2WSH input with the
 /// §6.2/§6.3 witnesses, one P2WSH-sized output) — used to turn a feerate
@@ -141,9 +189,10 @@ fn signed_htlc_spend(
     key: &SecretKey,
     build_witness: impl FnOnce(Vec<u8>, Vec<u8>, &ScriptBuf) -> Witness,
 ) -> Result<Transaction> {
+    let dust = dust_threshold(&destination);
     ensure!(
-        htlc_value_sat > fee_sat + DUST_LIMIT_SAT,
-        "HTLC value {htlc_value_sat} cannot cover fee {fee_sat} plus dust (spec §6.4)"
+        htlc_value_sat > fee_sat + dust,
+        "HTLC value {htlc_value_sat} cannot cover fee {fee_sat} plus dust {dust} (spec §6.4)"
     );
     let witness_script = htlc.witness_script();
     let mut tx = Transaction {
@@ -357,5 +406,71 @@ mod tests {
                 .unwrap(),
         );
         assert!(too_small.is_err());
+    }
+
+    #[test]
+    fn dust_threshold_matches_core_per_output_type() {
+        use bitcoin::hashes::Hash;
+        use bitcoin::{PubkeyHash, WPubkeyHash, WScriptHash};
+        // Bitcoin Core's GetDustThreshold at the default 3 sat/vB dust-relay fee.
+        let p2wpkh = ScriptBuf::new_p2wpkh(&WPubkeyHash::from_byte_array([7u8; 20]));
+        let p2wsh = ScriptBuf::new_p2wsh(&WScriptHash::from_byte_array([7u8; 32]));
+        let p2pkh = ScriptBuf::new_p2pkh(&PubkeyHash::from_byte_array([7u8; 20]));
+        assert_eq!(dust_threshold(&p2wpkh), 294, "P2WPKH");
+        assert_eq!(dust_threshold(&p2wsh), 330, "P2WSH");
+        assert_eq!(dust_threshold(&p2pkh), 546, "P2PKH");
+        // The flat fallback is Core's P2PKH value — never below any real type,
+        // so it is safe but stricter than the segwit outputs we actually use.
+        assert_eq!(DUST_LIMIT_SAT, dust_threshold(&p2pkh));
+    }
+
+    #[test]
+    fn refund_of_a_500_sat_leg_builds_to_p2wpkh_but_not_p2pkh() {
+        // The rc12 field case (swap b590c699): a 500-sat leg. Against the real
+        // P2WPKH dust (294) it IS refundable at 1 sat/vB — 500 − 146 = 354 > 294.
+        // The flat 546 used to reject it, stranding the coins. This proves the
+        // guard is now output-type-accurate, not merely loosened.
+        use bitcoin::hashes::Hash;
+        use bitcoin::WPubkeyHash;
+        let (params, _alice, bob, _s) = test_params();
+        let htlc_b = params.htlc_b().unwrap();
+        let outpoint = OutPoint {
+            txid: bitcoin::Txid::from_str(
+                "2222222222222222222222222222222222222222222222222222222222222222",
+            )
+            .unwrap(),
+            vout: 0,
+        };
+        let bob_key = bob
+            .swap_secret_key(COIN_BTC, DeriveScope::LEGACY, 0)
+            .unwrap();
+        let fee = REFUND_TX_VSIZE; // 1 sat/vB
+        let p2wpkh = ScriptBuf::new_p2wpkh(&WPubkeyHash::from_byte_array([9u8; 20]));
+        let refund = build_refund_tx(&htlc_b, outpoint, 500, p2wpkh, fee, &bob_key)
+            .expect("500-sat leg refunds above P2WPKH dust");
+        assert_eq!(refund.output[0].value.to_sat(), 500 - fee); // 354
+
+        // Same 500 sat to a legacy P2PKH output (dust 546) still can't: 354 < 546.
+        let p2pkh = ScriptBuf::new_p2pkh(&bitcoin::PubkeyHash::from_byte_array([9u8; 20]));
+        assert!(build_refund_tx(&htlc_b, outpoint, 500, p2pkh, fee, &bob_key).is_err());
+    }
+
+    #[test]
+    fn min_leg_gate_rejects_sub_viable_legs() {
+        assert_eq!(
+            MIN_LEG_VALUE_SAT,
+            330 + REDEEM_TX_VSIZE * OFFER_PLANNING_FEERATE
+        );
+        assert_eq!(MIN_LEG_VALUE_SAT, 3430);
+        // Exactly at the floor passes; either leg below it is rejected, named.
+        ensure_leg_values_viable(MIN_LEG_VALUE_SAT, MIN_LEG_VALUE_SAT).unwrap();
+        let give_err = ensure_leg_values_viable(MIN_LEG_VALUE_SAT - 1, 10_000)
+            .unwrap_err()
+            .to_string();
+        assert!(give_err.contains("give leg"), "{give_err}");
+        let get_err = ensure_leg_values_viable(10_000, 500)
+            .unwrap_err()
+            .to_string();
+        assert!(get_err.contains("get leg"), "{get_err}");
     }
 }

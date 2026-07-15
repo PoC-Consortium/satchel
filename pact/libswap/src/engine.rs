@@ -3595,6 +3595,9 @@ impl Engine {
             );
             return Ok(None); // output can't cover the child fee
         };
+        // Conservative 546 (not per-script dust) is fine here: this only skips a
+        // fee-bump CHILD that would be near-dust — it never strands funds (the
+        // parent stands on its own), unlike the spend/claim guards above.
         if child_value <= DUST_LIMIT_SAT {
             eprintln!(
                 "warning: v2 redeem CPFP budget-limited (parent {}): child would be dust at \
@@ -3723,6 +3726,8 @@ impl Engine {
         let Some(child_value) = change_value.checked_sub(child_fee) else {
             return Ok(None); // change can't cover the child fee
         };
+        // Conservative 546 (not per-script dust) is fine here: skipping a
+        // near-dust fee-bump child never strands funds (parent stands alone).
         if child_value <= DUST_LIMIT_SAT {
             return Ok(None);
         }
@@ -3815,7 +3820,10 @@ impl Engine {
             .saturating_mul(REFUND_TX_VSIZE)
             .div_ceil(1000)
             .max(old_fee.saturating_add(incr_kvb.saturating_mul(REFUND_TX_VSIZE).div_ceil(1000)));
-        let dustless = amount > new_fee + DUST_LIMIT_SAT;
+        // Core-accurate dust for the real sweep output type (P2WPKH → 294), not
+        // the conservative 546 — else a small-value bump is refused when the
+        // network would still relay it.
+        let dustless = amount > new_fee + crate::swap::dust_threshold(&destination);
         if target_kvb <= old_feerate_kvb || !dustless {
             if backend.is_in_mempool(&old_txid)? {
                 return Ok(None);
@@ -7665,7 +7673,11 @@ impl Engine {
             .saturating_mul(vsize)
             .div_ceil(1000)
             .max(old_fee.saturating_add(incr_kvb.saturating_mul(vsize).div_ceil(1000)));
-        let dustless = amount > new_fee + DUST_LIMIT_SAT;
+        // Core-accurate dust for the real sweep output type (P2WPKH → 294), not
+        // the conservative 546 — else a small-value claim bump is refused when
+        // the network would still relay it.
+        let dustless =
+            amount > new_fee + crate::swap::dust_threshold(&old_tx.output[0].script_pubkey);
         if target_kvb <= old_feerate_kvb || !dustless {
             return self.reanchor_if_evicted(rec, backend, &old_tx, &old_txid);
         }
@@ -8483,6 +8495,9 @@ impl Engine {
     ) -> Result<String> {
         self.ensure_network_allowed(network)?;
         validate_offer_offsets(network, t1_secs, t2_secs)?;
+        // Reject a swap that could fund but then strand, unspendable above dust
+        // once fees are paid near its deadline — BEFORE it ever reaches a board.
+        crate::swap::ensure_leg_values_viable(give.1, get.1)?;
         let proto = resolve_offer_protocol(&give.0, &get.0, network, protocol)?;
         // Don't advertise a swap we can't service: both legs' nodes must be live.
         let chain_a = ChainRef {
@@ -8744,6 +8759,9 @@ impl Engine {
         );
         ensure!(!body.expired(local_now()), "offer has expired");
         ensure!(offer.from != self.identity()?, "that is our own offer");
+        // Refuse to take a leg-too-small offer (e.g. from an older build without
+        // this gate): it would fund but then strand, unspendable above dust.
+        crate::swap::ensure_leg_values_viable(body.give_amount, body.get_amount)?;
         // Don't signal a take we can't honor: parse the offer's network, then
         // require both legs supported AND their nodes live before committing.
         let network = match body.network.as_str() {
@@ -11641,12 +11659,13 @@ mod tests {
             )
             .expect("offer envelope build needs no live node");
 
-        // Posting to the board hits the gate first.
+        // Posting to the board hits the chain-live gate (amounts are above the
+        // MIN_LEG_VALUE_SAT floor so the value gate doesn't short-circuit first).
         let err = engine
             .post_board_offer(
                 Network::Regtest,
-                ("btcx".into(), 100),
-                ("btc".into(), 100),
+                ("btcx".into(), 5_000),
+                ("btc".into(), 5_000),
                 10 * 3600,
                 5 * 3600,
                 None,

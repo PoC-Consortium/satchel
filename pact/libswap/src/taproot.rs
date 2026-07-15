@@ -31,7 +31,7 @@ use bitcoin::{
 
 use crate::htlc::MIN_TIME_LOCKTIME;
 use crate::params::ChainParams;
-use crate::swap::{DUST_LIMIT_SAT, HTLC_SPEND_SEQUENCE};
+use crate::swap::{dust_threshold, HTLC_SPEND_SEQUENCE};
 
 /// Worst-case vsizes of the v2 1-in/1-out spends (P2TR input, one P2WSH-sized
 /// output), used to turn a feerate into an absolute fee before the witness
@@ -131,9 +131,10 @@ fn spend_skeleton(
     lock_time: LockTime,
     sequence: Sequence,
 ) -> Result<Transaction> {
+    let dust = dust_threshold(&dest);
     ensure!(
-        value_sat > fee_sat + DUST_LIMIT_SAT,
-        "leg value {value_sat} cannot cover fee {fee_sat} plus dust (spec v2 §5)"
+        value_sat > fee_sat + dust,
+        "leg value {value_sat} cannot cover fee {fee_sat} plus dust {dust} (spec v2 §5)"
     );
     Ok(Transaction {
         version: Version::TWO,
