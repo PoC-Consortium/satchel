@@ -87,6 +87,13 @@ pub fn since(store: &Store, key: &str) -> u64 {
 /// Step A: read identity, pending outbox and cursors. Returns `None` when
 /// the relay round should be skipped this tick (nostr not configured, or
 /// the seed is locked / unreadable).
+/// Min seconds between publish ATTEMPTS of the same outbox row. It must exceed
+/// both the scheduler tick interval and the worst-case `round()` duration, so a
+/// second drain (an RPC `flush_nostr` racing a tick) never re-claims a row whose
+/// first send is still in flight — that's the #176 concurrent-drain guard. It
+/// also throttles at-least-once retries of a genuinely un-ACKed message.
+const OUTBOX_RESEND_SECS: u64 = 60;
+
 pub fn prep(store: &Store, nostr_configured: bool) -> Result<Option<Prep>> {
     if !nostr_configured {
         return Ok(None);
@@ -99,7 +106,7 @@ pub fn prep(store: &Store, nostr_configured: bool) -> Result<Option<Prep>> {
     Ok(Some(Prep {
         secret_hex: hex::encode(kp.secret_bytes()),
         me: kp.x_only_public_key().0.to_string(),
-        outbox: store.nostr_outbox_pending()?,
+        outbox: store.nostr_outbox_claim(unix_now(), OUTBOX_RESEND_SECS)?,
         offers_since: since(store, "nostr_since:offers"),
         mailbox_since: since(store, "nostr_since:mailbox"),
         deletions_since: since(store, "nostr_since:deletions"),
