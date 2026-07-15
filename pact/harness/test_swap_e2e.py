@@ -191,9 +191,13 @@ class Party:
                  duplicate_backends=False, board_url=None, auto_fund=False,
                  tick_secs=0, auto_init=True, coin_confs=None, nostr_relays=None,
                  extra_coins=None, coins_file=None,
-                 pocx_url=None, btc_url=None):
+                 pocx_url=None, btc_url=None, extra_env=None):
         self.name = name
         self.auto_init = auto_init
+        # Extra process env for this party's pactd (e.g. a PACT_TEST_* hook).
+        # Merged over the inherited env at start(), so it never leaks to the
+        # shared harness process or the other parties.
+        self.extra_env = extra_env or {}
         # Additional coins beyond the built-in btcx/btc legs, as a list of
         # (coin_id, rpc_url) — e.g. [("ltc", node.rpc_url(wallet="bob_ltc"))].
         # Requires coins_file so pactd's registry knows the file coin.
@@ -250,6 +254,7 @@ class Party:
         self._logf = open(os.path.join(self.data_dir, "pactd.log"), "w", encoding="utf-8")
         env = dict(os.environ)
         env.setdefault("RUST_LOG", "pactd=debug,libswap=debug")
+        env.update(self.extra_env)
         # pactd's tracing goes to STDOUT; merge stderr into the same log file.
         self.proc = subprocess.Popen(cmd, stdout=self._logf, stderr=subprocess.STDOUT, env=env)
         deadline = time.time() + 30
@@ -986,6 +991,71 @@ def test_nostr_relay_swap(h):
         relay.stop()
 
 
+def test_concurrent_drain_no_double_send(h):
+    """Regression for #176 / #181: an RPC `flush_nostr` (fired straight after
+    boardtake) and the scheduler-tick drain must not BOTH publish the same
+    still-unsent outbox row — a fresh gift-wrap mints a fresh event id, so
+    event-id dedup can't collapse it and the maker would receive the `take`
+    TWICE. PACT_TEST_OUTBOX_DRAIN_DELAY_MS widens the read->mark-sent window so
+    the race is deterministic (in a clean env it's ~µs and never fires); the
+    atomic outbox claim (store `last_attempt`) must still yield exactly one
+    delivered take. Asserts the swap completes AND the maker narrates zero
+    duplicate/rejected takes. Reverting the claim to a plain pending-read makes
+    this go red (2+ takes -> take-duplicate)."""
+    relay = NostrRelay(h.workdir)
+    relay.start()
+    maker = Party("alicedrain", h, h.workdir, "alice_pocx", "alice_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True).start()
+    # Delay ONLY the taker's outbox drains — the side that sends the `take`.
+    taker = Party("bobdrain", h, h.workdir, "bob_pocx", "bob_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True,
+                  extra_env={"PACT_TEST_OUTBOX_DRAIN_DELAY_MS": "800"}).start()
+    counts = {}
+
+    def tally(resp):
+        for e in (resp or {}).get("events", []):
+            counts[e.get("action", "")] = counts.get(e.get("action", ""), 0) + 1
+
+    try:
+        offer_id = maker.rpc(
+            "boardpostoffer", f"btcx:{GIVE_POCX}", f"btc:{GET_BTC}", 4 * 3600, 2 * 3600,
+            "pact-htlc-v1")["offer_id"]
+        seen = False
+        for _ in range(20):
+            maker.rpc("tick")
+            taker.rpc("tick")
+            if any(o["swap_id"] == offer_id for o in taker.rpc("boardlistoffers")["offers"]):
+                seen = True
+                break
+        assert seen, "offer never propagated over the nostr relay to the taker"
+        # boardtake fires flush_nostr (pass A, still inside its 800ms delay); an
+        # immediate tick is pass B — both would drain the same unsent `take`.
+        taker.rpc("boardtake", offer_id)
+        taker.rpc("tick")
+        ca = cb = 0
+        for _ in range(30):
+            tally(maker.rpc("tick"))
+            h.pocx.generate(1, "alice_pocx")
+            h.btc.generate(1, "bob_btc")
+            taker.rpc("tick")
+            ca = sum(1 for s in maker.rpc("listswaps") if s["state"] == "completed")
+            cb = sum(1 for s in taker.rpc("listswaps") if s["state"] == "completed")
+            if ca and cb:
+                break
+        else:
+            raise AssertionError(f"drain swap did not complete: maker={ca} taker={cb}")
+        dup = counts.get("take-duplicate", 0)
+        rej = counts.get("take-rejected", 0)
+        assert dup == 0 and rej == 0, \
+            f"concurrent-drain double-send regressed: take-duplicate={dup} take-rejected={rej}"
+        assert counts.get("take->init", 0) >= 1, "maker never processed the take"
+        print("[e2e] concurrent-drain no-double-send OK (0 duplicate takes under 800ms delay)")
+    finally:
+        maker.stop()
+        taker.stop()
+        relay.stop()
+
+
 def test_corkboard_swap(h):
     """Phase 2 end to end: maker posts a signed offer on the Corkboard,
     taker takes it, the whole handshake travels through the blind relay,
@@ -1572,7 +1642,8 @@ def main():
              test_chain_watched_funding, test_funding_fee_bump_v1,
              test_balance_validation,
              test_create_import_then_swap, test_coin_setup, test_corkboard_swap,
-             test_board_reset_recovery, test_nostr_relay_swap, test_private_offer_swap,
+             test_board_reset_recovery, test_nostr_relay_swap,
+             test_concurrent_drain_no_double_send, test_private_offer_swap,
              test_swap_rescue_v1, test_swap_rescue_v2,
              test_rescue_v1_maker_funded_a, test_rescue_v1_taker_accepted,
              test_rescue_v1_taker_post_reveal, test_rescue_v2_maker_committed,
