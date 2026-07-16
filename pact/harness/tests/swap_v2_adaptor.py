@@ -1,34 +1,23 @@
 #!/usr/bin/env python3
-"""End-to-end test for v2 (pact-htlc-v2) Taproot/MuSig2 adaptor swaps on
-regtest. Mirrors test_swap_e2e.py but drives the adaptor lifecycle through
-pactd's JSON-RPC.
+"""v2 (pact-htlc-v2) Taproot/MuSig2 adaptor-swap scenarios, from the former
+test_adaptor_swap.py (bodies verbatim; flow rationale in the docstrings).
+The LTC CPFP cell brings up litecoind via with_ltc — the LTC node is never
+cached, its wallets are created/funded by the scenario itself.
 
-Flow (PoCX leg A = Alice funds; BTC leg B = Bob funds):
-  adaptorinit (Alice) -> adaptoraccept (Bob) -> Alice recv accept
-  -> both adaptorfund -> exchange funding_ready
-  -> both adaptornonces -> exchange -> both adaptorsign -> exchange
-  -> both adaptorassemble  (verified AdaptorSignatures, state Signed)
-  -> Alice adaptorredeem leg B (reveals t) -> Bob adaptorredeem leg A
-Success = both Taproot funding outputs are cooperatively spent (key-path).
-
-Run:  python test_adaptor_swap.py
-Env:  POCX_BITCOIND / BTC_BITCOIND   (node binaries, see regtest_harness.py)
-
-NOTE: each redeem sweeps to a fresh CORE-WALLET address communicated in the
-signed init/accept (alice_sweep_b / bob_sweep_a), so both parties co-sign the
-identical redeem tx AND the proceeds land in a spendable wallet (not a swap-key
-address the node can't spend). Success is checked by the funding outputs being
-spent AND the claimers' core-wallet balances rising. If no node can mint an
-address the protocol falls back to the deterministic swap-key destination.
+Run:  python tests/swap_v2_adaptor.py [--filter SUBSTR] [--keep] [--no-build]
 """
-
+import os
 import sys
 
-from framework.daemon import Party
-from framework.services import Corkboard
-from framework.stack import COINS_TOML, build_workspace
-from regtest_harness import Harness
-from test_swap_e2e import regtest_timelocks
+sys.path.insert(0, os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")))
+
+from framework.daemon import Party  # noqa: E402
+from framework.services import Corkboard  # noqa: E402
+from framework.stack import COINS_TOML  # noqa: E402
+from framework.testbase import PactTestFramework, run_scenarios  # noqa: E402
+from framework.util import regtest_timelocks  # noqa: E402
+
 
 GIVE_POCX = "btcx:50.0"
 GET_BTC = "btc:0.001"
@@ -575,23 +564,58 @@ def test_adaptor_corkboard_swap(h):
         board.stop()
 
 
-def main():
-    build_workspace()
-    with Harness() as h:
-        test_adaptor_swap(h)
-        test_adaptor_refund(h)
-        test_adaptor_refund_feebump(h)
-        test_adaptor_redeem_cpfp(h)
-        test_adaptor_funding_cpfp(h)
-        test_adaptor_depth_gate(h)
-        test_adaptor_corkboard_swap(h)
-    # LTC leg in its own harness (brings up litecoind) so the core suite stays
-    # litecoind-free: first v2 adaptor swap on LTC + CPFP on litecoind.
-    with Harness(with_ltc=True) as h:
-        test_adaptor_redeem_cpfp_ltc(h)
-    print("[e2e] adaptor-swap suite passed "
-          "(happy + refund + fee-bump + redeem-cpfp + funding-cpfp + depth-gate + board + ltc-cpfp)")
+class AdaptorSwap(PactTestFramework):
+    def run_test(self):
+        test_adaptor_swap(self.h)
+
+
+class AdaptorRefund(PactTestFramework):
+    def run_test(self):
+        test_adaptor_refund(self.h)
+
+
+class AdaptorRefundFeebump(PactTestFramework):
+    def run_test(self):
+        test_adaptor_refund_feebump(self.h)
+
+
+class AdaptorRedeemCpfp(PactTestFramework):
+    def run_test(self):
+        test_adaptor_redeem_cpfp(self.h)
+
+
+class AdaptorFundingCpfp(PactTestFramework):
+    def run_test(self):
+        test_adaptor_funding_cpfp(self.h)
+
+
+class AdaptorDepthGate(PactTestFramework):
+    def run_test(self):
+        test_adaptor_depth_gate(self.h)
+
+
+class AdaptorCorkboardSwap(PactTestFramework):
+    def run_test(self):
+        test_adaptor_corkboard_swap(self.h)
+
+
+class AdaptorRedeemCpfpLtc(PactTestFramework):
+    with_ltc = True
+    def run_test(self):
+        test_adaptor_redeem_cpfp_ltc(self.h)
+
+
+SCENARIOS = [
+    AdaptorSwap,
+    AdaptorRefund,
+    AdaptorRefundFeebump,
+    AdaptorRedeemCpfp,
+    AdaptorFundingCpfp,
+    AdaptorDepthGate,
+    AdaptorCorkboardSwap,
+    AdaptorRedeemCpfpLtc,
+]
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    run_scenarios(SCENARIOS)

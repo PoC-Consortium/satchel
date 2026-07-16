@@ -179,6 +179,13 @@ adopt Bitcoin Core's cache mechanism:
 - Cache invalidation: a fingerprint file (node binary path + size + mtime,
   per coin) written at build; mismatch → rebuild. A `--rebuild-cache` runner
   flag forces it.
+- **Mocktime discipline (learned in Phase 2):** PoCX forging AUTO-ADVANCES
+  the mock clock while the cache is mined, so the cached pocx tip sits hours
+  ahead of the build wall clock — a plain restart trips Core's
+  block-from-the-future init check. The build records each chain's tip time;
+  cached nodes boot with `-mocktime = max(now, tips+1)`, then a 12-block
+  runway at that clock pulls tip time/MTP to "now" so scenario timelocks
+  (derived from tip time) are current regardless of cache age.
 - electrs is **not** cached — it indexes the copied chain at start (fast at
   height 110). Corkboard/relay are per-scenario ephemeral as today.
 

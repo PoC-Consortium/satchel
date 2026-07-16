@@ -1,35 +1,24 @@
 #!/usr/bin/env python3
-"""Nodeless wallet e2e parity suite (epic #58): real swaps where one side's
-btcx wallet is the NODELESS bdk wallet over live electrs — no Core-RPC URL.
+"""Nodeless wallet e2e parity scenarios (epic #58), from the former
+test_nodeless_e2e.py (bodies verbatim). Each scenario now runs on a fresh
+cached stack with its OWN electrs + Corkboard (previously shared across the
+suite's single run) on the REST-enabled PoCX node.
 
-Scenarios:
-  1. v1 HTLC swap, nodeless maker    (Alice gives btcx from the bdk wallet:
-     wallet_send funds leg A over Electrum broadcast; completion both sides)
-  2. v2 adaptor swap, nodeless taker (Alice gives btcx as participant: the
-     bdk wallet_build_funding two-phase leg B — build at accept, broadcast
-     only after leg A is deep; completion both sides)
-  3. v2 cancel pre-broadcast         (leg B BUILT in the bdk wallet, maker's
-     leg A never confirms; abort must take the commitment-semantics path and
-     wallet_cancel_funding must RELEASE the reserved inputs: balance restored)
-  4. v1 swap nodeless<->nodeless     (both parties' btcx wallets are bdk over
-     the SAME electrs, different seeds)
-
-Stack: PoCX node on :18443 with -rest (bindex hardcodes that port) + BTC node
-+ one electrs + Corkboard. Alice's btcx URL is tcp:// (nodeless); her btc and
-all of Bob's coins stay Core-RPC — except scenario 4.
-
-Run:  python test_nodeless_e2e.py
-Env:  POCX_BITCOIND / BTC_BITCOIND / PACT_ELECTRS_BIN (see regtest_harness.py)
+Run:  python tests/nodeless.py [--filter SUBSTR] [--keep] [--no-build]
 """
 
-import subprocess
-import sys
 import time
+import os
+import sys
 
-from framework.daemon import Party
-from framework.services import Corkboard
-from framework.stack import build_workspace
-from regtest_harness import ELECTRS_ELECTRUM_PORT, ElectrsServer, Harness
+sys.path.insert(0, os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")))
+
+from framework.daemon import Party  # noqa: E402
+from framework.node import ELECTRS_ELECTRUM_PORT, ElectrsServer  # noqa: E402
+from framework.services import Corkboard  # noqa: E402
+from framework.testbase import PactTestFramework, run_scenarios  # noqa: E402
+
 
 NODELESS_URL = f"tcp://127.0.0.1:{ELECTRS_ELECTRUM_PORT}"
 
@@ -244,34 +233,49 @@ def test_v1_nodeless_both_sides(h, electrs, board):
         bob.stop()
 
 
-def main():
-    build_workspace()
-    failures = 0
-    tests = (test_v1_nodeless_maker, test_v2_nodeless_taker,
-             test_v2_cancel_releases_bdk_inputs, test_v1_nodeless_both_sides)
-    with Harness(keep=True, pocx_rest=True) as h:
-        electrs = ElectrsServer(h.workdir, h.pocx)
-        board = Corkboard(h.workdir)
+class _NodelessScenario(PactTestFramework):
+    """Fresh electrs + Corkboard per scenario, PoCX node on :18443 (+REST)."""
+
+    pocx_rest = True
+    scenario = None
+
+    def run_test(self):
+        electrs = ElectrsServer(self.h.workdir, self.h.pocx)
+        board = Corkboard(self.h.workdir)
         try:
             electrs.start()
-            electrs.wait_synced(h.pocx.rpc("getblockcount"))
+            electrs.wait_synced(self.h.pocx.rpc("getblockcount"))
             print("[nodeless] electrs synced")
             board.start()
-            for test in tests:
-                try:
-                    test(h, electrs, board)
-                except Exception as exc:  # noqa: BLE001 — report and continue
-                    failures += 1
-                    print(f"[nodeless] FAIL {test.__name__}: {exc}", file=sys.stderr)
+            type(self).scenario(self.h, electrs, board)
         finally:
             board.stop()
             electrs.stop()
-    if failures:
-        print(f"\n[nodeless] RED: {failures}/{len(tests)} scenario(s) failing.",
-              file=sys.stderr)
-        sys.exit(1)
-    print(f"\n[nodeless] GREEN: all {len(tests)} nodeless parity scenarios pass.")
+
+
+class V1NodelessMaker(_NodelessScenario):
+    scenario = staticmethod(test_v1_nodeless_maker)
+
+
+class V2NodelessTaker(_NodelessScenario):
+    scenario = staticmethod(test_v2_nodeless_taker)
+
+
+class V2CancelReleasesBdkInputs(_NodelessScenario):
+    scenario = staticmethod(test_v2_cancel_releases_bdk_inputs)
+
+
+class V1NodelessBothSides(_NodelessScenario):
+    scenario = staticmethod(test_v1_nodeless_both_sides)
+
+
+SCENARIOS = [
+    V1NodelessMaker,
+    V2NodelessTaker,
+    V2CancelReleasesBdkInputs,
+    V1NodelessBothSides,
+]
 
 
 if __name__ == "__main__":
-    main()
+    run_scenarios(SCENARIOS)

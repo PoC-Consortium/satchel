@@ -1,43 +1,30 @@
 #!/usr/bin/env python3
-"""Dormant-observer state reconstruction e2e (docs/STATE_RECONSTRUCTION.md).
+"""Dormant-observer state reconstruction e2e (docs/STATE_RECONSTRUCTION.md),
+from the former test_follow_e2e.py (bodies verbatim; cell rationale in the
+docstrings). Each cell runs on a fresh cached stack with BOTH legs served by
+a Core-RPC + electrs multi-backend.
 
-Two focused scenarios over a live Nostr relay, with BOTH legs served by a
-Core-RPC + electrs multi-backend (the production mixed shape, and the
-history-capable tier the reconstruction needs):
-
-  1. observe-after-completion — the 2026-07-12 field ghost: a same-seed
-     OBSERVER machine that first sees a swap AFTER it settled must classify
-     that from chain history (the snapshot lingers because only the owner
-     tombstones it, and the owner died at `redeemed_b`). The swap must never
-     surface as a followed ghost — and the observer must never fund anything.
-
-  2. dormant-observer takeover — the observer imports MID-SWAP (both legs
-     funded), reconstructs the funding pointers from chain (the v1 accept
-     snapshot carries none), and after the owner machine is STOPPED takes the
-     swap over and drives it to completion with the live taker — adopting,
-     never re-funding, the owner's leg-A funding (txid must be identical).
-
-Deliberately NOT a full matrix (v2 witness classification and the tier-L
-age-out are covered by Rust unit tests in libswap::reconstruct and the
-follow evaluator); these two cells exercise the end-to-end seams: snapshot
-import, chain reconstruction, purge, takeover fast-forward, no-double-fund.
+Run:  python tests/follow.py [--filter SUBSTR] [--keep] [--no-build]
 """
 
+import time
 import os
 import sys
-import time
 
-from regtest_harness import (
+sys.path.insert(0, os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")))
+
+from framework.binaries import find_btc_electrs  # noqa: E402
+from framework.daemon import Party  # noqa: E402
+from framework.node import (  # noqa: E402
     BTC_ELECTRS_ELECTRUM_PORT,
     BTC_ELECTRS_MONITORING_PORT,
     ElectrsServer,
-    Harness,
-    find_btc_electrs,
 )
-from framework.daemon import Party
-from framework.services import NostrRelay
-from framework.stack import build_workspace
-from test_swap_e2e import GET_BTC, GIVE_POCX
+from framework.services import NostrRelay  # noqa: E402
+from framework.testbase import PactTestFramework, run_scenarios  # noqa: E402
+from framework.util import GET_BTC, GIVE_POCX  # noqa: E402
+
 
 # Standard BIP39 English test vectors (checksum-valid, NOT for real funds),
 # distinct from the rescue suite's so the relay scans never cross-pollinate.
@@ -407,12 +394,17 @@ def scenario_wallet_assisted_core_only(h, ep, eb):
         relay.stop()
 
 
-def main():
-    build_workspace()
-    keep = "--keep" in sys.argv
-    with Harness(keep=keep, pocx_rest=True, btc_rest=True) as h:
-        ep = ElectrsServer(h.workdir, h.pocx)
-        eb = ElectrsServer(h.workdir, h.btc,
+class _FollowScenario(PactTestFramework):
+    """Both nodes REST-enabled with an electrs each (the production mixed
+    multi-backend shape the reconstruction needs)."""
+
+    pocx_rest = True
+    btc_rest = True
+    scenario = None
+
+    def run_test(self):
+        ep = ElectrsServer(self.h.workdir, self.h.pocx)
+        eb = ElectrsServer(self.h.workdir, self.h.btc,
                            electrum_port=BTC_ELECTRS_ELECTRUM_PORT,
                            monitoring_port=BTC_ELECTRS_MONITORING_PORT,
                            network="testnet", binary=find_btc_electrs(),
@@ -420,17 +412,33 @@ def main():
         try:
             ep.start()
             eb.start()
-            ep.wait_synced(h.pocx.rpc("getblockcount"))
-            eb.wait_synced(h.btc.rpc("getblockcount"))
+            ep.wait_synced(self.h.pocx.rpc("getblockcount"))
+            eb.wait_synced(self.h.btc.rpc("getblockcount"))
             print("[follow-e2e] both electrs synced")
-            scenario_observe_after_completion(h, ep, eb)
-            scenario_dormant_observer_takeover(h, ep, eb)
-            scenario_wallet_assisted_core_only(h, ep, eb)
-            print("[follow-e2e] ALL CELLS GREEN")
+            type(self).scenario(self.h, ep, eb)
         finally:
             ep.stop()
             eb.stop()
 
 
+class ObserveAfterCompletion(_FollowScenario):
+    scenario = staticmethod(scenario_observe_after_completion)
+
+
+class DormantObserverTakeover(_FollowScenario):
+    scenario = staticmethod(scenario_dormant_observer_takeover)
+
+
+class WalletAssistedCoreOnly(_FollowScenario):
+    scenario = staticmethod(scenario_wallet_assisted_core_only)
+
+
+SCENARIOS = [
+    ObserveAfterCompletion,
+    DormantObserverTakeover,
+    WalletAssistedCoreOnly,
+]
+
+
 if __name__ == "__main__":
-    main()
+    run_scenarios(SCENARIOS)
