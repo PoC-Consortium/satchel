@@ -17,14 +17,13 @@ full side-by-side timeline to .playground/observer-compare.log for offline revie
 Run it alongside a live playground:  python observer_compare.py
 Ctrl-C to stop. It never touches the windows -- pure observation.
 """
-import base64
-import json
 import os
 import sys
 import time
-import urllib.request
 
 sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
+
+from framework.util import pactd_rpc_or_none  # noqa: E402
 
 MAIN, OBS = 9739, 9740
 POLL_SECS = 1.0
@@ -48,25 +47,8 @@ def rpc(port, method, *params, timeout=10):
     cookie_path = os.path.join(
         os.environ["LOCALAPPDATA"], base, "regtest", "pactd", ".cookie"
     )
-    try:
-        with open(cookie_path, encoding="utf-8") as fh:
-            cookie = fh.read().strip()
-    except OSError:
-        return None
-    body = json.dumps(
-        {"jsonrpc": "2.0", "id": "cmp", "method": method, "params": list(params)}
-    ).encode()
-    req = urllib.request.Request(f"http://127.0.0.1:{port}/", data=body, method="POST")
-    req.add_header("Content-Type", "application/json")
-    req.add_header("Authorization", f"Basic {base64.b64encode(cookie.encode()).decode()}")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read())
-        if data.get("error"):
-            return None
-        return data.get("result")
-    except Exception:  # noqa: BLE001
-        return None
+    return pactd_rpc_or_none(f"http://127.0.0.1:{port}/", method, *params,
+                             cookie_path=cookie_path, timeout=timeout)
 
 
 def progress_map(port):

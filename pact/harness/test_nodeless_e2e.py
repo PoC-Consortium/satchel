@@ -26,8 +26,10 @@ import subprocess
 import sys
 import time
 
+from framework.daemon import Party
+from framework.services import Corkboard
+from framework.stack import build_workspace
 from regtest_harness import ELECTRS_ELECTRUM_PORT, ElectrsServer, Harness
-from test_swap_e2e import PACT_DIR, Corkboard, Party, build_workspace
 
 NODELESS_URL = f"tcp://127.0.0.1:{ELECTRS_ELECTRUM_PORT}"
 

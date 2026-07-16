@@ -353,7 +353,7 @@ Copy-paste to collapse:
 | `18443` / `18332` | REST/bindex-hardcoded node RPC (nodeless: pocx regtest-default, btc testnet-default) |
 | `19750/19751` (+fleet `19752`–`19757`) | PoCX electrs electrum/monitoring (fleet steps by 2) |
 | `19760/19761` | vanilla (BTC) electrs |
-| `19737`–`19749` | **pactd allocation range** (bots + e2e parties; `_alloc_port` starts at 19737 and must be **capped at 19749** — today it rolls unbounded into the electrs range) |
+| `19737`–`19749` | **pactd allocation range** (bots + e2e parties). `_alloc_port` starts at 19737 and today rolls unbounded into the electrs range — the shared-Harness monolith burns ~48 ports per run, so the **cap at 19749 can only land with Phase 2's per-scenario allocator reset** (≤4 parties per scenario). |
 | `19788` | **playground** Nostr relay |
 | `19791` | **e2e-suite** Nostr relay (the old doc wrongly listed only 19788) |
 | `19790` | corkboard |

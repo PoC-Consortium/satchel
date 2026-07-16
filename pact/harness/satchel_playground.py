@@ -25,20 +25,20 @@ Satchel separately; this script runs the infra + Bob + Carol and keeps mining
 so confirmations and timelocks advance.
 """
 
-import base64
-import json
 import os
 # Regtest seeds take the obfuscation wrap (#120), off the dev keychain.
 os.environ.setdefault("PACT_DISABLE_KEYRING", "1")
 import sys
 import time
-import urllib.request
 
 sys.stdout.reconfigure(line_buffering=True)
 
+from framework.daemon import Party
+from framework.services import Corkboard
+from framework.stack import COINS_TOML, build_workspace
+from framework.util import pactd_rpc, read_cookie
 from regtest_harness import (
     ElectrsServer, Harness, ELECTRS_ELECTRUM_PORT, ELECTRS_MONITORING_PORT)
-from test_swap_e2e import build_workspace, Corkboard, Party, COINS_TOML
 
 # Timing model mirrored from the nostr playground: per-chain block cadence at
 # mainnet RATIOS scaled ~20x (fast btcx, slower btc/ltc) instead of a uniform
@@ -79,18 +79,8 @@ FAUCET_BTCX = 100.0
 
 
 def alice_rpc(method, *params):
-    with open(ALICE_COOKIE, encoding="utf-8") as fh:
-        cookie = fh.read().strip()
-    body = json.dumps(
-        {"jsonrpc": "2.0", "id": "pg", "method": method, "params": list(params)}).encode()
-    req = urllib.request.Request(ALICE_RPC, data=body, method="POST")
-    req.add_header("Content-Type", "application/json")
-    req.add_header("Authorization", "Basic " + base64.b64encode(cookie.encode()).decode())
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        data = json.loads(resp.read())
-    if data.get("error"):
-        raise RuntimeError(data["error"]["message"])
-    return data["result"]
+    return pactd_rpc(ALICE_RPC, method, *params,
+                     cookie=read_cookie(ALICE_COOKIE), timeout=10)
 
 
 def faucet_alice_btcx(h):

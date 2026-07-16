@@ -34,7 +34,10 @@ from regtest_harness import (
     Harness,
     find_btc_electrs,
 )
-from test_swap_e2e import GET_BTC, GIVE_POCX, NostrRelay, Party, build_workspace
+from framework.daemon import Party
+from framework.services import NostrRelay
+from framework.stack import build_workspace
+from test_swap_e2e import GET_BTC, GIVE_POCX
 
 # Standard BIP39 English test vectors (checksum-valid, NOT for real funds),
 # distinct from the rescue suite's so the relay scans never cross-pollinate.

@@ -13,8 +13,10 @@ import time
 
 sys.stdout.reconfigure(line_buffering=True)
 
+from framework.daemon import Party
+from framework.services import Corkboard
+from framework.stack import build_workspace
 from regtest_harness import Harness
-from test_swap_e2e import build_workspace, Corkboard, Party
 
 OFFERS = [("btcx:5", "btc:0.001"), ("btcx:6", "btc:0.001"), ("btcx:7", "btc:0.001")]
 BLOCK_EVERY = 4

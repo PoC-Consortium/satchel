@@ -26,8 +26,10 @@ import time
 # Keep output visible even when stdout is piped (background runs).
 sys.stdout.reconfigure(line_buffering=True)
 
+from framework.daemon import Party
+from framework.services import Corkboard
+from framework.stack import build_workspace
 from regtest_harness import Harness
-from test_swap_e2e import build_workspace, Corkboard, Party
 
 BLOCK_EVERY_SECS = 4
 

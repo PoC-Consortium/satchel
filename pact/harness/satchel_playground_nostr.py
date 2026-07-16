@@ -23,15 +23,14 @@ nostr_relays=[the relay] and board_urls=[] (relays-only) and launches Satchel.
 import os
 # Regtest seeds take the obfuscation wrap (#120), off the dev keychain.
 os.environ.setdefault("PACT_DISABLE_KEYRING", "1")
-import shlex
-import socket
-import subprocess
 import sys
 import time
 
 sys.stdout.reconfigure(line_buffering=True)
 
-from framework import binaries
+from framework.daemon import Party
+from framework.services import PLAYGROUND_NOSTR_RELAY_PORT, NostrRelay
+from framework.stack import COINS_TOML, build_workspace
 from regtest_harness import (
     BTC_ELECTRS_ELECTRUM_PORT,
     BTC_ELECTRS_MONITORING_PORT,
@@ -40,7 +39,6 @@ from regtest_harness import (
     find_btc_electrs,
 )
 from satchel_playground import FAUCET_BTCX, alice_rpc
-from test_swap_e2e import build_workspace, Party, COINS_TOML
 
 # Starter BTC for nodeless Alice's pact-seed wallet (enough for every
 # sell-side take on the book; bob_btc is coinbase-rich).
@@ -65,7 +63,7 @@ REPOST_EVERY_SECS = 30
 # avoid stale offers lingering on PUBLIC relays — but this playground runs a
 # LOCAL relay that's wiped on teardown, so a short TTL only made offers churn
 # (expire + re-post) mid-session for no benefit.
-NOSTR_RELAY_PORT = 19788
+NOSTR_RELAY_PORT = PLAYGROUND_NOSTR_RELAY_PORT  # 19788, ps1-pinned in satchel.json
 
 # --nodeless (playground-nostr-nodeless.ps1): Alice runs no btcx/btc nodes --
 # btcx over the PoCX-patched electrs AND btc over the vanilla upstream electrs,
@@ -118,73 +116,6 @@ CAROL_LTC_OFFERS = [
 ]
 
 
-class NostrRelay:
-    """A local Nostr relay standing in for the Corkboard.
-
-    Default: the bundled `nostr-rs-relay` (pact/harness/bin/nostr-rs-relay) with
-    a generated minimal config (our chosen port + an ephemeral db under the
-    workspace). Override with PACT_NOSTR_RELAY_BIN (a different binary) or
-    PACT_NOSTR_RELAY_CMD (a full command template, {port}/{dir} substituted).
-    Ephemeral: the db lives under the (temp) workspace, wiped on teardown."""
-
-    def __init__(self, workdir, port=NOSTR_RELAY_PORT):
-        self.port = port
-        self.host = "127.0.0.1"
-        self.ws_url = f"ws://{self.host}:{port}"
-        self.dir = os.path.join(workdir, "nostr-relay")
-        os.makedirs(self.dir, exist_ok=True)
-        self.proc = None
-
-    def _build_cmd(self):
-        # Escape hatch: a full command template.
-        tmpl = os.environ.get("PACT_NOSTR_RELAY_CMD")
-        if tmpl:
-            return shlex.split(
-                tmpl.replace("{port}", str(self.port)).replace("{dir}", self.dir))
-        # Default: bundled nostr-rs-relay + a generated config (its port lives in
-        # the config file, not a flag).
-        relay_bin = binaries.nostr_relay_default()
-        if not os.path.exists(relay_bin):
-            raise RuntimeError(
-                f"nostr-rs-relay not found at {relay_bin}.\n"
-                "Set PACT_NOSTR_RELAY_BIN to the binary, or PACT_NOSTR_RELAY_CMD "
-                "to a full launch command ({port}/{dir} substituted).")
-        cfg = os.path.join(self.dir, "config.toml")
-        db = self.dir.replace(os.sep, "/")
-        with open(cfg, "w", encoding="utf-8") as fh:
-            fh.write(
-                f'[info]\nrelay_url = "{self.ws_url}/"\nname = "pact-playground"\n\n'
-                f'[network]\naddress = "{self.host}"\nport = {self.port}\n\n'
-                f'[database]\ndata_directory = "{db}"\n')
-        return [relay_bin, "--config", cfg, "--db", self.dir]
-
-    def start(self):
-        cmd = self._build_cmd()
-        self.proc = subprocess.Popen(
-            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        deadline = time.time() + 30
-        while time.time() < deadline:
-            if self.proc.poll() is not None:
-                raise RuntimeError(
-                    f"nostr relay exited early: {self.proc.returncode} (cmd: {cmd})")
-            try:
-                with socket.create_connection((self.host, self.port), timeout=2):
-                    print(f"[nostr-pg] relay up on :{self.port} ({self.ws_url})")
-                    return self
-            except OSError:
-                time.sleep(0.2)
-        raise TimeoutError("nostr relay did not come up")
-
-    def stop(self):
-        if self.proc:
-            self.proc.terminate()
-            try:
-                self.proc.wait(timeout=15)
-            except subprocess.TimeoutExpired:
-                self.proc.kill()
-            self.proc = None
-
-
 def faucet_alice(h):
     """Nodeless Alice's wallets live on the seed she creates in the wizard, so
     they can't be pre-funded. Poll until her pactd serves a wallet, then send a
@@ -222,7 +153,7 @@ def main():
     # runs (a local node; Alice connects core-rpc even in nodeless mode).
     with Harness(keep=False, with_ltc=True,
                  pocx_rest=NODELESS, btc_rest=NODELESS) as h:
-        relay = NostrRelay(h.workdir)
+        relay = NostrRelay(h.workdir, port=NOSTR_RELAY_PORT, name="pact-playground")
         relay.start()
         pocx_electrs = btc_electrs = None
         if NODELESS:
