@@ -21,8 +21,11 @@ import os
 import sys
 import time
 
+sys.path.insert(0, os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")))
 sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
 
+from framework import binaries  # noqa: E402
 from framework.util import pactd_rpc_or_none  # noqa: E402
 
 MAIN, OBS = 9739, 9740
@@ -39,7 +42,7 @@ CONFS_TOL = 1
 # terminal-state straggler is the expected history-vs-purge asymmetry.
 TERMINAL = {"completed", "refunded", "aborted"}
 
-LOG = os.path.join(os.path.dirname(__file__), "..", "..", ".playground", "observer-compare.log")
+LOG = os.path.join(binaries.REPO_DIR, ".playground", "observer-compare.log")
 
 
 def rpc(port, method, *params, timeout=10):

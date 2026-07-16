@@ -7,16 +7,19 @@ async setup should, because the scheduler and miner interleave.
 
 Run: python repro_multiswap.py
 """
+import os
 import sys
 import threading
 import time
 
+sys.path.insert(0, os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")))
 sys.stdout.reconfigure(line_buffering=True)
 
-from framework.daemon import Party
-from framework.services import Corkboard
-from framework.stack import build_workspace
-from regtest_harness import Harness
+from framework.daemon import Party  # noqa: E402
+from framework.node import Harness  # noqa: E402
+from framework.services import Corkboard  # noqa: E402
+from framework.stack import build_workspace  # noqa: E402
 
 OFFERS = [("btcx:5", "btc:0.001"), ("btcx:6", "btc:0.001"), ("btcx:7", "btc:0.001")]
 BLOCK_EVERY = 4

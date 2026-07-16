@@ -75,19 +75,29 @@ fallbacks. Copy the daemons in once:
 Node startup asserts the regtest genesis hash per chain, so a mixed-up copy
 fails loudly.
 
-## Playgrounds (interactive, launched via tools/*.ps1 until Phase 3)
+## The playground (interactive) — `python -m play`
 
-- **`playground.py`** — headless full stack (nodes + Corkboard + two
-  auto-fund pactds) for driving with `pact-cli`.
-- **`satchel_playground.py`** — managed-Satchel two-sided market (Bob buys /
-  Carol sells, LTC sub-book); `--nodeless` puts Alice's btcx on a bdk wallet
-  over electrs (`--electrs-count N` for the failover fleet).
-- **`satchel_playground_nostr.py`** — the same book relays-only (no
-  corkboard); `--nodeless` for the full end-user vision stack.
-- **`observer_playground.py`** — main + observer Satchel on one seed
-  (follow/failover eyeballing); `observer_compare.py` is its read-only
-  divergence oracle.
-- **`repro_multiswap.py`** — async take-storm repro (C13).
+ONE flag-composed entrypoint (closes #110; replaces the seven
+`tools/playground-*.ps1` + `knockdown.ps1` + the four per-variant drivers):
+
+```sh
+python -m play                                   # cork board, node-backed, one Satchel
+python -m play --board nostr                     # relays-only book
+python -m play --btcx nodeless [--electrs 4]     # pact-seed bdk wallet (+failover fleet)
+python -m play --board nostr --btcx nodeless     # the end-user vision stack
+python -m play --satchel two-observer            # main + observer pair, one seed
+python -m play --satchel none                    # headless backdrop (drive via pact-cli)
+python -m play --satchel viewer [--persist]      # mainnet board viewer (no backdrop)
+python -m play --down                            # force-tear a stale run
+```
+
+Plus `--first-run` (exercise onboarding/coin-setup), `--relay-cmd`, `--keep`
+(backdrop survives the Satchel window closing). Closing the Satchel window
+(the MAIN window in two-observer) tears the whole stack down.
+
+Companion diagnostics under `play/`: `repro_multiswap.py` (async take-storm
+repro, C13) and `observer_compare.py` (read-only main-vs-observer divergence
+oracle for the two-observer playground).
 
 ## Notes baked into the harness (from bitcoin-pocx source)
 
