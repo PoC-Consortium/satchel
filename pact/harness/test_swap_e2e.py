@@ -22,13 +22,14 @@ import sys
 import time
 import urllib.request
 
-from regtest_harness import Harness, HERE, EXE
+from framework import binaries
+from regtest_harness import Harness, HERE
 
-PACT_DIR = os.path.normpath(os.path.join(HERE, ".."))
-PACT_BIN = os.path.join(PACT_DIR, "target", "debug", "pact-cli" + EXE)
-PACTD_BIN = os.path.join(PACT_DIR, "target", "debug", "pactd" + EXE)
-CORKBOARD_DIR = os.path.normpath(os.path.join(HERE, "..", "..", "corkboard"))
-CORKBOARD_BIN = os.path.join(CORKBOARD_DIR, "target", "debug", "corkboard" + EXE)
+PACT_DIR = binaries.PACT_DIR
+PACT_BIN = binaries.pact_cli()
+PACTD_BIN = binaries.pactd()
+CORKBOARD_DIR = binaries.CORKBOARD_DIR
+CORKBOARD_BIN = binaries.corkboard()
 CORKBOARD_PORT = 19790
 NOSTR_RELAY_PORT = 19791
 # The shipped coin-templates file (consensus params for file-added coins like
@@ -116,8 +117,7 @@ class NostrRelay:
         if tmpl:
             return shlex.split(
                 tmpl.replace("{port}", str(self.port)).replace("{dir}", self.dir))
-        relay_bin = os.environ.get("PACT_NOSTR_RELAY_BIN") or \
-            os.path.join(HERE, "bin", "nostr-rs-relay" + EXE)
+        relay_bin = binaries.nostr_relay_default()
         if not os.path.exists(relay_bin):
             raise RuntimeError(
                 f"nostr-rs-relay not found at {relay_bin}. Set PACT_NOSTR_RELAY_BIN "

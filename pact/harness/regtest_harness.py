@@ -2,12 +2,10 @@
 """Regtest harness for Pact: launches a PoCX node + a Bitcoin node and
 provides RPC plumbing for the end-to-end swap tests.
 
-Stdlib only. Binaries are located via (in order):
-  PoCX node:    $POCX_BITCOIND, else harness/bin/pocx-bitcoind(.exe),
-                else ../../../bitcoin-pocx/bitcoin/build/bin/bitcoind(.exe)
-  Bitcoin node: $BTC_BITCOIND,  else harness/bin/btc-bitcoind(.exe),
-                else `bitcoind` on PATH
-(harness/bin is gitignored; copy installed daemons there for convenience)
+Stdlib only. Binary resolution lives in framework/binaries.py — ONE shared
+bin dir (harness/bin, gitignored; PACT_HARNESS_BIN overrides the dir) with
+per-binary env overrides (POCX_BITCOIND, BTC_BITCOIND, …) and the legacy
+fallbacks. The find_* names are re-exported here for existing callers.
 
 Chain facts this harness depends on (read from bitcoin-pocx chainparams —
 do not guess):
@@ -30,7 +28,6 @@ import os
 # keeps playground/e2e runs off the developer's Windows/macOS keychain. pactd
 # subprocesses inherit this env.
 os.environ.setdefault("PACT_DISABLE_KEYRING", "1")
-import platform
 import shutil
 import subprocess
 import sys
@@ -38,8 +35,19 @@ import tempfile
 import time
 import urllib.request
 
+# Single source for binary paths (framework/binaries.py); the find_* helpers
+# and EXE are re-exported so every existing `from regtest_harness import …`
+# keeps working. noqa: imported-but-unused re-exports.
+from framework.binaries import (  # noqa: F401
+    EXE,
+    find_btc_bitcoind,
+    find_btc_electrs,
+    find_electrs,
+    find_litecoind,
+    find_pocx_bitcoind,
+)
+
 HERE = os.path.dirname(os.path.abspath(__file__))
-EXE = ".exe" if platform.system() == "Windows" else ""
 
 POCX_REGTEST_GENESIS = "2a98a52253aeff06093948b00568d380b7634621bc606403127973c9acbbfde0"
 BTC_REGTEST_GENESIS = "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"
@@ -68,76 +76,6 @@ BTC_ELECTRS_MONITORING_PORT = 19761
 # satchel/coins.toml so the same port story holds end to end. Only used when a
 # Harness is built with_ltc (the playground); the e2e suite never starts it.
 LTC_RPC_PORT = 19643
-
-
-def find_pocx_bitcoind():
-    candidates = [
-        os.environ.get("POCX_BITCOIND"),
-        os.path.join(HERE, "bin", "pocx-bitcoind" + EXE),
-        os.path.normpath(os.path.join(
-            HERE, "..", "..", "..", "bitcoin-pocx", "bitcoin", "build", "bin", "bitcoind" + EXE)),
-    ]
-    for candidate in candidates:
-        if candidate and os.path.exists(candidate):
-            return candidate
-    raise FileNotFoundError(
-        "PoCX node binary not found. Copy the installed daemon to "
-        "harness/bin/pocx-bitcoind" + EXE + " or set POCX_BITCOIND.")
-
-
-def find_btc_bitcoind():
-    candidates = [
-        os.environ.get("BTC_BITCOIND"),
-        os.path.join(HERE, "bin", "btc-bitcoind" + EXE),
-        shutil.which("bitcoind"),
-    ]
-    for candidate in candidates:
-        if candidate and os.path.exists(candidate):
-            return candidate
-    raise FileNotFoundError(
-        "Bitcoin Core binary not found. Copy the installed daemon to "
-        "harness/bin/btc-bitcoind" + EXE + " or set BTC_BITCOIND.")
-
-
-def find_litecoind():
-    candidates = [
-        os.environ.get("LITECOIND"),
-        os.path.join(HERE, "bin", "litecoind" + EXE),
-        os.path.join(HERE, "bin", "ltc-bitcoind" + EXE),
-        shutil.which("litecoind"),
-    ]
-    for candidate in candidates:
-        if candidate and os.path.exists(candidate):
-            return candidate
-    raise FileNotFoundError(
-        "Litecoin Core binary not found. Copy the installed daemon to "
-        "harness/bin/litecoind" + EXE + " or set LITECOIND.")
-
-
-def find_electrs():
-    candidates = [
-        os.environ.get("PACT_ELECTRS_BIN"),
-        os.path.join(HERE, "bin", "electrs" + EXE),
-    ]
-    for candidate in candidates:
-        if candidate and os.path.exists(candidate):
-            return candidate
-    raise FileNotFoundError(
-        "electrs binary not found. Copy the PoCX-patched electrs to "
-        "harness/bin/electrs" + EXE + " or set PACT_ELECTRS_BIN.")
-
-
-def find_btc_electrs():
-    candidates = [
-        os.environ.get("PACT_BTC_ELECTRS_BIN"),
-        os.path.join(HERE, "bin", "btc-electrs" + EXE),
-    ]
-    for candidate in candidates:
-        if candidate and os.path.exists(candidate):
-            return candidate
-    raise FileNotFoundError(
-        "vanilla (upstream) electrs binary not found. Copy it to "
-        "harness/bin/btc-electrs" + EXE + " or set PACT_BTC_ELECTRS_BIN.")
 
 
 class ElectrsServer:
