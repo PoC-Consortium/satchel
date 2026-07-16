@@ -27,20 +27,23 @@ cargo run -p pactd -- --network regtest \
 cargo run -p pact-cli -- getinfo
 
 # end-to-end on regtest
-python harness/test_swap_e2e.py      # full BTCX↔BTC v1 swap
-python harness/test_adaptor_swap.py  # v2 adaptor swap end to end
+cd harness
+python test_runner.py                # the full e2e set
+python tests/swap_v1.py              # BTCX↔BTC v1 scenarios only
+python tests/swap_v2_adaptor.py      # v2 adaptor scenarios only
 ```
 
 One-shot regtest playground (regtest nodes + headless counterparties + Satchel):
 
 ```sh
-./tools/playground-cork.ps1            # over a Corkboard
-./tools/playground-nostr.ps1           # over a local Nostr relay
-./tools/playground-nostr-nodeless.ps1  # Nostr + nodeless: wallets on the Pact
-                                       # seed via local electrs (LTC rides
-                                       # along as the one local-node coin)
+cd pact/harness
+python -m play                                 # over a Corkboard
+python -m play --board nostr                   # over a local Nostr relay
+python -m play --board nostr --btcx nodeless   # Nostr + nodeless: wallets on the
+                                               # Pact seed via local electrs (LTC
+                                               # rides along as the one local-node coin)
 ```
 
-Each script builds the whole stack, brings it up, and blocks on the Satchel window — close it and everything tears down (`-Down` force-tears a stale run).
+One flag-composed entrypoint builds the whole stack, brings it up, and blocks on the Satchel window — close it and everything tears down (`python -m play --down` force-tears a stale run).
 
 Details: [Running pactd](Running-pactd) · [pact-cli](pact-cli) · [JSON-RPC API](JSON-RPC-API) · [Building from Source](Building-from-Source). Deep reference is the **Pact Developer Handbook** — <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.

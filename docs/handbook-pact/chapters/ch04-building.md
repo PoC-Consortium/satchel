@@ -44,25 +44,29 @@ The harness performs complete swaps on regtest against real nodes — the highes
 check that the engine works end to end:
 
 ```sh
-python harness/test_swap_e2e.py      # full BTCX↔BTC v1 (HTLC) swap on regtest
-python harness/test_adaptor_swap.py  # full v2 (Taproot/MuSig2 adaptor) swap
+cd harness
+python test_runner.py                    # every suite (the full e2e set)
+python tests/swap_v1.py                  # BTCX↔BTC v1 (HTLC) scenarios only
+python tests/swap_v2_adaptor.py          # v2 (Taproot/MuSig2 adaptor) scenarios
 ```
 
-`test_swap_e2e.py` exercises the v1 flow: the manual two-CLI happy path, refund
+`tests/swap_v1.py` exercises the v1 flow: the manual two-CLI happy path, refund
 (including premature- and late-reveal negatives), the daemon autopilot
 (scheduler-driven auto-redeem and RBF fee-bump, and auto-refund on both sides),
 chain-watched funding, balance validation, encrypted-seed create/import, coin
-setup, and the Corkboard, Nostr-relay, and private-offer flows.
+setup, and the Corkboard, Nostr-relay, and private-offer flows (the seed-only
+rescue matrix sits beside it in `tests/swap_v1_rescue.py`).
 
-`test_adaptor_swap.py` exercises the v2 flow: the happy path, the single-key
+`tests/swap_v2_adaptor.py` exercises the v2 flow: the happy path, the single-key
 CLTV-tapleaf refund and its fee-bump, the CPFP redeem-bump (on BTC and on
 litecoind), the reveal depth-gate, and the v2 Corkboard flow.
 
-> **Tip** — Both scripts share `regtest_harness.py`, which always brings up BTCX
-> and BTC nodes and only adds an LTC node when constructed with
+> **Tip** — All suites share `framework/node.py`'s `Harness`, which always
+> brings up BTCX and BTC nodes and only adds an LTC node when constructed with
 > `Harness(with_ltc=True)`. The harness uses `setmocktime` to advance median
 > time on both chains, so timelock-dependent paths (refund, deadline gates) can
-> be tested deterministically without waiting in real time.
+> be tested deterministically without waiting in real time. Each scenario gets
+> a fresh stack, restored from a funded-datadir cache — see ch26.
 
 ## Building Corkboard
 

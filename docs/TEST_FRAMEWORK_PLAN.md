@@ -1,9 +1,11 @@
 # Test & Playground Infrastructure — Consolidation Plan
 
-Status: **respec'd + decided (2026-07-16)** — assessment findings folded in,
-design decisions locked (§2.0). Supersedes the PowerShell-only scope of issue
-#110 ("flexible playground"); #110 is re-scoped to point here and closes when
-Phase 3 lands.
+Status: **IMPLEMENTED — phases 0–4 merged to master 2026-07-16**
+(#184/#185/#189/#187/#188; issue #110 closed by Phase 3). Phase 5 (e2e in CI)
+remains open pending a home for the node binaries. §1 below describes the
+PRE-consolidation state the plan was written against; §2–§3 are the design as
+built — one later amendment: the datadir cache needed the `-mocktime` boot
+discipline (§2.3), discovered during Phase 2.
 
 Blueprint: Bitcoin Core's functional test framework
 (`test/functional/test_framework/` + `test_runner.py`).

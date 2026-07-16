@@ -92,6 +92,6 @@ moves, the hash is bumped and the affected pages are updated.
   and per-feature design notes.
 - The `spec/` directory is the authoritative protocol description plus the
   `htlc_v1.json` / `htlc_v2.json` test vectors.
-- The end-to-end harness under `pact/harness/` (notably `test_swap_e2e.py` and
-  `test_adaptor_swap.py`) is the best executable reference for how a full swap
+- The end-to-end harness under `pact/harness/` (notably `tests/swap_v1.py` and
+  `tests/swap_v2_adaptor.py`) is the best executable reference for how a full swap
   is driven — when in doubt, read the harness.
