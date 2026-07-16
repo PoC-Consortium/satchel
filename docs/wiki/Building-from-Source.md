@@ -13,8 +13,10 @@ Everything is Rust (cargo); Satchel's frontend adds a Node/Vite layer. This page
 ```sh
 cd pact
 cargo build && cargo test            # unit + protocol-vector tests (v1 + v2)
-python harness/test_swap_e2e.py      # full BTCX↔BTC swap on regtest
-python harness/test_adaptor_swap.py  # v2 adaptor swap end to end
+cd harness
+python test_runner.py                # the full regtest e2e set
+python tests/swap_v1.py              # BTCX↔BTC v1 scenarios only
+python tests/swap_v2_adaptor.py      # v2 adaptor scenarios only
 ```
 
 Run the daemon and drive it with the CLI (see [Running pactd](Running-pactd) and [pact-cli](pact-cli)):
@@ -52,23 +54,23 @@ cd ..        && cargo tauri build               # full bundle
 
 > **Warning — `ui/dist` embedding gotcha.** Tauri embeds `ui/dist` into the Rust binary at **compile time**. `cargo tauri build` re-runs the frontend build for you, but a plain `cargo build` / `cargo run` does **not** — it will ship a stale (or missing) UI unless you run `npm run build` first. Use `cargo tauri dev`, which serves Vite directly.
 
-> **Note — sidecar staging.** The Tauri config lists `pactd` and `pact-cli` as `externalBin` sidecars, so a dev/build run refuses to start unless `satchel/binaries/<name>-<host-triple>.exe` exist. The playground scripts stage these by copying fresh debug binaries.
+> **Note — sidecar staging.** The Tauri config lists `pactd` and `pact-cli` as `externalBin` sidecars, so a dev/build run refuses to start unless `satchel/binaries/<name>-<host-triple>.exe` exist. The playground (`python -m play`) stages these by copying fresh debug binaries.
 
 > **Note — install locations (Windows).** Satchel stores its config and seed under **`%LOCALAPPDATA%`** (machine-bound — the seed must not roam; it was previously under Roaming `%APPDATA%`). The per-user installer also appends the install dir to your user **PATH**, so `pact-cli`/`pactd` run from any terminal — open a **new** terminal after installing for the change to take effect.
 
 ## One-shot regtest playground
 
 ```sh
-./tools/playground-cork.ps1            # regtest nodes + Corkboard + headless
-                                       # counterparties, then launches Satchel
-./tools/playground-nostr.ps1           # same, but over a local Nostr relay
-                                       # (no board)
-./tools/playground-nostr-nodeless.ps1  # Nostr + nodeless: Alice's wallets on
-                                       # the Pact seed via local electrs (LTC
-                                       # as her one local-node coin)
+cd pact/harness
+python -m play                                 # regtest nodes + Corkboard +
+                                               # headless counterparties, then Satchel
+python -m play --board nostr                   # same, but over a local Nostr relay
+python -m play --board nostr --btcx nodeless   # Nostr + nodeless: Alice's wallets on
+                                               # the Pact seed via local electrs (LTC
+                                               # as her one local-node coin)
 ```
 
-Each script brings up the whole stack and blocks on the Satchel window — close it and everything is torn down automatically (`-Down` force-tears a stale run; teardown is PID/port-only).
+One flag-composed entrypoint brings up the whole stack and blocks on the Satchel window — close it and everything is torn down automatically (`python -m play --down` force-tears a stale run; teardown is PID/port-only).
 
 ## See also
 

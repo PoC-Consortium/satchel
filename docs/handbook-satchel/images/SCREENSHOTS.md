@@ -5,7 +5,7 @@ captured** — each chapter carries a placeholder image reference, and the build
 will show a missing-image box until the file exists in `images/processed/`.
 
 Capture each on a clean **regtest** Satchel (use the playground:
-`./tools/playground-cork.ps1`) so no real funds or live seeds appear. Use a
+`python -m play` from `pact/harness`) so no real funds or live seeds appear. Use a
 throwaway seed for any phrase shown on screen. Save each as a PNG at the exact
 path below, then rebuild with `./build.ps1`.
 

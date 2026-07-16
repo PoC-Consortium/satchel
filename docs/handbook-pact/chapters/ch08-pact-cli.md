@@ -103,7 +103,7 @@ form).
 
 ## Worked example: a v1 swap with two CLIs
 
-This is the manual happy path the harness drives in `test_swap_e2e.py`, with two
+This is the manual happy path the harness drives in `tests/swap_v1.py`, with two
 daemons — **Alice** (the initiator, giving BTCX, getting BTC) and **Bob** (the
 participant). Each `pact-cli` here is assumed pointed at its own daemon's
 `--rpc` / `--data-dir`; messages are passed between the two as JSON files.

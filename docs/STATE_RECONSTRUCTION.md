@@ -7,7 +7,7 @@ Companion to `MULTI_MACHINE_122.md` (#122/#134/#163/#164) and the #54 rescue
 path. Triggered by the 2026-07-12 mainnet field bug: a follower that first
 sees a swap *after* completion is a permanent `state=accepted` ghost.
 Verified by `libswap::reconstruct` unit tests and
-`harness/test_follow_e2e.py` (observe-after-completion, dormant-observer
+`harness/tests/follow.py` (observe-after-completion, dormant-observer
 takeover, and a Core-only observer resolving via the shared wallet).
 
 **Amendment (#171, 2026-07-12).** The tier framing below originally treated

@@ -30,24 +30,30 @@ cargo clippy --workspace    # lints
 
 ## The Python harness
 
-The harness lives in `pact/harness/`, is Python 3.10+ stdlib-only, and is built
-around `regtest_harness.py`:
+The harness lives in `pact/harness/`, is Python 3.10+ stdlib-only, and is
+structured like Bitcoin Core's functional-test framework (design + history in
+`docs/TEST_FRAMEWORK_PLAN.md`): an importable `framework/` package, asserting
+suites under `tests/` (one scenario class per cell), and `test_runner.py` as
+the single entry that runs them all. `framework/node.py`'s `Harness`:
 
-- It brings up a **Bitcoin PoCX (btcx)** regtest node and a **Bitcoin (btc)**
+- brings up a **Bitcoin PoCX (btcx)** regtest node and a **Bitcoin (btc)**
   regtest node — always; an optional **Litecoin (ltc)** node starts only with
-  `Harness(with_ltc=True)`.
-- It funds one wallet per party per chain (e.g. `alice_pocx` funded /
-  `bob_pocx` empty; `bob_btc` funded / `alice_btc` empty).
-- It keeps both chains on a **shared mock clock** (`setmocktime`) and exposes
+  `Harness(with_ltc=True)`;
+- funds one wallet per party per chain (e.g. `alice_pocx` funded /
+  `bob_pocx` empty; `bob_btc` funded / `alice_btc` empty);
+- keeps both chains on a **shared mock clock** (`setmocktime`) and exposes
   `advance_time()` to push median-time-past (MTP) forward — this is how
-  CLTV/timelock and refund behaviour is driven deterministically.
-- Genesis hashes are asserted at startup, so a mis-pointed daemon binary fails
+  CLTV/timelock and refund behaviour is driven deterministically;
+- asserts genesis hashes at startup, so a mis-pointed daemon binary fails
   loudly instead of silently testing the wrong chain.
 
-The two end-to-end suites build the cargo workspace (`pactd`, `pact-cli`) and the
-Corkboard first, then run every scenario against a single shared `Harness`.
+**Every scenario runs on its own fresh stack** in its own tmpdir (kept, with
+the path printed, on failure). The funded datadirs come from an on-demand
+cache under `pact/harness/cache/` — copied per scenario instead of re-mining
+110 blocks per chain, invalidated automatically when the node binaries change
+(`--rebuild-cache` forces it).
 
-### v1 HTLC scenarios — `test_swap_e2e.py`
+### v1 HTLC scenarios — `tests/swap_v1.py`
 
 | Scenario | What it proves |
 |---|---|
@@ -65,7 +71,15 @@ Corkboard first, then run every scenario against a single shared `Harness`.
 | `test_nostr_relay_swap` | A swap over a **live local Nostr relay**, offers and relay mail flowing over Nostr alone. |
 | `test_private_offer_swap` | Off-market: `makeprivateoffer` produces a `pactoffer1:` slip posted to no board; `takeoffer <slip>` relays the take and the swap auto-completes with no board listing. |
 
-### v2 adaptor scenarios — `test_adaptor_swap.py`
+The seed-only mid-swap **rescue matrix** (#54 — {maker,taker} × wipe-stage ×
+{v1,v2} plus a refund variant) lives beside it in `tests/swap_v1_rescue.py`,
+and the dormant-observer **state-reconstruction cells** (#166,
+`docs/STATE_RECONSTRUCTION.md`) in `tests/follow.py`. `tests/multimachine.py`
+carries the automatable #122 checks (data-dir lock, distinct machine scopes,
+derive-scope partition), and `tests/framework_selftest.py` is the fast no-node
+preflight (port registry, allocator, binary resolver).
+
+### v2 adaptor scenarios — `tests/swap_v2_adaptor.py`
 
 | Scenario | What it proves |
 |---|---|
@@ -78,7 +92,7 @@ Corkboard first, then run every scenario against a single shared `Harness`.
 | `test_adaptor_depth_gate` | The reveal/redeem gate fires at the configured `--coin-confs` confirmation depth. |
 | `test_adaptor_corkboard_swap` | A board-driven v2 swap (a PoCX↔BTC pair off-mainnet defaults to `pact-htlc-v2`, so a plain `boardpostoffer` posts a v2 offer). |
 
-### Nodeless wallet scenarios — `test_nodeless_e2e.py`
+### Nodeless wallet scenarios — `tests/nodeless.py`
 
 The nodeless (bdk + Electrum) wallet path has its own parity suite: real swaps
 where one side's btcx wallet is the **nodeless bdk wallet over a live
@@ -93,47 +107,61 @@ indexing the PoCX node (binary at `pact/harness/bin/electrs.exe`, gitignored;
 | v2 cancel pre-broadcast | Leg B is BUILT in the bdk wallet but the maker's leg A never confirms; abort takes the commitment-semantics path and `wallet_cancel_funding` RELEASES the reserved inputs — balance restored. |
 | v1 nodeless ↔ nodeless | Both parties' btcx wallets are bdk over the SAME electrs, different seeds. |
 
-`spike_electrs.py` is the companion smoke: the minimal wallet flow (fresh-seed
-scan, receive, send, activity, restart persistence) against a real electrs,
-kept for quick iteration on the chain source.
-
 ## Running the suites
 
 ```sh
 cd pact/harness
 
+# everything: builds the workspace once, then every suite as a subprocess
+python test_runner.py
+
+# one suite / one scenario
+python tests/swap_v1.py
+python tests/swap_v2_adaptor.py --filter AdaptorDepthGate
+
+# fast sanity only (no nodes): port registry, allocator, binary resolver
+python tests/framework_selftest.py
+
 # infrastructure only (nodes start, mine, mocktime works)
 python regtest_harness.py --smoke
-
-# v1 (HTLC) end-to-end suite
-python test_swap_e2e.py
-
-# v2 (Taproot/MuSig2 adaptor) end-to-end suite
-python test_adaptor_swap.py
-
-# nodeless (bdk + Electrum) wallet parity suite
-python test_nodeless_e2e.py
 ```
 
-The harness resolves node binaries from `$POCX_BITCOIND` / `$BTC_BITCOIND` (or
-`bin/`), so copy your installed daemons into `pact/harness/bin/` first. PoCX
-regtest refuses rapid blocks unless mocktime is active, which is why the harness
-always sets and advances mocktime on both chains.
+`framework/binaries.py` resolves every binary from the shared (gitignored)
+`pact/harness/bin/` dir with per-binary env overrides (`$POCX_BITCOIND`,
+`$BTC_BITCOIND`, `$PACT_ELECTRS_BIN`, …) — copy your installed daemons in
+once. PoCX regtest refuses rapid blocks unless mocktime is active, which is
+why the harness always sets and advances mocktime on both chains.
 
-## The playground scripts
+Adding a scenario: subclass `PactTestFramework` in the matching `tests/*.py`
+and append it to that file's `SCENARIOS`; a new file must also be added to
+`TEST_LIST` in `test_runner.py` — the runner hard-errors on unlisted files, so
+nothing can be silently skipped. The runner is sequential by design (the
+stacks use fixed ports).
 
-For a full local stack you can click through (rather than assert against), use
-the PowerShell playground scripts in `tools/`:
+## The playground — `python -m play`
 
-| Script | Brings up |
-|---|---|
-| `tools/playground-cork.ps1` | Regtest PoCX + BTC nodes, a **Corkboard**, two headless counterparties posting a two-sided book, and Satchel launched as a funded "Alice". Offers on PoCX↔BTC default to v2. |
-| `tools/playground-nostr.ps1` | The same, but **relays-only**: no Corkboard, a single local ephemeral Nostr relay, Satchel with a relays-only `satchel.json`. Proves offers flow over Nostr alone. |
-| `tools/playground-nostr-nodeless.ps1` | The relays-only stack with Alice **nodeless**: she runs no btcx/btc nodes — BTCX syncs over a PoCX-patched electrs and BTC over a vanilla electrs, both wallets on her Pact seed, while **LTC rides along as her one local-node (core-rpc) coin**, so the mixed Electrum+RPC configuration is exercised too. Bob and Carol stay node-backed market makers, with LTC legs so the LTC sub-book is live. |
+For a full local stack you can click through (rather than assert against),
+one flag-composed entrypoint replaces the old per-scenario PowerShell scripts:
 
-All three block on the Satchel window and tear the whole stack down (PID/port-only)
-when you close it; `tools/knockdown.ps1` force-tears a stale run. Logs land in
-`<repo>\.playground\`.
+```sh
+cd pact/harness
+python -m play                                 # Corkboard book + Satchel "Alice"
+python -m play --board nostr                   # relays-only (no Corkboard)
+python -m play --btcx nodeless [--electrs 4]   # Alice's BTCX on the Pact seed
+                                               #   over electrs (+failover fleet)
+python -m play --board nostr --btcx nodeless   # the end-user vision stack
+python -m play --satchel two-observer          # main + observer pair, one seed
+python -m play --satchel none                  # headless (drive via pact-cli)
+python -m play --satchel viewer [--persist]    # mainnet board viewer
+python -m play --down                          # force-tear a stale run
+```
+
+Every regtest variant brings up the nodes, a two-sided Bob/Carol book (with an
+LTC sub-book where LTC runs), paced per-coin mining with mainnet-like
+confirmation depths, and — unless `--satchel none` — Satchel as a funded
+"Alice". `--first-run` ships no coins so the onboarding/coin-setup path runs.
+The driver blocks on the Satchel window and tears the whole stack down when
+you close it; logs land in `<repo>/.playground/`.
 
 > **Warning** — Teardown is **PID- and port-only**, never by process name. A live
 > mainnet `pocx-bitcoind` must not be killed by a name-based sweep; the
