@@ -32,9 +32,7 @@ each state on screen long enough to watch on both machines.
 import os
 
 os.environ.setdefault("PACT_DISABLE_KEYRING", "1")  # regtest seeds → obfs wrap (#120)
-import json  # noqa: E402
 import time  # noqa: E402
-import urllib.request  # noqa: E402
 
 import sys  # noqa: E402
 
@@ -43,6 +41,10 @@ import sys  # noqa: E402
 # the locale codepage (cp1252) and raise UnicodeEncodeError mid-run, killing it.
 sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
 
+from framework.daemon import Party  # noqa: E402
+from framework.services import PLAYGROUND_NOSTR_RELAY_PORT, NostrRelay  # noqa: E402
+from framework.stack import COINS_TOML, build_workspace  # noqa: E402
+from framework.util import pactd_rpc_or_none  # noqa: E402
 from regtest_harness import (  # noqa: E402
     BTC_ELECTRS_ELECTRUM_PORT,
     BTC_ELECTRS_MONITORING_PORT,
@@ -50,7 +52,6 @@ from regtest_harness import (  # noqa: E402
     Harness,
     find_btc_electrs,
 )
-from test_swap_e2e import build_workspace, Party, COINS_TOML  # noqa: E402
 
 # Alice's (and the observer's) shared Pact seed. A CHECKSUM-VALID BIP39 test
 # vector so both Satchels import the SAME identity with no copy-paste. Local
@@ -105,27 +106,8 @@ def rpc(port, method, *params, timeout=30):
     cookie_path = os.path.join(
         os.environ["LOCALAPPDATA"], base, "regtest", "pactd", ".cookie"
     )
-    try:
-        with open(cookie_path, encoding="utf-8") as fh:
-            cookie = fh.read().strip()
-    except OSError:
-        return None
-    body = json.dumps(
-        {"jsonrpc": "2.0", "id": "obs", "method": method, "params": list(params)}
-    ).encode()
-    req = urllib.request.Request(f"http://127.0.0.1:{port}/", data=body, method="POST")
-    req.add_header("Content-Type", "application/json")
-    import base64
-
-    req.add_header("Authorization", f"Basic {base64.b64encode(cookie.encode()).decode()}")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read())
-        if data.get("error"):
-            return None
-        return data.get("result")
-    except Exception:  # noqa: BLE001
-        return None
+    return pactd_rpc_or_none(f"http://127.0.0.1:{port}/", method, *params,
+                             cookie_path=cookie_path, timeout=timeout)
 
 
 def chain_time(node):
@@ -155,10 +137,8 @@ def main():
         btc_electrs.wait_synced(h.btc.rpc("getblockcount"))
         print(f"[obs-pg] electrs up: btcx {pocx_electrs.url} | btc {btc_electrs.url}")
 
-        # Import the relay from the shared harness helper (same bundled relay).
-        from satchel_playground_nostr import NostrRelay
-
-        relay = NostrRelay(h.workdir)
+        relay = NostrRelay(h.workdir, port=PLAYGROUND_NOSTR_RELAY_PORT,
+                           name="pact-playground")
         relay.start()
 
         # Bob/Carol counterparties (node wallets, node-backed). They post a book

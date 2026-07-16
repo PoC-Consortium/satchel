@@ -24,8 +24,11 @@ address the protocol falls back to the deterministic swap-key destination.
 
 import sys
 
+from framework.daemon import Party
+from framework.services import Corkboard
+from framework.stack import COINS_TOML, build_workspace
 from regtest_harness import Harness
-from test_swap_e2e import COINS_TOML, Corkboard, Party, build_workspace, regtest_timelocks
+from test_swap_e2e import regtest_timelocks
 
 GIVE_POCX = "btcx:50.0"
 GET_BTC = "btc:0.001"
