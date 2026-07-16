@@ -31,11 +31,10 @@ import time
 
 sys.stdout.reconfigure(line_buffering=True)
 
+from framework import binaries
 from regtest_harness import (
     BTC_ELECTRS_ELECTRUM_PORT,
     BTC_ELECTRS_MONITORING_PORT,
-    EXE,
-    HERE,
     ElectrsServer,
     Harness,
     find_btc_electrs,
@@ -144,8 +143,7 @@ class NostrRelay:
                 tmpl.replace("{port}", str(self.port)).replace("{dir}", self.dir))
         # Default: bundled nostr-rs-relay + a generated config (its port lives in
         # the config file, not a flag).
-        relay_bin = os.environ.get("PACT_NOSTR_RELAY_BIN") or \
-            os.path.join(HERE, "bin", "nostr-rs-relay" + EXE)
+        relay_bin = binaries.nostr_relay_default()
         if not os.path.exists(relay_bin):
             raise RuntimeError(
                 f"nostr-rs-relay not found at {relay_bin}.\n"

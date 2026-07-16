@@ -33,10 +33,9 @@ import tempfile
 import time
 import urllib.request
 
+from framework import binaries
 from regtest_harness import (
     ELECTRS_ELECTRUM_PORT,
-    EXE,
-    HERE,
     POCX_REGTEST_GENESIS,
     POCX_REST_RPC_PORT,
     ElectrsServer,
@@ -44,8 +43,8 @@ from regtest_harness import (
     find_pocx_bitcoind,
 )
 
-PACT_DIR = os.path.normpath(os.path.join(HERE, ".."))
-PACTD_BIN = os.path.join(PACT_DIR, "target", "debug", "pactd" + EXE)
+PACT_DIR = binaries.PACT_DIR
+PACTD_BIN = binaries.pactd()
 
 PACTD_PORT = 19752
 
