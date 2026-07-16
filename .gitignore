@@ -24,9 +24,9 @@ satchel/tauri-dev.log
 # time (by playground-*.ps1 for dev, by CI for release). Binaries, never committed.
 satchel/binaries/
 
-# The whole demo/ tree is local-only (assembled bundles + launchers/scripts);
-# nothing under it is tracked. The cross-platform orchestrator SOURCE lives in
-# tools/demo-runner (tracked); demo/ is just the packaging output.
+# The whole demo/ tree is local-only (old assembled demo bundles); nothing
+# under it is tracked. (Its tools/demo-runner orchestrator was removed in the
+# test-framework consolidation, TEST_FRAMEWORK_PLAN Phase 4.)
 /demo/
 
 # Claude Code local dir — contains git worktrees + session data; never commit
