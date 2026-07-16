@@ -108,7 +108,105 @@ def all_teardown_ports():
 all_teardown_ports()
 
 
+# ---------------------------------------------------------------------------
+# Shared swap-flow helpers + canonical scenario amounts (moved verbatim from
+# test_swap_e2e.py in the Phase 2 split; used by the v1/rescue/follow suites).
+
+import os  # noqa: E402
+
+GIVE_POCX = "50.0"      # Alice gives 50 POCX
+GET_BTC = "0.001"       # ... for 0.001 BTC from Bob
+FEE_SLACK = 0.01        # generous bound for redeem/refund fees
+
+
+def swap_id_from(message_file):
+    with open(message_file, encoding="utf-8") as fh:
+        return json.load(fh)["swap_id"]
+
+
+def load_msg(message_file):
+    with open(message_file, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def save_msg(message_file, envelope):
+    with open(message_file, "w", encoding="utf-8") as fh:
+        json.dump(envelope, fh, indent=2)
+
+
+def outpoint_from(funded_message_file):
+    body = load_msg(funded_message_file)["body"]
+    return body["txid"], body["vout"]
+
+
+def assert_htlc_spent(node, funded_message_file, what):
+    txid, vout = outpoint_from(funded_message_file)
+    utxo = node.rpc("gettxout", txid, vout, True)
+    assert utxo is None, f"{what} HTLC {txid}:{vout} is still unspent"
+
+
+def expect_fail(party, what, *args):
+    try:
+        party.cli(*args)
+    except RuntimeError as exc:
+        print(f"[e2e] correctly rejected: {what}")
+        return str(exc)
+    raise AssertionError(f"{what} should have been rejected but succeeded")
+
+
+def balances(h):
+    return {
+        "alice_pocx": float(h.pocx.rpc("getbalance", wallet="alice_pocx")),
+        "bob_pocx": float(h.pocx.rpc("getbalance", wallet="bob_pocx")),
+        "alice_btc": float(h.btc.rpc("getbalance", wallet="alice_btc")),
+        "bob_btc": float(h.btc.rpc("getbalance", wallet="bob_btc")),
+    }
+
+
+def msg(workdir, name):
+    return os.path.join(workdir, name)
+
+
+def regtest_timelocks(h):
+    now = int(h.pocx.rpc("getblockchaininfo")["time"])
+    return now + 2 * 3600, now + 4 * 3600   # (t2, t1)
+
+
+def drive_until(party, cond, tries=20):
+    """Tick `party` repeatedly until cond(events) holds; returns those events.
+    Mining is the caller's job — this only drives the scheduler."""
+    for _ in range(tries):
+        events = party.tick()
+        if cond(events):
+            return events
+    raise AssertionError(f"{party.name}: condition not met after {tries} ticks")
+
+
+def handshake_and_fund(h, alice, bob, prefix):
+    """Shared plumbing: offer/accept handshake, fund both legs. Returns
+    (swap_id, funded_a_file, funded_b_file)."""
+    t2, t1 = regtest_timelocks(h)
+    m_init = msg(h.workdir, f"{prefix}_init.json")
+    m_accept = msg(h.workdir, f"{prefix}_accept.json")
+    m_funded_a = msg(h.workdir, f"{prefix}_funded_a.json")
+    m_funded_b = msg(h.workdir, f"{prefix}_funded_b.json")
+
+    alice.cli("offer", "--give", f"btcx:{GIVE_POCX}", "--get", f"btc:{GET_BTC}",
+              "--t1", str(t1), "--t2", str(t2), "--out", m_init)
+    sid = swap_id_from(m_init)
+    bob.cli("accept", "--in", m_init, "--out", m_accept)
+    alice.cli("recv", "--in", m_accept)
+    alice.cli("fund", "--swap", sid, "--out", m_funded_a)
+    h.pocx.generate(1, "alice_pocx")
+    bob.cli("recv", "--in", m_funded_a)
+    bob.cli("fund", "--swap", sid, "--out", m_funded_b)
+    h.btc.generate(1, "bob_btc")
+    return sid, m_funded_a, m_funded_b
+
+
+
+
 if __name__ == "__main__":
-    ports = all_teardown_ports()
-    print(f"{len(ports)} teardown ports, mainnet-safe "
-          f"(9737/9738 excluded): {ports}")
+    _ports = all_teardown_ports()
+    print(f"{len(_ports)} teardown ports, mainnet-safe "
+          f"(9737/9738 excluded): {_ports}")

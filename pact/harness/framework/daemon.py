@@ -13,13 +13,20 @@ import urllib.request
 from framework import binaries
 from framework.util import pactd_rpc
 
-# Base of the party port-allocation range. Appendix B of the plan caps the
-# range at 19749 once Phase 2's per-scenario allocator reset lands; the
-# shared-Harness suites still burn one port per Party for a whole run, so the
-# allocator stays unbounded (it skips live listeners) until then.
+# The party port-allocation range (plan Appendix B). Each scenario resets the
+# allocator (testbase calls reset_port_allocator()), so ≤4 parties per
+# scenario sit well inside the range; the cap turns a leak or runaway into a
+# loud error instead of a silent walk into the electrs range (19750+).
 PACTD_PORT = 19737
+PACTD_PORT_MAX = 19749
 
 _next_port = [PACTD_PORT]
+
+
+def reset_port_allocator():
+    """Per-scenario reset: allocation starts back at the range base. Stopped
+    parties' ports are re-probed on allocation, so reuse is safe."""
+    _next_port[0] = PACTD_PORT
 
 
 def _alloc_port():
@@ -28,6 +35,11 @@ def _alloc_port():
     # dies at bind (no .cookie ever appears).
     while True:
         p = _next_port[0]
+        if p > PACTD_PORT_MAX:
+            raise RuntimeError(
+                f"pactd port range exhausted ({PACTD_PORT}–{PACTD_PORT_MAX}) — "
+                "leaked daemons on these ports, or a missing "
+                "reset_port_allocator() between scenarios?")
         _next_port[0] += 1
         with socket.socket() as probe:
             if probe.connect_ex(("127.0.0.1", p)) != 0:
