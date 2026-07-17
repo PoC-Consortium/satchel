@@ -26,6 +26,7 @@ from framework.util import (  # noqa: E402
     drive_until,
     expect_fail,
     handshake_and_fund,
+    handshake_done,
     load_msg,
     msg,
     outpoint_from,
@@ -591,8 +592,9 @@ def test_nostr_relay_swap(h):
         for _ in range(30):
             for party in (maker, taker):
                 party.rpc("tick")
-                h.pocx.generate(1, "alice_pocx")
-                h.btc.generate(1, "bob_btc")
+                if handshake_done(maker, taker):
+                    h.pocx.generate(1, "alice_pocx")
+                    h.btc.generate(1, "bob_btc")
             ca = sum(1 for s in maker.rpc("listswaps") if s["state"] == "completed")
             cb = sum(1 for s in taker.rpc("listswaps") if s["state"] == "completed")
             if ca and cb:
@@ -650,8 +652,9 @@ def test_concurrent_drain_no_double_send(h):
         ca = cb = 0
         for _ in range(30):
             tally(maker.rpc("tick"))
-            h.pocx.generate(1, "alice_pocx")
-            h.btc.generate(1, "bob_btc")
+            if handshake_done(maker, taker):
+                h.pocx.generate(1, "alice_pocx")
+                h.btc.generate(1, "bob_btc")
             taker.rpc("tick")
             ca = sum(1 for s in maker.rpc("listswaps") if s["state"] == "completed")
             cb = sum(1 for s in taker.rpc("listswaps") if s["state"] == "completed")

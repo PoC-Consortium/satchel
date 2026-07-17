@@ -35,7 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from framework.daemon import Party  # noqa: E402
 from framework.services import NostrRelay  # noqa: E402
 from framework.testbase import run_scenarios  # noqa: E402
-from framework.util import GET_BTC, GIVE_POCX  # noqa: E402
+from framework.util import GET_BTC, GIVE_POCX, handshake_done  # noqa: E402
 from follow import (  # noqa: E402  (shared scaffold, verbatim helpers)
     _FollowScenario,
     mine_and_sync,
@@ -103,7 +103,8 @@ def scenario_refund_only_takeover_v2(h, ep, eb):
             if signed_committed():
                 sid = swap_of(maker)["swap_id"]
                 break
-            mine_and_sync(h, ep, eb)
+            if handshake_done(maker, taker):
+                mine_and_sync(h, ep, eb)
         assert sid, "maker never reached Signed with both legs committed"
         pre = swap_of(maker, sid)
         pre_a = pre.get("funding_a_txid")
@@ -239,7 +240,8 @@ def scenario_hot_standby_takeover_v1(h, ep, eb):
             if both_funded():
                 sid = (swap_of(maker) or swap_of(taker))["swap_id"]
                 break
-            mine_and_sync(h, ep, eb)
+            if handshake_done(maker, taker):
+                mine_and_sync(h, ep, eb)
         assert sid, "swap never reached both-legs-funded"
         pre_a = swap_of(maker, sid)["htlc_a_txid"]
 

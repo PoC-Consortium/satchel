@@ -4,9 +4,11 @@
 # build + its unit tests, and the UI lint + typecheck/build. Security audits
 # live in security.yml (scheduled, non-blocking).
 #
-# NOT here yet (by decision): the regtest e2e (pact/harness/*.py) needs the
-# pocx-bitcoind + bitcoind binaries (not in the repo), so e2e stays a local
-# step (the playground) until those binaries have a CI home.
+# The e2e job runs the full regtest harness (pact/harness/test_runner.py,
+# TEST_FRAMEWORK_PLAN Phase 5). Its external binaries live in an actions
+# cache keyed on pact/harness/ci/fetch-binaries.sh — bump a pin there to
+# rebuild them (cold rebuild ≈ 45 min for the pocx-bitcoind source build;
+# warm runs restore in seconds).
 
 name: CI
 
@@ -111,6 +113,58 @@ jobs:
         run: cargo clippy --manifest-path satchel/Cargo.toml --all-targets -- -D warnings
       - name: Test Satchel app
         run: cargo test --manifest-path satchel/Cargo.toml
+
+  e2e:
+    name: E2E (regtest harness)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            pact
+            corkboard
+      - name: System deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake pkgconf libevent-dev libboost-dev \
+            libsqlite3-dev libssl-dev protobuf-compiler
+      - name: Cache harness binaries
+        uses: actions/cache@v4
+        with:
+          path: pact/harness/bin
+          key: harness-bins-${{ runner.os }}-${{ hashFiles('pact/harness/ci/fetch-binaries.sh') }}
+      # Unconditional: the script skips per binary already in bin/, so a warm
+      # cache is a no-op and a partial one (cancelled run) self-heals.
+      - name: Fetch/build harness binaries
+        run: bash pact/harness/ci/fetch-binaries.sh
+      # The funded-datadir cache (stack.py §2.3) self-invalidates on a node
+      # binary fingerprint, so restoring it is always safe; it saves once per
+      # binary pin and shaves the funding bringup off every scenario.
+      - name: Cache funded datadirs
+        uses: actions/cache@v4
+        with:
+          path: pact/harness/cache
+          key: harness-datadirs-${{ runner.os }}-${{ hashFiles('pact/harness/ci/fetch-binaries.sh') }}
+      - name: Build workspace (pactd + pact-cli + corkboard)
+        run: |
+          cargo build --manifest-path pact/Cargo.toml
+          cargo build --manifest-path corkboard/Cargo.toml
+      - name: Run the e2e suite
+        working-directory: pact/harness
+        env:
+          TMPDIR: ${{ runner.temp }}   # failed-scenario workdirs (pact-*) land here
+        run: python3 test_runner.py --skip-build
+      - name: Upload failure workdirs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-workdirs
+          path: ${{ runner.temp }}/pact-*
+          if-no-files-found: ignore
 
   ui:
     name: UI (lint + build)

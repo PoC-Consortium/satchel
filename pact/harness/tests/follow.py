@@ -23,7 +23,7 @@ from framework.node import (  # noqa: E402
 )
 from framework.services import NostrRelay  # noqa: E402
 from framework.testbase import PactTestFramework, run_scenarios  # noqa: E402
-from framework.util import GET_BTC, GIVE_POCX  # noqa: E402
+from framework.util import GET_BTC, GIVE_POCX, handshake_done  # noqa: E402
 
 
 # Standard BIP39 English test vectors (checksum-valid, NOT for real funds),
@@ -104,7 +104,8 @@ def drive_swap_over_relay(h, ep, eb, maker, taker, stop_when, rounds=60):
             # counter, spec §4.2) — it is NOT the board offer id.
             rec = swap_of(maker) or swap_of(taker)
             return rec["swap_id"]
-        mine_and_sync(h, ep, eb)
+        if handshake_done(maker, taker):
+            mine_and_sync(h, ep, eb)
     raise AssertionError("drive condition never reached")
 
 

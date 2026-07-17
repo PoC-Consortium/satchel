@@ -75,6 +75,12 @@ fallbacks. Copy the daemons in once:
 Node startup asserts the regtest genesis hash per chain, so a mixed-up copy
 fails loudly.
 
+In CI the same `bin/` dir is filled by `ci/fetch-binaries.sh` (Linux-only:
+sha256-pinned official downloads for bitcoind/litecoind, the electrs-btcx
+release for both electrs flavors, pinned source builds for nostr-rs-relay and
+pocx-bitcoind) and held in an actions cache keyed on that script — bump a pin
+there to roll a binary. Local dev keeps the manual copy flow above.
+
 ## The playground (interactive) — `python -m play`
 
 ONE flag-composed entrypoint (closes #110; replaces the seven

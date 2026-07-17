@@ -19,7 +19,8 @@ sys.path.insert(0, os.path.normpath(
 from framework.daemon import Party  # noqa: E402
 from framework.services import NostrRelay  # noqa: E402
 from framework.testbase import PactTestFramework, run_scenarios  # noqa: E402
-from framework.util import FEE_SLACK, GET_BTC, GIVE_POCX, balances  # noqa: E402
+from framework.util import (  # noqa: E402
+    FEE_SLACK, GET_BTC, GIVE_POCX, balances, handshake_done)
 
 
 # Fixed BIP39 test vectors — deterministic identities so a wiped party can be
@@ -190,8 +191,9 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
             if stage_reached():
                 reached = True
                 break
-            h.pocx.generate(1, "alice_pocx")
-            h.btc.generate(1, "bob_btc")
+            if handshake_done(maker, taker):
+                h.pocx.generate(1, "alice_pocx")
+                h.btc.generate(1, "bob_btc")
         assert reached, f"stage '{stage}' never reached before the wipe"
         pre_rec = swap_of(victim_party)
         pre_own_leg = own_leg_txid(pre_rec)

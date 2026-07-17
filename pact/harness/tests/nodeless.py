@@ -18,6 +18,7 @@ from framework.daemon import Party  # noqa: E402
 from framework.node import ELECTRS_ELECTRUM_PORT, ElectrsServer  # noqa: E402
 from framework.services import Corkboard  # noqa: E402
 from framework.testbase import PactTestFramework, run_scenarios  # noqa: E402
+from framework.util import handshake_done  # noqa: E402
 
 
 NODELESS_URL = f"tcp://127.0.0.1:{ELECTRS_ELECTRUM_PORT}"
@@ -64,9 +65,10 @@ def drive_to_completion(h, electrs, a, b, rounds=30, label="swap"):
         for party in (a, b):
             for ev in party.rpc("tick")["events"]:
                 print(f"[nodeless]   {party.name}: {ev['action']} {ev['detail'][:70]}")
-        h.pocx.generate(1, "alice_pocx")
-        h.btc.generate(1, "bob_btc")
-        electrs.wait_synced(h.pocx.rpc("getblockcount"))
+        if handshake_done(a, b):
+            h.pocx.generate(1, "alice_pocx")
+            h.btc.generate(1, "bob_btc")
+            electrs.wait_synced(h.pocx.rpc("getblockcount"))
         swaps_a = swaps_of(a)
         swaps_b = swaps_of(b)
         if swaps_a and swaps_b:
