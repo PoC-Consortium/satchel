@@ -119,6 +119,19 @@ GET_BTC = "0.001"       # ... for 0.001 BTC from Bob
 FEE_SLACK = 0.01        # generous bound for redeem/refund fees
 
 
+def handshake_done(*parties):
+    """True once EVERY party holds a swap record — i.e. the take→init→accept
+    handshake is past `init_matches_offer`. Relay drive loops must not mine
+    while this is False: each regtest PoCX block auto-advances chain time by
+    minutes, so a handshake that needs a few extra relay round-trips (slow CI
+    box) sees `coordination_now` blow the 15-min timelock tolerance
+    (board.rs) and the take dies with a permanent "init t1 deviates" abort.
+    Blocks are only needed from funding onward, so gating mining on this
+    keeps chain time still exactly while the tolerance window is open."""
+    return all(p.rpc("listswaps") or p.rpc("listadaptorswaps")
+               for p in parties)
+
+
 def swap_id_from(message_file):
     with open(message_file, encoding="utf-8") as fh:
         return json.load(fh)["swap_id"]

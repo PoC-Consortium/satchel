@@ -43,9 +43,11 @@ NOSTR_RELAY_REV=b5c1f642e4f4c3b9c54f5d18d66f4c53642076b4
 
 # PoC-Consortium/bitcoin (the Core fork; the `bitcoin` SUBMODULE of
 # bitcoin-pocx — cloned directly since the parent repo holds no sources).
-# This SHA = the submodule pointer at bitcoin-pocx master 441e8527
-# (v31.0.0rc1 era).
-POCX_REV=b88b852644f629cd5f25b3424d11b462462c24b3
+# Pinned on the pocx-NIGHTLY line ("v31.0 PoCX consensus integration on
+# Bitcoin Core v31.0"): the released electrs-btcx needs the /rest/blockpart/
+# endpoint (bitcoin#33657), which pocx-master (v30.2.1) does not serve yet.
+# Matches the local dev binaries (v31.0.0rc1).
+POCX_REV=54bea87e9cc8acc89431421d12e241b0d1f65130
 # ----------------------------------------------------------------------------
 
 if [[ "$(uname -s)-$(uname -m)" != "Linux-x86_64" ]]; then
