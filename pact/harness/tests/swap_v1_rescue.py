@@ -41,6 +41,8 @@ RESCUE_MNEMONIC_M2 = ("abandon amount liar amount expire adjust cage candy "
                       "arch gather drum buyer")
 RESCUE_MNEMONIC_R1 = ("avoid mass luggage choice fabric argue gather cash "
                       "brand thought elegant divide")
+RESCUE_MNEMONIC_T2V2 = ("army van defense carry jealous true garbage claim "
+                        "echo media make crunch")
 
 
 def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
@@ -416,6 +418,18 @@ def test_rescue_v2_maker_committed(h):
                      victim="maker", stage="committed")
 
 
+def test_rescue_v2_taker_post_reveal(h):
+    """v2: wipe the TAKER after the maker revealed t (redeemed leg B) — the
+    v2 analog of the v1 post-reveal cell, and the owner-reveals-then-dies
+    takeover the audit flagged as uncovered. The rescued participant restores
+    from its Signed snapshot, then must find the maker's leg-B cooperative
+    redeem on chain, EXTRACT t from its witness (t replaces the v1 hash
+    preimage) and claim leg A — proving the payout-gate change still lets a
+    wallet-OWNING machine complete the redeem post-takeover."""
+    _rescue_scenario(h, "pact-htlc-v2", "rct2v2", RESCUE_MNEMONIC_T2V2,
+                     victim="taker", stage="post_reveal")
+
+
 def test_rescue_v1_maker_refund(h):
     """v1 refund variant: the taker never funds leg B; the maker is wiped at
     funded_a and, once past the timelocks, the RESCUED maker must time out and
@@ -459,6 +473,11 @@ class RescueMakerRefundV1(PactTestFramework):
         test_rescue_v1_maker_refund(self.h)
 
 
+class RescueTakerPostRevealV2(PactTestFramework):
+    def run_test(self):
+        test_rescue_v2_taker_post_reveal(self.h)
+
+
 SCENARIOS = [
     RescueTakerCommittedV1,
     RescueTakerCommittedV2,
@@ -467,6 +486,7 @@ SCENARIOS = [
     RescueTakerPostRevealV1,
     RescueMakerCommittedV2,
     RescueMakerRefundV1,
+    RescueTakerPostRevealV2,
 ]
 
 
