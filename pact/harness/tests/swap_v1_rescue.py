@@ -46,7 +46,7 @@ RESCUE_MNEMONIC_T2V2 = ("army van defense carry jealous true garbage claim "
 
 
 def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
-                     stage="committed", refund=False):
+                     stage="committed", refund=False, fund_refused_when_blind=False):
     """Seed-only mid-swap rescue (#54) over a live Nostr relay — one cell of
     the wipe-stage matrix {maker,taker} × {accepted, funded_a, committed,
     post_reveal} × {v1,v2}, plus a refund variant.
@@ -288,6 +288,30 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
         rec = swap_of(victim_party, sid)
         assert rec.get("source") == "local", \
             f"takeover did not adopt the restored swap: {rec}"
+
+        if fund_refused_when_blind:
+            # F3 fail-closed belt: this Core-only backup (no script index) is
+            # blind to the counterparty's leg, so it CANNOT prove its own leg is
+            # unfunded — it must REFUSE to broadcast a fresh funding rather than
+            # risk re-funding a swap that may have already settled (whose secret
+            # would be public → theft). The old "blind backup continues a
+            # pre-funding swap" path is deliberately gone. Drive a while; assert
+            # the backup NEVER broadcasts its leg and the swap never completes —
+            # it safely stalls (and would time out both sides).
+            for _ in range(15):
+                for party in (maker, taker):
+                    party.rpc("tick")
+                h.pocx.generate(1, "alice_pocx")
+                h.btc.generate(1, "bob_btc")
+                v = swap_of(victim_party, sid)
+                assert own_leg_txid(v) is None, \
+                    f"blind backup re-funded its leg despite the F3 belt: {v}"
+                assert v is None or v["state"] != "completed", \
+                    f"blind adopted swap completed via an unverified re-fund: {v}"
+            print(f"[e2e] {tag}: F3 belt held — blind backup refused to fund its "
+                  "leg (no re-fund; swap left to time out)")
+            return
+
         # The snapshot was taken at `accept`, BEFORE any funding — the rescued
         # record has no funding pointers; the tick rediscovers them on chain
         # below. (The no-double-fund check compares txids after settlement.)
@@ -396,10 +420,15 @@ def test_rescue_v1_maker_funded_a(h):
 
 
 def test_rescue_v1_taker_accepted(h):
-    """v1: wipe the taker at ACCEPT, before anything of its is on chain — the
-    earliest snapshot; the rescued (anchored-key) taker funds and completes."""
+    """v1: wipe the taker at ACCEPT, before anything is on chain. The snapshot is
+    still detected and auto-followed, and takeover ADOPTS — but the F3 belt then
+    REFUSES to fund: a Core-only backup is blind to the counterparty's leg and
+    can't prove its own leg is unfunded, so re-funding could pay a lock whose
+    secret is already public on a settled swap. The backup safely stalls instead
+    of re-funding. (Completing a pre-funding swap on the backup now requires a
+    chain view (Electrum) for both legs, so the leg is provably unfunded.)"""
     _rescue_scenario(h, "pact-htlc-v1", "rct1", RESCUE_MNEMONIC_T1,
-                     victim="taker", stage="accepted")
+                     victim="taker", stage="accepted", fund_refused_when_blind=True)
 
 
 def test_rescue_v1_taker_post_reveal(h):

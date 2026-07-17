@@ -2539,7 +2539,8 @@ impl Engine {
         // Idempotency guard 3 (historical, docs/STATE_RECONSTRUCTION.md §5.1):
         // the live reads above cannot see a funding that was already SPENT — a
         // rescued/taken-over record of a settled swap must never fund "again".
-        match self.classify_v2_legs(&rec).map(|(a, _)| a) {
+        let leg_a_class = self.classify_v2_legs(&rec).map(|(a, _)| a);
+        match &leg_a_class {
             Some(crate::reconstruct::LegClass::Spent(s)) => bail!(
                 "refusing to fund leg A of swap {swap}: its funding {} was already spent \
                  on-chain by {} ({:?}) — the swap settled; nothing to fund",
@@ -2554,6 +2555,18 @@ impl Engine {
             ),
             _ => {}
         }
+        // F3 fail-closed belt (v1 twin — see `fund`): an ADOPTED record never
+        // broadcasts leg A unless we can POSITIVELY prove it is unfunded; an
+        // inconclusive read on a blind backend could otherwise re-fund a settled
+        // swap. Same uniform rule on every backend; a fresh LOCAL swap is exempt.
+        ensure!(
+            !rec.adopted
+                || matches!(leg_a_class, Some(crate::reconstruct::LegClass::Unfunded)),
+            "refusing to fund leg A of adopted swap {swap}: cannot confirm it is unfunded \
+             from this machine — a settled swap must not be re-funded. Add a chain view \
+             (Electrum) for the coin, or point this machine at the wallet that holds this \
+             swap, then retry."
+        );
 
         // Initiator: broadcast leg A now. Safe — leg A is only claimable after the
         // initiator reveals `t` (which only it can do) and its refund is intact.
@@ -4152,13 +4165,12 @@ impl Engine {
                 // live reads above cannot see a funding that is ALREADY SPENT
                 // — for a rescued or taken-over record of a swap that settled
                 // long ago, funding "again" here would be a real double-fund.
-                // One history classification when the live view finds nothing;
-                // tier-L backends (no script index) return None and keep the
-                // pre-reconstruction behavior.
-                match self.classify_v1_legs(&rec).map(|(a, b)| match leg {
+                // One history classification when the live view finds nothing.
+                let leg_class = self.classify_v1_legs(&rec).map(|(a, b)| match leg {
                     "a" => a,
                     _ => b,
-                }) {
+                });
+                match &leg_class {
                     Some(crate::reconstruct::LegClass::Spent(s)) => bail!(
                         "refusing to fund leg {leg} of swap {swap}: its funding {} was already \
                          spent on-chain by {} ({:?}) — the swap settled; nothing to fund",
@@ -4173,6 +4185,25 @@ impl Engine {
                     ),
                     _ => {}
                 }
+                // F3 fail-closed belt: an ADOPTED (taken-over / rescued) record
+                // must never broadcast a FRESH funding unless we can POSITIVELY
+                // prove this leg is unfunded. On a backend blind to the leg (a
+                // Core node with no script index and no wallet history for it)
+                // classification is inconclusive (`None`) — and re-funding then
+                // could pay a lock whose secret is already public on a swap that
+                // settled (theft). A freshly-created LOCAL swap (not adopted) is
+                // exempt: it has no prior incarnation to have settled, so a first
+                // funding is safe even where the read is inconclusive — this is
+                // the SAME uniform rule on every backend (Electrum simply returns
+                // a conclusive `Unfunded` more often than a bare local node).
+                ensure!(
+                    !rec.adopted
+                        || matches!(leg_class, Some(crate::reconstruct::LegClass::Unfunded)),
+                    "refusing to fund leg {leg} of adopted swap {swap}: cannot confirm it is \
+                     unfunded from this machine — a settled swap must not be re-funded. Add a \
+                     chain view (Electrum) for the coin, or point this machine at the wallet \
+                     that holds this swap, then retry."
+                );
                 let address = htlc.address(backend.params())?;
                 let txid = backend.wallet_send(
                     &address,
