@@ -308,8 +308,29 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
                     f"blind backup re-funded its leg despite the F3 belt: {v}"
                 assert v is None or v["state"] != "completed", \
                     f"blind adopted swap completed via an unverified re-fund: {v}"
-            print(f"[e2e] {tag}: F3 belt held — blind backup refused to fund its "
-                  "leg (no re-fund; swap left to time out)")
+            print(f"[e2e] {tag}: F3 belt held — blind backup refused to fund its leg")
+
+            # No forever ghost: past the §7.4 fund/confirm deadline the stalled
+            # adopted record auto-aborts (nothing of ours is committed — the
+            # counterparty reclaims its own leg at its timelock), so it leaves the
+            # active dock instead of lingering. These deadlines are chain-time, so
+            # advance_time triggers them.
+            h.advance_time(5 * 3600)
+            terminal = False
+            for _ in range(30):
+                for party in (maker, taker):
+                    party.rpc("tick")
+                h.pocx.generate(1, "alice_pocx")
+                h.btc.generate(1, "bob_btc")
+                v = swap_of(victim_party, sid)
+                if v is not None and v["state"] in ("aborted", "refunded"):
+                    terminal = True
+                    break
+            assert terminal, \
+                f"stalled adopted swap never terminalized — forever ghost: {swap_of(victim_party, sid)}"
+            assert own_leg_txid(swap_of(victim_party, sid)) is None, \
+                "re-funded its leg on the way to the abort"
+            print(f"[e2e] {tag}: stalled swap auto-aborted past the deadline — no ghost")
             return
 
         # The snapshot was taken at `accept`, BEFORE any funding — the rescued
