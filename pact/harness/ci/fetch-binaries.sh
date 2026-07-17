@@ -41,8 +41,11 @@ ELECTRS_BITCOIN_SHA256=625fa69a04839f1a2328a77ca8f9e4d3392dabfaadcec1170967410b6
 # author stopped tagging after 0.9.0)
 NOSTR_RELAY_REV=b5c1f642e4f4c3b9c54f5d18d66f4c53642076b4
 
-# PoC-Consortium/bitcoin-pocx master (v31.0.0rc1 era)
-POCX_REV=441e8527359ec6552f1627e02f595c6346af5c5d
+# PoC-Consortium/bitcoin (the Core fork; the `bitcoin` SUBMODULE of
+# bitcoin-pocx — cloned directly since the parent repo holds no sources).
+# This SHA = the submodule pointer at bitcoin-pocx master 441e8527
+# (v31.0.0rc1 era).
+POCX_REV=b88b852644f629cd5f25b3424d11b462462c24b3
 # ----------------------------------------------------------------------------
 
 if [[ "$(uname -s)-$(uname -m)" != "Linux-x86_64" ]]; then
@@ -111,10 +114,9 @@ have pocx-bitcoind || {
     echo "== pocx-bitcoind @ $POCX_REV (source build)"
     mkdir "$WORK/pocx" && cd "$WORK/pocx"
     git init -q
-    git remote add origin https://github.com/PoC-Consortium/bitcoin-pocx
+    git remote add origin https://github.com/PoC-Consortium/bitcoin
     git fetch -q --depth 1 origin "$POCX_REV"
     git checkout -q FETCH_HEAD
-    cd bitcoin
     cmake -B build \
           -DCMAKE_BUILD_TYPE=Release \
           -DBUILD_TESTS=OFF -DBUILD_TX=OFF -DBUILD_UTIL=OFF \
