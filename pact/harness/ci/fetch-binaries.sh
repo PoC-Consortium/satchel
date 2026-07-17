@@ -15,6 +15,10 @@
 # pin below invalidates the cache and triggers a rebuild. The two source
 # builds (relay ~5 min, pocx node ~40 min) only run on that cache miss.
 #
+# Idempotent per binary: anything already present in bin/ is skipped, so a
+# partially-saved cache (e.g. from a cancelled run) self-heals instead of
+# poisoning every later run — ci.yml therefore runs this unconditionally.
+#
 # Build deps (installed by ci.yml): build-essential cmake pkgconf libevent-dev
 # libboost-dev libsqlite3-dev libssl-dev protobuf-compiler
 #
@@ -57,49 +61,68 @@ fetch() { # url sha256 outfile
     echo "$2  $3" | sha256sum -c -
 }
 
-echo "== Bitcoin Core $BITCOIN_VER"
-fetch "https://bitcoincore.org/bin/bitcoin-core-$BITCOIN_VER/bitcoin-$BITCOIN_VER-x86_64-linux-gnu.tar.gz" \
-      "$BITCOIN_SHA256" "$WORK/bitcoin.tar.gz"
-tar -xzf "$WORK/bitcoin.tar.gz" -C "$WORK" "bitcoin-$BITCOIN_VER/bin/bitcoind"
-install -m 755 "$WORK/bitcoin-$BITCOIN_VER/bin/bitcoind" "$BIN_DIR/btc-bitcoind"
+have() { # bin/ name
+    if [[ -x "$BIN_DIR/$1" ]]; then echo "== $1: already present, skipping"; return 0; fi
+    return 1
+}
 
-echo "== Litecoin Core $LITECOIN_VER"
-fetch "https://download.litecoin.org/litecoin-$LITECOIN_VER/linux/litecoin-$LITECOIN_VER-x86_64-linux-gnu.tar.gz" \
-      "$LITECOIN_SHA256" "$WORK/litecoin.tar.gz"
-tar -xzf "$WORK/litecoin.tar.gz" -C "$WORK" "litecoin-$LITECOIN_VER/bin/litecoind"
-install -m 755 "$WORK/litecoin-$LITECOIN_VER/bin/litecoind" "$BIN_DIR/litecoind"
+have btc-bitcoind || {
+    echo "== Bitcoin Core $BITCOIN_VER"
+    fetch "https://bitcoincore.org/bin/bitcoin-core-$BITCOIN_VER/bitcoin-$BITCOIN_VER-x86_64-linux-gnu.tar.gz" \
+          "$BITCOIN_SHA256" "$WORK/bitcoin.tar.gz"
+    tar -xzf "$WORK/bitcoin.tar.gz" -C "$WORK" "bitcoin-$BITCOIN_VER/bin/bitcoind"
+    install -m 755 "$WORK/bitcoin-$BITCOIN_VER/bin/bitcoind" "$BIN_DIR/btc-bitcoind"
+}
 
-echo "== electrs ($ELECTRS_TAG, btcx + vanilla-bitcoin flavors)"
+have litecoind || {
+    echo "== Litecoin Core $LITECOIN_VER"
+    fetch "https://download.litecoin.org/litecoin-$LITECOIN_VER/linux/litecoin-$LITECOIN_VER-x86_64-linux-gnu.tar.gz" \
+          "$LITECOIN_SHA256" "$WORK/litecoin.tar.gz"
+    tar -xzf "$WORK/litecoin.tar.gz" -C "$WORK" "litecoin-$LITECOIN_VER/bin/litecoind"
+    install -m 755 "$WORK/litecoin-$LITECOIN_VER/bin/litecoind" "$BIN_DIR/litecoind"
+}
+
 ELECTRS_BASE="https://github.com/PoC-Consortium/electrs-btcx/releases/download/$ELECTRS_TAG"
-fetch "$ELECTRS_BASE/electrs-btcx-$ELECTRS_TAG-x86_64-linux-gnu.tar.gz" \
-      "$ELECTRS_BTCX_SHA256" "$WORK/electrs-btcx.tar.gz"
-tar -xzf "$WORK/electrs-btcx.tar.gz" -C "$WORK" electrs
-install -m 755 "$WORK/electrs" "$BIN_DIR/electrs"
-rm "$WORK/electrs"
-fetch "$ELECTRS_BASE/electrs-bitcoin-$ELECTRS_TAG-x86_64-linux-gnu.tar.gz" \
-      "$ELECTRS_BITCOIN_SHA256" "$WORK/electrs-bitcoin.tar.gz"
-tar -xzf "$WORK/electrs-bitcoin.tar.gz" -C "$WORK" electrs
-install -m 755 "$WORK/electrs" "$BIN_DIR/btc-electrs"
+have electrs || {
+    echo "== electrs ($ELECTRS_TAG, btcx flavor)"
+    fetch "$ELECTRS_BASE/electrs-btcx-$ELECTRS_TAG-x86_64-linux-gnu.tar.gz" \
+          "$ELECTRS_BTCX_SHA256" "$WORK/electrs-btcx.tar.gz"
+    tar -xzf "$WORK/electrs-btcx.tar.gz" -C "$WORK" electrs
+    install -m 755 "$WORK/electrs" "$BIN_DIR/electrs"
+    rm "$WORK/electrs"
+}
 
-echo "== nostr-rs-relay @ $NOSTR_RELAY_REV (source build)"
-cargo install --locked --git https://github.com/scsibug/nostr-rs-relay \
-      --rev "$NOSTR_RELAY_REV" --root "$WORK/nrr" nostr-rs-relay
-install -m 755 "$WORK/nrr/bin/nostr-rs-relay" "$BIN_DIR/nostr-rs-relay"
+have btc-electrs || {
+    echo "== electrs ($ELECTRS_TAG, vanilla-bitcoin flavor)"
+    fetch "$ELECTRS_BASE/electrs-bitcoin-$ELECTRS_TAG-x86_64-linux-gnu.tar.gz" \
+          "$ELECTRS_BITCOIN_SHA256" "$WORK/electrs-bitcoin.tar.gz"
+    tar -xzf "$WORK/electrs-bitcoin.tar.gz" -C "$WORK" electrs
+    install -m 755 "$WORK/electrs" "$BIN_DIR/btc-electrs"
+}
 
-echo "== pocx-bitcoind @ $POCX_REV (source build)"
-mkdir "$WORK/pocx" && cd "$WORK/pocx"
-git init -q
-git remote add origin https://github.com/PoC-Consortium/bitcoin-pocx
-git fetch -q --depth 1 origin "$POCX_REV"
-git checkout -q FETCH_HEAD
-cd bitcoin
-cmake -B build \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DBUILD_TESTS=OFF -DBUILD_TX=OFF -DBUILD_UTIL=OFF \
-      -DBUILD_WALLET_TOOL=OFF -DBUILD_CLI=OFF -DBUILD_BITCOIN_BIN=OFF \
-      -DENABLE_IPC=OFF -DWITH_ZMQ=OFF -DWITH_CCACHE=OFF
-cmake --build build -j"$(nproc)" --target bitcoind
-install -m 755 build/bin/bitcoind "$BIN_DIR/pocx-bitcoind"
+have nostr-rs-relay || {
+    echo "== nostr-rs-relay @ $NOSTR_RELAY_REV (source build)"
+    cargo install --locked --git https://github.com/scsibug/nostr-rs-relay \
+          --rev "$NOSTR_RELAY_REV" --root "$WORK/nrr" nostr-rs-relay
+    install -m 755 "$WORK/nrr/bin/nostr-rs-relay" "$BIN_DIR/nostr-rs-relay"
+}
+
+have pocx-bitcoind || {
+    echo "== pocx-bitcoind @ $POCX_REV (source build)"
+    mkdir "$WORK/pocx" && cd "$WORK/pocx"
+    git init -q
+    git remote add origin https://github.com/PoC-Consortium/bitcoin-pocx
+    git fetch -q --depth 1 origin "$POCX_REV"
+    git checkout -q FETCH_HEAD
+    cd bitcoin
+    cmake -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DBUILD_TESTS=OFF -DBUILD_TX=OFF -DBUILD_UTIL=OFF \
+          -DBUILD_WALLET_TOOL=OFF -DBUILD_CLI=OFF -DBUILD_BITCOIN_BIN=OFF \
+          -DENABLE_IPC=OFF -DWITH_ZMQ=OFF -DWITH_CCACHE=OFF
+    cmake --build build -j"$(nproc)" --target bitcoind
+    install -m 755 build/bin/bitcoind "$BIN_DIR/pocx-bitcoind"
+}
 
 echo "== done"
 ls -la "$BIN_DIR"
