@@ -2,7 +2,11 @@
 
 Status: **IMPLEMENTED — phases 0–4 merged to master 2026-07-16**
 (#184/#185/#189/#187/#188; issue #110 closed by Phase 3). Phase 5 (e2e in CI)
-remains open pending a home for the node binaries. §1 below describes the
+landed 2026-07-17: ci.yml's `e2e` job runs `test_runner.py` on every PR; the
+binary home is an actions cache filled by `pact/harness/ci/fetch-binaries.sh`
+(official downloads for bitcoind/litecoind, the electrs-btcx release for both
+electrs flavors, pinned source builds for nostr-rs-relay + pocx-bitcoind).
+§1 below describes the
 PRE-consolidation state the plan was written against; §2–§3 are the design as
 built — one later amendment: the datadir cache needed the `-mocktime` boot
 discipline (§2.3), discovered during Phase 2.
