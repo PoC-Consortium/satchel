@@ -2482,7 +2482,11 @@ impl Engine {
             // retry — permanent so it advances the shared mailbox cursor instead
             // of head-of-line-blocking every other swap's mail (e.g. a `redeemed`
             // courtesy sent to a v2 swap, or junk sealed to our pubkey).
-            other => return Err(permanent_err(anyhow::anyhow!("unknown v2 message type {other:?}"))),
+            other => {
+                return Err(permanent_err(anyhow::anyhow!(
+                    "unknown v2 message type {other:?}"
+                )))
+            }
         }
         self.store.put_adaptor(&rec)?;
         // Initiator snapshots once at accept (#54); Signed is snapshotted in
@@ -2560,8 +2564,7 @@ impl Engine {
         // inconclusive read on a blind backend could otherwise re-fund a settled
         // swap. Same uniform rule on every backend; a fresh LOCAL swap is exempt.
         ensure!(
-            !rec.adopted
-                || matches!(leg_a_class, Some(crate::reconstruct::LegClass::Unfunded)),
+            !rec.adopted || matches!(leg_a_class, Some(crate::reconstruct::LegClass::Unfunded)),
             "refusing to fund leg A of adopted swap {swap}: cannot confirm it is unfunded \
              from this machine — a settled swap must not be re-funded. Add a chain view \
              (Electrum) for the coin, or point this machine at the wallet that holds this \
@@ -3991,10 +3994,7 @@ impl Engine {
                 // skipping the whole block here.
                 let leg_already_funded = match body.chain.as_str() {
                     "a" => !matches!(rec.state, State::Created | State::Accepted),
-                    "b" => !matches!(
-                        rec.state,
-                        State::Created | State::Accepted | State::FundedA
-                    ),
+                    "b" => !matches!(rec.state, State::Created | State::Accepted | State::FundedA),
                     // Deterministic junk — permanent so it advances the mailbox
                     // cursor instead of head-of-line-blocking every other swap.
                     other => {
@@ -4070,7 +4070,11 @@ impl Engine {
                 eprintln!("counterparty abort: {}", body.reason);
             }
             // Deterministic junk — permanent so the mailbox cursor advances.
-            other => return Err(permanent_err(anyhow::anyhow!("unknown message type {other:?}"))),
+            other => {
+                return Err(permanent_err(anyhow::anyhow!(
+                    "unknown message type {other:?}"
+                )))
+            }
         }
         self.store.put(&rec)?;
         // Initiator snapshots once at accept (#54); tombstone a pre-funding abort.
@@ -9880,7 +9884,9 @@ impl Engine {
             // peer can't wedge the shared mailbox by sealing junk envelopes to us
             // (each would otherwise cost MAX_ATTEMPTS passes of head-of-line
             // blocking before sync_board gives up).
-            other => return Err(permanent_err(anyhow::anyhow!("unexpected relay message type {other:?}"))),
+            other => Err(permanent_err(anyhow::anyhow!(
+                "unexpected relay message type {other:?}"
+            ))),
         }
     }
 
