@@ -38,6 +38,7 @@ TEST_LIST = [
     "swap_v2_adaptor.py",
     "nodeless.py",
     "follow.py",
+    "takeover.py",
 ]
 
 

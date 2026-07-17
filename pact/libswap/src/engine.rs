@@ -2478,7 +2478,15 @@ impl Engine {
                 rec.their_partial_a = Some(b.redeem_a_partial);
                 rec.their_partial_b = Some(b.redeem_b_partial);
             }
-            other => bail!("unknown v2 message type {other:?}"),
+            // Deterministic: a message type we'll never handle can't succeed on
+            // retry — permanent so it advances the shared mailbox cursor instead
+            // of head-of-line-blocking every other swap's mail (e.g. a `redeemed`
+            // courtesy sent to a v2 swap, or junk sealed to our pubkey).
+            other => {
+                return Err(permanent_err(anyhow::anyhow!(
+                    "unknown v2 message type {other:?}"
+                )))
+            }
         }
         self.store.put_adaptor(&rec)?;
         // Initiator snapshots once at accept (#54); Signed is snapshotted in
@@ -2535,7 +2543,8 @@ impl Engine {
         // Idempotency guard 3 (historical, docs/STATE_RECONSTRUCTION.md §5.1):
         // the live reads above cannot see a funding that was already SPENT — a
         // rescued/taken-over record of a settled swap must never fund "again".
-        match self.classify_v2_legs(&rec).map(|(a, _)| a) {
+        let leg_a_class = self.classify_v2_legs(&rec).map(|(a, _)| a);
+        match &leg_a_class {
             Some(crate::reconstruct::LegClass::Spent(s)) => bail!(
                 "refusing to fund leg A of swap {swap}: its funding {} was already spent \
                  on-chain by {} ({:?}) — the swap settled; nothing to fund",
@@ -2550,6 +2559,17 @@ impl Engine {
             ),
             _ => {}
         }
+        // F3 fail-closed belt (v1 twin — see `fund`): an ADOPTED record never
+        // broadcasts leg A unless we can POSITIVELY prove it is unfunded; an
+        // inconclusive read on a blind backend could otherwise re-fund a settled
+        // swap. Same uniform rule on every backend; a fresh LOCAL swap is exempt.
+        ensure!(
+            !rec.adopted || matches!(leg_a_class, Some(crate::reconstruct::LegClass::Unfunded)),
+            "refusing to fund leg A of adopted swap {swap}: cannot confirm it is unfunded \
+             from this machine — a settled swap must not be re-funded. Add a chain view \
+             (Electrum) for the coin, or point this machine at the wallet that holds this \
+             swap, then retry."
+        );
 
         // Initiator: broadcast leg A now. Safe — leg A is only claimable after the
         // initiator reveals `t` (which only it can do) and its refund is intact.
@@ -3221,7 +3241,14 @@ impl Engine {
                 // and we are still before T2. The depth gate is the reveal's
                 // reorg safety: never publish t against a funding that can still
                 // reorg away.
-                if rec.state == Signed && both_funded {
+                //
+                // Multi-machine payout gate: on a REFUND-ONLY takeover (leg-B
+                // sweep is a wallet this machine doesn't control), never reveal t
+                // — the leg-B proceeds would go to the dead machine's wallet, and
+                // revealing t would hand the counterparty leg A for nothing.
+                // Skip to the reclaim-leg-A-after-T1 branch below (refund pays an
+                // address we own).
+                if rec.state == Signed && both_funded && self.v2_owns_redeem_payout(rec)? {
                     let backend_b = self.backend(&rec.chain_b)?;
                     let net = rec.chain_b.network;
                     let (_, reveal_margin, _) = action_margins(net);
@@ -3382,7 +3409,14 @@ impl Engine {
                 // only while inside Bob's §7.4 redeem deadline (T1 − 1h, margin
                 // 0 on regtest); past it the redeem races Alice's refund and
                 // (being unbumpable) cannot win, so leave it (leg B is gone).
-                if rec.state == Signed && both_funded {
+                //
+                // Multi-machine payout gate: on a REFUND-ONLY takeover (leg-A
+                // sweep is a wallet this machine doesn't control), don't redeem
+                // leg A to the dead machine's wallet — ride to the reclaim-leg-B-
+                // after-T2 branch below (refund pays an address we own). If the
+                // counterparty already spent leg B, this leg simply waits until
+                // the owning wallet is attached (never pays a wallet we can't use).
+                if rec.state == Signed && both_funded && self.v2_owns_redeem_payout(rec)? {
                     let net = rec.chain_a.network;
                     let (_, _, redeem_a_margin) = action_margins(net);
                     let now = deadline_clock(
@@ -3899,11 +3933,15 @@ impl Engine {
 
         match envelope.msg_type.as_str() {
             "accept" => {
-                ensure!(
+                ensure_permanent!(
                     rec.role == Role::Initiator,
                     "only the initiator receives accept"
                 );
-                ensure!(
+                // A duplicate `accept` (at-least-once redelivery) lands here in a
+                // non-Created state; it's deterministic, so tag it permanent — the
+                // first accept already advanced + auto-funded, and without this the
+                // dup head-of-line-blocks the shared mailbox for MAX_ATTEMPTS passes.
+                ensure_permanent!(
                     rec.state == State::Created,
                     "accept in state {:?}",
                     rec.state
@@ -3942,46 +3980,73 @@ impl Engine {
                 // script if this message is ever lost.
                 let body: FundedBody = serde_json::from_value(envelope.body.clone())
                     .context("malformed funded body")?;
-                let outpoint = OutPoint {
-                    txid: bitcoin::Txid::from_str(&body.txid).context("funded: bad txid")?,
-                    vout: body.vout,
-                };
-                let params = self.swap_params(&rec)?;
-                let (chain, htlc, amount, min_conf) = match body.chain.as_str() {
-                    "a" => (&rec.chain_a, params.htlc_a()?, rec.amount_a, rec.n_a),
-                    "b" => (&rec.chain_b, params.htlc_b()?, rec.amount_b, rec.n_b),
-                    other => bail!("funded: unknown chain {other:?}"),
-                };
-                // Record the pointer regardless.
-                match body.chain.as_str() {
-                    "a" => {
-                        rec.htlc_a_txid = Some(body.txid.clone());
-                        rec.htlc_a_vout = Some(body.vout);
+                // Monotonic replay guard (#176/#181): at-least-once relay delivery
+                // re-wraps an un-ACKed `funded` under a FRESH gift-wrap id that
+                // event-id dedup cannot collapse, so the SAME message can arrive
+                // twice (immediately, or a resend window later). It is a
+                // non-authoritative pointer HINT — tick() is the real chain-watched
+                // advancer — so a re-delivery that finds this leg already funded
+                // must be a no-op and NEVER regress the record. A FundedB -> FundedA
+                // drop would re-arm the participant's auto-fund arm (should_fund
+                // matches (Participant, FundedA)) and, with the first funding
+                // briefly mempool-evicted, double-fund leg B. The pointer was
+                // already persisted on first delivery, so nothing is lost by
+                // skipping the whole block here.
+                let leg_already_funded = match body.chain.as_str() {
+                    "a" => !matches!(rec.state, State::Created | State::Accepted),
+                    "b" => !matches!(rec.state, State::Created | State::Accepted | State::FundedA),
+                    // Deterministic junk — permanent so it advances the mailbox
+                    // cursor instead of head-of-line-blocking every other swap.
+                    other => {
+                        return Err(permanent_err(anyhow::anyhow!(
+                            "funded: unknown chain {other:?}"
+                        )))
                     }
-                    _ => {
-                        rec.htlc_b_txid = Some(body.txid.clone());
-                        rec.htlc_b_vout = Some(body.vout);
+                };
+                if !leg_already_funded {
+                    let outpoint = OutPoint {
+                        txid: bitcoin::Txid::from_str(&body.txid).context("funded: bad txid")?,
+                        vout: body.vout,
+                    };
+                    let params = self.swap_params(&rec)?;
+                    let (chain, htlc, amount, min_conf) = match body.chain.as_str() {
+                        "a" => (&rec.chain_a, params.htlc_a()?, rec.amount_a, rec.n_a),
+                        _ => (&rec.chain_b, params.htlc_b()?, rec.amount_b, rec.n_b),
+                    };
+                    // Record the pointer regardless of confirmation depth.
+                    match body.chain.as_str() {
+                        "a" => {
+                            rec.htlc_a_txid = Some(body.txid.clone());
+                            rec.htlc_a_vout = Some(body.vout);
+                        }
+                        _ => {
+                            rec.htlc_b_txid = Some(body.txid.clone());
+                            rec.htlc_b_vout = Some(body.vout);
+                        }
                     }
-                }
-                // §6.1: the message is a pointer, not a proof — verify the output
-                // against the locally reconstructed script before advancing.
-                let backend = self.backend(chain)?;
-                let htlc_spk = htlc.script_pubkey();
-                if let Some(txout) = backend.get_txout(&outpoint, &htlc_spk)? {
-                    if txout.script_pubkey_hex == hex::encode(htlc_spk.as_bytes())
-                        && txout.value_sat == amount
-                        && txout.confirmations >= u64::from(min_conf)
-                    {
-                        match body.chain.as_str() {
-                            "a" => {
-                                rec.htlc_a_height =
-                                    Some(backend.tip_height()?.saturating_sub(txout.confirmations));
-                                rec.state = State::FundedA;
-                            }
-                            _ => {
-                                rec.htlc_b_height =
-                                    Some(backend.tip_height()?.saturating_sub(txout.confirmations));
-                                rec.state = State::FundedB;
+                    // §6.1: the message is a pointer, not a proof — verify the
+                    // output against the locally reconstructed script before
+                    // advancing.
+                    let backend = self.backend(chain)?;
+                    let htlc_spk = htlc.script_pubkey();
+                    if let Some(txout) = backend.get_txout(&outpoint, &htlc_spk)? {
+                        if txout.script_pubkey_hex == hex::encode(htlc_spk.as_bytes())
+                            && txout.value_sat == amount
+                            && txout.confirmations >= u64::from(min_conf)
+                        {
+                            match body.chain.as_str() {
+                                "a" => {
+                                    rec.htlc_a_height = Some(
+                                        backend.tip_height()?.saturating_sub(txout.confirmations),
+                                    );
+                                    rec.state = State::FundedA;
+                                }
+                                _ => {
+                                    rec.htlc_b_height = Some(
+                                        backend.tip_height()?.saturating_sub(txout.confirmations),
+                                    );
+                                    rec.state = State::FundedB;
+                                }
                             }
                         }
                     }
@@ -4004,7 +4069,12 @@ impl Engine {
                 }
                 eprintln!("counterparty abort: {}", body.reason);
             }
-            other => bail!("unknown message type {other:?}"),
+            // Deterministic junk — permanent so the mailbox cursor advances.
+            other => {
+                return Err(permanent_err(anyhow::anyhow!(
+                    "unknown message type {other:?}"
+                )))
+            }
         }
         self.store.put(&rec)?;
         // Initiator snapshots once at accept (#54); tombstone a pre-funding abort.
@@ -4099,13 +4169,12 @@ impl Engine {
                 // live reads above cannot see a funding that is ALREADY SPENT
                 // — for a rescued or taken-over record of a swap that settled
                 // long ago, funding "again" here would be a real double-fund.
-                // One history classification when the live view finds nothing;
-                // tier-L backends (no script index) return None and keep the
-                // pre-reconstruction behavior.
-                match self.classify_v1_legs(&rec).map(|(a, b)| match leg {
+                // One history classification when the live view finds nothing.
+                let leg_class = self.classify_v1_legs(&rec).map(|(a, b)| match leg {
                     "a" => a,
                     _ => b,
-                }) {
+                });
+                match &leg_class {
                     Some(crate::reconstruct::LegClass::Spent(s)) => bail!(
                         "refusing to fund leg {leg} of swap {swap}: its funding {} was already \
                          spent on-chain by {} ({:?}) — the swap settled; nothing to fund",
@@ -4120,6 +4189,25 @@ impl Engine {
                     ),
                     _ => {}
                 }
+                // F3 fail-closed belt: an ADOPTED (taken-over / rescued) record
+                // must never broadcast a FRESH funding unless we can POSITIVELY
+                // prove this leg is unfunded. On a backend blind to the leg (a
+                // Core node with no script index and no wallet history for it)
+                // classification is inconclusive (`None`) — and re-funding then
+                // could pay a lock whose secret is already public on a swap that
+                // settled (theft). A freshly-created LOCAL swap (not adopted) is
+                // exempt: it has no prior incarnation to have settled, so a first
+                // funding is safe even where the read is inconclusive — this is
+                // the SAME uniform rule on every backend (Electrum simply returns
+                // a conclusive `Unfunded` more often than a bare local node).
+                ensure!(
+                    !rec.adopted
+                        || matches!(leg_class, Some(crate::reconstruct::LegClass::Unfunded)),
+                    "refusing to fund leg {leg} of adopted swap {swap}: cannot confirm it is \
+                     unfunded from this machine — a settled swap must not be re-funded. Add a \
+                     chain view (Electrum) for the coin, or point this machine at the wallet \
+                     that holds this swap, then retry."
+                );
                 let address = htlc.address(backend.params())?;
                 let txid = backend.wallet_send(
                     &address,
@@ -8138,27 +8226,26 @@ impl Engine {
             return Ok(());
         }
         if let Ok(mut rec) = self.store.get_adaptor(swap_id) {
-            // Payout-custody gate (multi-machine): a v2 cooperative redeem is
+            // Payout-custody note (multi-machine): a v2 cooperative redeem is
             // pinned to the sweep address fixed in the MuSig2 sighash at init.
-            // If THIS machine's wallet doesn't own that address, driving the
-            // redeem would send the proceeds to the ORIGINATING machine's
-            // wallet — and on a txindex-less Core node we couldn't even track
-            // completion (the settlement isn't a wallet tx). So SKIP such a
-            // swap: the group takeover loop adopts the rest and logs this, and
-            // the user can point this machine at the owning wallet (or add an
-            // Electrum view) and take over again. v1 pins no destination
-            // (redeem/refund sweep to a fresh current-wallet address), so it is
-            // never gated; a sweep-unset v2 falls back to a seed-derived
-            // destination, always ours.
-            if let Some((addr, chain)) = Self::v2_takeover_payout(&rec) {
-                if self.backend(chain)?.wallet_owns_address(addr)? != Some(true) {
-                    bail!(
-                        "skipping swap {swap_id}: its payout pays a wallet this machine does not \
-                         control — the coin is served by another node's wallet. Point this \
-                         machine at that wallet (or add an Electrum view for the coin) and take \
-                         over again."
-                    );
-                }
+            // If THIS machine's wallet doesn't own that address, COMPLETING the
+            // redeem would send the proceeds to the originating machine's wallet.
+            // But a REFUND pays a fresh current-wallet address we always own, so
+            // adoption must still succeed — otherwise a funded v2 leg left behind
+            // by a dead machine can never be reclaimed at all (the followed record
+            // drives neither redeem nor refund). So we ADOPT regardless; the
+            // redeem driver (`adaptor_tick_one`) independently refuses to complete
+            // to a foreign wallet (`v2_owns_redeem_payout`), riding the swap to its
+            // refund instead. A sweep-unset v2 falls back to a seed-derived
+            // destination (always ours); v1 pins no destination, so neither is
+            // gated here.
+            if !self.v2_owns_redeem_payout(&rec)? {
+                eprintln!(
+                    "takeover {swap_id}: the cooperative-redeem payout is a wallet this \
+                     machine does not control — adopted REFUND-ONLY. To complete a \
+                     cooperative redeem, attach the owning wallet (or an Electrum view \
+                     for the coin)."
+                );
             }
             rec.adopted = true;
             if let Some(note) = self.fast_forward_v2(&mut rec) {
@@ -8183,6 +8270,23 @@ impl Engine {
             Role::Participant => (rec.sweep_a.as_deref(), &rec.chain_a),
         };
         sweep.filter(|s| !s.is_empty()).map(|s| (s, chain))
+    }
+
+    /// Whether THIS machine can COMPLETE the cooperative redeem — its proceeds
+    /// land in a wallet we control. True when the sweep is seed-derived (unset,
+    /// [`Self::v2_takeover_payout`] → `None`) or a core-wallet address this
+    /// machine owns. When false, a driven/adopted swap must ride to its REFUND
+    /// (which pays a fresh address we always own) rather than redeem to the
+    /// originating machine's (possibly dead) wallet. Gates the auto-redeem in
+    /// [`Self::adaptor_tick_one`]; the takeover path only warns (adoption stays
+    /// allowed so the refund can be driven).
+    fn v2_owns_redeem_payout(&self, rec: &AdaptorSwapRecord) -> Result<bool> {
+        match Self::v2_takeover_payout(rec) {
+            None => Ok(true), // seed-derived fallback — always ours
+            Some((addr, chain)) => {
+                Ok(self.backend(chain)?.wallet_owns_address(addr)? == Some(true))
+            }
+        }
     }
 
     /// Read-only twin of [`Engine::rescue_from_blobs`]: count the snapshots
@@ -9776,7 +9880,13 @@ impl Engine {
                 }
                 event(&record.swap_id, "recv", envelope.msg_type.clone())
             }
-            other => bail!("unexpected relay message type {other:?}"),
+            // A message type we don't dispatch is deterministic — permanent so a
+            // peer can't wedge the shared mailbox by sealing junk envelopes to us
+            // (each would otherwise cost MAX_ATTEMPTS passes of head-of-line
+            // blocking before sync_board gives up).
+            other => Err(permanent_err(anyhow::anyhow!(
+                "unexpected relay message type {other:?}"
+            ))),
         }
     }
 
@@ -10315,6 +10425,74 @@ mod tests {
         assert!(!b.drives(ra.derive_scope, ra.adopted));
         std::fs::remove_dir_all(&da).ok();
         std::fs::remove_dir_all(&db).ok();
+    }
+
+    #[test]
+    fn funded_replay_does_not_regress_advanced_state() {
+        // #176/#181 receive-side twin: a re-delivered `funded` (fresh gift-wrap
+        // id, so event-id dedup can't catch it) for a leg that is already funded
+        // must be an idempotent no-op — never drop FundedB back to FundedA, which
+        // would re-arm the participant's auto-fund and risk a double-fund. The
+        // guard short-circuits before any backend call, so this needs no chain.
+        let (engine, dir) = engine_with("funded-replay", None);
+        let (mut rec, _init) = engine
+            .offer(
+                Network::Regtest,
+                ("btcx".into(), 1000),
+                ("btc".into(), 1000),
+                1_700_000_002,
+                1_700_000_001,
+                None,
+                None,
+            )
+            .unwrap();
+
+        // A counterparty keypair to sign the (replayed) funded message as the
+        // pinned peer.
+        let secp = bitcoin::secp256k1::Secp256k1::new();
+        let cp_sk = bitcoin::secp256k1::SecretKey::from_slice(&[7u8; 32]).unwrap();
+        let cp_kp = bitcoin::secp256k1::Keypair::from_secret_key(&secp, &cp_sk);
+        let cp_x = cp_kp.x_only_public_key().0.to_string();
+
+        // Drive the record to "both legs funded" by hand and persist it.
+        let txid_a = "a".repeat(64);
+        let txid_b = "b".repeat(64);
+        rec.state = State::FundedB;
+        rec.counterparty_identity = Some(cp_x.clone());
+        rec.htlc_a_txid = Some(txid_a.clone());
+        rec.htlc_a_vout = Some(0);
+        rec.htlc_b_txid = Some(txid_b.clone());
+        rec.htlc_b_vout = Some(1);
+        engine.store.put(&rec).unwrap();
+
+        // Replay the counterparty's leg-A `funded`.
+        let mut env = Envelope {
+            v: 1,
+            msg_type: "funded".into(),
+            swap_id: rec.swap_id.clone(),
+            from: String::new(),
+            body: serde_json::to_value(FundedBody {
+                chain: "a".into(),
+                txid: txid_a,
+                vout: 0,
+            })
+            .unwrap(),
+            sig: String::new(),
+        };
+        crate::messages::sign(&mut env, &cp_kp).unwrap();
+
+        let out = engine.recv(&env).unwrap();
+        assert_eq!(
+            out.state,
+            State::FundedB,
+            "replayed funded(a) regressed an already-funded record"
+        );
+        assert_eq!(
+            engine.store.get(&rec.swap_id).unwrap().state,
+            State::FundedB,
+            "persisted state regressed after a funded(a) replay"
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
