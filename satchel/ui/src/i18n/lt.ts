@@ -677,6 +677,8 @@ export const lt: Bundle = {
     takeoverTitle: "Perimti {machine} mainus?",
     takeoverBody:
       "Tik jei {machine} yra sustabdytas. Šis įrenginys pradės valdyti visus jo vykstančius mainus. Jei abu įrenginiai vienu metu valdo tuos pačius mainus, jie gali dukart išleisti jūsų lėšas ir prarasti pinigų.",
+    takeoverPrefundNote:
+      "Mainai, kuriuose dar niekas neužrakinta, tęsiasi tik jei ši piniginė gali patikrinti, kad jų finansavimą saugu siųsti; kitaip praėjus kelioms minutėms po perėmimo jie baigiasi švariu nutraukimu. Abiem atvejais lėšoms pavojus negresia.",
     takeoverConfirm: "Tas įrenginys sustabdytas — perimti",
     takeoverCancel: "Atšaukti",
     col: {

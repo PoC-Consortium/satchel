@@ -680,6 +680,8 @@ export const fi: Bundle = {
     takeoverTitle: "Otetaanko {machine}:n swapit haltuun?",
     takeoverBody:
       "Vain jos {machine} on pysäytetty. Tämä kone alkaa ohjata kaikkia sen käynnissä olevia swapeja. Jos molemmat koneet ohjaavat samaa swapia yhtä aikaa, ne voivat käyttää varasi kahteen kertaan ja menettää rahaa.",
+    takeoverPrefundNote:
+      "Swapit, joissa mitään ei ole vielä lukittu, jatkuvat vain jos tämä lompakko voi varmistaa, että niiden rahoitus on turvallista lähettää; muuten ne päättyvät siistiin keskeytykseen muutama minuutti haltuunoton jälkeen. Kummassakaan tapauksessa varat eivät ole vaarassa.",
     takeoverConfirm: "Kyseinen kone on pysäytetty — ota haltuun",
     takeoverCancel: "Peruuta",
     col: {

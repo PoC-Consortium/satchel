@@ -675,6 +675,8 @@ export const it: Bundle = {
     takeoverTitle: "Rilevare gli swap di {machine}?",
     takeoverBody:
       "Solo se {machine} è ferma. Questa macchina inizierà a gestire tutti i suoi swap in corso. Se entrambe le macchine gestiscono lo stesso swap contemporaneamente, possono fare doppia spesa dei tuoi fondi e farti perdere denaro.",
+    takeoverPrefundNote:
+      "Gli swap senza ancora nulla bloccato proseguono solo se questo portafoglio può verificare che il loro finanziamento sia sicuro da inviare; altrimenti terminano con un annullamento pulito pochi minuti dopo il subentro. In entrambi i casi nessun fondo è a rischio.",
     takeoverConfirm: "Quella macchina è ferma — rileva",
     takeoverCancel: "Annulla",
     col: {

@@ -680,6 +680,8 @@ export const cs: Bundle = {
     takeoverTitle: "Převzít swapy stroje {machine}?",
     takeoverBody:
       "Jen pokud je {machine} zastavený. Tento stroj začne řídit všechny jeho probíhající swapy. Pokud dva stroje řídí stejný swap najednou, mohou dvakrát utratit vaše prostředky a přijít o peníze.",
+    takeoverPrefundNote:
+      "Swapy, v nichž zatím není nic uzamčeno, pokračují jen tehdy, pokud tato peněženka dokáže ověřit, že je jejich financování bezpečné odeslat; jinak několik minut po převzetí skončí čistým zrušením. V obou případech nejsou žádné prostředky ohroženy.",
     takeoverConfirm: "Onen stroj je zastavený — převzít",
     takeoverCancel: "Zrušit",
     col: {
