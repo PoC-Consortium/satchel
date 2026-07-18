@@ -71,6 +71,7 @@ fallbacks. Copy the daemons in once:
 | PoCX electrs | `PACT_ELECTRS_BIN` | `electrs(.exe)` |
 | vanilla electrs (BTC leg) | `PACT_BTC_ELECTRS_BIN` | `btc-electrs(.exe)` |
 | Nostr relay | `PACT_NOSTR_RELAY_BIN` | `nostr-rs-relay(.exe)` |
+| rc16 pactd (upgrade suite) | `PACT_RC16_PACTD` | `pactd-rc16(.exe)` — build tag `v0.1.0-rc16` once (see `framework/binaries.py`) |
 
 Node startup asserts the regtest genesis hash per chain, so a mixed-up copy
 fails loudly.

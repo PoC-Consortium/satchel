@@ -57,9 +57,14 @@ class Pactd:
                  duplicate_backends=False, board_url=None, auto_fund=False,
                  tick_secs=0, auto_init=True, coin_confs=None, nostr_relays=None,
                  extra_coins=None, coins_file=None,
-                 pocx_url=None, btc_url=None, extra_env=None):
+                 pocx_url=None, btc_url=None, extra_env=None, pactd_bin=None):
         self.name = name
         self.auto_init = auto_init
+        # Optional pactd binary override (the upgrade suite launches an OLD
+        # release's pactd on a datadir, then relaunches it with the current
+        # build). None = the workspace debug build. Reassignable between
+        # stop()/start() — the datadir and port stay put.
+        self.pactd_bin = pactd_bin
         # Extra process env for this party's pactd (e.g. a PACT_TEST_* hook).
         # Merged over the inherited env at start(), so it never leaks to the
         # shared harness process or the other parties.
@@ -96,7 +101,8 @@ class Pactd:
         # Every coin is attached the same generic way (`--coin id=url`); there
         # are no per-coin aliases. btcx/btc are the built-in legs; extra_coins
         # carries any file-added coin (ltc), which also needs --coins-file.
-        cmd = [binaries.pactd(), "--data-dir", self.data_dir, "--network", "regtest",
+        cmd = [self.pactd_bin or binaries.pactd(),
+               "--data-dir", self.data_dir, "--network", "regtest",
                "--coin", f"btcx={self.pocx_url}", "--coin", f"btc={self.btc_url}",
                "--listen", f"127.0.0.1:{self.port}",
                "--tick-secs", str(self.tick_secs)]

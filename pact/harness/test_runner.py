@@ -39,6 +39,7 @@ TEST_LIST = [
     "nodeless.py",
     "follow.py",
     "takeover.py",
+    "upgrade.py",
 ]
 
 

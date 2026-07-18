@@ -112,6 +112,17 @@ have nostr-rs-relay || {
     install -m 755 "$WORK/nrr/bin/nostr-rs-relay" "$BIN_DIR/nostr-rs-relay"
 }
 
+have pactd-rc16 || {
+    echo "== pactd @ v0.1.0-rc16 (source build — the upgrade-path suite's OLD daemon)"
+    mkdir "$WORK/rc16" && (
+        cd "$WORK/rc16"
+        git clone -q --depth 1 --branch v0.1.0-rc16 \
+            https://github.com/PoC-Consortium/satchel .
+        cargo build -p pactd --manifest-path pact/Cargo.toml
+    )
+    install -m 755 "$WORK/rc16/pact/target/debug/pactd" "$BIN_DIR/pactd-rc16"
+}
+
 have pocx-bitcoind || {
     echo "== pocx-bitcoind @ $POCX_REV (source build)"
     mkdir "$WORK/pocx" && cd "$WORK/pocx"
