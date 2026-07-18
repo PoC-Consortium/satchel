@@ -120,16 +120,23 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
         return leg_a_txid(s) if victim == "maker" else leg_b_txid(s)
 
     def committed_leg_b(s):
-        # "Leg B is on the wire", with a wide detection window that persists to
-        # completion (a mempool probe only hits for the single unconfirmed round).
-        # v1 sets htlc_b_txid only at the funding broadcast; v2 records
-        # funding_b_txid at BUILD (too early) but flips funding_b_broadcast at the
-        # two-phase broadcast.
+        # "Leg B is on the wire". v1 sets htlc_b_txid only at the funding
+        # broadcast, so the pointer itself is the signal. v2 records
+        # funding_b_txid at BUILD (too early), and the funding_b_broadcast flag
+        # turned out to be only transiently observable (a CI run caught the
+        # terminal record with the flag still false — the poll missed the
+        # window entirely and the swap sailed to completed). Probe the CHAIN
+        # instead: gettxout on the funding outpoint sees the tx from mempool
+        # broadcast until the redeem spends it — with the maker's 3-conf hold
+        # (maker_confs) that window spans several drive rounds.
         if s is None:
             return False
         if s.get("htlc_b_txid"):  # v1 HTLC
             return True
-        return s.get("funding_b_broadcast") is True  # v2 adaptor
+        txid, vout = s.get("funding_b_txid"), s.get("funding_b_vout")
+        if not txid:
+            return False
+        return h.btc.rpc("gettxout", txid, vout or 0) is not None  # v2 adaptor
 
     def stage_reached():
         if stage == "accepted":
