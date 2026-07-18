@@ -677,6 +677,8 @@ export const ptBR: Bundle = {
     takeoverTitle: "Assumir os swaps de {machine}?",
     takeoverBody:
       "Somente se {machine} estiver parada. Esta máquina passará a conduzir todos os swaps em andamento dela. Se as duas máquinas conduzirem o mesmo swap ao mesmo tempo, podem gastar seus fundos em dobro e perder dinheiro.",
+    takeoverPrefundNote:
+      "Swaps sem nada travado ainda só continuam se esta carteira puder verificar que o financiamento pode ser enviado com segurança; caso contrário terminam em um cancelamento limpo poucos minutos após a tomada de controle. Em ambos os casos nenhum fundo fica em risco.",
     takeoverConfirm: "Aquela máquina está parada — assumir",
     takeoverCancel: "Cancelar",
     col: {

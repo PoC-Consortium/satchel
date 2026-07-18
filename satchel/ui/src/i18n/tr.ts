@@ -677,6 +677,8 @@ export const tr: Bundle = {
     takeoverTitle: "{machine} makinesinin takasları devralınsın mı?",
     takeoverBody:
       "Yalnızca {machine} durdurulmuşsa. Bu makine, onun yürürlükteki tüm takaslarını yürütmeye başlar. İki makine aynı takası aynı anda yürütürse, fonlarınızı iki kez harcayıp para kaybedebilirsiniz.",
+    takeoverPrefundNote:
+      "Henüz hiçbir şeyin kilitlenmediği takaslar yalnızca bu cüzdan fonlamalarının güvenle gönderilebileceğini doğrulayabilirse devam eder; aksi halde devralmadan birkaç dakika sonra temiz bir iptalle sonlanır. Her iki durumda da hiçbir fon risk altında değildir.",
     takeoverConfirm: "O makine durduruldu — devral",
     takeoverCancel: "İptal",
     col: {

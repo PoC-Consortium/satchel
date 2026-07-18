@@ -677,6 +677,8 @@ export const id: Bundle = {
     takeoverTitle: "Ambil alih swap {machine}?",
     takeoverBody:
       "Hanya jika {machine} berhenti. Mesin ini akan mulai menggerakkan semua swap-nya yang sedang berjalan. Jika kedua mesin menggerakkan swap yang sama sekaligus, keduanya bisa membelanjakan ganda dana Anda dan menyebabkan kerugian.",
+    takeoverPrefundNote:
+      "Swap yang belum mengunci apa pun hanya berlanjut jika dompet ini dapat memverifikasi bahwa pendanaannya aman untuk dikirim; jika tidak, swap akan berakhir dengan pembatalan bersih beberapa menit setelah pengambilalihan. Dalam kedua kasus tidak ada dana yang berisiko.",
     takeoverConfirm: "Mesin itu berhenti — ambil alih",
     takeoverCancel: "Batal",
     col: {
