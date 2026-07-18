@@ -280,6 +280,18 @@ pub(crate) fn local_now() -> u64 {
 /// honour anyway.
 pub(crate) const PRE_FUNDING_TIMEOUT_SECS: u64 = 15 * 60;
 
+/// C8 test hook: `PACT_TEST_PREFUNDING_TIMEOUT_SECS` shrinks the pre-funding
+/// window so the takeover e2e cells can observe the clean auto-abort without
+/// waiting 15 wall-clock minutes (same pattern as
+/// `PACT_TEST_OUTBOX_DRAIN_DELAY_MS`). Unset — i.e. production — this is
+/// exactly `PRE_FUNDING_TIMEOUT_SECS`.
+pub(crate) fn pre_funding_timeout_secs() -> u64 {
+    std::env::var("PACT_TEST_PREFUNDING_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(PRE_FUNDING_TIMEOUT_SECS)
+}
+
 /// Meta-key prefix (§5): a followed swap we PURGED on deep terminal. Its shared
 /// relay snapshot may still linger (only the owner tombstones it), so this memo
 /// tells the rescue scan "already handled — do not re-import", preventing churn.
@@ -3050,11 +3062,12 @@ impl Engine {
         // on-chain, so this loses no money. The funding-pointer guard is
         // belt-and-braces; `created_at == 0` (pre-timestamp records) must
         // not be judged infinitely old.
+        let window = pre_funding_timeout_secs();
         if matches!(rec.state, Created | Accepted | NoncesExchanged)
             && rec.funding_a_txid.is_none()
             && rec.funding_b_txid.is_none()
             && rec.created_at > 0
-            && local_now().saturating_sub(rec.created_at) >= PRE_FUNDING_TIMEOUT_SECS
+            && local_now().saturating_sub(rec.created_at) >= window
         {
             let mut dead = rec.clone();
             dead.state = Aborted;
@@ -3062,7 +3075,7 @@ impl Engine {
             let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
             return ev(
                 "abort-timeout",
-                format!("no funding within {PRE_FUNDING_TIMEOUT_SECS}s; aborted"),
+                format!("no funding within {window}s; aborted"),
             );
         }
         // Signed: drive redeem/refund. RedeemedB/Completed/Refunded: keep the
@@ -5895,10 +5908,11 @@ impl Engine {
     /// waiting on a dead handshake and emit a `take-timeout` event per drop.
     fn prune_stale_pending_takes(&self, events: &mut Vec<TickEvent>) -> Result<()> {
         let now = local_now();
+        let window = pre_funding_timeout_secs();
         for (offer_id, _offer_json, created_at) in self.store.pending_takes_with_age()? {
             // Prune a take whose maker never followed through within the
             // pre-funding window — the abandoned handshake the timeout targets.
-            if now.saturating_sub(created_at) >= PRE_FUNDING_TIMEOUT_SECS {
+            if now.saturating_sub(created_at) >= window {
                 self.store.remove_pending_take(&offer_id)?;
                 // Report the truth: if inits DID arrive but failed processing,
                 // say what failed instead of claiming "no init" (the misread
@@ -5908,13 +5922,9 @@ impl Engine {
                 let last_error_key = format!("take_last_error:{offer_id}");
                 let detail = match self.store.meta_get(&last_error_key)? {
                     Some(err) => format!(
-                        "no usable init within {}s; abandoning pending take (last init failed: {err})",
-                        PRE_FUNDING_TIMEOUT_SECS
+                        "no usable init within {window}s; abandoning pending take (last init failed: {err})"
                     ),
-                    None => format!(
-                        "no init within {}s; abandoning pending take",
-                        PRE_FUNDING_TIMEOUT_SECS
-                    ),
+                    None => format!("no init within {window}s; abandoning pending take"),
                 };
                 let _ = self.store.meta_del(&last_error_key);
                 events.push(TickEvent {
@@ -7525,7 +7535,7 @@ impl Engine {
             // infinitely old.
             (_, State::Created | State::Accepted)
                 if rec.created_at > 0
-                    && local_now().saturating_sub(rec.created_at) >= PRE_FUNDING_TIMEOUT_SECS =>
+                    && local_now().saturating_sub(rec.created_at) >= pre_funding_timeout_secs() =>
             {
                 // Rescue safety (#54): a node restored from the accept snapshot is
                 // `Accepted` with NO funding pointer even when our leg is already
@@ -7590,7 +7600,7 @@ impl Engine {
                 self.abort(&rec.swap_id, "pre-funding handshake timed out")?;
                 event(
                     "abort-timeout",
-                    format!("no funding within {PRE_FUNDING_TIMEOUT_SECS}s; aborted"),
+                    format!("no funding within {}s; aborted", pre_funding_timeout_secs()),
                 )
             }
             // Retry the maker's leg-A funding (rc6 #2), mirroring the taker's
@@ -9626,12 +9636,13 @@ impl Engine {
                 // (taker clock ahead) saturates to age 0 = fresh, so honest
                 // clock skew within the 15-min window is tolerated.
                 let taken_at = envelope.body["taken_at"].as_u64().unwrap_or(0);
-                if local_now().saturating_sub(taken_at) >= PRE_FUNDING_TIMEOUT_SECS {
+                let window = pre_funding_timeout_secs();
+                if local_now().saturating_sub(taken_at) >= window {
                     return event(
                         &offer.swap_id,
                         "take-stale",
                         format!(
-                            "dropped a take older than {PRE_FUNDING_TIMEOUT_SECS}s (taker gave up); offer stays live"
+                            "dropped a take older than {window}s (taker gave up); offer stays live"
                         ),
                     );
                 }

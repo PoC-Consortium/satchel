@@ -290,6 +290,436 @@ def scenario_hot_standby_takeover_v1(h, ep, eb):
         relay.stop()
 
 
+def _relay_handshake(h, maker, taker, protocol, observers=()):
+    """Post a v1/v2 offer, propagate it over the relay, take it. Returns the
+    offer_id. Observers are ticked along so they see the mailbox live."""
+    offer_id = maker.rpc(
+        "boardpostoffer", f"btcx:{GIVE_POCX}", f"btc:{GET_BTC}",
+        4 * 3600, 2 * 3600, protocol)["offer_id"]
+    for _ in range(25):
+        maker.rpc("tick")
+        taker.rpc("tick")
+        for o in observers:
+            o.rpc("tick")
+        if any(o["swap_id"] == offer_id
+               for o in taker.rpc("boardlistoffers")["offers"]):
+            break
+    else:
+        raise AssertionError(f"{protocol} offer never propagated to the taker")
+    taker.rpc("boardtake", offer_id)
+    return offer_id
+
+
+def _await_follow(standby, sid, tag, rounds=30, others=()):
+    """Tick the standby until it holds `sid` as a FOLLOWED (read-only) record.
+    `others` are ticked along — needed while the owner is still alive and its
+    snapshot may not have reached the relay yet (v1 snapshots exactly once, in
+    the owner's accept-processing tick)."""
+    for _ in range(rounds):
+        tick_all(tag, standby, *others)
+        rec = swap_of(standby, sid)
+        if rec is not None:
+            assert rec.get("source") == "foreign", \
+                f"standby must follow read-only, not drive: {rec}"
+            return rec
+        time.sleep(0.5)
+    raise AssertionError(f"standby never followed swap {sid}")
+
+
+def _kill(party):
+    party.proc.kill()
+    party.proc.wait(timeout=15)
+
+
+def scenario_taker_hot_standby_v1(h, ep, eb):
+    """The TAKER-side twin of scenario_hot_standby_takeover_v1: every existing
+    takeover cell adopts the MAKER role, but a taker standby inherits the other
+    half of the protocol (leg-B custody, the leg-A redeem after the reveal).
+    Both legs fund, the taker is hard-killed, its warm standby takes over and
+    completes on the ORIGINAL leg-B funding."""
+    relay = NostrRelay(h.workdir)
+    maker_bx, maker_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
+    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
+    maker = Party("thmk", h, h.workdir, "alice_pocx", "alice_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
+                  pocx_url=maker_bx, btc_url=maker_bt)
+    taker = Party("thtk", h, h.workdir, "bob_pocx", "bob_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
+                  pocx_url=taker_bx, btc_url=taker_bt)
+    standby = Party("thsb", h, h.workdir, "bob_pocx", "bob_btc",
+                    nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
+                    pocx_url=taker_bx, btc_url=taker_bt)
+    try:
+        relay.start()
+        maker.start()
+        taker.start()
+        standby.start()
+        mnemonic = taker.setup_seed()
+        standby.setup_seed(mnemonic=mnemonic)
+
+        _relay_handshake(h, maker, taker, "pact-htlc-v1", observers=(standby,))
+
+        def both_funded():
+            m, t = swap_of(maker), swap_of(taker)
+            return (m is not None and m.get("htlc_a_txid")
+                    and t is not None and t.get("htlc_b_txid"))
+
+        standby_events = []
+        sid = None
+        for _ in range(60):
+            tick_all("drive", maker, taker)
+            standby_events += tick_all("standby", standby)
+            if both_funded():
+                sid = swap_of(taker)["swap_id"]
+                break
+            if handshake_done(maker, taker):
+                mine_and_sync(h, ep, eb)
+        assert sid, "swap never reached both-legs-funded"
+        pre_b = swap_of(taker, sid)["htlc_b_txid"]
+        for bad in ("auto-fund", "funded-a", "funded-b", "adaptor-fund-b"):
+            assert bad not in standby_events, \
+                f"taker standby committed funds while following: {standby_events}"
+
+        for _ in range(2):
+            taker.rpc("tick")
+            time.sleep(1)
+        print(f"[takeover-e2e] both funded (B {pre_b[:16]}) — hard-killing the taker")
+        _kill(taker)
+
+        _await_follow(standby, sid, "import")
+        standby.rpc("takeover", sid)
+        assert swap_of(standby, sid).get("source") == "local", \
+            "takeover did not adopt on the taker standby"
+        done = False
+        for _ in range(40):
+            tick_all("finish", standby, maker)
+            s, m = swap_of(standby, sid), swap_of(maker, sid)
+            if s and m and s["state"] == "completed" and m["state"] == "completed":
+                done = True
+                break
+            mine_and_sync(h, ep, eb)
+        assert done, (f"taker-standby takeover never completed: "
+                      f"standby={swap_of(standby, sid)} maker={swap_of(maker, sid)}")
+        assert swap_of(standby, sid)["htlc_b_txid"] == pre_b, \
+            "taker standby re-funded leg B (double-fund!)"
+        print("[takeover-e2e] taker hot-standby OK: took over a killed taker, "
+              "completed on the original leg-B funding")
+    finally:
+        for p in (maker, taker, standby):
+            try:
+                p.stop()
+            except Exception:  # noqa: BLE001
+                pass
+        relay.stop()
+
+
+def scenario_taker_committed_takeover_v2(h, ep, eb):
+    """v2 TAKER adopted mid-flight: the taker dies right after committing leg B
+    (its adaptor accept + funding are on the wire, nothing settled). The
+    standby must finish the participant side — wait out the maker's reveal and
+    claim leg A — WITHOUT re-funding leg B. The maker's btc=3 conf gate holds
+    it at Signed so the kill lands inside the committed window."""
+    relay = NostrRelay(h.workdir)
+    maker_bx, maker_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
+    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
+    maker = Party("tcmk", h, h.workdir, "alice_pocx", "alice_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
+                  coin_confs={"btc": 3}, pocx_url=maker_bx, btc_url=maker_bt)
+    taker = Party("tctk", h, h.workdir, "bob_pocx", "bob_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
+                  pocx_url=taker_bx, btc_url=taker_bt)
+    standby = Party("tcsb", h, h.workdir, "bob_pocx", "bob_btc",
+                    nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
+                    pocx_url=taker_bx, btc_url=taker_bt)
+    try:
+        relay.start()
+        maker.start()
+        taker.start()
+        standby.start()
+        mnemonic = taker.setup_seed()
+        standby.setup_seed(mnemonic=mnemonic)
+
+        _relay_handshake(h, maker, taker, "pact-htlc-v2", observers=(standby,))
+
+        def taker_committed():
+            # Chain probe, not the transient funding_b_broadcast flag (same
+            # rationale as the rescue suite's committed_leg_b).
+            t = swap_of(taker)
+            if t is None or not t.get("funding_b_txid"):
+                return False
+            return h.btc.rpc("gettxout", t["funding_b_txid"],
+                             t.get("funding_b_vout") or 0) is not None
+
+        sid = None
+        for _ in range(60):
+            tick_all("drive", maker, taker)
+            tick_all("standby", standby)
+            if taker_committed():
+                sid = swap_of(taker)["swap_id"]
+                break
+            if handshake_done(maker, taker):
+                mine_and_sync(h, ep, eb)
+        assert sid, "taker never committed leg B"
+        pre_b = swap_of(taker, sid)["funding_b_txid"]
+        print(f"[takeover-e2e] taker committed leg B ({pre_b[:16]}) — killing it")
+        _kill(taker)
+
+        _await_follow(standby, sid, "import")
+        standby.rpc("takeover", sid)
+        assert swap_of(standby, sid).get("source") == "local", \
+            "takeover did not adopt on the v2 taker standby"
+        done = False
+        for _ in range(40):
+            tick_all("finish", standby, maker)
+            s, m = swap_of(standby, sid), swap_of(maker, sid)
+            if s and m and s["state"] == "completed" and m["state"] == "completed":
+                done = True
+                break
+            mine_and_sync(h, ep, eb)
+        assert done, (f"v2 taker takeover never completed: "
+                      f"standby={swap_of(standby, sid)} maker={swap_of(maker, sid)}")
+        assert swap_of(standby, sid)["funding_b_txid"] == pre_b, \
+            "v2 taker standby re-funded leg B (double-fund!)"
+        print("[takeover-e2e] v2 taker-committed takeover OK: adopted, completed "
+              "on the original leg-B funding")
+    finally:
+        for p in (maker, taker, standby):
+            try:
+                p.stop()
+            except Exception:  # noqa: BLE001
+                pass
+        relay.stop()
+
+
+def scenario_prefund_takeover_aborts_blind(h, ep, eb):
+    """The fire-and-forget promise of the takeover dialog's pre-funding note,
+    UNPROVABLE branch: takeover of a swap with nothing locked, on a standby
+    whose backend cannot positively prove the leg unfunded (Core-RPC only, no
+    electrs view). The #191 F3 belt must block any funding broadcast and the
+    (test-shrunk) pre-funding timeout must end the swap in a CLEAN abort that
+    also reaches the counterparty. Nothing may hit the chain."""
+    relay = NostrRelay(h.workdir)
+    maker = Party("pbmk", h, h.workdir, "alice_pocx", "alice_btc",
+                  nostr_relays=relay.ws_url, auto_fund=False, auto_init=False)
+    taker = Party("pbtk", h, h.workdir, "bob_pocx", "bob_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True, auto_init=True)
+    # Core-only URLs (the Party default) — the blind-backup shape. The tiny
+    # pre-funding window makes the clean abort observable within the test.
+    standby = Party("pbsb", h, h.workdir, "alice_pocx", "alice_btc",
+                    nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
+                    extra_env={"PACT_TEST_PREFUNDING_TIMEOUT_SECS": "5"})
+    try:
+        relay.start()
+        maker.start()
+        taker.start()
+        standby.start()
+        mnemonic = maker.setup_seed()
+        standby.setup_seed(mnemonic=mnemonic)
+
+        _relay_handshake(h, maker, taker, "pact-htlc-v1", observers=(standby,))
+
+        # Handshake to accepted/accepted — NO mining, nothing funds (maker
+        # auto_fund=False holds the swap pre-funding indefinitely). Wait for
+        # the maker to PROCESS the accept ("accepted"): that tick publishes
+        # its one v1 snapshot, the standby's only follow source pre-funding.
+        sid = None
+        for _ in range(40):
+            tick_all("drive", maker, taker)
+            tick_all("standby", standby)
+            m, t = swap_of(maker), swap_of(taker)
+            if m and t and m["state"] == "accepted":
+                sid = m["swap_id"]
+                break
+        assert sid, "pre-funding handshake never established on both sides"
+        rec = swap_of(maker, sid)
+        assert not rec.get("htlc_a_txid") and not rec.get("htlc_b_txid"), \
+            f"scenario must hold PRE-funding, but a leg funded: {rec}"
+
+        _await_follow(standby, sid, "import", others=(maker, taker))
+        print(f"[takeover-e2e] pre-funding swap {sid[:16]} followed — killing the maker")
+        _kill(maker)
+
+        standby.rpc("takeover", sid)
+        assert swap_of(standby, sid).get("source") == "local", \
+            "pre-funding takeover did not adopt"
+
+        # Fire and forget: no funding may appear (belt), and within the shrunk
+        # window the standby must abort CLEANLY and notify the taker.
+        aborted = False
+        for _ in range(40):
+            tick_all("abort", standby, taker)
+            s, t = swap_of(standby, sid), swap_of(taker, sid)
+            s_dead = s is None or s["state"] == "aborted"
+            t_dead = t is None or t["state"] == "aborted"
+            if s_dead and t_dead:
+                aborted = True
+                break
+            time.sleep(0.5)
+        assert aborted, (f"pre-funding takeover did not end in a clean abort: "
+                         f"standby={swap_of(standby, sid)} taker={swap_of(taker, sid)}")
+        final = swap_of(standby, sid)
+        assert final is None or not final.get("htlc_a_txid"), \
+            f"blind standby broadcast a funding for an adopted pre-funding swap: {final}"
+        print("[takeover-e2e] blind pre-funding takeover OK: belt blocked funding, "
+              "clean abort reached both sides")
+    finally:
+        for p in (maker, taker, standby):
+            try:
+                p.stop()
+            except Exception:  # noqa: BLE001
+                pass
+        relay.stop()
+
+
+def scenario_prefund_takeover_funds_provable(h, ep, eb):
+    """The fire-and-forget promise, PROVABLE branch: the same pre-funding
+    takeover on a standby WITH an electrs chain view. The F3 belt's positive
+    `Unfunded` proof must let the adopted swap fund automatically and run to
+    completion — the "continues only if this wallet can verify" half of the
+    dialog copy."""
+    relay = NostrRelay(h.workdir)
+    maker_bx, maker_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
+    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
+    maker = Party("ppmk", h, h.workdir, "alice_pocx", "alice_btc",
+                  nostr_relays=relay.ws_url, auto_fund=False, auto_init=False,
+                  pocx_url=maker_bx, btc_url=maker_bt)
+    taker = Party("pptk", h, h.workdir, "bob_pocx", "bob_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
+                  pocx_url=taker_bx, btc_url=taker_bt)
+    standby = Party("ppsb", h, h.workdir, "alice_pocx", "alice_btc",
+                    nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
+                    pocx_url=maker_bx, btc_url=maker_bt)
+    try:
+        relay.start()
+        maker.start()
+        taker.start()
+        standby.start()
+        mnemonic = maker.setup_seed()
+        standby.setup_seed(mnemonic=mnemonic)
+
+        _relay_handshake(h, maker, taker, "pact-htlc-v1", observers=(standby,))
+
+        sid = None
+        for _ in range(40):
+            tick_all("drive", maker, taker)
+            tick_all("standby", standby)
+            m, t = swap_of(maker), swap_of(taker)
+            if m and t and m["state"] == "accepted":
+                sid = m["swap_id"]
+                break
+        assert sid, "pre-funding handshake never established on both sides"
+        assert not swap_of(maker, sid).get("htlc_a_txid"), \
+            "scenario must hold PRE-funding"
+
+        _await_follow(standby, sid, "import", others=(maker, taker))
+        print(f"[takeover-e2e] pre-funding swap {sid[:16]} followed — killing the maker")
+        _kill(maker)
+
+        standby.rpc("takeover", sid)
+        assert swap_of(standby, sid).get("source") == "local", \
+            "pre-funding takeover did not adopt"
+
+        # The belt's positive Unfunded proof (electrs view) lets auto-fund
+        # proceed; the swap must then complete normally with the taker.
+        done = False
+        for _ in range(40):
+            tick_all("finish", standby, taker)
+            s, t = swap_of(standby, sid), swap_of(taker, sid)
+            if s and t and s["state"] == "completed" and t["state"] == "completed":
+                done = True
+                break
+            mine_and_sync(h, ep, eb)
+        assert done, (f"provable pre-funding takeover never completed: "
+                      f"standby={swap_of(standby, sid)} taker={swap_of(taker, sid)}")
+        assert swap_of(standby, sid).get("htlc_a_txid"), \
+            "completed without a leg-A funding pointer on the standby?"
+        print("[takeover-e2e] provable pre-funding takeover OK: belt proved "
+              "unfunded, standby funded and completed the swap")
+    finally:
+        for p in (maker, taker, standby):
+            try:
+                p.stop()
+            except Exception:  # noqa: BLE001
+                pass
+        relay.stop()
+
+
+def scenario_taker_post_reveal_takeover_v1(h, ep, eb):
+    """Takeover in the REDEEM phase: the maker has redeemed leg B (the secret
+    is public on chain) and the taker dies before claiming leg A. The standby
+    adopts and must finish leg A from the chain-visible reveal — the takeover
+    twin of the rescue suite's post_reveal cells."""
+    relay = NostrRelay(h.workdir)
+    maker_bx, maker_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
+    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
+    maker = Party("prmk", h, h.workdir, "alice_pocx", "alice_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
+                  pocx_url=maker_bx, btc_url=maker_bt)
+    taker = Party("prtk", h, h.workdir, "bob_pocx", "bob_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
+                  pocx_url=taker_bx, btc_url=taker_bt)
+    standby = Party("prsb", h, h.workdir, "bob_pocx", "bob_btc",
+                    nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
+                    pocx_url=taker_bx, btc_url=taker_bt)
+    try:
+        relay.start()
+        maker.start()
+        taker.start()
+        standby.start()
+        mnemonic = taker.setup_seed()
+        standby.setup_seed(mnemonic=mnemonic)
+
+        _relay_handshake(h, maker, taker, "pact-htlc-v1", observers=(standby,))
+
+        sid = None
+        for _ in range(60):
+            tick_all("drive", maker, taker)
+            tick_all("standby", standby)
+            m = swap_of(maker)
+            if m is not None and m["state"] == "redeemed_b":
+                sid = m["swap_id"]
+                break
+            if handshake_done(maker, taker):
+                mine_and_sync(h, ep, eb)
+        assert sid, "maker never revealed (redeemed_b)"
+        pre_b = swap_of(taker, sid)["htlc_b_txid"]
+        print(f"[takeover-e2e] reveal is public ({sid[:16]}) — killing the taker "
+              "before its leg-A claim")
+        _kill(taker)
+
+        _await_follow(standby, sid, "import")
+        standby.rpc("takeover", sid)
+        assert swap_of(standby, sid).get("source") == "local", \
+            "post-reveal takeover did not adopt"
+        done = False
+        for _ in range(40):
+            tick_all("finish", standby, maker)
+            s, m = swap_of(standby, sid), swap_of(maker, sid)
+            if s and m and s["state"] == "completed" and m["state"] == "completed":
+                done = True
+                break
+            mine_and_sync(h, ep, eb)
+        assert done, (f"post-reveal takeover never completed: "
+                      f"standby={swap_of(standby, sid)} maker={swap_of(maker, sid)}")
+        post = swap_of(standby, sid)
+        assert post["htlc_b_txid"] == pre_b, \
+            "post-reveal standby re-funded leg B (double-fund!)"
+        # The leg-A HTLC outpoint must be SPENT — the standby's claim, made
+        # from the chain-visible secret alone.
+        assert h.pocx.rpc("gettxout", post["htlc_a_txid"],
+                          post.get("htlc_a_vout") or 0) is None, \
+            f"leg-A HTLC still unspent — the standby never claimed it: {post}"
+        print("[takeover-e2e] post-reveal taker takeover OK: adopted, claimed "
+              "leg A from the chain-visible secret")
+    finally:
+        for p in (maker, taker, standby):
+            try:
+                p.stop()
+            except Exception:  # noqa: BLE001
+                pass
+        relay.stop()
+
+
 class RefundOnlyTakeoverV2(_FollowScenario):
     scenario = staticmethod(scenario_refund_only_takeover_v2)
 
@@ -298,9 +728,34 @@ class HotStandbyTakeoverV1(_FollowScenario):
     scenario = staticmethod(scenario_hot_standby_takeover_v1)
 
 
+class TakerHotStandbyV1(_FollowScenario):
+    scenario = staticmethod(scenario_taker_hot_standby_v1)
+
+
+class TakerCommittedTakeoverV2(_FollowScenario):
+    scenario = staticmethod(scenario_taker_committed_takeover_v2)
+
+
+class PrefundTakeoverAbortsBlind(_FollowScenario):
+    scenario = staticmethod(scenario_prefund_takeover_aborts_blind)
+
+
+class PrefundTakeoverFundsProvable(_FollowScenario):
+    scenario = staticmethod(scenario_prefund_takeover_funds_provable)
+
+
+class TakerPostRevealTakeoverV1(_FollowScenario):
+    scenario = staticmethod(scenario_taker_post_reveal_takeover_v1)
+
+
 SCENARIOS = [
     RefundOnlyTakeoverV2,
     HotStandbyTakeoverV1,
+    TakerHotStandbyV1,
+    TakerCommittedTakeoverV2,
+    PrefundTakeoverAbortsBlind,
+    PrefundTakeoverFundsProvable,
+    TakerPostRevealTakeoverV1,
 ]
 
 
