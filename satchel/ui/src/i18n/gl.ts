@@ -675,6 +675,8 @@ export const gl: Bundle = {
     takeoverTitle: "Tomar o control dos intercambios de {machine}?",
     takeoverBody:
       "Só se {machine} está detida. Esta máquina comezará a xestionar todos os seus intercambios en curso. Se ambas as máquinas xestionan o mesmo intercambio á vez, poden facer un dobre gasto dos teus fondos e perder diñeiro.",
+    takeoverPrefundNote:
+      "Os intercambios sen nada bloqueado aínda só continúan se esta carteira pode verificar que o seu financiamento se pode enviar con seguridade; en caso contrario rematan cunha cancelación limpa poucos minutos despois da toma de control. En ningún caso hai fondos en risco.",
     takeoverConfirm: "Esa máquina está detida — tomar o control",
     takeoverCancel: "Cancelar",
     col: {

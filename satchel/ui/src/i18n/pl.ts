@@ -677,6 +677,8 @@ export const pl: Bundle = {
     takeoverTitle: "Przejąć swapy urządzenia {machine}?",
     takeoverBody:
       "Tylko jeśli {machine} jest zatrzymane. To urządzenie zacznie prowadzić wszystkie jego swapy w toku. Jeśli oba urządzenia prowadzą ten sam swap naraz, mogą podwójnie wydać Twoje środki i stracić pieniądze.",
+    takeoverPrefundNote:
+      "Swapy, w których nic nie jest jeszcze zablokowane, będą kontynuowane tylko wtedy, gdy ten portfel może zweryfikować, że ich finansowanie można bezpiecznie wysłać; w przeciwnym razie kilka minut po przejęciu zakończą się czystym przerwaniem. W obu przypadkach żadne środki nie są zagrożone.",
     takeoverConfirm: "Tamto urządzenie jest zatrzymane — przejmij",
     takeoverCancel: "Anuluj",
     col: {

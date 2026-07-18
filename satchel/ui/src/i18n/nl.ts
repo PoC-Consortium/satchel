@@ -677,6 +677,8 @@ export const nl: Bundle = {
     takeoverTitle: "De swaps van {machine} overnemen?",
     takeoverBody:
       "Alleen als {machine} gestopt is. Deze machine gaat al zijn lopende swaps besturen. Als beide machines dezelfde swap tegelijk besturen, kunnen ze je fondsen dubbel uitgeven en geld verliezen.",
+    takeoverPrefundNote:
+      "Swaps waarin nog niets is vastgezet gaan alleen verder als deze wallet kan verifiëren dat hun financiering veilig kan worden verzonden; anders eindigen ze enkele minuten na de overname in een nette afbreking. In beide gevallen loopt geen geld gevaar.",
     takeoverConfirm: "Die machine is gestopt — overnemen",
     takeoverCancel: "Annuleren",
     col: {

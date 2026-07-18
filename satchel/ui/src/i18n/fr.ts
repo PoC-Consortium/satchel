@@ -679,6 +679,8 @@ export const fr: Bundle = {
     takeoverTitle: "Reprendre les swaps de {machine} ?",
     takeoverBody:
       "Uniquement si {machine} est arrêtée. Cette machine va commencer à piloter tous ses swaps en cours. Si les deux machines pilotent le même swap en même temps, elles peuvent double-dépenser vos fonds et perdre de l'argent.",
+    takeoverPrefundNote:
+      "Les échanges où rien n'est encore verrouillé ne se poursuivent que si ce portefeuille peut vérifier que leur financement peut être envoyé sans risque ; sinon ils se terminent par une annulation propre quelques minutes après la reprise. Aucun fonds n'est en danger dans les deux cas.",
     takeoverConfirm: "Cette machine est arrêtée — reprendre",
     takeoverCancel: "Annuler",
     col: {

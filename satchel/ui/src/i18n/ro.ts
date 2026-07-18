@@ -677,6 +677,8 @@ export const ro: Bundle = {
     takeoverTitle: "Preiei swap-urile mașinii {machine}?",
     takeoverBody:
       "Doar dacă {machine} este oprită. Această mașină va începe să conducă toate swap-urile ei în desfășurare. Dacă ambele mașini conduc același swap în același timp, pot cheltui de două ori fondurile tale și pot pierde bani.",
+    takeoverPrefundNote:
+      "Swapurile în care nu este încă blocat nimic continuă doar dacă acest portofel poate verifica faptul că finanțarea lor poate fi trimisă în siguranță; altfel se încheie printr-o anulare curată la câteva minute după preluare. În ambele cazuri fondurile nu sunt în pericol.",
     takeoverConfirm: "Mașina respectivă este oprită — preia",
     takeoverCancel: "Anulează",
     col: {
