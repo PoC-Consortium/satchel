@@ -99,6 +99,21 @@ def pactd():
     return os.path.join(PACT_DIR, "target", "debug", "pactd" + EXE)
 
 
+def find_pactd_rc16():
+    """The LAST-RELEASE pactd for the upgrade-path suite (tests/upgrade.py),
+    built from the immutable tag v0.1.0-rc16. In CI ci/fetch-binaries.sh
+    provisions it; locally build the tag once:
+      git worktree add ../satchel-rc16 v0.1.0-rc16
+      cargo build -p pactd --manifest-path ../satchel-rc16/pact/Cargo.toml
+      cp ../satchel-rc16/pact/target/debug/pactd(.exe) harness/bin/pactd-rc16(.exe)
+    """
+    return _find(
+        "PACT_RC16_PACTD", ["pactd-rc16"], [],
+        "rc16 pactd not found. Build tag v0.1.0-rc16 and copy it to "
+        "harness/bin/pactd-rc16" + EXE + " or set PACT_RC16_PACTD "
+        "(see framework/binaries.py find_pactd_rc16).")
+
+
 def pact_cli():
     return os.path.join(PACT_DIR, "target", "debug", "pact-cli" + EXE)
 
