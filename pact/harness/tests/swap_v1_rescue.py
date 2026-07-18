@@ -198,7 +198,14 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
             if stage_reached():
                 reached = True
                 break
-            if handshake_done(maker, taker):
+            # committed-stage hold: once leg B is on the wire, stop mining so
+            # it stays 0-conf while the v2 maker assembles Signed — assembly is
+            # relay-message-driven, and on a slow box it can lag past leg B's
+            # conf floor, letting one tick assemble AND redeem (the Signed band
+            # of stage_reached is then never observable). Other stages need
+            # the blocks to keep flowing (reveal, refund).
+            if handshake_done(maker, taker) and not (
+                    stage == "committed" and committed_leg_b(swap_of(taker))):
                 h.pocx.generate(1, "alice_pocx")
                 h.btc.generate(1, "bob_btc")
         assert reached, f"stage '{stage}' never reached before the wipe"
