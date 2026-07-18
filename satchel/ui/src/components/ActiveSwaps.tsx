@@ -82,10 +82,19 @@ export default function ActiveSwaps() {
   // asserts "that machine is stopped" — the whole safety model — then each swap
   // is adopted (pactd `takeover`) and starts being driven here. Never do this
   // while the other machine is alive: two drivers can double-spend.
+  //
+  // A swap with nothing locked yet is still adoptable, but pactd only funds an
+  // adopted swap once it can PROVE the leg unfunded (#191 fail-closed belt);
+  // an unprovable one dies on the pre-funding timeout instead. Both outcomes
+  // are safe and automatic — the extra confirm paragraph says so, or the
+  // silent stall/abort would read as a bug.
   async function takeover(group: Swap[], machine: string) {
+    const prefund = group.some(canCancel);
     const ok = await confirm({
       title: t("swaps.takeoverTitle"),
-      body: t("swaps.takeoverBody", { machine }),
+      body:
+        t("swaps.takeoverBody", { machine }) +
+        (prefund ? "\n\n" + t("swaps.takeoverPrefundNote") : ""),
       confirmLabel: t("swaps.takeoverConfirm"),
       cancelLabel: t("swaps.takeoverCancel"),
       danger: true,

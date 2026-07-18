@@ -677,6 +677,8 @@ export const hr: Bundle = {
     takeoverTitle: "Preuzeti swapove računala {machine}?",
     takeoverBody:
       "Samo ako je {machine} zaustavljeno. Ovo će računalo početi upravljati svim njegovim swapovima u tijeku. Ako oba računala istovremeno upravljaju istim swapom, mogu dvostruko potrošiti vaša sredstva i uzrokovati gubitak.",
+    takeoverPrefundNote:
+      "Swapovi u kojima još ništa nije zaključano nastavljaju se samo ako ovaj novčanik može provjeriti da je njihovo financiranje sigurno za slanje; u suprotnom nekoliko minuta nakon preuzimanja završavaju čistim prekidom. Ni u jednom slučaju sredstva nisu ugrožena.",
     takeoverConfirm: "To je računalo zaustavljeno — preuzmi",
     takeoverCancel: "Odustani",
     col: {

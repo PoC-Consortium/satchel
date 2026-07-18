@@ -677,6 +677,8 @@ export const zhCn: Bundle = {
     takeoverTitle: "接管 {machine} 的交换？",
     takeoverBody:
       "仅当 {machine} 已停止时。本机将开始驱动它所有进行中的交换。如果两台机器同时驱动同一笔交换，它们可能重复花费你的资金并造成损失。",
+    takeoverPrefundNote:
+      "尚未锁定任何资金的交换仅在此钱包能够确认其注资可以安全发送时才会继续；否则将在接管后几分钟内安全中止。无论哪种情况，资金都不会有风险。",
     takeoverConfirm: "那台机器已停止 — 接管",
     takeoverCancel: "取消",
     col: {

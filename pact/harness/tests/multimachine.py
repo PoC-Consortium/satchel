@@ -13,8 +13,10 @@ no nodes, board or Electrum needed (offline derivation + the data-dir lock):
      coordinates never collide).
 
 The full FAILOVER flow (A drives a live swap, B follows read-only, kill A,
-take over on B, B drives to completion) is on-chain + human-confirm driven,
-so it stays a MANUAL walkthrough on top of a normal playground stack:
+take over on B, B drives to completion) is AUTOMATED in tests/takeover.py
+(HotStandbyTakeoverV1; dormant-observer variant in tests/follow.py). The
+manual walkthrough below remains only as the two-real-hosts / real-relay
+environment check on top of a normal playground stack:
   1. Bring up a full stack (nodes + board + a counterparty trader), point
      BOTH A and B at the SAME coins, same board/relay (shared seed wallet).
   2. On machine A, post an offer; counterparty takes it: listswaps on A

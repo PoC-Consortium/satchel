@@ -710,6 +710,8 @@ export const en = {
     takeoverTitle: "Take over {machine}'s swaps?",
     takeoverBody:
       "Only if {machine} is stopped. This machine will start driving all of its in-flight swaps. If both machines drive the same swap at once they can double-spend your funds and lose money.",
+    takeoverPrefundNote:
+      "Swaps with nothing locked yet continue only if this wallet can verify their funding is safe to send; otherwise they end in a clean abort a few minutes after take-over. No funds are at risk either way.",
     takeoverConfirm: "That machine is stopped — take over",
     takeoverCancel: "Cancel",
     col: {

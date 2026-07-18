@@ -680,6 +680,8 @@ export const de: Bundle = {
     takeoverTitle: "Swaps von {machine} übernehmen?",
     takeoverBody:
       "Nur wenn {machine} gestoppt ist. Dieser Rechner beginnt, alle seine laufenden Swaps zu steuern. Wenn zwei Rechner denselben Swap gleichzeitig steuern, können sie deine Gelder doppelt ausgeben und Geld verlieren.",
+    takeoverPrefundNote:
+      "Swaps, in denen noch nichts hinterlegt ist, laufen nur weiter, wenn diese Wallet sicherstellen kann, dass ihre Finanzierung gefahrlos gesendet werden kann; andernfalls enden sie wenige Minuten nach der Übernahme mit einem sauberen Abbruch. In beiden Fällen ist kein Geld in Gefahr.",
     takeoverConfirm: "Jener Rechner ist gestoppt — übernehmen",
     takeoverCancel: "Abbrechen",
     col: {

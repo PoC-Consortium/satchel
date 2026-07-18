@@ -679,6 +679,8 @@ export const ca: Bundle = {
     takeoverTitle: "Vols assumir els intercanvis de {machine}?",
     takeoverBody:
       "Només si {machine} està aturada. Aquesta màquina començarà a conduir tots els seus intercanvis en curs. Si dues màquines condueixen el mateix intercanvi alhora, poden gastar dues vegades els teus fons i perdre diners.",
+    takeoverPrefundNote:
+      "Els intercanvis sense res bloquejat encara només continuen si aquesta cartera pot verificar que el seu finançament es pot enviar amb seguretat; altrament acaben amb una cancel·lació neta pocs minuts després de la presa de control. En cap cas hi ha fons en risc.",
     takeoverConfirm: "Aquella màquina està aturada — assumeix",
     takeoverCancel: "Cancel·la",
     col: {

@@ -679,6 +679,8 @@ export const es: Bundle = {
     takeoverTitle: "¿Tomar el control de los swaps de {machine}?",
     takeoverBody:
       "Solo si {machine} está detenida. Esta máquina empezará a gestionar todos sus swaps en curso. Si ambas máquinas gestionan el mismo swap a la vez, pueden hacer un doble gasto de tus fondos y perder dinero.",
+    takeoverPrefundNote:
+      "Los intercambios sin fondos bloqueados todavía solo continúan si esta cartera puede verificar que su financiación se puede enviar con seguridad; de lo contrario terminan en una cancelación limpia pocos minutos después de la toma de control. En ningún caso hay fondos en riesgo.",
     takeoverConfirm: "Esa máquina está detenida — tomar el control",
     takeoverCancel: "Cancelar",
     col: {
