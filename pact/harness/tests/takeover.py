@@ -89,13 +89,20 @@ def scenario_refund_only_takeover_v2(h, ep, eb):
 
         # Drive until the maker is Signed with BOTH legs on the wire — break the
         # instant leg B is broadcast (still shallow), before the maker reveals t.
+        def leg_b_on_wire():
+            # Chain probe (mempool included), not the transiently-observable
+            # funding_b_broadcast flag — see the rescue suite's committed_leg_b.
+            t = swap_of(taker)
+            return (t is not None and t.get("funding_b_txid") is not None
+                    and h.btc.rpc("gettxout", t["funding_b_txid"],
+                                  t.get("funding_b_vout") or 0) is not None)
+
         def signed_committed():
             m = swap_of(maker)
             return (m is not None
                     and m.get("state") in ("signed", "funded_a", "funded_b")
                     and m.get("funding_a_txid")
-                    and (m.get("funding_b_broadcast") is True
-                         or m.get("funding_b_txid")))
+                    and leg_b_on_wire())
 
         sid = None
         for _ in range(60):
@@ -103,7 +110,12 @@ def scenario_refund_only_takeover_v2(h, ep, eb):
             if signed_committed():
                 sid = swap_of(maker)["swap_id"]
                 break
-            if handshake_done(maker, taker):
+            # Mining stops the moment leg B hits the wire: the maker's Signed
+            # assembly is relay-message-driven and on a slow box can lag past
+            # leg B's 3rd conf — the same tick then assembles AND redeems, and
+            # the Signed window is never observable. With B held at 0-conf the
+            # window opens deterministically; the burial resumes below.
+            if handshake_done(maker, taker) and not leg_b_on_wire():
                 mine_and_sync(h, ep, eb)
         assert sid, "maker never reached Signed with both legs committed"
         pre = swap_of(maker, sid)
