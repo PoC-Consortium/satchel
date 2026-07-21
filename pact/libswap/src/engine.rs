@@ -520,10 +520,20 @@ pub(crate) fn redeem_conf_target(remaining_secs: u64, funding_target: u16) -> (u
     match remaining_secs {
         r if r > 6 * 3600 => (funding_target, false), // relaxed: the ~30-min class
         r if r > 3 * 3600 => (3, true),               // closer: robust conservative estimate
-        r if r > 90 * 60 => (2, true),                // closer still
+        r if r > REDEEM_FINAL_BAND_SECS => (2, true), // closer still
         _ => (1, true), // final stretch: fastest, worth almost any fee
     }
 }
+
+/// The final escalation band of [`redeem_conf_target`] (90 min). Inside it the
+/// bump CADENCE escalates too: once-per-block becomes every tick. Per-block
+/// cadence bumps at the first tick of a block interval and then goes deaf for
+/// the rest of it — a fee run-up inside a single (possibly hour-long) interval,
+/// or the 2→1 band transition itself firing mid-block, would wait a full block
+/// to be acted on, at exactly the moment the leg is on the line. The bump gate
+/// (market must exceed what the tx pays, Rule-4-floored, value-capped) still
+/// bounds the cost: a flat estimate stays a no-op at any cadence.
+pub(crate) const REDEEM_FINAL_BAND_SECS: u64 = 90 * 60;
 
 /// Is an action whose lead margin is `margin` still safe to broadcast at
 /// conservative time `clock`, given absolute deadline `deadline`? True iff
@@ -3549,9 +3559,27 @@ impl Engine {
         if confs >= 1 {
             return Ok(None);
         }
-        // Step 0: act at most once per block (block-driven cadence).
+        // Deadline-aware CPFP target (#48): initiator leg-B redeem confirms by T2;
+        // participant leg-A redeem by T1 − redeem-a margin. Escalate as it nears.
+        // Computed BEFORE the cadence guard: the final band escalates cadence too.
+        let remaining = if is_refund {
+            None
+        } else {
+            let deadline = if chain.coin_id == rec.chain_b.coin_id {
+                u64::from(rec.t2)
+            } else {
+                u64::from(rec.t1).saturating_sub(action_margins(chain.network).2)
+            };
+            let now = deadline_clock(chain.network, local_now(), backend.tip_median_time()?);
+            Some(deadline.saturating_sub(now))
+        };
+        // Step 0: act at most once per block — EXCEPT a redeem inside the final
+        // escalation band, which re-arms every tick (REDEEM_FINAL_BAND_SECS: a
+        // fee run-up or the 2→1 band flip mid-interval must not wait a block).
         let tip_height = backend.tip_height()?;
-        if tip_height == rec.last_action_height {
+        if tip_height == rec.last_action_height
+            && remaining.is_none_or(|r| r > REDEEM_FINAL_BAND_SECS)
+        {
             return Ok(None);
         }
         if is_refund {
@@ -3561,9 +3589,9 @@ impl Engine {
         // the pre-signed adaptor signature), so re-anchor the parent only if it
         // was evicted, and CPFP-bump it toward market with a self-funded child
         // spending its own wallet-owned sweep output (v2+). Unilateral — the
-        // signed redeem stays byte-identical, no fresh MuSig2 round. Once per
-        // block; in steady state an unchanged market makes the child a no-op
-        // (CPFP returns None) or a self-rejecting same-fee replacement.
+        // signed redeem stays byte-identical, no fresh MuSig2 round. In steady
+        // state an unchanged market makes the child a no-op (CPFP returns None)
+        // or a self-rejecting same-fee replacement.
         let parent_txid = tx.compute_txid().to_string();
         if !backend.is_in_mempool(&parent_txid)? {
             self.broadcast_swap_tx(rec.derive_scope, rec.adopted, &rec.swap_id, &backend, &tx)?;
@@ -3573,16 +3601,10 @@ impl Engine {
         } else {
             rec.amount_a
         };
-        // Deadline-aware CPFP target (#48): initiator leg-B redeem confirms by T2;
-        // participant leg-A redeem by T1 − redeem-a margin. Escalate as it nears.
-        let deadline = if chain.coin_id == rec.chain_b.coin_id {
-            u64::from(rec.t2)
-        } else {
-            u64::from(rec.t1).saturating_sub(action_margins(chain.network).2)
-        };
-        let now = deadline_clock(chain.network, local_now(), backend.tip_median_time()?);
-        let (conf_target, conservative) =
-            redeem_conf_target(deadline.saturating_sub(now), backend.funding_conf_target());
+        let (conf_target, conservative) = redeem_conf_target(
+            remaining.expect("refunds returned above"),
+            backend.funding_conf_target(),
+        );
         match self.adaptor_cpfp_bump(&backend, &tx, amount, conf_target, conservative) {
             Ok(Some(child)) => {
                 let mut updated = rec.clone();
@@ -7714,11 +7736,7 @@ impl Engine {
         let Some(tx_hex) = &rec.final_tx_hex else {
             return Ok(None); // record predates fee-bumping support
         };
-        // Step 0: act at most once per block.
         let tip_height = backend.tip_height()?;
-        if tip_height == rec.last_action_height {
-            return Ok(None);
-        }
         let old_tx: bitcoin::Transaction =
             bitcoin::consensus::encode::deserialize(&hex::decode(tx_hex)?)
                 .context("corrupt final_tx_hex")?;
@@ -7739,6 +7757,26 @@ impl Engine {
             }
             _ => return Ok(None),
         };
+        // Deadline distance for a redeem (None for refunds), BEFORE the cadence
+        // guard: the final band escalates cadence too.
+        let remaining = if is_redeem {
+            let deadline = match rec.role {
+                Role::Initiator => u64::from(rec.t2),
+                _ => u64::from(rec.t1).saturating_sub(action_margins(chain.network).2),
+            };
+            let now = deadline_clock(chain.network, local_now(), backend.tip_median_time()?);
+            Some(deadline.saturating_sub(now))
+        } else {
+            None
+        };
+        // Step 0: act at most once per block — EXCEPT a redeem inside the final
+        // escalation band, which re-arms every tick (REDEEM_FINAL_BAND_SECS: a
+        // fee run-up or the 2→1 band flip mid-interval must not wait a block).
+        if tip_height == rec.last_action_height
+            && remaining.is_none_or(|r| r > REDEEM_FINAL_BAND_SECS)
+        {
+            return Ok(None);
+        }
 
         let destination = old_tx.output[0].script_pubkey.clone();
         let vsize = if is_redeem {
@@ -7756,15 +7794,9 @@ impl Engine {
         // → T2; Participant leg-A → T1 − redeem-a margin), because a redeem that
         // misses its timelock loses the leg. Refunds keep the cheap baseline (we
         // are the only spender — no counterparty race).
-        let (conf_target, conservative) = if is_redeem {
-            let deadline = match rec.role {
-                Role::Initiator => u64::from(rec.t2),
-                _ => u64::from(rec.t1).saturating_sub(action_margins(chain.network).2),
-            };
-            let now = deadline_clock(chain.network, local_now(), backend.tip_median_time()?);
-            redeem_conf_target(deadline.saturating_sub(now), backend.funding_conf_target())
-        } else {
-            (6, false)
+        let (conf_target, conservative) = match remaining {
+            Some(r) => redeem_conf_target(r, backend.funding_conf_target()),
+            None => (6, false),
         };
         // sat/kvB throughout — Core/Electrum quote BTC/kvB, so keep that native
         // resolution instead of rounding the market to a whole sat/vB.
