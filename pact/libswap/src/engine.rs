@@ -500,22 +500,28 @@ pub(crate) fn deadline_clock(network: Network, local: u64, chain_mtp: u64) -> u6
     }
 }
 
-/// Deadline-aware market estimate parameters for a **redeem** bump (spec §7.4
+/// Deadline-aware market estimate parameters for a **redeem** (spec §7.4
 /// "MUST fee-bump aggressively"; issues #47/#48). Given the time remaining until
 /// the redeem's confirm-by deadline, pick the estimator's `(conf_target,
-/// conservative)`: keep the cheap "normal" tier (6, economical) when there is
-/// plenty of time, and escalate to tighter/robuster targets as the timelock
-/// nears — because a redeem that fails to confirm before its deadline loses the
-/// leg, so the going fast rate is value-justified insurance, not overpay (the
-/// value cap in `claim_feerate` still bounds the absolute fee). `conf_target = 1`
-/// is notoriously flaky in Core, so it is reserved for the final stretch; the
-/// middle bands use 3/2 with the conservative estimate mode for a robust bump.
-pub(crate) fn redeem_conf_target(remaining_secs: u64) -> (u16, bool) {
+/// conservative)`. The relaxed baseline is `funding_target` — the coin's
+/// wall-clock-normalized ~30-min class ([`crate::chain::funding_conf_target_for`],
+/// = 3 on Bitcoin) — NOT the old flat 6-block tier: a claim is the leg a human
+/// is actively waiting on (the 2026-07-21 mainnet claim at the 6-econ rate
+/// missed four slow blocks and settled 73 min after the reveal), and for v2 the
+/// signing-time commitment can never be re-signed, so the baseline is also the
+/// parent's committed rate. Escalation stretches earlier than the deadline
+/// suggests because a single block can take an hour: the final `conf_target = 1`
+/// band (notoriously flaky in Core, reserved for the last stretch) arms at 90
+/// minutes, leaving the §7.4 margin behind it as a true reserve instead of the
+/// primary buffer. A late redeem loses the leg, so the going fast rate is
+/// value-justified insurance, not overpay (the value cap in `claim_feerate`
+/// still bounds the absolute fee).
+pub(crate) fn redeem_conf_target(remaining_secs: u64, funding_target: u16) -> (u16, bool) {
     match remaining_secs {
-        r if r > 6 * 3600 => (6, false), // plenty of time: today's cheap baseline
-        r if r > 2 * 3600 => (3, true),  // closer: robust conservative estimate
-        r if r > 3600 => (2, true),      // closer still
-        _ => (1, true),                  // final stretch: fastest, worth almost any fee
+        r if r > 6 * 3600 => (funding_target, false), // relaxed: the ~30-min class
+        r if r > 3 * 3600 => (3, true),               // closer: robust conservative estimate
+        r if r > 90 * 60 => (2, true),                // closer still
+        _ => (1, true), // final stretch: fastest, worth almost any fee
     }
 }
 
@@ -1202,18 +1208,25 @@ impl Engine {
     }
 
     /// The cooperative-redeem feerate (sat/vB) the initiator fixes at init for
-    /// `chain` (M2): the **live market** rate, floored at [`MIN_REDEEM_FEERATE`]
-    /// (min-relay) and clamped to the **protocol** [`MAX_REDEEM_FEERATE`] (NOT the
-    /// local `max_feerate_sat_vb` bump ceiling). Committed at market with no
-    /// over-provision — the committed fee can't be RBF'd, but the deadline-aware
-    /// CPFP child lifts it if the market climbs while it's pending. On regtest the
-    /// node can't estimate, so market lands on its ≈1 fallback (= the floor). The
-    /// value is negotiated into the init and must pass the counterparty's protocol
-    /// validation (§2 init check); a conservative fallback applies when no backend
-    /// is reachable. Only the initiator calls this; the participant adopts the
-    /// value from the signed init, so the two never diverge.
+    /// `chain` (M2): the **live market** rate at the funding-class (~30-min)
+    /// target — the committed fee can't be re-signed, and hours may pass between
+    /// signing and the actual claim, so the commitment must not start life in
+    /// the slow lane (the 2026-07-21 mainnet claim committed at the old 6-econ
+    /// rate and missed four blocks). Floored at [`MIN_REDEEM_FEERATE`]
+    /// (min-relay) and clamped to the **protocol** [`MAX_REDEEM_FEERATE`] (NOT
+    /// the local `max_feerate_sat_vb` bump ceiling); the deadline-aware CPFP
+    /// child still lifts it if the market climbs while it's pending. On regtest
+    /// the node can't estimate, so market lands on its ≈1 fallback (= the
+    /// floor). The value is negotiated into the init and must pass the
+    /// counterparty's protocol validation (§2 init check); a conservative
+    /// fallback applies when no backend is reachable. Only the initiator calls
+    /// this; the participant adopts the value from the signed init, so the two
+    /// never diverge.
     fn adaptor_redeem_feerate(&self, chain: &ChainRef) -> u64 {
-        match self.backend(chain).and_then(|b| b.fee_rate_sat_per_vb()) {
+        match self
+            .backend(chain)
+            .and_then(|b| b.fee_rate_for(b.funding_conf_target(), false))
+        {
             Ok(rate) => rate.clamp(MIN_REDEEM_FEERATE, MAX_REDEEM_FEERATE),
             Err(_) => ADAPTOR_REDEEM_FEERATE_FALLBACK,
         }
@@ -3568,7 +3581,8 @@ impl Engine {
             u64::from(rec.t1).saturating_sub(action_margins(chain.network).2)
         };
         let now = deadline_clock(chain.network, local_now(), backend.tip_median_time()?);
-        let (conf_target, conservative) = redeem_conf_target(deadline.saturating_sub(now));
+        let (conf_target, conservative) =
+            redeem_conf_target(deadline.saturating_sub(now), backend.funding_conf_target());
         match self.adaptor_cpfp_bump(&backend, &tx, amount, conf_target, conservative) {
             Ok(Some(child)) => {
                 let mut updated = rec.clone();
@@ -4346,10 +4360,12 @@ impl Engine {
                 let destination = backend
                     .params()
                     .parse_address(&backend.wallet_new_address()?)?;
-                // A1: initial spend priced at the unified value-capped target.
+                // A1: initial spend priced at the unified value-capped target —
+                // at the funding-class (~30-min) market: this is the leg the
+                // counterparty is waiting on, and the nurse only bumps later.
                 let fee = spend_fee_sat(
                     self.fee_bump.claim_feerate(
-                        backend.fee_rate_sat_per_vb()?,
+                        backend.fee_rate_for(backend.funding_conf_target(), false)?,
                         rec.amount_b,
                         REDEEM_TX_VSIZE,
                     ),
@@ -4430,10 +4446,11 @@ impl Engine {
                 let destination = backend_a
                     .params()
                     .parse_address(&backend_a.wallet_new_address()?)?;
-                // A1: initial spend priced at the unified value-capped target.
+                // A1: initial spend priced at the unified value-capped target —
+                // at the funding-class (~30-min) market (see the leg-B twin).
                 let fee = spend_fee_sat(
                     self.fee_bump.claim_feerate(
-                        backend_a.fee_rate_sat_per_vb()?,
+                        backend_a.fee_rate_for(backend_a.funding_conf_target(), false)?,
                         rec.amount_a,
                         REDEEM_TX_VSIZE,
                     ),
@@ -7745,7 +7762,7 @@ impl Engine {
                 _ => u64::from(rec.t1).saturating_sub(action_margins(chain.network).2),
             };
             let now = deadline_clock(chain.network, local_now(), backend.tip_median_time()?);
-            redeem_conf_target(deadline.saturating_sub(now))
+            redeem_conf_target(deadline.saturating_sub(now), backend.funding_conf_target())
         } else {
             (6, false)
         };
@@ -11467,17 +11484,30 @@ mod tests {
 
     #[test]
     fn redeem_conf_target_escalates_as_deadline_nears() {
-        // #47/#48: plenty of time → today's cheap economical "normal" (6, false).
-        assert_eq!(redeem_conf_target(12 * 3600), (6, false));
-        assert_eq!(redeem_conf_target(6 * 3600 + 1), (6, false));
-        // Under 6h → robust conservative middle bands.
-        assert_eq!(redeem_conf_target(6 * 3600), (3, true));
-        assert_eq!(redeem_conf_target(2 * 3600 + 1), (3, true));
-        assert_eq!(redeem_conf_target(2 * 3600), (2, true));
-        assert_eq!(redeem_conf_target(3600 + 1), (2, true));
-        // Final stretch → fastest target (worth almost any fee, value-capped).
-        assert_eq!(redeem_conf_target(3600), (1, true));
-        assert_eq!(redeem_conf_target(0), (1, true));
+        // #47/#48 (+2026-07-21 field retune): the relaxed band is the coin's
+        // wall-clock funding class — 3 economical on Bitcoin — not a flat 6.
+        assert_eq!(redeem_conf_target(12 * 3600, 3), (3, false));
+        assert_eq!(redeem_conf_target(6 * 3600 + 1, 3), (3, false));
+        // Under 6h → robust conservative middle bands (stretched: a single
+        // block can take an hour, so escalation starts earlier).
+        assert_eq!(redeem_conf_target(6 * 3600, 3), (3, true));
+        assert_eq!(redeem_conf_target(3 * 3600 + 1, 3), (3, true));
+        assert_eq!(redeem_conf_target(3 * 3600, 3), (2, true));
+        assert_eq!(redeem_conf_target(90 * 60 + 1, 3), (2, true));
+        // Final stretch, armed at 90 min (the §7.4 margin behind it is a
+        // reserve, not the primary buffer) → fastest, worth almost any fee.
+        assert_eq!(redeem_conf_target(90 * 60, 3), (1, true));
+        assert_eq!(redeem_conf_target(0, 3), (1, true));
+    }
+
+    #[test]
+    fn redeem_conf_target_baseline_tracks_the_coin_funding_class() {
+        // The relaxed band inherits the per-coin wall-clock class: a fast chain
+        // (LTC-style clamp → 6) keeps its 6-block baseline; Bitcoin gets 3.
+        assert_eq!(redeem_conf_target(12 * 3600, 6), (6, false));
+        assert_eq!(redeem_conf_target(12 * 3600, 3), (3, false));
+        // Escalation bands are absolute (deadline physics), independent of it.
+        assert_eq!(redeem_conf_target(4 * 3600, 6), (3, true));
     }
 
     #[test]
