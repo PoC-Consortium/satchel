@@ -9814,10 +9814,26 @@ impl Engine {
                 // identity match (correct whenever there is only one pending
                 // take with this maker).
                 let echoed_offer_id = envelope.body["offer_id"].as_str();
-                let (offer_id, offer) = self
-                    .match_pending_take(&envelope.from, echoed_offer_id)?
-                    .context("init from a maker we have no pending take with")
-                    .map_err(permanent_err)?;
+                let Some((offer_id, offer)) =
+                    self.match_pending_take(&envelope.from, echoed_offer_id)?
+                else {
+                    // Not a failure on THIS machine: a shared-seed standby
+                    // receives every handshake message through the identity
+                    // mailbox, but the pending take lives only in the driving
+                    // machine's DB — so an unmatched init here is expected
+                    // fan-out noise (the 2026-07-21 soak had a healthy standby
+                    // log it as "permanent handshake failure", reading like a
+                    // broken swap). Consume it quietly as an INFO event, same
+                    // terminal outcome as the old permanent-tagged drop; the
+                    // driving machine (or the follow-import) owns the swap.
+                    return event(
+                        &envelope.swap_id,
+                        "init-ignored",
+                        "no pending take on this machine (another machine on \
+                         this seed may be driving it) — ignored"
+                            .into(),
+                    );
+                };
                 // Build the accept; classify any failure. Deterministic
                 // (permanent-tagged) failures — wire mismatch, §7.3 violations,
                 // malformed bodies — can never succeed on retry: drop the
