@@ -368,6 +368,11 @@ struct AppState {
 struct RpcConn {
     url: String,
     auth: String,
+    /// `(listen, data_dir)` for re-reading a restarted managed/adopted pactd's
+    /// `.cookie` when an in-flight call fails auth (#202). `None` for external
+    /// cookie mode — there the URL carries the `__cookiefile__:` sentinel and
+    /// pactd resolves the cookie live (#162), so it self-heals a level down.
+    reprobe: Option<(String, PathBuf)>,
 }
 
 struct RpcState(Mutex<RpcConn>);
@@ -616,6 +621,7 @@ fn relaunch_pactd(app: &tauri::AppHandle) -> anyhow::Result<()> {
     *app.state::<RpcState>().0.lock().unwrap() = RpcConn {
         url: format!("http://{}", config.listen),
         auth: cookie,
+        reprobe: Some((config.listen.clone(), data_dir.clone())),
     };
     *app.state::<ManagedPactd>().0.lock().unwrap() = Some(child);
     Ok(())
@@ -1066,12 +1072,39 @@ async fn pactd_rpc(
     if conn.auth.is_empty() {
         return Err("pactd is not running yet — its connection isn't ready".into());
     }
-    tauri::async_runtime::spawn_blocking(move || {
+    let method2 = method.clone();
+    let params2 = params.clone();
+    let first = tauri::async_runtime::spawn_blocking(move || {
         pactd_call(&conn.url, &conn.auth, &method, &params)
     })
     .await
-    .map_err(|e| format!("join error: {e}"))?
-    .map_err(|e| format!("{e:#}"))
+    .map_err(|e| format!("join error: {e}"))?;
+    let Err(err) = first else {
+        return first.map_err(|e| format!("{e:#}"));
+    };
+    // #202: the call failed — a managed/adopted pactd may have restarted with a
+    // fresh cookie (our in-memory auth is now stale) or be mid-relaunch. Re-probe
+    // the datadir once; if a healthy same-network engine answers, refresh the
+    // stored auth and retry the call exactly once. Nothing here spawns a daemon —
+    // we only reconnect to one that is demonstrably back and authenticates.
+    let reprobe = app.state::<RpcState>().0.lock().unwrap().reprobe.clone();
+    let Some((listen, data_dir)) = reprobe else {
+        return Err(format!("{err:#}"));
+    };
+    let Some(cookie) = probe_adoptable(&listen, &data_dir) else {
+        return Err(format!("{err:#}"));
+    };
+    {
+        let state = app.state::<RpcState>();
+        let mut guard = state.0.lock().unwrap();
+        guard.auth = cookie.clone();
+        guard.url = format!("http://{listen}");
+    }
+    let url = format!("http://{listen}");
+    tauri::async_runtime::spawn_blocking(move || pactd_call(&url, &cookie, &method2, &params2))
+        .await
+        .map_err(|e| format!("join error: {e}"))?
+        .map_err(|e| format!("{e:#}"))
 }
 
 /// C6: the exit-gate's terminal action. ExitGate has already run the 4-state
@@ -1496,6 +1529,7 @@ fn main() {
                         .trim_end_matches('/')
                         .to_string(),
                     auth,
+                    reprobe: None, // external mode self-heals via the sentinel (#162)
                 })));
                 app.manage(ManagedPactd(Mutex::new(None)));
                 app.manage(DetachFlag(Mutex::new(false)));
@@ -1529,6 +1563,7 @@ fn main() {
             app.manage(RpcState(Mutex::new(RpcConn {
                 url: format!("http://{listen}"),
                 auth: String::new(),
+                reprobe: Some((listen.clone(), data_dir.clone())),
             })));
             app.manage(ManagedPactd(Mutex::new(None)));
             app.manage(DetachFlag(Mutex::new(false)));
@@ -1550,6 +1585,7 @@ fn main() {
                         *app.state::<RpcState>().0.lock().unwrap() = RpcConn {
                             url: format!("http://{listen}"),
                             auth: cookie,
+                            reprobe: Some((listen.clone(), data_dir.clone())),
                         };
                         return Ok(());
                     }
@@ -1567,6 +1603,7 @@ fn main() {
                 *app.state::<RpcState>().0.lock().unwrap() = RpcConn {
                     url: format!("http://{listen}"),
                     auth: cookie,
+                    reprobe: Some((listen.clone(), data_dir.clone())),
                 };
             } else if health_ok(&listen) {
                 // Something is on the port but it is NOT our engine (wrong network,
@@ -1597,6 +1634,7 @@ fn main() {
                 *app.state::<RpcState>().0.lock().unwrap() = RpcConn {
                     url: format!("http://{listen}"),
                     auth: cookie,
+                    reprobe: Some((listen.clone(), data_dir.clone())),
                 };
                 *app.state::<ManagedPactd>().0.lock().unwrap() = Some(child);
             }
