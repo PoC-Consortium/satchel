@@ -627,7 +627,7 @@ checksum = "91622ff5e7162018101f2fea40d6ebf4a78bbe5a49736a2020649edf9693679e"
 [[package]]
 name = "electrum-btcx"
 version = "0.1.0"
-source = "git+https://github.com/PoC-Consortium/btcx?rev=292fcc3e9d7853407099666271e5947bc08165d9#292fcc3e9d7853407099666271e5947bc08165d9"
+source = "git+https://github.com/PoC-Consortium/btcx?rev=f9c51fcf5a0b2209099a4fb9ac51f406a4f3c972#f9c51fcf5a0b2209099a4fb9ac51f406a4f3c972"
 dependencies = [
  "anyhow",
  "bdk_wallet",
@@ -1154,7 +1154,7 @@ dependencies = [
 [[package]]
 name = "keys-btcx"
 version = "0.1.0"
-source = "git+https://github.com/PoC-Consortium/btcx?rev=292fcc3e9d7853407099666271e5947bc08165d9#292fcc3e9d7853407099666271e5947bc08165d9"
+source = "git+https://github.com/PoC-Consortium/btcx?rev=f9c51fcf5a0b2209099a4fb9ac51f406a4f3c972#f9c51fcf5a0b2209099a4fb9ac51f406a4f3c972"
 dependencies = [
  "anyhow",
  "bip39",
@@ -1462,7 +1462,7 @@ dependencies = [
 [[package]]
 name = "params-btcx"
 version = "0.1.0"
-source = "git+https://github.com/PoC-Consortium/btcx?rev=292fcc3e9d7853407099666271e5947bc08165d9#292fcc3e9d7853407099666271e5947bc08165d9"
+source = "git+https://github.com/PoC-Consortium/btcx?rev=f9c51fcf5a0b2209099a4fb9ac51f406a4f3c972#f9c51fcf5a0b2209099a4fb9ac51f406a4f3c972"
 dependencies = [
  "anyhow",
  "bech32",
@@ -1837,7 +1837,7 @@ dependencies = [
 [[package]]
 name = "seedstore"
 version = "0.1.0"
-source = "git+https://github.com/PoC-Consortium/btcx?rev=292fcc3e9d7853407099666271e5947bc08165d9#292fcc3e9d7853407099666271e5947bc08165d9"
+source = "git+https://github.com/PoC-Consortium/btcx?rev=f9c51fcf5a0b2209099a4fb9ac51f406a4f3c972#f9c51fcf5a0b2209099a4fb9ac51f406a4f3c972"
 dependencies = [
  "anyhow",
  "bip39",
@@ -2466,7 +2466,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 [[package]]
 name = "wallet-btcx"
 version = "0.1.0"
-source = "git+https://github.com/PoC-Consortium/btcx?rev=292fcc3e9d7853407099666271e5947bc08165d9#292fcc3e9d7853407099666271e5947bc08165d9"
+source = "git+https://github.com/PoC-Consortium/btcx?rev=f9c51fcf5a0b2209099a4fb9ac51f406a4f3c972#f9c51fcf5a0b2209099a4fb9ac51f406a4f3c972"
 dependencies = [
  "anyhow",
  "bdk_wallet",

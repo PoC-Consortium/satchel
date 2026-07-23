@@ -10,7 +10,7 @@ The engine ships with `btcx` and `btc` compiled in. Additional coins are declare
 
 `coins.toml` is read by both pactd (consensus parameters) and Satchel (connection defaults + icon). Satchel resolves `<exe>/coins.toml` first, then a user-editable copy under the config dir, falling back to a baked-in default if parsing fails.
 
-> **Per-coin minimum feerate** — each `[coin.<network>]` block takes an optional **`min_feerate_sat_vb`** (default `1`). pactd floors every funding/spend feerate at it, so chains with a higher wallet floor still fund. The bundled **ltc** ships `10` on all networks (litecoind's `-mintxfee`, exposed by no RPC); **btc**/**btcx** keep the default `1`.
+> **Per-coin minimum feerate** — each `[coin.<network>]` block takes an optional **`min_feerate_sat_vb`** (decimal sat/vB, e.g. `0.1`; default `1` for file coins). pactd floors every feerate at it, so chains with a higher wallet floor still fund. The bundled **ltc** ships `10` on all networks (litecoind's `-mintxfee`, exposed by no RPC); the built-in **btc**/**btcx** floor at `0.1` (Core 30+ relays it). Estimator/preset-driven rates additionally never go below `1` sat/vB (the miner-revenue floor) — only an explicitly user-chosen Custom rate may price between the coin floor and `1`.
 
 ## Connecting a coin
 
