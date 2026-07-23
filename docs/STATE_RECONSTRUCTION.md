@@ -195,6 +195,7 @@ inherit a follower-fabricated driving state.
 | follow (foreign scope, `drives()=false`, `engine.rs:4412`, `:4460`) | full state derivation + purge decision | hints + purge |
 | takeover / #54 rescue adopt (`take_over_swap` `engine.rs:6298`, `rescue_from_blobs` `:6251`) | one-shot **fast-forward** at the adoption boundary (§5.2) | maps DerivedSwap → driving state, confirm-gated as today |
 | adopted / own drive (`tick_one`, `adaptor_tick_one`) | **pre-action gate** at the funding/claim seams (§5.1) | none — refusals only |
+| driver resume / anomaly (#201, `reconcile_driven_v1`/`_v2`) | **reconcile-before-drive** at boot + on tracked-leg-vanished (§5.4) | terminal-state write (depth-gated), pointers, `final_tx` adoption |
 
 ---
 
@@ -336,7 +337,33 @@ never extracts `s`/`t`. Add `htlc_a_height` (v1) and `funding_a_height`/
 writes, `locate_funding`, the v2 rediscovery, `funded` message handling) and used as
 `from_height` everywhere `find_spend_witness` is called.
 
-### 5.4 What is deliberately NOT done
+### 5.4 Driver reconcile-before-drive on resume (#201)
+
+The takeover/rescue fast-forward (§5.2) only runs at an ADOPTION boundary; a
+plain restart of the owning machine had no equivalent, so a driver resumed on a
+stale record trusted it blindly — the rc17-soak takeover-zombie (owner returns
+after its same-seed standby completed the swap; the `FundedA`/`FundedB` arms
+can't tell reorged-out from already-redeemed-by-our-standby, so the row lies
+forever and T1 arms a refund against a spent leg). `reconcile_driven_v1`/`_v2`
+close the gap by reusing the same classification (`classify_v1_legs`/`_v2`) and
+the follower's own depth gate (`follow_purge_ok`) — one source of chain truth —
+and mapping conclusively-settled legs onto the LOCAL record: terminal state
+written (the follower purges instead), chain pointers adopted, our settlement
+spend adopted as `final_tx` so the confirmation nurse converges on it. Zero
+broadcasts by construction.
+
+Cadence: once per driven swap per process start (an in-memory set, emptied by
+restart — that IS the resume trigger), re-armed by the drive arms whenever a
+fast UTXO read finds a tracked leg unexpectedly gone (`request_reconcile`), so
+the full classification is never paid every tick in steady state. Reorg
+safety: a terminal is written only when OUR settlement leg is spent deep at
+ITS OWN confirmation target; shallow or inconclusive verdicts keep the record
+pending (retried next tick) while the arms keep driving — their own guards
+make that harmless. The settled-swap terminal matrix (`v1_settled_terminal`/
+`v2_settled_terminal`) is shared verbatim with the §5.2 fast-forward, so the
+two consumers cannot drift.
+
+### 5.5 What is deliberately NOT done
 
 No rewrite of `tick_one`/`adaptor_tick_one` into a derived-state machine. The
 driver holds secrets and spends money; its arms encode *policy* (§7.4 margins,
