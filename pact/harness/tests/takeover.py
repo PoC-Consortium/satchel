@@ -732,6 +732,237 @@ def scenario_taker_post_reveal_takeover_v1(h, ep, eb):
         relay.stop()
 
 
+def scenario_owner_returns_after_takeover_v1(h, ep, eb):
+    """#201 headline: on resume, a DRIVEN swap must derive its true status
+    from chain BEFORE driving. The owner dies at both-legs-funded, its warm
+    standby takes over and COMPLETES the swap, then the owner's pactd
+    restarts on its ORIGINAL datadir. Pre-fix the returned owner lingered at
+    funded_a/funded_b forever (its FundedA/FundedB arms can't tell
+    reorged-out from already-redeemed-by-our-standby) and past T1 armed a
+    refund against the spent leg. Post-fix the resume reconcile maps the
+    stale record to `completed` with ZERO broadcasts and no re-fund."""
+    relay = NostrRelay(h.workdir)
+    owner_bx, owner_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
+    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
+    maker = Party("ormk", h, h.workdir, "alice_pocx", "alice_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
+                  pocx_url=owner_bx, btc_url=owner_bt)
+    taker = Party("ortk", h, h.workdir, "bob_pocx", "bob_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
+                  pocx_url=taker_bx, btc_url=taker_bt)
+    # Same seed + same node wallets as the owner, own data dir (own scope).
+    standby = Party("orsb", h, h.workdir, "alice_pocx", "alice_btc",
+                    nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
+                    pocx_url=owner_bx, btc_url=owner_bt)
+    try:
+        relay.start()
+        maker.start()
+        taker.start()
+        standby.start()
+        mnemonic = maker.setup_seed()
+        standby.setup_seed(mnemonic=mnemonic)
+
+        _relay_handshake(h, maker, taker, "pact-htlc-v1", observers=(standby,))
+
+        def both_funded():
+            m, t = swap_of(maker), swap_of(taker)
+            return (m is not None and m.get("htlc_a_txid")
+                    and t is not None and t.get("htlc_b_txid"))
+
+        sid = None
+        for _ in range(60):
+            tick_all("drive", maker, taker)
+            tick_all("standby", standby)
+            if both_funded():
+                sid = swap_of(maker)["swap_id"]
+                break
+            if handshake_done(maker, taker):
+                mine_and_sync(h, ep, eb)
+        assert sid, "swap never reached both-legs-funded"
+        pre_a = swap_of(maker, sid)["htlc_a_txid"]
+        for _ in range(2):
+            maker.rpc("tick")
+            time.sleep(1)
+        print(f"[takeover-e2e] both funded (A {pre_a[:16]}) — hard-killing the owner")
+        _kill(maker)
+
+        # The standby takes over and finishes the swap with the taker.
+        standby.rpc("takeover", sid)
+        done = False
+        for _ in range(40):
+            tick_all("finish", standby, taker)
+            s, t = swap_of(standby, sid), swap_of(taker, sid)
+            if s and t and s["state"] == "completed" and t["state"] == "completed":
+                done = True
+                break
+            mine_and_sync(h, ep, eb)
+        assert done, (f"standby takeover never completed: "
+                      f"standby={swap_of(standby, sid)} taker={swap_of(taker, sid)}")
+        standby_final = swap_of(standby, sid).get("final_txid")
+        assert standby_final, "standby completed without a final_txid?"
+        # Bury the settlement spends past the owner's confirmation targets so
+        # the returning owner's depth-gated reconcile can conclude promptly.
+        mine_and_sync(h, ep, eb, n=2)
+
+        # HEADLINE: the owner's pactd RETURNS on its original datadir.
+        print(f"[takeover-e2e] swap {sid[:16]} completed by the standby — "
+              "restarting the owner's pactd on its old datadir")
+        maker.stop()  # release the killed process's log handle (Windows)
+        maker.start()
+        owner_events = []
+        reconciled = False
+        for _ in range(20):
+            owner_events += tick_all("owner-return", maker)
+            rec = swap_of(maker, sid)
+            if rec is not None and rec["state"] == "completed":
+                reconciled = True
+                break
+            mine_and_sync(h, ep, eb)
+        assert reconciled, (f"returned owner never reconciled its stale record "
+                            f"to completed: {swap_of(maker, sid)}")
+        assert "reconciled" in owner_events, \
+            f"terminal must come from the reconcile pass, got: {owner_events}"
+        # Zero broadcasts, no re-fund: the reconcile writes STATUS only.
+        for bad in ("auto-fund", "auto-redeem", "auto-refund",
+                    "funded-a", "funded-b"):
+            assert bad not in owner_events, \
+                f"returned owner broadcast on a settled swap: {owner_events}"
+        post = swap_of(maker, sid)
+        assert post["htlc_a_txid"] == pre_a, \
+            f"returned owner re-funded leg A: {pre_a} -> {post['htlc_a_txid']}"
+        assert post.get("final_txid") == standby_final, \
+            (f"owner must adopt the standby's redeem as its settlement: "
+             f"{post.get('final_txid')} != {standby_final}")
+        print("[takeover-e2e] owner-returns v1 OK: stale record reconciled to "
+              "completed from chain truth, zero broadcasts, no re-fund")
+    finally:
+        for p in (maker, taker, standby):
+            try:
+                p.stop()
+            except Exception:  # noqa: BLE001
+                pass
+        relay.stop()
+
+
+def scenario_owner_returns_after_takeover_v2(h, ep, eb):
+    """v2 twin of the #201 owner-returns cell: the maker is held at `Signed`
+    (btc=3 conf gate) with both legs committed, hard-killed, and its standby
+    (same seed AND same wallets, so the cooperative-redeem payout is owned)
+    takes over and completes by revealing t. The returned owner must
+    reconcile its stale `signed` record to `completed` — zero broadcasts, no
+    reveal, no re-fund."""
+    relay = NostrRelay(h.workdir)
+    owner_bx, owner_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
+    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
+    maker = Party("o2mk", h, h.workdir, "alice_pocx", "alice_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
+                  coin_confs={"btc": 3}, pocx_url=owner_bx, btc_url=owner_bt)
+    taker = Party("o2tk", h, h.workdir, "bob_pocx", "bob_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
+                  pocx_url=taker_bx, btc_url=taker_bt)
+    standby = Party("o2sb", h, h.workdir, "alice_pocx", "alice_btc",
+                    nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
+                    coin_confs={"btc": 3}, pocx_url=owner_bx, btc_url=owner_bt)
+    try:
+        relay.start()
+        maker.start()
+        taker.start()
+        standby.start()
+        mnemonic = maker.setup_seed()
+        standby.setup_seed(mnemonic=mnemonic)
+
+        _relay_handshake(h, maker, taker, "pact-htlc-v2", observers=(standby,))
+
+        # Drive until the maker is Signed with BOTH legs on the wire (the same
+        # window trick as scenario_refund_only_takeover_v2: mining stops while
+        # leg B is shallow so the Signed window stays observable).
+        def leg_b_on_wire():
+            t = swap_of(taker)
+            return (t is not None and t.get("funding_b_txid") is not None
+                    and h.btc.rpc("gettxout", t["funding_b_txid"],
+                                  t.get("funding_b_vout") or 0) is not None)
+
+        def signed_committed():
+            m = swap_of(maker)
+            return (m is not None
+                    and m.get("state") in ("signed", "funded_a", "funded_b")
+                    and m.get("funding_a_txid")
+                    and leg_b_on_wire())
+
+        sid = None
+        for _ in range(60):
+            tick_all("drive", maker, taker)
+            tick_all("standby", standby)
+            if signed_committed():
+                sid = swap_of(maker)["swap_id"]
+                break
+            if handshake_done(maker, taker) and not leg_b_on_wire():
+                mine_and_sync(h, ep, eb)
+        assert sid, "maker never reached Signed with both legs committed"
+        pre_a = swap_of(maker, sid)["funding_a_txid"]
+        for _ in range(2):
+            maker.rpc("tick")
+            time.sleep(1)
+        print(f"[takeover-e2e] maker Signed (leg A {pre_a[:16]}) — killing the owner")
+        _kill(maker)
+
+        _await_follow(standby, sid, "import")
+        standby.rpc("takeover", sid)
+        assert swap_of(standby, sid).get("source") == "local", \
+            "takeover did not adopt on the v2 standby"
+        done = False
+        for _ in range(40):
+            tick_all("finish", standby, taker)
+            s, t = swap_of(standby, sid), swap_of(taker, sid)
+            if s and t and s["state"] == "completed" and t["state"] == "completed":
+                done = True
+                break
+            mine_and_sync(h, ep, eb)
+        assert done, (f"v2 standby takeover never completed: "
+                      f"standby={swap_of(standby, sid)} taker={swap_of(taker, sid)}")
+        standby_final_b = swap_of(standby, sid).get("final_txid_b")
+        assert standby_final_b, "standby completed without a final_txid_b?"
+        mine_and_sync(h, ep, eb, n=3)
+
+        # HEADLINE: the owner returns on its original datadir.
+        print(f"[takeover-e2e] v2 swap {sid[:16]} completed by the standby — "
+              "restarting the owner's pactd on its old datadir")
+        maker.stop()  # release the killed process's log handle (Windows)
+        maker.start()
+        owner_events = []
+        reconciled = False
+        for _ in range(20):
+            owner_events += tick_all("owner-return", maker)
+            rec = swap_of(maker, sid)
+            if rec is not None and rec["state"] == "completed":
+                reconciled = True
+                break
+            mine_and_sync(h, ep, eb)
+        assert reconciled, (f"returned v2 owner never reconciled its stale "
+                            f"record to completed: {swap_of(maker, sid)}")
+        assert "reconciled" in owner_events, \
+            f"terminal must come from the reconcile pass, got: {owner_events}"
+        for bad in ("adaptor-fund-b", "adaptor-redeem-b", "adaptor-redeem-a",
+                    "adaptor-refund-a", "adaptor-refund-b", "adaptor-build-b"):
+            assert bad not in owner_events, \
+                f"returned v2 owner acted on a settled swap: {owner_events}"
+        post = swap_of(maker, sid)
+        assert post["funding_a_txid"] == pre_a, \
+            f"returned owner re-funded leg A: {pre_a} -> {post['funding_a_txid']}"
+        assert post.get("final_txid_b") == standby_final_b, \
+            (f"owner must adopt the standby's reveal as its settlement: "
+             f"{post.get('final_txid_b')} != {standby_final_b}")
+        print("[takeover-e2e] owner-returns v2 OK: stale record reconciled to "
+              "completed from chain truth, zero broadcasts, no re-fund")
+    finally:
+        for p in (maker, taker, standby):
+            try:
+                p.stop()
+            except Exception:  # noqa: BLE001
+                pass
+        relay.stop()
+
+
 class RefundOnlyTakeoverV2(_FollowScenario):
     scenario = staticmethod(scenario_refund_only_takeover_v2)
 
@@ -760,6 +991,14 @@ class TakerPostRevealTakeoverV1(_FollowScenario):
     scenario = staticmethod(scenario_taker_post_reveal_takeover_v1)
 
 
+class OwnerReturnsAfterTakeoverV1(_FollowScenario):
+    scenario = staticmethod(scenario_owner_returns_after_takeover_v1)
+
+
+class OwnerReturnsAfterTakeoverV2(_FollowScenario):
+    scenario = staticmethod(scenario_owner_returns_after_takeover_v2)
+
+
 SCENARIOS = [
     RefundOnlyTakeoverV2,
     HotStandbyTakeoverV1,
@@ -768,6 +1007,8 @@ SCENARIOS = [
     PrefundTakeoverAbortsBlind,
     PrefundTakeoverFundsProvable,
     TakerPostRevealTakeoverV1,
+    OwnerReturnsAfterTakeoverV1,
+    OwnerReturnsAfterTakeoverV2,
 ]
 
 

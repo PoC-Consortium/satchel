@@ -15,7 +15,7 @@ use anyhow::{bail, ensure, Context, Result};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::{OutPoint, ScriptBuf};
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Mutex;
@@ -100,6 +100,14 @@ pub struct Engine {
     /// legacy means "no partition": new swaps derive on the pre-scope path and
     /// this machine drives every record, exactly as before scopes existed.
     pub machine_scope: crate::keys::DeriveScope,
+    /// Swap-ids whose DRIVEN record has been reconciled against chain truth
+    /// since this process started (#201: "first derive true status from chain,
+    /// then continue driving"). Deliberately in-memory: it empties on restart,
+    /// which IS the resume trigger — the first tick after boot reconciles every
+    /// driven in-flight swap before its arms act on possibly-stale state. The
+    /// steady-state anomaly triggers ([`Engine::request_reconcile`]) re-arm a
+    /// swap whose tracked leg unexpectedly vanished.
+    reconciled: Mutex<HashSet<String>>,
 }
 
 fn chain_params(chain: &ChainRef) -> Result<&'static ChainParams> {
@@ -843,6 +851,7 @@ impl Engine {
             // Bare open = no partition (legacy scope). pactd's registry injects
             // the install's real machine.json scope after construction.
             machine_scope: crate::keys::DeriveScope::LEGACY,
+            reconciled: Mutex::new(HashSet::new()),
         })
     }
 
@@ -3312,7 +3321,18 @@ impl Engine {
                                 );
                             }
                             Some(_) => return Ok(None), // shallow / wrong script or value — wait
-                            None => return Ok(None), // not yet funded/visible — wait (T1 protects leg A)
+                            None => {
+                                // Not yet funded/visible — wait (T1 protects
+                                // leg A). But a leg we ONCE saw confirmed
+                                // (height recorded) that is now gone was
+                                // spent — possibly a same-seed machine's
+                                // reveal while we were down: re-arm the chain
+                                // reconciliation (#201).
+                                if rec.funding_b_height.is_some() {
+                                    self.request_reconcile(&rec.swap_id);
+                                }
+                                return Ok(None);
+                            }
                         }
                     }
                 }
@@ -3329,6 +3349,11 @@ impl Engine {
                             let r = self.adaptor_refund(&rec.swap_id)?;
                             return ev("adaptor-refund-a", format!("state {:?}", r.state));
                         }
+                        // Leg A gone past T1 while we still think we're
+                        // Signed: someone spent it (our own pre-crash refund,
+                        // a standby's, or the counterparty's post-reveal
+                        // claim) — reconcile instead of idling forever (#201).
+                        self.request_reconcile(&rec.swap_id);
                     }
                 }
                 Ok(None)
@@ -3497,6 +3522,11 @@ impl Engine {
                             let r = self.adaptor_refund(&rec.swap_id)?;
                             return ev("adaptor-refund-b", format!("state {:?}", r.state));
                         }
+                        // Leg B gone past T2 while we still think we're
+                        // Signed: spent by someone (our own pre-crash refund,
+                        // a standby's settlement, or the maker's reveal) —
+                        // reconcile instead of idling forever (#201).
+                        self.request_reconcile(&rec.swap_id);
                     }
                 }
                 Ok(None)
@@ -4789,6 +4819,27 @@ impl Engine {
                 }
                 continue;
             }
+            // #201: a DRIVEN record derives its true status from chain BEFORE
+            // driving — on resume (the reconciled set empties every process
+            // start) and after a tracked-leg anomaly re-armed it. A terminal
+            // another same-seed machine already achieved is written locally
+            // with zero broadcasts, and the drive is skipped this tick; a
+            // still-live (or inconclusive) swap falls through to `tick_one`
+            // exactly as before.
+            if self.reconcile_pending(&record.swap_id) {
+                match self.reconcile_driven_v1(&record) {
+                    Ok(Some(event)) => {
+                        events.push(event);
+                        continue;
+                    }
+                    Ok(None) => {}
+                    Err(err) => events.push(TickEvent {
+                        swap_id: record.swap_id.clone(),
+                        action: "error".into(),
+                        detail: format!("reconcile: {err:#}"),
+                    }),
+                }
+            }
             match self.tick_one(&record) {
                 Ok(Some(event)) => events.push(event),
                 Ok(None) => {}
@@ -4837,6 +4888,21 @@ impl Engine {
                     }),
                 }
                 continue;
+            }
+            // #201: reconcile-before-drive, v2 twin — see the v1 loop above.
+            if self.reconcile_pending(&rec.swap_id) {
+                match self.reconcile_driven_v2(&rec) {
+                    Ok(Some(event)) => {
+                        events.push(event);
+                        continue;
+                    }
+                    Ok(None) => {}
+                    Err(err) => events.push(TickEvent {
+                        swap_id: rec.swap_id.clone(),
+                        action: "error".into(),
+                        detail: format!("reconcile: {err:#}"),
+                    }),
+                }
             }
             match self.adaptor_tick_one(&rec) {
                 Ok(Some(event)) => events.push(event),
@@ -6748,27 +6814,9 @@ impl Engine {
                     && sa.spend_confs >= 1
                     && sb.spend_confs >= 1 =>
             {
-                let completed = sa.kind == SpendKind::Redeem || sb.kind == SpendKind::Redeem;
-                let (state, ours) = if completed {
-                    // Initiator's claim is the leg-B redeem, participant's leg A.
-                    match rec.role {
-                        Role::Initiator => (State::Completed, sb),
-                        Role::Participant => (State::Completed, sa),
-                    }
-                } else {
-                    match rec.role {
-                        Role::Initiator => (State::Refunded, sa),
-                        Role::Participant => (State::Refunded, sb),
-                    }
-                };
+                let (state, ours, detail) = Self::v1_settled_terminal(rec.role, sa, sb);
                 adopt_final(rec, ours);
-                Some((
-                    state,
-                    format!(
-                        "both legs settled on-chain (A {:?}, B {:?})",
-                        sa.kind, sb.kind
-                    ),
-                ))
+                Some((state, detail))
             }
             (LegClass::Funded { .. }, LegClass::Spent(sb)) if sb.kind == SpendKind::Redeem => {
                 match rec.role {
@@ -6877,44 +6925,9 @@ impl Engine {
                     && sa.spend_confs >= 1
                     && sb.spend_confs >= 1 =>
             {
-                let completed = sa.kind == SpendKind::Redeem || sb.kind == SpendKind::Redeem;
-                if completed {
-                    match rec.role {
-                        Role::Initiator if rec.final_txid_b.is_none() => {
-                            rec.final_txid_b = Some(sb.spend_txid.clone());
-                            rec.final_tx_b_hex = Some(sb.spend_tx_hex.clone());
-                        }
-                        Role::Participant if rec.final_txid_a.is_none() => {
-                            rec.final_txid_a = Some(sa.spend_txid.clone());
-                            rec.final_tx_a_hex = Some(sa.spend_tx_hex.clone());
-                        }
-                        _ => {}
-                    }
-                } else {
-                    match rec.role {
-                        Role::Initiator if rec.final_txid_a.is_none() => {
-                            rec.final_txid_a = Some(sa.spend_txid.clone());
-                            rec.final_tx_a_hex = Some(sa.spend_tx_hex.clone());
-                        }
-                        Role::Participant if rec.final_txid_b.is_none() => {
-                            rec.final_txid_b = Some(sb.spend_txid.clone());
-                            rec.final_tx_b_hex = Some(sb.spend_tx_hex.clone());
-                        }
-                        _ => {}
-                    }
-                }
-                let state = if completed {
-                    AdaptorState::Completed
-                } else {
-                    AdaptorState::Refunded
-                };
-                Some((
-                    state,
-                    format!(
-                        "both legs settled on-chain (A {:?}, B {:?})",
-                        sa.kind, sb.kind
-                    ),
-                ))
+                let (state, ours_is_a, ours, detail) = Self::v2_settled_terminal(rec.role, sa, sb);
+                Self::v2_adopt_final(rec, ours_is_a, ours);
+                Some((state, detail))
             }
             (LegClass::Funded { .. }, LegClass::Spent(sb))
                 if sb.kind == SpendKind::Redeem
@@ -6941,6 +6954,389 @@ impl Engine {
             return Some(format!("fast-forwarded to {state:?}: {note}"));
         }
         None
+    }
+
+    // ---- driver reconcile-before-drive (#201) -----------------------------
+    //
+    // On every restart/resume, a DRIVEN swap must first derive its true status
+    // from chain, then continue driving — never drive forward from persisted
+    // state alone. The observer/follow path always had this (follow_one →
+    // classify → follow_settle); the driver did not, so an owner restarted
+    // after a same-seed standby settled its swap lingered forever on a stale
+    // state (and armed a refund against an already-spent leg). The reconcile
+    // pass below closes that gap by reusing the SAME classification
+    // (`classify_v1_legs`/`classify_v2_legs`) and the SAME depth gate
+    // (`follow_purge_ok`) as the follower — one source of chain truth — but
+    // maps the verdicts onto the LOCAL record (a terminal-state write, the
+    // follower purges instead). Cadence: once per swap per process start
+    // (resume), plus whenever a drive arm's fast UTXO read finds its tracked
+    // leg unexpectedly gone (`request_reconcile`) — so the full classification
+    // is never paid every tick in steady state. Zero broadcasts by
+    // construction: it only reads chain and writes record status.
+
+    /// Whether `swap_id` still owes a chain reconciliation (#201).
+    fn reconcile_pending(&self, swap_id: &str) -> bool {
+        self.reconciled
+            .lock()
+            .map(|s| !s.contains(swap_id))
+            .unwrap_or(false)
+    }
+
+    /// Record that `swap_id`'s driven record now matches chain reality
+    /// conclusively (terminal written, or provably still in flight).
+    fn mark_reconciled(&self, swap_id: &str) {
+        if let Ok(mut s) = self.reconciled.lock() {
+            s.insert(swap_id.to_string());
+        }
+    }
+
+    /// Re-arm the reconcile pass for `swap_id` — called by the drive arms when
+    /// a leg they track unexpectedly vanished from the UTXO set (spent by a
+    /// same-seed machine while we were down, or reorged out — only a fresh
+    /// classification can tell the two apart, and the arms must never act
+    /// blind on either).
+    fn request_reconcile(&self, swap_id: &str) {
+        if let Ok(mut s) = self.reconciled.lock() {
+            s.remove(swap_id);
+        }
+    }
+
+    /// The terminal a v1 record reaches once BOTH legs are conclusively spent
+    /// — the single settled-swap matrix, shared by the adoption fast-forward
+    /// and the driver reconcile so the two can never drift. Any redeem means
+    /// the swap completed (a redeem is what moves value; a §7.4-window mixed
+    /// redeem/refund is flagged in the detail); a double refund means it
+    /// unwound. `ours` is OUR settlement spend (initiator claims leg B /
+    /// refunds leg A; participant claims leg A / refunds leg B — the same
+    /// role→leg mapping as [`Engine::follow_purge_ok`]), adopted as `final_tx`
+    /// so the confirmation nurse converges on it. Pure/testable.
+    fn v1_settled_terminal<'a>(
+        role: Role,
+        sa: &'a crate::reconstruct::SpentLeg,
+        sb: &'a crate::reconstruct::SpentLeg,
+    ) -> (State, &'a crate::reconstruct::SpentLeg, String) {
+        use crate::reconstruct::SpendKind;
+        let completed = sa.kind == SpendKind::Redeem || sb.kind == SpendKind::Redeem;
+        let (state, ours) = if completed {
+            // Initiator's claim is the leg-B redeem, participant's leg A.
+            match role {
+                Role::Initiator => (State::Completed, sb),
+                Role::Participant => (State::Completed, sa),
+            }
+        } else {
+            match role {
+                Role::Initiator => (State::Refunded, sa),
+                Role::Participant => (State::Refunded, sb),
+            }
+        };
+        let mixed = if sa.kind != sb.kind {
+            " (mixed redeem/refund — §7.4 window, check history)"
+        } else {
+            ""
+        };
+        (
+            state,
+            ours,
+            format!(
+                "both legs settled on-chain (A {:?}, B {:?}){mixed}",
+                sa.kind, sb.kind
+            ),
+        )
+    }
+
+    /// v2 twin of [`Engine::v1_settled_terminal`]. v2 keeps per-leg `final_*`
+    /// fields, so it also returns WHICH leg our settlement spend lives on.
+    fn v2_settled_terminal<'a>(
+        role: Role,
+        sa: &'a crate::reconstruct::SpentLeg,
+        sb: &'a crate::reconstruct::SpentLeg,
+    ) -> (AdaptorState, bool, &'a crate::reconstruct::SpentLeg, String) {
+        use crate::reconstruct::SpendKind;
+        let completed = sa.kind == SpendKind::Redeem || sb.kind == SpendKind::Redeem;
+        let (state, ours_is_a, ours) = if completed {
+            match role {
+                Role::Initiator => (AdaptorState::Completed, false, sb),
+                Role::Participant => (AdaptorState::Completed, true, sa),
+            }
+        } else {
+            match role {
+                Role::Initiator => (AdaptorState::Refunded, true, sa),
+                Role::Participant => (AdaptorState::Refunded, false, sb),
+            }
+        };
+        let mixed = if sa.kind != sb.kind {
+            " (mixed redeem/refund — §7.4 window, check history)"
+        } else {
+            ""
+        };
+        (
+            state,
+            ours_is_a,
+            ours,
+            format!(
+                "both legs settled on-chain (A {:?}, B {:?}){mixed}",
+                sa.kind, sb.kind
+            ),
+        )
+    }
+
+    /// Adopt our settlement spend into a v2 record's per-leg `final_*` fields
+    /// (never clobbering local data) — shared by fast-forward and reconcile.
+    fn v2_adopt_final(
+        rec: &mut AdaptorSwapRecord,
+        ours_is_a: bool,
+        ours: &crate::reconstruct::SpentLeg,
+    ) {
+        if ours_is_a {
+            if rec.final_txid_a.is_none() {
+                rec.final_txid_a = Some(ours.spend_txid.clone());
+                rec.final_tx_a_hex = Some(ours.spend_tx_hex.clone());
+            }
+        } else if rec.final_txid_b.is_none() {
+            rec.final_txid_b = Some(ours.spend_txid.clone());
+            rec.final_tx_b_hex = Some(ours.spend_tx_hex.clone());
+        }
+    }
+
+    /// #201: derive a driven v1 record's true status from chain before the
+    /// drive arms act on it. `Some(event)` = the record was reconciled to a
+    /// terminal (skip driving this tick); `None` = keep driving — either the
+    /// swap is provably in flight (marked reconciled) or the view was
+    /// inconclusive/shallow (stays pending, retried next tick — the arms'
+    /// own guards make driving meanwhile harmless).
+    ///
+    /// Reorg safety: a terminal is written only when OUR settlement leg is
+    /// spent deep at ITS OWN confirmation target ([`Engine::follow_purge_ok`],
+    /// the follower's purge gate verbatim). `classify_v1_legs` is cache-free —
+    /// every call is already the fresh, reorg-belt-grade read `follow_settle`
+    /// demands before ITS terminal decision, so no second read is needed.
+    fn reconcile_driven_v1(&self, rec: &SwapRecord) -> Result<Option<TickEvent>> {
+        use crate::reconstruct::{LegClass, SpendKind};
+        if matches!(
+            rec.state,
+            State::Completed | State::Refunded | State::Aborted
+        ) {
+            self.mark_reconciled(&rec.swap_id);
+            return Ok(None);
+        }
+        let Some((a, b)) = self.classify_v1_legs(rec) else {
+            return Ok(None); // pre-accept / tier L / chain error — retry next tick
+        };
+        let conclusive = |s: &crate::reconstruct::SpentLeg| s.kind != SpendKind::Unknown;
+        let deep = |confs: u64, n: u32| confs >= u64::from(n.max(1));
+        let (state, ours, detail) = match (&a, &b) {
+            (LegClass::Spent(sa), LegClass::Spent(sb)) if conclusive(sa) && conclusive(sb) => {
+                if !Self::follow_purge_ok(
+                    rec.role,
+                    &sa.kind,
+                    &sb.kind,
+                    sa.spend_confs,
+                    sb.spend_confs,
+                    rec.n_a,
+                    rec.n_b,
+                ) {
+                    return Ok(None); // settled but shallow — wait for depth (stays pending)
+                }
+                Self::v1_settled_terminal(rec.role, sa, sb)
+            }
+            // Our funded leg refunded (deep at its own target) while the co-leg
+            // never funded — e.g. a refund-only standby reclaimed our leg while
+            // we were down. The refund's on-chain existence proves the timelock
+            // passed, so "not funded YET" is no longer a live possibility.
+            (LegClass::Spent(sa), LegClass::Unfunded)
+                if rec.role == Role::Initiator
+                    && sa.kind == SpendKind::Refund
+                    && deep(sa.spend_confs, rec.n_a) =>
+            {
+                (
+                    State::Refunded,
+                    sa,
+                    "leg A refunded on-chain; leg B never funded".to_string(),
+                )
+            }
+            (LegClass::Unfunded, LegClass::Spent(sb))
+                if rec.role == Role::Participant
+                    && sb.kind == SpendKind::Refund
+                    && deep(sb.spend_confs, rec.n_b) =>
+            {
+                (
+                    State::Refunded,
+                    sb,
+                    "leg B refunded on-chain; leg A never funded".to_string(),
+                )
+            }
+            // A leg is spent but the pair isn't terminal-able yet (co-leg
+            // still live, spend shallow, kind unclassifiable): the swap is
+            // settling RIGHT NOW — stay pending so this pass re-derives every
+            // tick until it resolves. Marking here would freeze a stale state
+            // exactly when chain truth is in motion.
+            (LegClass::Spent(_), _) | (_, LegClass::Spent(_)) => return Ok(None),
+            // Live / unfunded / tier-L Vanished: the swap is (or may still
+            // be) in flight — the drive arms take it from here, and the
+            // anomaly triggers re-arm this pass if a tracked leg vanishes
+            // later. (Vanished can never depth-verify — tier L's known gap —
+            // so re-classifying forever would buy nothing.)
+            _ => {
+                self.mark_reconciled(&rec.swap_id);
+                return Ok(None);
+            }
+        };
+        let mut updated = rec.clone();
+        // Adopt chain-truth funding pointers (same shape as the fast-forward).
+        let adopt = |class: &LegClass,
+                     txid: &mut Option<String>,
+                     vout: &mut Option<u32>,
+                     height: &mut Option<u64>| {
+            let (op, h) = match class {
+                LegClass::Funded {
+                    outpoint, height, ..
+                } => (outpoint, *height),
+                LegClass::Spent(s) => (&s.outpoint, s.funding_height),
+                LegClass::Vanished {
+                    outpoint,
+                    funding_height,
+                } => (outpoint, *funding_height),
+                LegClass::Unfunded => return,
+            };
+            *txid = Some(op.txid.to_string());
+            *vout = Some(op.vout);
+            *height = (h > 0).then_some(h).or(*height);
+        };
+        adopt(
+            &a,
+            &mut updated.htlc_a_txid,
+            &mut updated.htlc_a_vout,
+            &mut updated.htlc_a_height,
+        );
+        adopt(
+            &b,
+            &mut updated.htlc_b_txid,
+            &mut updated.htlc_b_vout,
+            &mut updated.htlc_b_height,
+        );
+        // Our settlement spend (a same-seed machine's redeem/refund IS ours)
+        // becomes `final_tx` so the existing confirmation nurse converges on
+        // it; never clobber local data.
+        if updated.final_txid.is_none() {
+            updated.final_txid = Some(ours.spend_txid.clone());
+            updated.final_tx_hex = Some(ours.spend_tx_hex.clone());
+        }
+        updated.state = state;
+        self.store.put(&updated)?;
+        let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
+        self.mark_reconciled(&rec.swap_id);
+        Ok(Some(TickEvent {
+            swap_id: rec.swap_id.clone(),
+            action: "reconciled".into(),
+            detail: format!("chain truth → {state:?}: {detail}"),
+        }))
+    }
+
+    /// v2 twin of [`Engine::reconcile_driven_v1`] — same cadence, same depth
+    /// gate, same one-matrix terminal mapping, per-leg `final_*` adoption.
+    fn reconcile_driven_v2(&self, rec: &AdaptorSwapRecord) -> Result<Option<TickEvent>> {
+        use crate::reconstruct::{LegClass, SpendKind};
+        if matches!(
+            rec.state,
+            AdaptorState::Completed | AdaptorState::Refunded | AdaptorState::Aborted
+        ) {
+            self.mark_reconciled(&rec.swap_id);
+            return Ok(None);
+        }
+        let Some((a, b)) = self.classify_v2_legs(rec) else {
+            return Ok(None); // handshake incomplete / tier L / chain error — retry
+        };
+        let conclusive = |s: &crate::reconstruct::SpentLeg| s.kind != SpendKind::Unknown;
+        let deep = |confs: u64, n: u32| confs >= u64::from(n.max(1));
+        let (state, ours_is_a, ours, detail) = match (&a, &b) {
+            (LegClass::Spent(sa), LegClass::Spent(sb)) if conclusive(sa) && conclusive(sb) => {
+                if !Self::follow_purge_ok(
+                    rec.role,
+                    &sa.kind,
+                    &sb.kind,
+                    sa.spend_confs,
+                    sb.spend_confs,
+                    rec.n_a,
+                    rec.n_b,
+                ) {
+                    return Ok(None); // settled but shallow — wait for depth
+                }
+                Self::v2_settled_terminal(rec.role, sa, sb)
+            }
+            (LegClass::Spent(sa), LegClass::Unfunded)
+                if rec.role == Role::Initiator
+                    && sa.kind == SpendKind::Refund
+                    && deep(sa.spend_confs, rec.n_a) =>
+            {
+                (
+                    AdaptorState::Refunded,
+                    true,
+                    sa,
+                    "leg A refunded on-chain; leg B never funded".to_string(),
+                )
+            }
+            (LegClass::Unfunded, LegClass::Spent(sb))
+                if rec.role == Role::Participant
+                    && sb.kind == SpendKind::Refund
+                    && deep(sb.spend_confs, rec.n_b) =>
+            {
+                (
+                    AdaptorState::Refunded,
+                    false,
+                    sb,
+                    "leg B refunded on-chain; leg A never funded".to_string(),
+                )
+            }
+            // Settling right now (a spent leg, pair not terminal-able) — stay
+            // pending and re-derive every tick; see the v1 twin.
+            (LegClass::Spent(_), _) | (_, LegClass::Spent(_)) => return Ok(None),
+            _ => {
+                self.mark_reconciled(&rec.swap_id);
+                return Ok(None);
+            }
+        };
+        let mut updated = rec.clone();
+        let adopt = |class: &LegClass,
+                     txid: &mut Option<String>,
+                     vout: &mut Option<u32>,
+                     height: &mut Option<u64>| {
+            let (op, h) = match class {
+                LegClass::Funded {
+                    outpoint, height, ..
+                } => (outpoint, *height),
+                LegClass::Spent(s) => (&s.outpoint, s.funding_height),
+                LegClass::Vanished {
+                    outpoint,
+                    funding_height,
+                } => (outpoint, *funding_height),
+                LegClass::Unfunded => return,
+            };
+            *txid = Some(op.txid.to_string());
+            *vout = Some(op.vout);
+            *height = (h > 0).then_some(h).or(*height);
+        };
+        adopt(
+            &a,
+            &mut updated.funding_a_txid,
+            &mut updated.funding_a_vout,
+            &mut updated.funding_a_height,
+        );
+        adopt(
+            &b,
+            &mut updated.funding_b_txid,
+            &mut updated.funding_b_vout,
+            &mut updated.funding_b_height,
+        );
+        Self::v2_adopt_final(&mut updated, ours_is_a, ours);
+        updated.state = state;
+        self.store.put_adaptor(&updated)?;
+        let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
+        self.mark_reconciled(&rec.swap_id);
+        Ok(Some(TickEvent {
+            swap_id: rec.swap_id.clone(),
+            action: "reconciled".into(),
+            detail: format!("chain truth → {state:?}: {detail}"),
+        }))
     }
 
     /// Purge a followed swap once BOTH legs have been resolved (spent) and the
@@ -7331,9 +7727,14 @@ impl Engine {
                         Some(_) => return Ok(None), // waiting on confirmations
                         None => {
                             // A verified HTLC vanished without us spending
-                            // it: reorged out (or in a mempool gap). No
-                            // automatic action — never reveal s for an
-                            // output we can't see; T1 protects our leg.
+                            // it: reorged out (or in a mempool gap) — or
+                            // already redeemed by a same-seed machine while
+                            // we were down. No automatic action here — never
+                            // reveal s for an output we can't see; T1
+                            // protects our leg — but re-arm the chain
+                            // reconciliation (#201): only a fresh
+                            // classification can tell the two apart.
+                            self.request_reconcile(&rec.swap_id);
                             return event(
                                 "reorg-alert",
                                 format!("chain-B HTLC {outpoint_b} no longer visible"),
@@ -7398,6 +7799,13 @@ impl Engine {
                                 "chain-B HTLC seen; burying to n_b (chain-watched)".into(),
                             );
                         }
+                    } else if rec.htlc_b_txid.is_some() {
+                        // A leg-B pointer we once recorded no longer resolves
+                        // to a live output: spent (a same-seed machine settled
+                        // while we were down?) or reorged. Re-arm the chain
+                        // reconciliation (#201) before the T1 fallback below
+                        // arms a refund against an already-settled swap.
+                        self.request_reconcile(&rec.swap_id);
                     }
                 }
                 self.try_refund_due(rec, "a")
@@ -7485,8 +7893,11 @@ impl Engine {
                         }
                         return Ok(None); // too late to redeem safely
                     }
-                    // Spent without a preimage: that was our own refund or
-                    // an anomaly; nothing to do here.
+                    // Spent without a preimage: our own refund — or a
+                    // same-seed machine's settlement we haven't derived yet
+                    // (our record still says FundedB). Re-arm the chain
+                    // reconciliation (#201) to find out; nothing to do here.
+                    self.request_reconcile(&rec.swap_id);
                     return Ok(None);
                 }
                 self.try_refund_due(rec, "b")
@@ -7680,6 +8091,17 @@ impl Engine {
         // reads as "already spent" and the auto-refund would silently never fire.
         // `None` = genuinely nothing to refund (a real spend / not funded yet).
         let Some((outpoint, _confs)) = self.locate_funding(rec, leg)? else {
+            let recorded = match leg {
+                "a" => rec.htlc_a_txid.is_some(),
+                _ => rec.htlc_b_txid.is_some(),
+            };
+            if recorded {
+                // We RECORDED a funding that is now gone: someone spent it (a
+                // same-seed machine, the counterparty) — re-arm the chain
+                // reconciliation (#201) instead of silently idling forever on
+                // a stale state.
+                self.request_reconcile(&rec.swap_id);
+            }
             return Ok(None);
         };
         // If the live outpoint differs from what we recorded, the record is stale
@@ -12745,6 +13167,134 @@ mod tests {
             na,
             nb
         ));
+    }
+
+    fn spent_leg(
+        kind: crate::reconstruct::SpendKind,
+        confs: u64,
+        tag: char,
+    ) -> crate::reconstruct::SpentLeg {
+        crate::reconstruct::SpentLeg {
+            outpoint: OutPoint {
+                txid: bitcoin::Txid::from_str(&tag.to_string().repeat(64)).unwrap(),
+                vout: 0,
+            },
+            funding_height: 100,
+            spend_txid: tag.to_string().repeat(64),
+            spend_height: 110,
+            spend_confs: confs,
+            kind,
+            spend_tx_hex: format!("00{tag}{tag}"),
+        }
+    }
+
+    #[test]
+    fn settled_terminal_maps_role_to_our_settlement_leg() {
+        // The ONE settled-swap matrix (#201) shared by adoption fast-forward
+        // and the driver reconcile: any redeem → Completed with OUR claim leg
+        // as final (initiator claims B, participant claims A); double refund →
+        // Refunded with OUR funded leg as final (initiator funded A,
+        // participant funded B). Getting this backwards misreads a refund as a
+        // completion — the money-critical mapping the issue calls out.
+        use crate::reconstruct::SpendKind::*;
+        use Role::*;
+        let (ra, rb) = (spent_leg(Redeem, 5, 'a'), spent_leg(Redeem, 5, 'b'));
+        let (fa, fb) = (spent_leg(Refund, 5, 'c'), spent_leg(Refund, 5, 'd'));
+
+        let (state, ours, detail) = Engine::v1_settled_terminal(Initiator, &ra, &rb);
+        assert_eq!(state, State::Completed);
+        assert_eq!(ours.spend_txid, rb.spend_txid, "initiator's claim is leg B");
+        assert!(!detail.contains("§7.4"), "clean completion is not mixed");
+
+        let (state, ours, _) = Engine::v1_settled_terminal(Participant, &ra, &rb);
+        assert_eq!(state, State::Completed);
+        assert_eq!(
+            ours.spend_txid, ra.spend_txid,
+            "participant's claim is leg A"
+        );
+
+        let (state, ours, _) = Engine::v1_settled_terminal(Initiator, &fa, &fb);
+        assert_eq!(state, State::Refunded);
+        assert_eq!(
+            ours.spend_txid, fa.spend_txid,
+            "initiator refunds its leg A"
+        );
+
+        let (state, ours, _) = Engine::v1_settled_terminal(Participant, &fa, &fb);
+        assert_eq!(state, State::Refunded);
+        assert_eq!(
+            ours.spend_txid, fb.spend_txid,
+            "participant refunds its leg B"
+        );
+
+        // Mixed spends (§7.4 double-spend window) are flagged for history.
+        let (state, _, detail) = Engine::v1_settled_terminal(Initiator, &fa, &rb);
+        assert_eq!(state, State::Completed, "a redeem is what moved value");
+        assert!(detail.contains("§7.4"), "mixed settlement must be flagged");
+
+        // v2 twin — also asserts WHICH per-leg final_* slot our spend fills.
+        let (state, ours_a, ours, _) = Engine::v2_settled_terminal(Initiator, &ra, &rb);
+        assert_eq!(state, AdaptorState::Completed);
+        assert!(!ours_a, "initiator's v2 claim lands in final_txid_b");
+        assert_eq!(ours.spend_txid, rb.spend_txid);
+        let (state, ours_a, ours, _) = Engine::v2_settled_terminal(Participant, &ra, &rb);
+        assert_eq!(state, AdaptorState::Completed);
+        assert!(ours_a, "participant's v2 claim lands in final_txid_a");
+        assert_eq!(ours.spend_txid, ra.spend_txid);
+        let (state, ours_a, _, _) = Engine::v2_settled_terminal(Initiator, &fa, &fb);
+        assert_eq!(state, AdaptorState::Refunded);
+        assert!(ours_a, "initiator's v2 refund lands in final_txid_a");
+        let (state, ours_a, _, _) = Engine::v2_settled_terminal(Participant, &fa, &fb);
+        assert_eq!(state, AdaptorState::Refunded);
+        assert!(!ours_a, "participant's v2 refund lands in final_txid_b");
+    }
+
+    #[test]
+    fn reconcile_pass_runs_once_then_rearms_on_request() {
+        // #201 cadence bookkeeping: every swap owes ONE reconcile per process
+        // start; a terminal record settles the debt without chain reads; an
+        // anomaly trigger (request_reconcile) re-arms it. An inconclusive
+        // classification (here: no backend configured at all) must NOT mark —
+        // the pass retries next tick instead of silently giving up.
+        let (engine, dir) = engine_with("reconcile-cadence", None);
+        let (mut rec, _init) = engine
+            .offer(
+                Network::Regtest,
+                ("btcx".into(), 1000),
+                ("btc".into(), 1000),
+                1_700_000_002,
+                1_700_000_001,
+                None,
+                None,
+            )
+            .unwrap();
+
+        assert!(
+            engine.reconcile_pending(&rec.swap_id),
+            "fresh process → every driven swap owes a reconcile"
+        );
+        // Pre-accept, no backends: classification is inconclusive → stays
+        // pending, no terminal write, no error.
+        assert!(engine
+            .reconcile_driven_v1(&rec)
+            .expect("inconclusive is not an error")
+            .is_none());
+        assert!(
+            engine.reconcile_pending(&rec.swap_id),
+            "inconclusive must retry, not mark"
+        );
+        // A terminal record reconciles trivially (no chain I/O) and marks.
+        rec.state = State::Completed;
+        engine.store.put(&rec).unwrap();
+        assert!(engine.reconcile_driven_v1(&rec).unwrap().is_none());
+        assert!(
+            !engine.reconcile_pending(&rec.swap_id),
+            "terminal record settles the reconcile debt"
+        );
+        // An anomaly trigger re-arms the pass.
+        engine.request_reconcile(&rec.swap_id);
+        assert!(engine.reconcile_pending(&rec.swap_id));
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
