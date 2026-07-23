@@ -138,8 +138,9 @@ discover it at runtime — a spend below it is simply rejected (`-6`, "lower tha
 the minimum fee rate setting"), so swaps on that coin can't fund at all.
 
 Carry the floor as data instead. Each `[coin.<network>]` block takes an optional
-**`min_feerate_sat_vb`** (integer sat/vB, default `1`); the engine floors every
-funding and spend feerate at it, so a coin's own floor always wins:
+**`min_feerate_sat_vb`** (decimal sat/vB, e.g. `0.1`; default `1` for file
+coins, whose node version is unknown); the engine floors every feerate at it,
+so a coin's own floor always wins:
 
 ```toml
 [coin.mainnet]
@@ -148,7 +149,13 @@ consensus = { genesis_hash = "12a7…", bech32_hrp = "ltc", … }
 ```
 
 The bundled `ltc` coin ships `min_feerate_sat_vb = 10` on mainnet, testnet, and
-regtest; the built-in `btc` and `btcx` coins use the `1` default.
+regtest; the built-in `btc` and `btcx` coins floor at **0.1 sat/vB** (Core 30+
+relays it). Two floors apply, deliberately distinct: **estimator/preset-driven**
+rates (market estimates, target fallbacks) never go below **1 sat/vB** — the
+miner-revenue floor — while an **explicitly user-chosen** rate (the send form's
+Custom field) respects only the coin floor, so `0.1` survives to the wire.
+Internally feerates are integer **sat/kvB** (`min_feerate_sat_kvb`, 100 = 0.1
+sat/vB); the decimal form exists only at human-facing edges like this file.
 
 ### The `%NODEDIR%` datadir token
 

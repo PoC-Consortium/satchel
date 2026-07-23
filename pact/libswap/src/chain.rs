@@ -30,6 +30,14 @@ pub use wallet_btcx::WalletTxInfo;
 use electrum_btcx::backend::{btc_kvb_to_sat_kvb, kvb_to_vb_round};
 use electrum_btcx::SANITY_MAX_SAT_PER_VB;
 
+/// Floor for ESTIMATOR-driven rates (presets, target fallbacks): 1 sat/vB —
+/// the miner-revenue floor. EXPLICIT user rates bypass this and respect only
+/// the coin's own `min_feerate_sat_kvb` (0.1 sat/vB on the built-ins; Core
+/// 30+ relays it). Twin of `ElectrumBackend::ESTIMATE_FLOOR_SAT_KVB` (private
+/// there) — the two-floor policy must not drift between the Core-RPC and
+/// Electrum backends.
+const ESTIMATE_FLOOR_SAT_KVB: u64 = 1000;
+
 /// Test-only market-feerate override (sat/vB); 0 = unset. Set via the
 /// regtest-gated `_settestfeerate` RPC and honored by [`RpcBackend::fee_rate_sat_per_vb`]
 /// ONLY on regtest, so the harness can manufacture the market-vs-broadcast gap
@@ -220,7 +228,9 @@ pub trait ChainBackend: Send + Sync {
     /// [`Self::fee_rate_for`] would silently substitute the 1 sat/vB fallback.
     /// The send form needs the distinction to mirror phoenix's preset logic:
     /// estimate-less presets are disabled and the form falls back to a custom
-    /// rate at the coin floor. Estimates are floored to `min_feerate_sat_vb`.
+    /// rate at the coin floor. Estimates are floored to
+    /// `max(min_feerate_sat_kvb, ESTIMATE_FLOOR_SAT_KVB)` — the two-floor
+    /// policy: estimator/preset-driven rates never go below 1 sat/vB.
     /// Chain-data-less backends report no estimate.
     fn fee_estimate(&self, _conf_target: u16) -> Result<Option<u64>> {
         Ok(None)
@@ -246,14 +256,16 @@ pub trait ChainBackend: Send + Sync {
     }
 
     /// Resolve a [`SendFee`] to the sat/kvB rate a send prices itself at:
-    /// market estimate (with fallback) for a target, or the explicit rate
-    /// clamped to the coin floor and the sanity max.
+    /// market estimate (with the estimator floor) for a target, or the
+    /// EXPLICIT user rate clamped only to the coin floor and the sanity max —
+    /// two-floor policy: an explicit 0.1 sat/vB must survive (Core 30+ relays
+    /// it), never re-floored at the estimator's 1 sat/vB.
     fn resolve_send_fee(&self, fee: SendFee) -> Result<u64> {
         match fee {
             SendFee::Target(conf_target) => self.fee_rate_for_kvb(conf_target, false),
             SendFee::RatePerKvb(rate) => Ok(rate
                 .clamp(1, SANITY_MAX_SAT_PER_VB * 1000)
-                .max(self.params().min_feerate_sat_vb * 1000)),
+                .max(self.params().min_feerate_sat_kvb)),
         }
     }
 
@@ -641,10 +653,13 @@ impl CoreRpcBackend {
         if self.params.network == Network::Regtest {
             let ov = TEST_FEERATE_OVERRIDE_SAT_VB.load(Ordering::Relaxed);
             if ov > 0 {
+                // Plays the role of a market ESTIMATE, so the estimator floor
+                // applies (the clamp's lower bound IS the 1 sat/vB floor; a
+                // coin floor above it — Litecoin — still wins via the max).
                 return Some(
                     (ov * 1000)
-                        .clamp(1000, SANITY_MAX_SAT_PER_VB * 1000)
-                        .max(self.params.min_feerate_sat_vb * 1000),
+                        .clamp(ESTIMATE_FLOOR_SAT_KVB, SANITY_MAX_SAT_PER_VB * 1000)
+                        .max(self.params.min_feerate_sat_kvb),
                 );
             }
         }
@@ -660,9 +675,11 @@ impl CoreRpcBackend {
         // returns an estimate (Core src/rpc/fees.cpp), but some wallets reject
         // anything below a higher baked-in `-mintxfee` that no RPC exposes
         // (Litecoin's is ~10 sat/vB), giving -6 "lower than the minimum fee rate
-        // setting". `min_feerate_sat_vb` carries that per-coin floor (coins.toml
-        // for file coins, 1 for the built-ins); applied AFTER the sanity clamp so
-        // the coin's floor always wins.
+        // setting". `min_feerate_sat_kvb` carries that per-coin floor (coins.toml
+        // for file coins), raised to the ESTIMATOR floor (1 sat/vB — two-floor
+        // policy: only an EXPLICIT user rate may go below that, and it never
+        // passes through here); applied AFTER the sanity clamp so the effective
+        // floor always wins.
         self.rpc
             .call("estimatesmartfee", &args)
             .ok()
@@ -670,7 +687,7 @@ impl CoreRpcBackend {
             .map(btc_kvb_to_sat_kvb)
             .map(|est| {
                 est.clamp(1, SANITY_MAX_SAT_PER_VB * 1000)
-                    .max(self.params.min_feerate_sat_vb * 1000)
+                    .max(self.params.min_feerate_sat_kvb.max(ESTIMATE_FLOOR_SAT_KVB))
             })
     }
 
@@ -889,7 +906,9 @@ impl ChainBackend for CoreRpcBackend {
         Ok(self
             .smart_fee_estimate_kvb(conf_target, conservative)
             .map(|kvb| kvb_to_vb_round(kvb).max(1))
-            .unwrap_or(self.params.min_feerate_sat_vb.max(1)))
+            .unwrap_or(
+                kvb_to_vb_round(self.params.min_feerate_sat_kvb.max(ESTIMATE_FLOOR_SAT_KVB)).max(1),
+            ))
     }
 
     fn fee_estimate(&self, conf_target: u16) -> Result<Option<u64>> {
@@ -905,7 +924,7 @@ impl ChainBackend for CoreRpcBackend {
     fn fee_rate_for_kvb(&self, conf_target: u16, conservative: bool) -> Result<u64> {
         Ok(self
             .smart_fee_estimate_kvb(conf_target, conservative)
-            .unwrap_or(self.params.min_feerate_sat_vb.max(1) * 1000))
+            .unwrap_or(self.params.min_feerate_sat_kvb.max(ESTIMATE_FLOOR_SAT_KVB)))
     }
 
     fn is_in_mempool(&self, txid: &str) -> Result<bool> {
