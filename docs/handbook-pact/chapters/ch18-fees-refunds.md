@@ -57,6 +57,13 @@ Around that target, the loop applies three gates:
   **at most once per block**; if the tip has not advanced since the last action
   it does nothing. This replaces the old 30-second scheduler tick that produced
   the per-tick churn behind the storm — a back-off when the chain is quiet.
+  One deliberate exception: a **redeem** inside the final 90 minutes before its
+  confirm-by deadline re-arms **every tick** (`REDEEM_FINAL_BAND_SECS = 5400`,
+  `engine.rs:544`) — per-block cadence bumps at the first tick of a block
+  interval and then goes deaf for the rest of it, which on an hour-long block
+  is exactly the wrong moment to be deaf. The gates below still bound the
+  cost: a flat market stays a no-op at any cadence. Refunds are always
+  once-per-block.
 - **BIP125 Rule-4 gate.** A replacement is broadcast only when `target` clears
   the current feerate by the node's **incremental-relay fee** (`getmempoolinfo`
   → `incremental_relay_feerate`, `chain.rs:389`). If the market has not risen —
@@ -75,22 +82,48 @@ Around that target, the loop applies three gates:
   per-tick rebroadcast the old escalator emitted is gone.
 
 A dust guard still applies: a target whose `new_fee` would push the swept output
-below `DUST_LIMIT_SAT = 546` (`swap.rs:20`) is treated as "no bump" and falls
-through to the evicted-only rebroadcast path rather than dusting the output.
+below that output type's real dust threshold (`dust_threshold`, `swap.rs:34` —
+Core's `minimal_non_dust`, line-for-line: **294** sat P2WPKH, **330** P2TR/P2WSH,
+**546** legacy P2PKH) is treated as "no bump" and falls through to the
+evicted-only rebroadcast path rather than dusting the output. The old flat
+`DUST_LIMIT_SAT = 546` (`swap.rs:25`) was *stricter than the network* — it
+rejected small sweeps the network would happily relay — and survives only as
+the conservative floor on the v2 CPFP child value, where skipping a near-dust
+fee-bump child never strands funds.
 
 **Deadline-aware redeem escalation.** The market-tracking baseline keeps fees
 cheap when there is time, but a pure market follower never reacts to the *clock*:
 in a flat market a marginal redeem can sit unconfirmed into its timelock and lose
 the leg. So the **redeem** nurse (v1 RBF and v2 CPFP alike) is deadline-aware —
 as the redeem's confirm-by deadline nears it escalates the estimator's
-confirmation target, `conf_target` 6 → 3 → 2 → 1 (with Core's CONSERVATIVE
-estimate mode in the tighter bands), keyed off absolute time-to-deadline
-thresholds (`redeem_conf_target`, `engine.rs`). Deadlines: the initiator's leg-B
-redeem → `T2`; the participant's leg-A redeem → `T1 − redeem-a margin`. This only
-raises the *market* term — the value-at-risk cap still bounds the absolute fee,
-so it is insurance, never overpay. Refunds keep the cheap baseline (we are the
-only spender — no counterparty race). The baseline itself is unchanged
-(`estimatesmartfee(6)`); regtest is exempt (test-feerate override).
+`(conf_target, estimate mode)`, keyed off absolute time-to-deadline thresholds
+(`redeem_conf_target`, `engine.rs:527`):
+
+```text
+remaining > 6 h           → (funding conf-target, economical)   [= 3 on Bitcoin]
+6 h ≥ remaining > 3 h     → (3, conservative)
+3 h ≥ remaining > 90 min  → (2, conservative)
+remaining ≤ 90 min        → (1, conservative)
+```
+
+The relaxed baseline is **not** a flat `estimatesmartfee(6)`: it is the coin's
+wall-clock-normalized ~30-min **funding class** (`funding_conf_target`, = 3 on
+Bitcoin — see "The funding-bump nurse" below), because a claim is the leg a
+human is actively waiting on. The same funding-class rate also prices the v1
+**initial** redeem builds (both legs) and the v2 negotiated cooperative-redeem
+feerate — the signing-time commitment that can never be re-signed. The final
+`conf_target = 1` band arms a full **90 minutes** out (a single block can take
+an hour, so the §7.4 margin becomes a reserve, not the primary buffer), and
+inside it the bump **cadence** escalates too: once-per-block becomes every tick
+(`REDEEM_FINAL_BAND_SECS`, the cadence exception above). Field motivation: a
+2026-07-21 mainnet claim priced at the old flat 6-block economical rate missed
+four slow blocks and settled 73 minutes after the reveal. Deadlines: the
+initiator's leg-B redeem → `T2`; the participant's leg-A redeem → `T1 −
+redeem-a margin`. Escalation only raises the *market* term — the value-at-risk
+cap still bounds the absolute fee, so it is insurance, never overpay. Refunds
+keep the cheap flat-6 baseline and the once-per-block cadence — we are the only
+spender, no counterparty race, so escalation buys nothing. Regtest is exempt
+(test-feerate override).
 
 ## v1 fee-bumping (RBF)
 
@@ -98,9 +131,10 @@ In v1 **both** the redeem and the refund are RBF-bumpable. Both spends signal
 RBF (`nSequence = 0xFFFFFFFD`), and because the v1 keys sign deterministically
 (ECDSA), the engine can re-sign a higher-fee replacement unilaterally
 (`maybe_bump`). Both follow the **unified market-tracking strategy** above:
-`target_feerate` toward the live market, at most once per block, only when the
-target clears the BIP125 Rule-4 floor, otherwise a silent evicted-only
-rebroadcast (`max_feerate_sat_vb = 500` by default).
+`target_feerate` toward the live market, at most once per block (every tick for
+a redeem inside the final 90-min band), only when the target clears the BIP125
+Rule-4 floor, otherwise a silent evicted-only rebroadcast
+(`max_feerate_sat_vb = 500` by default).
 
 ## v2 fee-bumping: a split design
 
@@ -131,12 +165,13 @@ Two mitigations make this safe in practice.
 signing (`engine.rs`, `adaptor_redeem_feerate`):
 
 ```text
-adaptor_redeem_feerate = live_market_estimate
+adaptor_redeem_feerate = live market estimate at the funding conf-target
+                         (the ~30-min class; 3 on Bitcoin)
                          clamped to [MIN_REDEEM_FEERATE = 1, MAX_REDEEM_FEERATE = 500] sat/vB
                          fallback 20 sat/vB if no backend is reachable
 ```
 
-The redeem commits at the **live market rate, with no over-provision** — the
+The redeem commits at the **funding-class market rate, with no over-provision** — the
 CPFP child below is what lifts it if the market climbs while it's pending, so
 padding the committed fee up front is no longer needed (there was an
 over-provision multiplier before this — 2× at one point, and 3× before CPFP
@@ -160,7 +195,8 @@ through with a child-pays-for-parent transaction (`adaptor_cpfp_bump`,
 - It emits `adaptor-cpfp` / `adaptor-rebroadcast` events.
 - The child's package target is **deadline-aware** (see "Deadline-aware redeem
   escalation" above): as `T2` (initiator) or `T1 − margin` (participant) nears it
-  escalates `conf_target`, and it is bounded by the sweep output's value — if that
+  escalates `conf_target` through the 6 h / 3 h / 90 min bands — re-arming every
+  tick inside the final band — and it is bounded by the sweep output's value — if that
   output is too small to fund the child to the target, the shortfall is logged
   rather than silently under-bumped.
 
@@ -207,9 +243,9 @@ Bitcoin (600 s) → **3**; Litecoin (150 s) → 12 clamped back to the standard
 **6** (6 blocks ≈ 15 min is already inside the budget); BTCX (120 s) → **6**. The
 30-min cap only ever pulls the target *faster* on slow chains — it never prices a
 fast chain below the historical `estimatesmartfee(6)` baseline, and it needs no
-per-coin config (block spacing is already in `coins.toml`). Redeem and refund keep
-their own targets (deadline-aware for redeem, flat 6 for refund); this applies to
-funding only.
+per-coin config (block spacing is already in `coins.toml`). The redeem's relaxed
+baseline reuses this same funding class (see "Deadline-aware redeem escalation"
+above); refunds keep their flat 6.
 
 This is **liveness, not safety**: a funding that can't keep up simply stalls and
 the timelock refund returns the coin — never a loss. The two protocols bump
@@ -368,7 +404,10 @@ Other fee-related constants remain fixed (not policy):
 | Constant | Value | Meaning |
 |---|---|---|
 | `FEE_CAP_PCT` | 100% | value-at-risk cap in `target_feerate`: a bump's fee never exceeds the amount being claimed (Eclair's rule). Hardcoded (`fee_policy.rs:28`), not a knob |
-| `DUST_LIMIT_SAT` | 546 sat | swept output must stay above this |
+| `dust_threshold(script)` | 294 / 330 / 546 sat | per-output-type dust floor for a swept output (Core's `minimal_non_dust`: P2WPKH / P2TR+P2WSH / legacy P2PKH) |
+| `DUST_LIMIT_SAT` | 546 sat | conservative fallback when the destination script is unknown; the spend/bump gates use `dust_threshold` instead, so this survives only as the v2 CPFP child-value floor |
+| `MIN_LEG_VALUE_SAT` | 3430 sat | minimum for either leg, enforced at offer post and take (330-sat segwit dust + 155 vB × 20 sat/vB planning feerate); already-created swaps are exempt so they can still refund |
+| `REDEEM_FINAL_BAND_SECS` | 5400 s | the final redeem escalation band (90 min): `conf_target = 1` plus per-tick bump cadence |
 | `MAX_REDEEM_FEERATE` | 500 sat/vB | **protocol** bound on the negotiated redeem feerate (distinct from `max_feerate_sat_vb`) |
 | `CPFP_CHILD_VSIZE` | 150 vB | the CPFP redeem/funding-bump child |
 | `FUNDING_VSIZE_EST` | 250 vB | sizing estimate for the funds-gate reservation |

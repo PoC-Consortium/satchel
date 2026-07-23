@@ -181,7 +181,7 @@ first.
 > card: the engine reclaims your funds automatically after that deadline.
 
 > **Tip** — You don't strictly have to press **cancel** on a handshake that's
-> going nowhere. A **Private (Taproot)** swap stuck waiting on the other side —
+> going nowhere. A swap of either kind stuck waiting on the other side —
 > before anything is funded — clears itself automatically after about 15
 > minutes, on both sides independently, with nothing lost either way. Cancel is
 > there for when you don't want to wait even that long.
@@ -196,12 +196,26 @@ shows the *other* machine's in-flight swaps, grouped per machine under a heading
 like **Another machine · M-7f3a**. Those cards are **read-only**: this machine
 watches them on-chain but never acts on them, and they don't appear in the Swaps
 ledger. Each group carries one **Take over** button. Press it — and confirm that
-the other machine really is stopped — and this machine adopts the group's swaps
-and starts driving them, ledger and all. The one kind it can't adopt this way is
-a **Private (v2)** swap paid out to a node wallet this machine doesn't control:
-it's skipped, with a note to point this machine at that wallet (or add an
-Electrum view for the coin) and take over again. All v1 swaps, and v2 swaps that
-pay a seed-derived address, adopt without conditions.
+the other machine really is stopped — and this machine adopts **all** of the
+group's swaps and starts driving them, ledger and all. One kind adopts with a
+caveat: a **Private (v2)** swap whose payout is pinned to a node wallet this
+machine doesn't control is taken over **refund-only**, with a warning — this
+machine won't complete the trade into a wallet it doesn't own, so that swap
+simply rides to its timelock and refunds to an address this machine *does* own.
+Nothing is skipped, and nothing is left undriven. All v1 swaps, and v2 swaps
+that pay a seed-derived address, adopt and complete without conditions.
+
+> **Note** — If the group holds a swap that hasn't locked anything yet, the
+> confirmation dialog says so honestly: taking over a pre-funding swap is
+> fire-and-forget. It continues only if this wallet can positively verify from
+> the blockchain that its funding is safe to send; if that can't be proven, it
+> ends in a clean abort about 15 minutes after take-over. No funds are at risk
+> either way.
+
+And take-over doesn't set a trap for the other machine, either: if it later
+comes back online, it checks each of its swaps against the blockchain before
+acting, sees the ones you finished here, and simply records them as completed —
+it won't fight you for them or re-broadcast anything.
 
 > **Note** — Upgrading from an older Satchel needs no ceremony here: your
 > **finished** swaps stay in the ledger automatically. A swap that was still

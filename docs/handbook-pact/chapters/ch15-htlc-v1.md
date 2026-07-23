@@ -166,11 +166,14 @@ Key parameters (`swap.rs:127-205`):
   Auto-Refund").
 - `nLockTime = 0` — the hash branch has no timelock.
 - Signature is BIP143 `SIGHASH_ALL` (`swap.rs:158-169`).
-- Worst-case vsize for fee math: `REDEEM_TX_VSIZE = 155` (`swap.rs:25`).
+- Worst-case vsize for fee math: `REDEEM_TX_VSIZE = 155` (`swap.rs:73`).
 
 The spend sweeps `htlc_value − fee` to the claimer's destination; the engine
-refuses to build a spend whose output would fall below the dust limit
-(`DUST_LIMIT_SAT = 546`, `swap.rs:19-20`, guarded at `swap.rs:138-141`).
+refuses to build a spend whose output would fall below the destination's real
+dust threshold (`dust_threshold`, `swap.rs:34` — Core's `minimal_non_dust` per
+output type: 294 sat P2WPKH, 330 P2TR/P2WSH, 546 legacy P2PKH; guarded at
+`swap.rs:192`). Matching Core exactly rather than a flat 546 means a small leg
+the network would relay is never stranded by a stricter-than-network guard.
 
 ## Refund
 

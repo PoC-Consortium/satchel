@@ -31,6 +31,9 @@ until you can.
 It also runs the same **wallet-lock check** posting does, on the coin you'd be
 **getting** (the side you fund): if that node wallet is encrypted and locked, the
 take is refused up front, asking you to unlock it first with `walletpassphrase`.
+And the same **minimum size** rule from posting applies here too: a take is
+refused if either side of the trade comes to less than about 3,430 sats — too
+small to claim or refund safely once network fees are paid.
 
 > **Warning** — A locked wallet can read its balance but can't sign your funding
 > transaction, so taking with it locked would strand the swap at funding. Unlock

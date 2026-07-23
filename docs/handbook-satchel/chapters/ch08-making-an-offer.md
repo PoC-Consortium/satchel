@@ -37,6 +37,14 @@ at the end of the field. Just beneath it Satchel shows your **live balance** in
 that coin (pulled straight from your own node), so you can see what you have to
 work with.
 
+There's also a floor. An offer where **either side of the trade comes to less
+than about 3,430 sats** is refused up front, with a message saying the leg is
+too small. That isn't fussiness: a swap that tiny could lock funds and then be
+worth less than the network fee needed to claim or refund it near the deadline —
+stranding coins that can never economically move again. Refusing it before
+anything is posted means a swap can never start that couldn't safely finish.
+(The same floor applies when someone tries to *take* an offer.)
+
 ### Price
 
 The **Price** is always quoted **quote-coin per base-coin**, and — this is the

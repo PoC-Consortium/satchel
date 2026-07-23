@@ -132,7 +132,9 @@ driven by the clock rather than by a message.
   and redeems leg A.
 - `Refunded` is reachable from `FundedA` or `FundedB` when a refund timelock
   matures and the corresponding HTLC is still unspent. `Aborted` covers
-  pre-funding handshake or validation failures.
+  pre-funding handshake or validation failures — including a `Created` swap
+  whose accept never arrives, which self-aborts at the 15-minute pre-funding
+  timeout (`PRE_FUNDING_TIMEOUT_SECS`) rather than lingering.
 
 ## v2 state machine — `AdaptorState`
 

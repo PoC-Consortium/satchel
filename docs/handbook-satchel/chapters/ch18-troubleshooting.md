@@ -22,8 +22,11 @@ can't load data — the app can't reach its swap engine. The usual causes:
    to it, the connection details are off. Open **Settings → Coins**, edit the coin,
    and re-check the host, port, and authentication (cookie file path, or
    username/password). See the chapter *"Setting Up Your Coins"*.
-3. **The engine simply needs a restart.** Closing and reopening Satchel relaunches
-   the engine cleanly.
+3. **The engine was stopped or crashed.** If the engine Satchel launched died
+   and came back, Satchel **reconnects to it automatically** the next time a
+   screen asks for data — you don't need to restart the app, just give it a
+   moment (or click into any page) and the dot turns green again. If it stays
+   red, closing and reopening Satchel relaunches the engine cleanly.
 
 > **Note** — Satchel needs the engine to be reachable before it can show balances,
 > offers, or swaps. Fixing the engine connection usually fixes several symptoms at

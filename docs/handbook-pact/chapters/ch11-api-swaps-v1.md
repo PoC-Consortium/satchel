@@ -122,6 +122,20 @@ blocks (initiator and counterparty legs respectively).
 > message: both sides' schedulers independently time out their own copy of the
 > stalled handshake. `signed` is excluded from this auto-timeout, since funding
 > may already be in flight by then. See the chapter "API: v2 Adaptor Swaps".
+> A v1 swap stuck in `Created` with no accept auto-aborts at the same
+> 15-minute timeout, instead of erroring "no accept yet" every tick forever.
+
+> **Note** — **Every inbound relay handler is idempotent on re-delivery.**
+> Relay delivery is at-least-once, and a re-sent message mints a fresh
+> gift-wrap (fresh event id), so event-id dedup cannot collapse it. A repeat
+> `take` for an offer already served to the same taker is therefore a no-op,
+> surfaced as a `"take-duplicate"` tick event — **not** answered with an
+> `abort` (an abort keyed to the offer id would delete the taker's still-live
+> pending take and kill the handshake, a real field failure fixed in rc15).
+> The same invariant holds across the rest of the inbound set
+> (`accept`/`funded`/`redeemed`/nonces/partial-sigs/`funding`/`abort`); a
+> replayed v1 `funded` in particular never regresses `FundedB → FundedA` or
+> re-arms auto-fund.
 
 > **Note** — The `funded` envelope `fund` relays is an *accelerator*, not a
 > requirement. Even if the relay message never reaches the maker, the swap still

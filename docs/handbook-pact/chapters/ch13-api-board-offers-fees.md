@@ -56,6 +56,23 @@ chooses one transport rather than merging.
 > offers expire first.
 > ```
 
+> **Note** — **Minimum leg size.** `boardpostoffer` and `boardtake` both refuse
+> a swap either of whose legs is below `MIN_LEG_VALUE_SAT = 3430` sat
+> (`swap.rs:52`, `ensure_leg_values_viable`): 330-sat segwit dust plus one
+> worst-case redeem's fee (`REDEEM_TX_VSIZE = 155` vB × the 20 sat/vB
+> `OFFER_PLANNING_FEERATE`). A smaller leg could fund but then strand — too
+> small to redeem *or* refund above dust once fees are paid near the deadline.
+> The rejection reads:
+>
+> ```text
+> {give|get} leg {amt} sat is below the 3430-sat minimum — too small to redeem
+> or refund above dust once fees are paid near the deadline (spec §6.4)
+> ```
+>
+> The floor is deliberately **not** enforced on the swap-processing path
+> (`validate_structure`) — that would brick the refund of an already-created
+> sub-minimum swap.
+
 > **Note** — On Nostr the listing's expiry is **rolling**:
 > `min(now + 1800s, created + ttl_secs)`. It is refreshed as the offer is
 > republished, not pinned to `ttl_secs` from creation.

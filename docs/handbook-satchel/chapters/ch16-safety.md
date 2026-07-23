@@ -154,15 +154,30 @@ own swaps:
   carries one **Take over** button, behind a confirmation that spells out the
   condition: *only if that machine is stopped*. Confirm, and this machine
   adopts those swaps and drives them to completion — the standby becoming the
-  main, in one click. (One exception: a **Private (v2) swap** whose payout is
-  pinned to a node wallet this machine doesn't control is left untouched rather
-  than adopted — driving it would send the proceeds to the other machine's
-  wallet. Point this machine at that coin's wallet, or add an Electrum view for
-  it, and take over again. All v1 swaps, and v2 swaps that pay a seed-derived
-  address, adopt without conditions.) Make absolutely sure the dead machine is
+  main, in one click. (One special case: a **Private (v2) swap** whose payout is
+  pinned to a node wallet this machine doesn't control is still adopted, but
+  **refund-only**, with a warning — this machine won't complete the trade into
+  a wallet it doesn't own, so that swap rides to its timelock and refunds to an
+  address this machine *does* own. Nothing is skipped or left undriven. All v1
+  swaps, and v2 swaps that pay a seed-derived address, adopt and complete
+  without conditions.) Make absolutely sure the dead machine is
   genuinely off
   first: two machines driving the same swap at once can lose money, and the
   confirmation is your promise that it can't happen.
+
+> **Note** — The confirmation dialog is also honest about swaps that haven't
+> locked anything yet: taking one of those over is fire-and-forget. It
+> continues only if this wallet can positively verify from the blockchain that
+> its funding is safe to send; if that can't be proven, it ends in a clean
+> abort about 15 minutes after take-over. No funds are at risk either way.
+
+> **Note** — The road back is safe too. If the original machine comes back
+> after its standby finished a swap, it doesn't blindly resume from its old
+> records: on startup it checks each of its swaps against the blockchain
+> first, and a swap the standby already settled simply shows its true final
+> state — **Completed** or **Refunded** — in the ledger. Nothing is
+> re-broadcast, and nothing lingers as a stuck active card or a doomed refund
+> attempt.
 
 > **Warning** — Machines sharing a seed share **one balance**. This is a
 > failover arrangement, not doubled liquidity: running two machines does not
