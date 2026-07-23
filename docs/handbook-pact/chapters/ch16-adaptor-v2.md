@@ -151,8 +151,9 @@ daemon recovering from a crash, with no live nonce state at all, can still
 refund from the seed alone.
 
 Worst-case vsize: `SCRIPTPATH_REFUND_VSIZE = 140` (`taproot.rs:41`). As in v1,
-the engine refuses any spend whose output would fall below
-`DUST_LIMIT_SAT = 546` (`taproot.rs:130-133`).
+the engine refuses any spend whose output would fall below the destination's
+per-output-type dust threshold (`dust_threshold` — Core's `minimal_non_dust`:
+294 sat P2WPKH, 330 P2TR/P2WSH, 546 legacy P2PKH; `taproot.rs:134`).
 
 ## The adaptor mechanism
 

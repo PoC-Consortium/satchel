@@ -34,13 +34,13 @@
 
 ## Rescue / takeover
 
-A machine restored from the seed alone can rediscover in-flight swaps from encrypted-to-self relay snapshots; a machine sharing the seed with a stopped one can adopt its swaps. Adoption is always explicit — `pactd` only ever detects and warns on its own (boot/unlock/merchant-load).
+A machine restored from the seed alone can rediscover in-flight swaps from encrypted-to-self relay snapshots; a machine sharing the seed with a stopped one can adopt its swaps. Adoption is always explicit — `pactd` only ever detects and warns on its own (boot/unlock/merchant-load). On restart the engine also reconciles each swap it drives against the chain before acting (once per process start, zero broadcasts) — a swap another same-seed machine already settled snaps straight to its true terminal state instead of lingering or arming a doomed refund.
 
 | Method | Purpose |
 |---|---|
 | `restorefromrelay` | Adopt every rescuable relay snapshot not already held locally; `{ restored, seen }`. |
 | `rescuestatus` | Read-only preview — how many *would* be adopted, plus a two-machines double-fund warning; `{ pending, seen, warning? }`. |
-| `takeover` | Adopt a followed swap (another machine's on the same seed, or one recovered after re-import) so this machine drives it — only once that machine is stopped (`swap_id`). A v2 swap whose cooperative-redeem payout pays a wallet this machine doesn't control is refused (driving it would pay the other machine); v1 and seed-derived v2 adopt unconditionally. |
+| `takeover` | Adopt a followed swap (another machine's on the same seed, or one recovered after re-import) so this machine drives it — only once that machine is stopped (`swap_id`). A v2 swap whose cooperative-redeem payout pays a wallet this machine doesn't control is adopted anyway, with a warning, but **refund-only**: completing it would pay the other machine, so the driver refuses the cooperative redeem and rides the swap to its timelock refund (which pays a fresh address this machine owns); v1 and seed-derived v2 adopt fully. |
 
 ## Merchants
 
@@ -103,8 +103,8 @@ v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed). T
 |---|---|
 | `boardlistoffers` | Browse one board's offers (`board` = URL or `"nostr"`). |
 | `boardstatus` | Per-relay connectivity. |
-| `boardpostoffer` | Post an offer; fans out to all configured boards. |
-| `boardtake` | Take a posted offer. |
+| `boardpostoffer` | Post an offer; fans out to all configured boards. Rejects an offer if either leg is below the **3,430-sat minimum** (330-sat segwit dust + one redeem's fee at the 20 sat/vB planning rate) — too small to redeem or refund above dust once fees are paid near the deadline. |
+| `boardtake` | Take a posted offer (same 3,430-sat minimum-leg check as `boardpostoffer`). |
 | `boardrevoke` | Revoke one of my offers. |
 | `revokeoffersforcoin` | Withdraw every live offer whose pair involves a coin (`coin_id`) — Satchel calls it before removing/reconfiguring a coin so its offers de-list cleanly. |
 

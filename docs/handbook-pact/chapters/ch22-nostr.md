@@ -166,8 +166,9 @@ account.
 **three steps**, so the engine lock is held only for fast SQLite work and never
 across a relay round-trip:
 
-1. **`prep`** *(under the lock)* — read the active merchant's identity, pending
-   `nostr_outbox` rows, and the offer/mailbox fetch cursors.
+1. **`prep`** *(under the lock)* — read the active merchant's identity,
+   atomically **claim** the due `nostr_outbox` rows (see the delivery model
+   below), and read the offer/mailbox fetch cursors.
 2. **`round`** *(lock-free)* — **publish the outbox first**, then fetch offers,
    mail, and deletions, with `FETCH_TIMEOUT` = 10s. Publishing first reclaims
    latency: outgoing swap-handshake gift-wraps don't wait on the fetch round, and
@@ -188,6 +189,30 @@ across a relay round-trip:
 > If cursor-stranding is ever seen for real, the intended robust fix is a
 > windowed / author-scoped offer re-fetch, not reordering the round.
 
+**Delivery is at-least-once, and every inbound handler is idempotent.** The
+step-1 claim is atomic (`nostr_outbox_claim`, `store.rs:672`): it selects
+unsent rows whose last publish attempt is older than `OUTBOX_RESEND_SECS = 60`
+(`nostr_service.rs:95`) and stamps their `last_attempt` in the same locked
+pass, so a concurrent drain — an RPC `flush_nostr` racing the scheduler tick —
+sees the fresh stamp and skips them rather than double-publishing (a duplicate
+the receiver's event-id dedup can never catch: a fresh gift-wrap mints a fresh
+event id). The claim is per-row, so a slow relay defers only its own rows — no
+head-of-line blocking. The same 60-second window doubles as the retry
+throttle: a row unACKed for 60 s is re-sent, and the ACK (mark-sent) retires
+it for good. Because a send can land while its ACK is lost, re-delivery is
+always possible — which is why **every inbound relay handler is idempotent on
+re-delivery** (a repeat `take` is a `"take-duplicate"` no-op, a replayed
+`funded` never regresses state; see the chapter "API: v1 HTLC Swaps").
+
+On the receive side, a deterministically-bad envelope — an unknown v1/v2
+message type, an unexpected relay message, a duplicate v1 `accept` — is tagged
+**permanent** and consumed, so it advances the shared per-board mailbox cursor
+instead of head-of-line-blocking every other swap's mail for the full retry
+budget. And on a shared-seed standby, an `init` with no matching pending take
+is *expected* (the pending take lives only in the driving machine's DB): it is
+consumed quietly as an `"init-ignored"` tick event, not logged as a permanent
+handshake failure.
+
 Polling (fetch-per-tick) rather than long-lived subscriptions keeps this aligned
 with how the engine already drives the HTTP relay each tick and sidesteps
 subscription/reconnect lifecycle. Cross-relay duplicates are absorbed by
@@ -197,7 +222,7 @@ The buffer tables:
 
 | Table | Role |
 |---|---|
-| `nostr_outbox` | Offers/revocations/gift-wraps awaiting publication. |
+| `nostr_outbox` | Offers/revocations/gift-wraps awaiting publication; `last_attempt` is the atomic-claim stamp (concurrent-drain guard + 60-s resend throttle). |
 | `nostr_inbox` | Received gift-wrap blobs; autoincrement id = the `relay_poll` cursor; deduped by `event_id`. |
 | `nostr_offer_cache` | Offers discovered from relays, with expiry. |
 

@@ -169,7 +169,8 @@ and "v2 Adaptor (Construction)".
   alone can adopt and finish it. Published at `accepted` (v1 and v2) and again
   at `signed` (v2 only); tombstoned on terminal states. See "Seeds, Wallets &
   Merchants".
-- **`PRE_FUNDING_TIMEOUT_SECS`** — 15 minutes; the shared deadline for two
+- **`PRE_FUNDING_TIMEOUT_SECS`** — 15 minutes; the shared deadline for three
   self-healing behaviors: a v2 handshake stuck before either leg funds
-  auto-aborts, and a board `take` whose signed `taken_at` is older than this is
-  silently dropped rather than served.
+  auto-aborts, a v1 swap stuck in `Created` with no accept auto-aborts, and a
+  board `take` whose signed `taken_at` is older than this is silently dropped
+  rather than served.

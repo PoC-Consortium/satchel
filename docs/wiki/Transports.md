@@ -36,6 +36,7 @@ Whichever transport you use, the privacy model is the same:
 - **Offers** are public but **signed** — anyone can read terms, nobody can forge them.
 - **Coordination** travels as **sealed `PACTSEALED1` blobs** — encrypted to the recipient, so the board/relay only ever sees ciphertext. There is no plaintext downgrade.
 - Relays can withhold, delay, or drop messages, but **your funds are protected by timelocks**, not by trusting the relay. Mitigate liveness risk by using multiple boards and refreshing offers.
+- Delivery is **at-least-once**: a send unacknowledged for 60 s is re-sent, and every inbound coordination handler is idempotent — a duplicated or replayed message is a no-op, never a broken swap.
 
 Boards and relays are independent, equal noticeboards — a post fans out across all of them at once, while browsing selects one board at a time.
 

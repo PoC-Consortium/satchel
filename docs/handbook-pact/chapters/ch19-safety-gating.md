@@ -65,19 +65,39 @@ active; safety comes from **partitioning**, not from electing an owner:
   secrets and swap ids at the same counter (see the chapter "Seeds, Wallets &
   Merchants").
 - **Take gate.** A maker serves a take only if this machine owns the offer;
-  another machine on the same seed ignores it silently.
+  another machine on the same seed ignores it silently. Symmetrically, a
+  maker's `init` arriving at a standby that holds no matching pending take is
+  expected fan-out noise — the pending take lives only in the driving
+  machine's DB — and is consumed quietly as an `"init-ignored"` tick event,
+  not logged as a handshake failure.
 - **Drive rule.** A record is driven only if its scope matches this machine
   (or it was explicitly adopted). Another machine's swap shows as **followed**
   — read-only chain monitoring, never broadcast; the engine funnels every
   broadcast through one belt that refuses followed records.
 - **Takeover.** If a machine dies, another adopts its swaps behind one
   explicit confirm ("confirm that machine is stopped") — the `takeover` RPC or
-  the dock's "Take over" button. A v2 record is additionally payout-gated: if
-  its pinned cooperative-redeem sweep address is not owned by this machine's
-  wallet, takeover skips it (driving it would pay the originating machine) and
-  asks the operator to point this machine at that wallet or add an Electrum
-  view. v1 pins no destination, and a sweep-unset v2 falls back to a
-  seed-derived address, so both always adopt.
+  the dock's "Take over" button. Takeover never skips a swap. A v2 record
+  whose pinned cooperative-redeem sweep address is not owned by this machine's
+  wallet is adopted anyway, with a warning, as **refund-only**: a refund pays a
+  fresh owned address and needs no sweep custody, so the payout check
+  (`v2_owns_redeem_payout`, gating both `adaptor_redeem` call sites) refuses
+  only the cooperative *completion* to the foreign wallet and rides the swap
+  to its timelock refund. v1 pins no destination, and a sweep-unset v2 falls
+  back to a seed-derived address, so those adopt with full redeem capability.
+- **Reconcile before drive.** On every restart, a driven swap first derives
+  its true status from chain before its drive arms act — the same
+  classification and depth gate the follower uses (`reconcile_driven_v1`/`_v2`,
+  `engine.rs:7113/7237`) — so a resumed driver never drives forward from
+  persisted state alone. A swap already settled elsewhere (say, by a same-seed
+  standby while the owner was down) is written to its true terminal state
+  locally with **zero broadcasts**: chain pointers are adopted and the
+  settling spend becomes the record's `final_tx` so the confirmation nurse
+  converges on it. Cadence is once per driven swap per process start,
+  re-armed by the drive arms whenever a tracked leg unexpectedly vanishes
+  (`request_reconcile`). A terminal is written only when our settlement leg is
+  spent deep at its own confirmation target — a shallow spend keeps the record
+  driving, so a reorg cannot fake a completion. Each reconciliation surfaces
+  as a `"reconciled"` tick event ("chain truth → {State}: …").
 - **Upgrade path.** Pre-upgrade records carry the legacy scope. Terminal
   legacy records are auto-claimed as this machine's history on the first tick
   (they stay in the Swaps ledger); active legacy swaps appear under "Another
@@ -88,8 +108,11 @@ active; safety comes from **partitioning**, not from electing an owner:
 > share ONE wallet balance — N interchangeable drivers, not N× liquidity.
 > Shared-wallet races (input-race errors, address reuse, a stale standby
 > balance until a rescan) are documented in the design doc. Withdraw/receive
-> is never gated. And a takeover asserts dead-is-dead: reconciling a machine
-> that was taken over and later restarted is the operator's responsibility.
+> is never gated. A takeover still asserts dead-is-dead at the moment it runs
+> — but a machine that was taken over and later restarted now reconciles each
+> driven swap against chain before acting ("Reconcile before drive" above), so
+> its settled swaps close out to their true terminal state instead of
+> lingering active or arming a doomed refund against a spent leg.
 
 The full design — the partitioning model, the followed-swap auto-purge at deep
 terminal, the scope-rotation self-heal on re-import — is
@@ -184,8 +207,10 @@ trade.
 > `adaptor_fund`.
 
 > **Note** — **Pre-funding timeout-abort now covers v2 too.** A v1 handshake
-> stuck pre-funding has long self-aborted after `PRE_FUNDING_TIMEOUT_SECS` (15
-> minutes). A v2 adaptor handshake stalled in `created`, `accepted`, or
+> stuck pre-funding self-aborts after `PRE_FUNDING_TIMEOUT_SECS` (15 minutes) —
+> since rc15 this includes a `Created` swap whose accept never arrives, which
+> previously errored every tick forever instead of aborting. A v2 adaptor
+> handshake stalled in `created`, `accepted`, or
 > `nonces_exchanged` — before either leg is funded — now does the same,
 > silently and independently on each side's own clock (`signed` is excluded, as
 > funding may already be in flight by then). Previously a stalled pre-`signed`

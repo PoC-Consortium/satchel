@@ -134,6 +134,16 @@ or **Reset to defaults** to put both back the way they came.
 > tab alone. Satchel handles fees for you out of the box; these knobs exist only
 > for people who want fine control over the cost of a stalled swap.
 
+A word on how the automatic side behaves, since it shows up in the feerates on
+your swap cards. A **claim** — the transaction that collects the coins you're
+owed — is in a genuine race against the swap's deadline, so it's priced to
+confirm at the same brisk pace as the swap's funding right from the start, and
+the engine escalates it as the deadline nears: in roughly the last hour and a
+half it re-checks the fee market on every pass and bumps whenever the market has
+moved above what the transaction pays. A **refund** never gets that treatment,
+on purpose — after the timelock, nobody else can spend those coins, so there's
+no race and a refund can afford to wait for a cheap block.
+
 ## Notifications
 
 Swaps take a while and run on their own — so the **Notifications** tab lets your
