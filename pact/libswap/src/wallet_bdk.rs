@@ -183,6 +183,18 @@ impl ChainBackend for BdkWalletBackend {
         self.backend.wallet_balance()
     }
 
+    fn wallet_balances(&self) -> Result<crate::chain::WalletBalances> {
+        // bdk buckets → the display triple: spendable = trusted_spendable
+        // (confirmed + own change, exactly what `wallet_balance` reports),
+        // pending = inbound awaiting its first confirmation.
+        let b = self.backend.wallet_balance_buckets()?;
+        Ok(crate::chain::WalletBalances {
+            spendable_sat: b.confirmed + b.trusted_pending,
+            pending_sat: b.untrusted_pending,
+            immature_sat: b.immature,
+        })
+    }
+
     fn wallet_send(&self, address: &str, amount_sat: u64, fee: SendFee) -> Result<String> {
         self.backend.wallet_send(address, amount_sat, fee)
     }

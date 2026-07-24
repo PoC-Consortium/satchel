@@ -10400,6 +10400,20 @@ impl Engine {
         .wallet_balance()
     }
 
+    /// Balance buckets for the wallet card (display only — spend gates keep
+    /// using [`Engine::wallet_balance`]).
+    pub fn wallet_balances(
+        &self,
+        network: Network,
+        coin_id: &str,
+    ) -> Result<crate::chain::WalletBalances> {
+        self.backend(&ChainRef {
+            coin_id: coin_id.to_string(),
+            network,
+        })?
+        .wallet_balances()
+    }
+
     pub fn wallet_address(&self, network: Network, coin_id: &str) -> Result<String> {
         self.backend(&ChainRef {
             coin_id: coin_id.to_string(),

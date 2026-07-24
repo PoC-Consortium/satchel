@@ -49,10 +49,15 @@ export interface LogLine {
 }
 
 /** Last-known wallet balance for one coin. `error` rides alongside the cached
- *  value when a refresh fails — the UI keeps showing the stale number. */
+ *  value when a refresh fails — the UI keeps showing the stale number.
+ *  `text` is the HEADLINE (spendable + pending + immature, phoenix parity —
+ *  money in flight never reads as an empty wallet); `sat` stays the SPENDABLE
+ *  amount (what the send dialog may use); `pendingSat` drives the small
+ *  "pending" row when non-zero. */
 export interface Bal {
   text: string;
   sat?: number;
+  pendingSat?: number;
   error?: string;
 }
 
@@ -287,10 +292,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await Promise.all(
       coinIds.map(async (id) => {
         try {
-          const r = await rpc<{ balance_sat: number }>("getbalance", [id]);
+          const r = await rpc<{ balance_sat: number; pending_sat?: number; immature_sat?: number }>(
+            "getbalance",
+            [id],
+          );
+          // Unmatured coinbase is "pending" from the card's point of view —
+          // it exists and will become spendable, it just isn't yet.
+          const pending = (r.pending_sat ?? 0) + (r.immature_sat ?? 0);
           setBalances((b) => ({
             ...b,
-            [id]: { text: fmtBare(r.balance_sat), sat: r.balance_sat },
+            [id]: {
+              text: fmtBare(r.balance_sat + pending),
+              sat: r.balance_sat,
+              pendingSat: pending,
+            },
           }));
         } catch (e) {
           setBalances((b) => ({

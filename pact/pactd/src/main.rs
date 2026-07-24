@@ -1869,9 +1869,16 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             blocking(app, move |e| e.estimate_swap_fees(net, &give, &get)).await
         }
         "getbalance" => {
+            // `balance_sat` stays the SPENDABLE balance (what a send may use);
+            // `pending_sat`/`immature_sat` are display-only extras so the
+            // wallet card can show money in flight instead of an empty wallet.
             let chain = p.str(0, "chain")?;
-            let bal = blocking(app, move |e| e.wallet_balance(net, &parse_coin(&chain)?)).await?;
-            Ok(json!({ "balance_sat": bal }))
+            let b = blocking(app, move |e| e.wallet_balances(net, &parse_coin(&chain)?)).await?;
+            Ok(json!({
+                "balance_sat": b.spendable_sat,
+                "pending_sat": b.pending_sat,
+                "immature_sat": b.immature_sat,
+            }))
         }
         "getnewaddress" => {
             let chain = p.str(0, "chain")?;

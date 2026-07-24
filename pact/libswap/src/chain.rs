@@ -30,6 +30,18 @@ pub use wallet_btcx::WalletTxInfo;
 use electrum_btcx::backend::{btc_kvb_to_sat_kvb, kvb_to_vb_round};
 use electrum_btcx::SANITY_MAX_SAT_PER_VB;
 
+/// A wallet's balance split for DISPLAY (the wallet card's headline +
+/// pending row): `spendable_sat` matches [`ChainBackend::wallet_balance`]
+/// exactly; `pending_sat` is inbound value awaiting its first confirmation
+/// (bdk untrusted-pending / Core `untrusted_pending`); `immature_sat` is
+/// unmatured coinbase. Never a spend gate.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
+pub struct WalletBalances {
+    pub spendable_sat: u64,
+    pub pending_sat: u64,
+    pub immature_sat: u64,
+}
+
 /// Floor for ESTIMATOR-driven rates (presets, target fallbacks): 1 sat/vB —
 /// the miner-revenue floor. EXPLICIT user rates bypass this and respect only
 /// the coin's own `min_feerate_sat_kvb` (0.1 sat/vB on the built-ins; Core
@@ -315,6 +327,20 @@ pub trait ChainBackend: Send + Sync {
     /// Confirmed core-wallet balance in base units.
     fn wallet_balance(&self) -> Result<u64>;
 
+    /// Balance buckets for the wallet card (phoenix parity): what is
+    /// spendable NOW, what is pending its first confirmation, and unmatured
+    /// coinbase — so a payment in flight shows as "pending", never as an
+    /// empty wallet. DISPLAY ONLY: every spend/funds gate keeps pricing off
+    /// [`ChainBackend::wallet_balance`]. Default: everything spendable,
+    /// nothing pending — bucket-less backends stay correct.
+    fn wallet_balances(&self) -> Result<WalletBalances> {
+        Ok(WalletBalances {
+            spendable_sat: self.wallet_balance()?,
+            pending_sat: 0,
+            immature_sat: 0,
+        })
+    }
+
     /// Fund `address` with exactly `amount_sat` via the core wallet
     /// (HTLC funding is a normal send, spec §6.1). `fee` is how the send
     /// prices itself — funding callers pass
@@ -519,6 +545,9 @@ impl<T: ChainBackend + ?Sized> ChainBackend for std::sync::Arc<T> {
     }
     fn wallet_balance(&self) -> Result<u64> {
         (**self).wallet_balance()
+    }
+    fn wallet_balances(&self) -> Result<WalletBalances> {
+        (**self).wallet_balances()
     }
     fn wallet_send(&self, address: &str, amount_sat: u64, fee: SendFee) -> Result<String> {
         (**self).wallet_send(address, amount_sat, fee)
@@ -1129,6 +1158,21 @@ impl ChainBackend for CoreRpcBackend {
         let balance = self.rpc.call("getbalance", &[])?;
         let coins = balance.as_f64().context("getbalance: non-numeric")?;
         Ok((coins * 1e8).round() as u64)
+    }
+
+    fn wallet_balances(&self) -> Result<WalletBalances> {
+        // `getbalances.mine`: `trusted` is what `getbalance` reports (confirmed
+        // + own unconfirmed change), `untrusted_pending` is inbound awaiting
+        // its first confirmation, `immature` is unmatured coinbase.
+        let r = self.rpc.call("getbalances", &[])?;
+        let sat = |v: &Value| -> Result<u64> {
+            Ok((v.as_f64().context("getbalances: non-numeric")? * 1e8).round() as u64)
+        };
+        Ok(WalletBalances {
+            spendable_sat: sat(&r["mine"]["trusted"])?,
+            pending_sat: sat(&r["mine"]["untrusted_pending"])?,
+            immature_sat: sat(&r["mine"]["immature"])?,
+        })
     }
 
     fn wallet_locked(&self) -> Result<bool> {
@@ -1920,6 +1964,10 @@ impl ChainBackend for MultiBackend {
 
     fn wallet_balance(&self) -> Result<u64> {
         self.primary().wallet_balance()
+    }
+
+    fn wallet_balances(&self) -> Result<WalletBalances> {
+        self.primary().wallet_balances()
     }
 
     fn wallet_locked(&self) -> Result<bool> {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, Skeleton, Stack, Tooltip, Typography } from "@mui/material";
 import { useApp, type Bal } from "../AppContext";
+import { fmtBare } from "../format";
 import { useNavigate } from "../ui/nav";
 import { useT } from "../i18n";
 import { EmptyState } from "../components/StatusViews";
@@ -199,6 +200,21 @@ function WalletCard({
           <Typography sx={{ fontSize: 10.5, color: "text.secondary", letterSpacing: "0.06em", textTransform: "uppercase" }}>
             {t("wallets.balanceLabel", { symbol: c.symbol })}
           </Typography>
+          {!!bal?.pendingSat && (
+            // Money in flight (unconfirmed inbound / immature) — included in
+            // the headline above, called out here so a self-transfer never
+            // reads as an empty wallet (phoenix parity).
+            <Typography
+              sx={{
+                fontFamily: C.mono,
+                fontSize: 11,
+                color: "warning.main",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {`${fmtBare(bal.pendingSat)} ${t("wallets.activityPending")}`}
+            </Typography>
+          )}
         </Box>
       </CardContent>
       <CardContent sx={{ pt: 0, pb: "12px !important" }}>
