@@ -17,7 +17,7 @@ import {
   Typography,
 } from "@mui/material";
 import ChoiceCard from "../components/ChoiceCard";
-import { errMsg, rpc } from "../api/tauri";
+import { createMerchant, errMsg, rpc } from "../api/tauri";
 import { BIP39_WORDS, isBip39Word, isValidMnemonic } from "../bip39";
 import { useApp } from "../AppContext";
 import { useT } from "../i18n";
@@ -27,15 +27,19 @@ import { C } from "../theme";
 // list as the user types (Phoenix-style autocomplete).
 const filterWords = createFilterOptions<string>({ matchFrom: "start", limit: 8 });
 
-// Provision the (already active) merchant's seed, Phoenix-style and stepwise:
+// Provision a merchant's seed, Phoenix-style and stepwise:
 //   choose (create | import)
 //   create:  reveal mnemonic (+ "written down") -> verify 3 random words -> passphrase
 //   import:  enter phrase (numbered word grid, like the reveal grid but editable;
 //            per-word autocomplete + typo flagging + checksum gate) -> passphrase
 // The passphrase step is the OPTIONAL at-rest encryption (not a BIP39 word).
-// For create we generate the mnemonic WITHOUT persisting (generateseed) so it
-// can be confirmed first; both paths commit via importseed once the passphrase
-// step is done. Shared by the first-run wizard and the phase-"seed" resume gate.
+// The mnemonic is generated WITHOUT persisting (generateseed, stateless) so it
+// can be confirmed first. Shared by two hosts with different commit shapes:
+//   wizard (`createLabel` set): NO merchant exists until the final commit,
+//     which creates it and imports the seed together (#209 — cancelling at
+//     any earlier step leaves no ghost merchant);
+//   resume gate (`createLabel` unset): the merchant is already active but
+//     seedless — commit imports into it.
 
 type SeedMode = "create" | "import";
 type Step = "choose" | "reveal" | "verify" | "enter" | "passphrase";
@@ -49,12 +53,18 @@ function pickVerifyIndices(n: number): number[] {
 
 export default function SeedForm({
   label,
+  createLabel,
   mode: presetMode,
   onDone,
   onBack,
   onLater,
 }: {
   label: string;
+  /** Lazy-create wizard (#209): when set, NO merchant exists yet — the commit
+   *  step creates one with this label (may be empty → pactd default) right
+   *  before importing the seed, so cancelling earlier leaves no trace. Unset
+   *  (resume gate): the seed imports into the already-active merchant. */
+  createLabel?: string;
   /** When set (wizard flow), the create/import choice was already made upstream
    *  — skip the "choose" step. Unset (resume gate) → start at "choose". */
   mode?: SeedMode;
@@ -141,7 +151,16 @@ export default function SeedForm({
 
   const verifyOk = verifyIdx.length > 0 && verifyIdx.every((idx, k) => verifyIn[k].trim().toLowerCase() === words[idx]);
 
-  // The terminal action: persist the (created or imported) seed via importseed.
+  // Lazy-create guard: once the merchant exists, a retry after a failed
+  // importseed must NOT create a second one. Survives re-renders, not a
+  // dialog close — but after a successful create the merchant is active and
+  // seedless, so the seed-provision resume gate picks it up on next launch.
+  const createdRef = useRef(false);
+
+  // The terminal action (#209): create the merchant (wizard flow only — the
+  // resume gate imports into the already-active one) and persist the seed,
+  // together. Nothing exists until this point, so every earlier cancel is
+  // free.
   async function commit() {
     const pass = encrypt ? passphrase : "";
     if (encrypt && pass.length < 1) {
@@ -156,6 +175,11 @@ export default function SeedForm({
     setErr("");
     setBusy(true);
     try {
+      if (createLabel !== undefined && !createdRef.current) {
+        const m = await createMerchant(createLabel);
+        createdRef.current = true;
+        log(t("log.merchantCreated", { id: m.id }));
+      }
       await rpc("importseed", [phrase, pass]);
       log(t("log.merchantReady"));
       await onDone();
