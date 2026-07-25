@@ -7,17 +7,19 @@ import {
   DialogContentText,
   DialogTitle,
   TextField,
-  Typography,
 } from "@mui/material";
 import SeedForm from "./SeedForm";
-import { createMerchant, errMsg } from "../api/tauri";
-import { useApp } from "../AppContext";
 import { useT } from "../i18n";
 
 // New-merchant wizard. The create-vs-import choice is made upstream (the merchant
 // manager's welcome), so this is just: name the merchant -> provision its seed
 // (SeedForm runs the chosen create/import sub-flow). Reached on first run (after
 // the empty welcome) and from "Create/Import" in the merchant manager.
+//
+// NOTHING is created until the final commit (#209): the name step only keeps
+// the label in state, and SeedForm's terminal action creates the merchant AND
+// imports its seed together. Cancelling anywhere before that leaves no trace —
+// no ghost merchant, and the previously active merchant keeps the active slot.
 type Step = "name" | "seed";
 
 export default function Wizard({
@@ -31,28 +33,9 @@ export default function Wizard({
   onClose: () => void;
   onDone: () => void | Promise<void>;
 }) {
-  const { log } = useApp();
   const t = useT();
   const [step, setStep] = useState<Step>("name");
   const [label, setLabel] = useState("");
-  const [createdLabel, setCreatedLabel] = useState(t("merchants.thisMerchant"));
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  async function createAndContinue() {
-    setBusy(true);
-    setErr("");
-    try {
-      const m = await createMerchant(label.trim());
-      log(t("log.merchantCreated", { id: m.id }));
-      setCreatedLabel(m.label);
-      setStep("seed");
-    } catch (e) {
-      setErr(errMsg(e));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <Dialog open maxWidth="sm" fullWidth disableEscapeKeyDown={firstRun} onClose={firstRun ? undefined : onClose}>
@@ -73,16 +56,15 @@ export default function Wizard({
               autoFocus
               fullWidth
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !busy) void createAndContinue();
+                if (e.key === "Enter") setStep("seed");
               }}
             />
-            {err && <Typography sx={{ color: "error.main", fontSize: 13, mt: 1.25 }}>{err}</Typography>}
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2 }}>
             <Button color="inherit" onClick={onClose} sx={{ mr: "auto" }}>
               {firstRun ? t("wizard.back") : t("common.cancel")}
             </Button>
-            <Button variant="contained" disabled={busy} onClick={() => void createAndContinue()}>
+            <Button variant="contained" onClick={() => setStep("seed")}>
               {t("wizard.continue")}
             </Button>
           </DialogActions>
@@ -92,7 +74,8 @@ export default function Wizard({
       {step === "seed" && (
         <SeedForm
           mode={mode}
-          label={createdLabel}
+          label={label.trim() || t("merchants.thisMerchant")}
+          createLabel={label.trim()}
           onDone={onDone}
           onBack={() => setStep("name")}
         />

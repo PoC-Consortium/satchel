@@ -1344,8 +1344,11 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         // shows + confirms it, then commits via `importseed`. Read-only.
         "generateseed" => {
             // Optional word count (12 default | 24) — phoenix parity.
+            // STATELESS — no active merchant required: the lazy-create wizard
+            // (#209) shows the phrase BEFORE the merchant exists; the merchant
+            // + seed are only committed together at the wizard's final step.
             let words = p.opt_u64(0, "words").unwrap_or(12) as usize;
-            let mnemonic = blocking(app, move |e| e.store.generate_mnemonic(words)).await?;
+            let mnemonic = libswap::store::Store::generate_mnemonic(words)?;
             Ok(json!({ "mnemonic": mnemonic }))
         }
         "importseed" => {

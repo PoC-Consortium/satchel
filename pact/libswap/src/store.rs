@@ -441,8 +441,10 @@ impl Store {
     /// onboarding flow that shows + confirms the phrase before committing. The
     /// mnemonic is only written once it's passed back to [`Self::import_seed`].
     /// `words`: 12 or 24, see [`Self::create_seed`].
-    pub fn generate_mnemonic(&self, words: usize) -> Result<String> {
-        self.seed_store.generate_mnemonic(words)
+    /// Stateless — see [`SeedStore::generate_mnemonic`]: the lazy-create
+    /// onboarding needs a phrase before any merchant/store exists.
+    pub fn generate_mnemonic(words: usize) -> Result<String> {
+        SeedStore::generate_mnemonic(words)
     }
 
     /// Import a user-supplied BIP39 mnemonic (validated). Returns the
