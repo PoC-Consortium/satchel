@@ -439,7 +439,7 @@ fn side_line(
                 .map(|u| format!(" · ${}", fmt_usd(u)))
                 .unwrap_or_default();
             line.push_str(&format!(
-                " *(was {}{was_usd})*",
+                "\n*(was {}{was_usd})*",
                 ctx.price_str(prev_price, decimals)
             ));
         }
@@ -551,7 +551,8 @@ BID  400 BTCX @ 0.655\n\
         assert_eq!(a.title, "BTCX/BTC — new best ask ⬇️");
         assert_eq!(
             a.body,
-            "**Ask** `37 BTCX @ 0.676 ($79.77)` ⬇️ *(was 0.691 · $81.54)*\n\
+            "**Ask** `37 BTCX @ 0.676 ($79.77)` ⬇️\n\
+             *(was 0.691 · $81.54)*\n\
              **Bid** `26 BTCX @ 0.670 ($79.06)`\n\
              **Spread** `0.006` (0.9 %) · mid `0.673` ($79.41)"
         );
