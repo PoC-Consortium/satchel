@@ -34,11 +34,19 @@ pub const PROTOCOL_V2: &str = "pact-htlc-v2";
 pub enum AdaptorState {
     Created,
     Accepted,
-    /// Both MuSig2 nonce sets exchanged (both redeem sessions).
+    /// Both MuSig2 nonce sets exchanged (both redeem sessions). DEAD in the
+    /// driven flow: `adaptor_assemble` jumps Accepted → Signed directly, so no
+    /// production writer ever persists this. Kept for serde compatibility.
     NoncesExchanged,
-    /// Both adaptor signatures aggregated and verified against `T`.
+    /// Both adaptor signatures aggregated and verified against `T`. v2
+    /// executes ENTIRELY within this state — funding and settlement are
+    /// sub-divided by the progress display, never by state transitions.
     Signed,
+    /// DEAD in v2 (see `Signed`): no production writer; the tick's state gate
+    /// would divert a record here to refund-if-due only. Kept for serde
+    /// compatibility with the shared display rank tables.
     FundedA,
+    /// DEAD in v2 — see [`AdaptorState::FundedA`].
     FundedB,
     /// Alice broadcast the adapted leg-B redeem; `t` is now public.
     RedeemedB,

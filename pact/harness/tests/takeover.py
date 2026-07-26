@@ -700,6 +700,23 @@ def scenario_taker_post_reveal_takeover_v1(h, ep, eb):
         _kill(taker)
 
         _await_follow(standby, sid, "import")
+        # Deterministically exercise the FOLLOW-RATCHET shape (state-matrix
+        # audit V1-1): tick the follower until its chain watcher persists the
+        # maker's reveal as `redeemed_b` on the taker record — the state a
+        # takeover then inherits. Takeover fast-forward cannot remap it (its
+        # conclusive target FundedB ranks BELOW RedeemedB), so pre-fix the
+        # adopted record was undrivable AND unclaimable from here; the
+        # FundedB|RedeemedB claim arm must finish it.
+        ratcheted = False
+        for _ in range(40):
+            tick_all("ratchet", standby)
+            s = swap_of(standby, sid)
+            if s is not None and s["state"] == "redeemed_b":
+                ratcheted = True
+                break
+            mine_and_sync(h, ep, eb)
+        assert ratcheted, \
+            f"follower never ratcheted to redeemed_b: {swap_of(standby, sid)}"
         standby.rpc("takeover", sid)
         assert swap_of(standby, sid).get("source") == "local", \
             "post-reveal takeover did not adopt"
