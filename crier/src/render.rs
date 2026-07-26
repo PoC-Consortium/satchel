@@ -308,14 +308,14 @@ pub struct Announcement {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SideChange {
     Same,
+    /// A different best price — whether the side appeared or re-priced.
+    /// Headlines make NO judgement ("improved"/"backed off" implied maker
+    /// intent, which crier cannot know: a re-price is indistinguishable from
+    /// the old best being revoked, expired, or invisibly taken with the next
+    /// level surfacing). The body's "(was X)" lets the reader judge the
+    /// direction themselves (provable-facts rule, PLAN.md §4).
     New,
     Gone,
-    /// Price moved. Headlines state ONLY the observable direction ("best bid
-    /// fell") — never intent ("backed off") or cause: crier cannot tell a
-    /// maker re-pricing from the old best being revoked, expired, or taken
-    /// with the next level surfacing (provable-facts rule, PLAN.md §4).
-    Rose,
-    Fell,
     Size,
 }
 
@@ -332,10 +332,8 @@ fn classify(prev: &Option<SideTop>, new: &Option<SideTop>) -> SideChange {
                 } else {
                     SideChange::Same
                 }
-            } else if np < pp {
-                SideChange::Fell
             } else {
-                SideChange::Rose
+                SideChange::New
             }
         }
     }
@@ -346,8 +344,6 @@ fn side_headline(side: &str, change: SideChange) -> Option<String> {
         SideChange::Same => None,
         SideChange::New => Some(format!("new best {side}")),
         SideChange::Gone => Some(format!("best {side} gone")),
-        SideChange::Rose => Some(format!("best {side} rose")),
-        SideChange::Fell => Some(format!("best {side} fell")),
         SideChange::Size => Some(format!("best {side} size changed")),
     }
 }
@@ -409,7 +405,7 @@ fn side_line(
         ctx.base.symbol,
         ctx.price_with_usd(price, decimals)
     );
-    if matches!(change, SideChange::Rose | SideChange::Fell) {
+    if change == SideChange::New {
         if let Some(p) = prev {
             line.push_str(&format!(
                 " *(was {})*",
@@ -521,7 +517,7 @@ BID  400 BTCX @ 0.655\n\
             ..prev.clone()
         };
         let a = render_announcement(&prev, &new, &ctx(Some(118_000.0)));
-        assert_eq!(a.title, "BTCX/BTC — best ask fell");
+        assert_eq!(a.title, "BTCX/BTC — new best ask");
         assert_eq!(
             a.body,
             "**Ask** `37 BTCX @ 0.676 ($79.77)` *(was 0.691)*\n\
