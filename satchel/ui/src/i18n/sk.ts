@@ -365,7 +365,7 @@ export const sk: Bundle = {
     checkUpdate: "Skontrolovať aktualizácie",
     protocols: "Swapové protokoly",
     protocolsHint:
-      "Čo táto verzia podporuje — ponuky s inou verziou si možno prezerať, ale nie prijať. Obe strany swapu sa musia zhodovať.",
+      "Čo táto zostava ovláda — čísla sú verzia formátu správ každého protokolu (nie je to poradie protokolov). Ponuky s inou verziou možno prezerať, ale nie prijať; obe strany swapu sa musia zhodovať.",
     machine: "Tento stroj",
     machineHint:
       "Id tejto inštalácie. Ak spúšťate rovnaký seed na viacerých strojoch, každý riadi vlastné swapy — ostatné sa v doku swapov zobrazujú len na čítanie ako „Iný stroj“ a tu ich môžete prevziať, ak sa niektorý zastaví. Používanie na viacerých strojoch je určené na prevzatie pri výpadku a obnovu, nie na obchodovanie z dvoch strojov naraz (zdieľajú jeden zostatok).",

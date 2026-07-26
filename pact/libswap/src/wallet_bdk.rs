@@ -1,5 +1,5 @@
 //! Nodeless on-chain wallet — bdk over the raw Electrum machinery
-//! (docs/NODELESS_WALLET.md, epic #58).
+//! (docs/design/NODELESS_WALLET.md, epic #58).
 //!
 //! The wallet itself was extracted to the `wallet-btcx` crate:
 //! [`WalletManager`] (per-coin bdk wallet cache + background sync workers)

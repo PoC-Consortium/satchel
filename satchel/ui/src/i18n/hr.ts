@@ -365,7 +365,7 @@ export const hr: Bundle = {
     checkUpdate: "Provjeri ažuriranja",
     protocols: "Protokoli zamjene",
     protocolsHint:
-      "Što ova verzija govori — ponude s drugom verzijom mogu se pregledavati, ali ne i preuzeti. Obje strane zamjene moraju se podudarati.",
+      "Što ova verzija govori — brojevi su verzija formata poruka svakog protokola (ne rangiraju protokole). Ponude s drugom verzijom mogu se pregledavati, ali ne i prihvatiti; obje strane swapa moraju se podudarati.",
     machine: "Ovo računalo",
     machineHint:
       "Id ove instalacije. Ako isti seed pokrećete na više od jednog računala, svako upravlja vlastitim swapovima — ostala se u docku swapova prikazuju samo za čitanje kao „Drugo računalo”, a ovdje ih možete preuzeti ako se jedno zaustavi. Višeračunalna uporaba služi za prebacivanje i oporavak, a ne za trgovanje s dva računala istovremeno (dijele jedno stanje).",

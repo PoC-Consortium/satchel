@@ -1,5 +1,5 @@
 //! Swap-leg state reconstruction from chain ground truth
-//! (docs/STATE_RECONSTRUCTION.md).
+//! (docs/design/STATE_RECONSTRUCTION.md).
 //!
 //! Every classification here is a PURE, idempotent function of the chain:
 //! it answers "what happened to this leg" identically whether the swap
@@ -285,7 +285,7 @@ pub fn classify_spent_by_scan(
 }
 
 /// Safety margin past a swap's LAST timelock before a followed record with
-/// no visible funds may be aged out (docs/STATE_RECONSTRUCTION.md §4.2):
+/// no visible funds may be aged out (docs/design/STATE_RECONSTRUCTION.md §4.2):
 /// generous enough that no rational continuation exists, and at least the
 /// finality budget so a reorg cannot un-pass it. `0` on regtest, matching
 /// the `action_margins` house style (tests jump clocks).

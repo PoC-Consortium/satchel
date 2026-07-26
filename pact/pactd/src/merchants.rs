@@ -131,7 +131,7 @@ pub struct MerchantRegistry {
     /// merchant (fresh managed install before `createmerchant`).
     engine: Option<Engine>,
     /// This install's per-machine seed-derivation scope (§1 of
-    /// docs/MULTI_MACHINE_122.md), loaded once from `<data-dir>/machine.json` at
+    /// docs/design/MULTI_MACHINE_122.md), loaded once from `<data-dir>/machine.json` at
     /// the ROOT and injected into every merchant engine so all merchants on one
     /// install share it (different seeds already diverge their keys). pactd owns
     /// this file; Satchel never sees it.

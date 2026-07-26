@@ -383,7 +383,7 @@ export const en = {
     checkUpdate: "Check for updates",
     protocols: "Swap protocols",
     protocolsHint:
-      "What this build speaks — offers whose version differs can be browsed but not taken. Both sides of a swap must match.",
+      "What this build speaks — the numbers are each protocol's message-format version (they don't rank the protocols). Offers whose version differs can be browsed but not taken; both sides of a swap must match.",
     machine: "This machine",
     machineHint:
       "This install's id. If you run the same seed on more than one machine, each drives its own swaps — the others show up read-only as \"Another machine\" in the swaps dock, and you can take them over here if one stops. Multi-machine use is for failover and recovery, not trading from two machines at once (they share one balance).",

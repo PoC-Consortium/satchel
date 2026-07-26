@@ -365,7 +365,7 @@ export const ro: Bundle = {
     checkUpdate: "Verifică actualizări",
     protocols: "Protocoale de swap",
     protocolsHint:
-      "Ce vorbește această versiune — ofertele cu o versiune diferită pot fi văzute, dar nu preluate. Ambele părți ale swapului trebuie să se potrivească.",
+      "Ce vorbește această versiune — numerele sunt versiunea formatului de mesaje a fiecărui protocol (nu ierarhizează protocoalele). Ofertele cu altă versiune pot fi răsfoite, dar nu acceptate; ambele părți ale unui swap trebuie să corespundă.",
     machine: "Această mașină",
     machineHint:
       "Id-ul acestei instalări. Dacă rulezi același seed pe mai mult de o mașină, fiecare își conduce propriile swap-uri — celelalte apar doar pentru citire ca „Altă mașină” în dock-ul de swap-uri, iar dacă una se oprește le poți prelua aici. Utilizarea pe mai multe mașini este pentru failover și recuperare, nu pentru a tranzacționa de pe două mașini deodată (împart un singur sold).",

@@ -66,7 +66,7 @@ Two further artifacts live at the data-dir root from the first run:
   generated on first run. It partitions key derivation between machines
   sharing one seed, so a failover or standby install never derives the same
   swap secrets as another machine. See the chapter "Seeds, Wallets &
-  Merchants" and `docs/MULTI_MACHINE_122.md`.
+  Merchants" and `docs/design/MULTI_MACHINE_122.md`.
 
 ## Logging
 

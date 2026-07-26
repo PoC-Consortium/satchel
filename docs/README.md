@@ -1,12 +1,22 @@
 # Documentation
 
-This folder holds the project's documentation. It comes in three forms, all
+This folder holds the project's documentation. It comes in three layers, all
 kept in sync and checked against the code.
 
 > **Status** — these docs were verified against commit `8dc8318`. The docs track
 > the code by **commit hash** rather than a release version; when the code moves,
 > the hash (in each handbook's front-matter and the wiki footer) is bumped and
 > the affected pages are updated.
+
+## The rule
+
+**The handbooks are canonical.** If a handbook chapter covers a topic, no other
+doc duplicates it. A design doc exists under [`design/`](design/) only when it
+carries something the handbooks deliberately do not: internal invariants,
+section anchors cited from code comments, or decision rationale. Every doc that
+stays in this tree is kept true at the stamped commit — point-in-time notes,
+status scratchpads, and completed plans are deleted (git history is the
+archive).
 
 ## 1. Handbooks (build to PDF)
 
@@ -29,19 +39,19 @@ that points readers at the handbooks for depth. To publish, push the contents of
 out with GitHub's conventions (`Home.md`, `_Sidebar.md`, `_Footer.md`, and one
 file per page).
 
-## 3. Roadmap & specification
+## 3. Design docs of record — [`design/`](design/)
 
-The earlier design/architecture docs (`ARCHITECTURE.md`, `V2_ADAPTOR_SWAPS.md`,
-`NOSTR_TRANSPORT.md`, `PRIVATE_OFFERS.md`, `SATCHEL.md`, `SATCHEL_BACKEND.md`,
-`SATCHEL_UI.md`) have been **removed** — they are fully superseded by the
-handbooks and the wiki, which are verified against the code. Their content lives
-on in:
+Internal designs the handbooks delegate to. Their section numbers (§) are cited
+from code comments — do not renumber sections.
 
-- the **Pact handbook** (architecture, the v1/v2 protocols, transports, private
-  offers, and the full RPC/CLI surface), and
-- the **Satchel handbook** + wiki (the app and its screens).
+| File | Topic |
+|------|-------|
+| [`design/MULTI_MACHINE_122.md`](design/MULTI_MACHINE_122.md) | One seed on several machines: derive-scope partitioning, follow/takeover, the broadcast belt. |
+| [`design/STATE_RECONSTRUCTION.md`](design/STATE_RECONSTRUCTION.md) | Chain-truth reconstruction: leg classification, backend tiers, reconcile-before-drive. |
+| [`design/NODELESS_WALLET.md`](design/NODELESS_WALLET.md) | The bdk/Electrum wallet: BIP-86 derivation, wallet exclusivity, degradation tiers. |
+| [`design/TEST_FRAMEWORK_PLAN.md`](design/TEST_FRAMEWORK_PLAN.md) | The e2e harness design of record (`pact/harness/` delegates here); mainnet-safe port registry. |
 
-What remains here, because the handbooks deliberately do not cover it:
+## 4. Roadmap & specification
 
 | File | Topic |
 |------|-------|
@@ -49,3 +59,6 @@ What remains here, because the handbooks deliberately do not cover it:
 
 The normative protocol specification and deterministic test vectors live in
 [`../spec/`](../spec/) and remain authoritative; the handbooks cite them.
+`spec/README.md` also defines the protocol **naming & versioning** (family names
+Standard/HTLC and Private/Taproot, wire-id strings, and the per-family wire
+epochs the app displays).

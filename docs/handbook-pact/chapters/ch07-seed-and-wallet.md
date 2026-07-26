@@ -106,7 +106,7 @@ key doesn't travel, so the copy lands in the reconfirm-with-mnemonic path
 above, and that re-import **rotates the machine scope** — a copy can never
 reuse the source machine's scope. After rotation the machine's own old
 in-flight swaps read as another machine's; one `takeover` (the dock's "Take
-over") adopts them. The full partitioning model is `docs/MULTI_MACHINE_122.md`
+over") adopts them. The full partitioning model is `docs/design/MULTI_MACHINE_122.md`
 and the chapter "Network Support, Reorgs & Safety".
 
 ## The merchant model

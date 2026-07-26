@@ -1,22 +1,31 @@
-# Test & Playground Infrastructure — Consolidation Plan
+# Test & Playground Infrastructure — Consolidation (as built)
 
-Status: **IMPLEMENTED — phases 0–4 merged to master 2026-07-16**
-(#184/#185/#189/#187/#188; issue #110 closed by Phase 3). Phase 5 (e2e in CI)
-landed 2026-07-17: ci.yml's `e2e` job runs `test_runner.py` on every PR; the
-binary home is an actions cache filled by `pact/harness/ci/fetch-binaries.sh`
-(official downloads for bitcoind/litecoind, the electrs-btcx release for both
-electrs flavors, pinned source builds for nostr-rs-relay + pocx-bitcoind).
-§1 below describes the
-PRE-consolidation state the plan was written against; §2–§3 are the design as
-built — one later amendment: the datadir cache needed the `-mocktime` boot
-discipline (§2.3), discovered during Phase 2.
+Status: **SHIPPED — all phases (0–5) on master.** Phases 0–4 merged
+2026-07-16 (#184/#185/#189/#187/#188; issue #110 closed by Phase 3); Phase 5
+(e2e in CI) landed 2026-07-17 (#192): ci.yml's `e2e` job runs
+`test_runner.py` on every PR (~17 min), with the binary home an actions
+cache filled by `pact/harness/ci/fetch-binaries.sh` (official downloads for
+bitcoind/litecoind, the electrs-btcx release for both electrs flavors,
+pinned source builds for nostr-rs-relay + pocx-bitcoind).
+
+This doc is the **design of record** for `pact/harness` —
+`pact/harness/README.md` delegates here, and harness module docstrings cite
+the § numbers below (keep them stable). §1 is the historical
+pre-consolidation analysis; §2 is the structure as built (reconciled against
+the tree at rc19); §3 is the completed migration, kept because it documents
+WHY the shape is what it is. One post-design amendment: the datadir cache
+needed the `-mocktime` boot discipline (§2.3), discovered during Phase 2.
 
 Blueprint: Bitcoin Core's functional test framework
 (`test/functional/test_framework/` + `test_runner.py`).
 
 ---
 
-## 1. Deep analysis — current state
+## 1. Deep analysis — the pre-consolidation state (historical)
+
+Everything in this section describes the tree as it stood before Phase 0
+(2026-07-16); every artifact named here has since been migrated or deleted
+per §2.2.
 
 Three orchestrators, ~7,700 lines, all standing up variations of the same
 regtest stack:
@@ -132,12 +141,16 @@ pact/harness/
   tests/                      # asserting suites; each file holds 1..n PactTestFramework
                               #   subclasses, each class = one scenario = one fresh stack
     swap_v1.py  swap_v1_rescue.py  swap_v2_adaptor.py  follow.py  nodeless.py  multimachine.py
+    takeover.py  upgrade.py   # landed after the split, same pattern (#191/#195, #196)
+    framework_selftest.py     # no-node sanity: port registry, allocator, binary resolver
   play/
     __main__.py               # ONE flag-composed playground (§2.5)
     repro_multiswap.py        # diagnostic driver (kept, framework-based)
     observer_compare.py       # live observer/main oracle (kept, framework-based)
   test_runner.py              # runs each tests/*.py as a subprocess, list-vs-dir cross-check,
-                              #   per-test timing, --filter, keep-tmpdir-on-failure (CI entry)
+                              #   per-test timing, --filter, keep-tmpdir-on-failure (the CI entry)
+  regtest_harness.py          # compat shim over framework/node.py + the no-Pact --smoke entry
+  ci/fetch-binaries.sh        # Phase 5: fills bin/ in CI (actions cache keyed on its hash)
   bin/                        # the ONE shared binaries dir (gitignored): nodes, electrs, relay
   cache/                      # datadir cache (gitignored), built on demand (§2.3)
 ```
@@ -149,7 +162,7 @@ cargo integration tests — unrelated to this consolidation.
 
 | Today | Becomes |
 |---|---|
-| `regtest_harness.py` | `framework/node.py` + `framework/binaries.py` (+ cache logic → `stack.py`) |
+| `regtest_harness.py` | `framework/node.py` + `framework/binaries.py` (+ cache logic → `stack.py`); the file itself stays as a thin compat shim + `--smoke` entry |
 | `test_swap_e2e.py` | infra classes → `framework/`; 21 scenarios → `tests/swap_v1.py` + `tests/swap_v1_rescue.py` (+ board/nostr cells staying with their protocol group) |
 | `test_adaptor_swap.py` | `tests/swap_v2_adaptor.py` (its two-Harness main — core + with_ltc — maps to per-scenario stacks trivially) |
 | `test_nodeless_e2e.py` | `tests/nodeless.py` |
@@ -237,12 +250,13 @@ Porting the ps1 skeleton means preserving all of its load-bearing details:
 
 ### 2.5 The flexible playground (fulfils #110, in Python)
 
-One entrypoint whose flags compose the stack:
+One entrypoint whose flags compose the stack (run from `pact/harness/`):
 
 ```
-python -m harness.play --board cork|nostr|none --btcx node|nodeless --electrs N
-                       --satchel one|two-observer|viewer|none
-                       [--first-run] [--relay-cmd CMD] [--persist] [--keep] [--down]
+python -m play --board cork|nostr --btcx node|nodeless --electrs N
+               --satchel one|two-observer|viewer|none
+               [--first-run] [--relay-cmd CMD] [--persist] [--keep]
+               [--no-build] [--down]
 ```
 
 | Today | Becomes |
@@ -301,32 +315,36 @@ just no longer load-bearing).
 
 ## 3. Migration plan — one PR per phase, each leaves the tree green
 
-- **Phase 0 — one bin dir + `binaries.py`.** Pure consolidation, no behavior
+(Completed history — every phase landed as its own PR, in order, exactly as
+planned. Kept because it records why the shape is what it is.)
+
+- **Phase 0 — one bin dir + `binaries.py`.** DONE (#184). Pure consolidation, no behavior
   change (bin/ already is the de-facto home; this formalizes it + adds the
   resolver). Enabler.
 - **Phase 1 — extract `framework/` from the monolith, no behavior change.**
-  Move `Party`→`daemon.py` (keep a `Party` alias through Phase 2),
+  DONE (#185). Move `Party`→`daemon.py` (keep a `Party` alias through Phase 2),
   `Corkboard`/`NostrRelay`→`services.py` (delete the diverged 2nd copy, probe
   becomes universal), `build_workspace`→`stack.py`; add `util.py`
   (`wait_until`/`assert_*`/cookie/teardown registry). Suites keep their own
   `main()`s and shared Harnesses this phase. Prove green by running all
   suites.
 - **Phase 2 — `PactTestFramework` + datadir cache + `test_runner.py`; split
-  the monolith.** The big one: per-scenario stacks land here (§2.3), suites
+  the monolith.** DONE (#189). The big one: per-scenario stacks land here (§2.3), suites
   convert to scenario classes, `multimachine.ps1` logic becomes
   `tests/multimachine.py`, runner + list-vs-dir cross-check + subprocess
   execution. Now `python test_runner.py` runs the whole e2e set hermetically.
 - **Phase 3 — `framework/satchel.py` + `market.py`/`clock.py` +
-  `play/__main__.py`; delete the 8 ps1.** Port the GUI-launch + teardown per
+  `play/__main__.py`; delete the 8 ps1.** DONE (#187). Port the GUI-launch + teardown per
   §2.4, wire the full flag matrix (§2.5), move repro/observer_compare under
   `play/`, delete `spike_electrs.py`, rewrite `pact/harness/README.md`.
   **Closes #110.**
-- **Phase 4 — delete `demo-runner`** (+ its `.gitignore` stanza).
-- **Phase 5 (optional, unblocks CI e2e).** Once binaries have a home
-  (cache/artifact/self-hosted runner), `test_runner.py` is the single CI
-  entry — `ci.yml` already documents this as the sole blocker. (The
-  multi-workspace `cargo test` sprawl is orthogonal Rust tidy-up — kept out of
-  this effort unless bundled deliberately.)
+- **Phase 4 — delete `demo-runner`** (+ its `.gitignore` stanza). DONE
+  (#188).
+- **Phase 5 — e2e in CI.** DONE (#192). Binaries got their home — an
+  actions cache filled by `ci/fetch-binaries.sh` — and `test_runner.py`
+  became the single CI entry (ci.yml `e2e` job, every PR). (The
+  multi-workspace `cargo test` sprawl is orthogonal Rust tidy-up — kept out
+  of this effort as planned.)
 
 **Risk controls:** Phases 0–1 validated by the existing suites; Phase 2
 validated by a full runner pass + spot-diff of scenario outcomes against a
@@ -366,7 +384,7 @@ Copy-paste to collapse:
 | `18443` / `18332` | REST/bindex-hardcoded node RPC (nodeless: pocx regtest-default, btc testnet-default) |
 | `19750/19751` (+fleet `19752`–`19757`) | PoCX electrs electrum/monitoring (fleet steps by 2) |
 | `19760/19761` | vanilla (BTC) electrs |
-| `19737`–`19749` | **pactd allocation range** (bots + e2e parties). `_alloc_port` starts at 19737 and today rolls unbounded into the electrs range — the shared-Harness monolith burns ~48 ports per run, so the **cap at 19749 can only land with Phase 2's per-scenario allocator reset** (≤4 parties per scenario). |
+| `19737`–`19749` | **pactd allocation range** (bots + e2e parties). `_alloc_port` starts at 19737 and is **capped at 19749** (`PACTD_PORT_MAX`, `framework/daemon.py`) — affordable because Phase 2's per-scenario allocator reset keeps it to ≤4 parties per scenario (the old shared-Harness monolith burned ~48 ports per run and rolled unbounded into the electrs range). |
 | `19788` | **playground** Nostr relay |
 | `19791` | **e2e-suite** Nostr relay (the old doc wrongly listed only 19788) |
 | `19790` | corkboard |

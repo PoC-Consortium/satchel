@@ -365,7 +365,7 @@ export const fi: Bundle = {
     checkUpdate: "Tarkista päivitykset",
     protocols: "Swap-protokollat",
     protocolsHint:
-      "Mitä tämä versio puhuu — eri versiota käyttäviä tarjouksia voi selata mutta ei ottaa. Swapin molempien osapuolten on täsmättävä.",
+      "Mitä tämä versio puhuu — numerot ovat kunkin protokollan viestimuodon versio (eivät protokollien järjestys). Eri version tarjouksia voi selata mutta ei ottaa; vaihdon molempien osapuolten on täsmättävä.",
     machine: "Tämä kone",
     machineHint:
       "Tämän asennuksen tunnus. Jos ajat samaa seediä useammalla kuin yhdellä koneella, kukin ohjaa omia swapejaan — muut näkyvät vain luku -tilassa nimellä \"Toinen kone\" swap-dockissa, ja voit ottaa ne haltuun täällä, jos jokin pysähtyy. Monikoneen käyttö on vikasietoisuutta ja palautumista varten, ei kahdelta koneelta yhtä aikaa tapahtuvaa kaupankäyntiä varten (ne jakavat yhden saldon).",

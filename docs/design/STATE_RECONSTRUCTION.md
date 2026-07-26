@@ -523,8 +523,10 @@ e2e cells (playground, extending the #54/#163 matrix):
   skip; age-out; dock phase surfacing. e2e cells 1/2/5/6. **Fixes the field bug.**
 - **P3 — driver seams:** funding-guard refusals; takeover/rescue fast-forward;
   heights threaded into spend scans. e2e cells 3/4.
-- **P4 — docs:** MULTI_MACHINE_122.md §5 update, handbook "what a follower can
-  see per backend" table, wiki sync.
+- **P4 — docs:** done/superseded — the promised MULTI_MACHINE_122.md update
+  ships with the docs/consolidation-1.0 pass (the doc now lives at
+  `docs/design/MULTI_MACHINE_122.md` and carries the follower-capability
+  material); wiki sync rides the regular doc-sync train.
 - **P5 (optional):** subscription pokes, Tier-L scan throttle.
 
 P2 alone stops the ghosts; P3 closes the takeover/rescue money seams. Ship P2+P3
@@ -554,4 +556,5 @@ together in one rc — the invariants in §6 are only all-true with both.
 ---
 
 *Grounding note: every `file:line` above was read against master @ 5555fce
-(2026-07-12); the btcx citations are against the pinned rev f1e2168.*
+(2026-07-12); the btcx citations are against the pinned rev f1e2168.
+Reconciled at rc19 (`aabb391`).*

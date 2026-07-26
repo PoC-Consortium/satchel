@@ -365,7 +365,7 @@ export const pl: Bundle = {
     checkUpdate: "Sprawdź aktualizacje",
     protocols: "Protokoły swapów",
     protocolsHint:
-      "Co obsługuje ta wersja — oferty z inną wersją można przeglądać, ale nie brać. Obie strony swapu muszą się zgadzać.",
+      "Co rozumie ta kompilacja — liczby to wersja formatu wiadomości każdego protokołu (nie są rankingiem protokołów). Oferty z inną wersją można przeglądać, ale nie przyjmować; obie strony swapu muszą się zgadzać.",
     machine: "To urządzenie",
     machineHint:
       "Id tej instalacji. Jeśli uruchamiasz ten sam seed na więcej niż jednym urządzeniu, każde prowadzi własne swapy — pozostałe pojawiają się tylko do odczytu jako „Inne urządzenie” w doku swapów, a jeśli któreś się zatrzyma, możesz je tutaj przejąć. Praca na wielu urządzeniach służy do przełączania awaryjnego i odzyskiwania, a nie do handlu z dwóch urządzeń naraz (współdzielą jedno saldo).",

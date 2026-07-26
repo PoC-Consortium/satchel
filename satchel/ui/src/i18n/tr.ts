@@ -365,7 +365,7 @@ export const tr: Bundle = {
     checkUpdate: "Güncellemeleri denetle",
     protocols: "Takas protokolleri",
     protocolsHint:
-      "Bu sürümün konuştuğu şey — farklı sürümdeki teklifler görüntülenebilir ama alınamaz. Takasın iki tarafı da eşleşmelidir.",
+      "Bu derlemenin konuştuğu — sayılar her protokolün mesaj biçimi sürümüdür (protokolleri sıralamaz). Farklı sürümdeki teklifler görüntülenebilir ama alınamaz; bir takasın iki tarafı eşleşmelidir.",
     machine: "Bu makine",
     machineHint:
       "Bu kurulumun kimliği. Aynı seed'i birden fazla makinede çalıştırırsanız, her biri kendi takaslarını yürütür — diğerleri takas panelinde salt okunur olarak \"Başka makine\" şeklinde görünür ve biri durursa onları buradan devralabilirsiniz. Birden fazla makine kullanımı, yük devretme ve kurtarma içindir, aynı anda iki makineden işlem yapmak için değil (tek bir bakiyeyi paylaşırlar).",

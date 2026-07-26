@@ -1,6 +1,6 @@
 """The harness framework package (Bitcoin Core's test_framework/ analog).
 
-Being extracted from the ad-hoc harness per docs/TEST_FRAMEWORK_PLAN.md.
+Being extracted from the ad-hoc harness per docs/design/TEST_FRAMEWORK_PLAN.md.
 binaries.py — the single binary resolver;  node.py — Node/ElectrsServer/
 Harness;  daemon.py — Pactd (a.k.a. Party);  services.py — Corkboard +
 NostrRelay;  stack.py — build_workspace + the funded-datadir cache;

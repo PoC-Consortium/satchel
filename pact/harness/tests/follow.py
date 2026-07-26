@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dormant-observer state reconstruction e2e (docs/STATE_RECONSTRUCTION.md),
+"""Dormant-observer state reconstruction e2e (docs/design/STATE_RECONSTRUCTION.md),
 from the former test_follow_e2e.py (bodies verbatim; cell rationale in the
 docstrings). Each cell runs on a fresh cached stack with BOTH legs served by
 a Core-RPC + electrs multi-backend.

@@ -2,14 +2,25 @@
 
 Design doc for the nodeless build: Satchel carries its own on-chain wallet
 (bdk + Electrum) so a user needs **no full node** to receive, send, and swap.
-Supersedes the read-only wallet scoping decision once shipped.
+Superseded the read-only wallet scoping decision when it shipped.
 
-Status: design accepted 2026-07-03 (seed derivation, backend shape, electrs
-strategy). Sub-issues tracked under #58.
+Status: **SHIPPED** — design accepted 2026-07-03, implemented on master
+2026-07-04 (issue #58 / PR #67; the background sync model followed in
+#86/#87). The wallet layer has since been extracted to the `btcx` companion
+crates (`wallet-btcx`, `electrum-btcx`, `keys-btcx` — see D3). Doc
+reconciled against the code at rc19. Code comments cite the §2 decision
+numbers (`NODELESS_WALLET.md D1/D2/D5`), so those stay stable; the
+overnight decision log that accompanied the build is absorbed as the
+appendix. All §7 open questions are closed.
 
 ---
 
 ## 1. Where the code already is
+
+(Historical — the 2026-07-03 pre-implementation survey, line numbers as of
+that date. The nine-method gap described here has since been closed:
+`wallet_bdk.rs` adapts the extracted `wallet_btcx::BdkWalletBackend` to the
+`ChainBackend` trait.)
 
 The abstraction work landed long before this epic; the gap is narrow and
 well-defined.
@@ -104,6 +115,12 @@ companion crate (the ecosystem-standard shape for alt-chain bdk support).
 If deeper divergence ever appears, that crate is the natural seed of a real
 fork — with the interface already proven.
 
+*Shipped as designed, and the extraction has since happened: the chain
+source + sync worker live in `electrum-btcx`, the wallet manager + handout
+cap in `wallet-btcx` (PoC-Consortium/btcx, workspace-pinned).
+`libswap/src/wallet_bdk.rs` keeps the engine-facing adapter under the old
+module path.*
+
 ### D4 — electrs strategy: mod latest as the community server; explorer fork bootstraps
 
 (User decision 2026-07-03.) Two PoCX electrs candidates exist; both stay:
@@ -129,8 +146,9 @@ primary** (i.e. `tcp://`/`ssl://` only) runs in nodeless-wallet mode:
 `backends[0]` wrapping the Electrum URLs. No new flag, no parallel route.
 The existing plumbing (`--coin` repeatable flag, Satchel coin config,
 `coins.toml` with `header_format`/`magic` already specified for the light
-path) carries this unchanged. **Nodeless coins require ≥2 Electrum URLs**
-(enforced at config validation) — the `MultiBackend` agreement machinery
+path) carries this unchanged. **Nodeless mainnet coins require ≥2 Electrum URLs**
+(enforced in `Engine::nodeless_backend`; test networks may run on one) —
+the `MultiBackend` agreement machinery
 (script+value agreement, min-confirmations, min/max MTP clocks) already
 exists for exactly this.
 
@@ -237,9 +255,8 @@ entirely:
   nodeless↔nodeless and nodeless↔Core, including funding-nurse RBF/CPFP,
   locked-seed gating, and rescue rediscovery (`find_funding` re-adoption).
 - **Infra:** electrs (explorer fork first) against the regtest nodes; the
-  playground gains an electrs leg. Windows build story: under
-  investigation — native if the fork builds on Windows, otherwise
-  Docker/WSL wrapper (open question O1).
+  playground gains an electrs leg. Windows build story: resolved native
+  (O1).
 
 ## 6. Sub-issue decomposition (execution order)
 
@@ -257,13 +274,58 @@ entirely:
 7. **Hardening (later):** multi-server policy tuning, Electrum-over-Tor,
    macOS packaging.
 
-## 7. Open questions
+## 7. Open questions — all closed
 
-- **O1** — electrs on Windows: native build vs Docker/WSL for the
-  playground (being checked now).
-- **O2** — gap-limit / full-scan policy for restores (bdk default stop-gap
-  vs a Satchel "deep rescan" affordance).
+- **O1 — CLOSED: native.** The electrs fork builds and runs natively on
+  Windows — `pact/harness/bin/` carries `electrs.exe` + `btc-electrs.exe`,
+  and CI provisions Linux builds from the PoC-Consortium/electrs-btcx
+  release (`pact/harness/ci/fetch-binaries.sh`). No Docker/WSL wrapper.
+- **O2 — CLOSED by appendix D11: handout cap instead of deep rescan.**
+  `wallet_new_address` reveals fresh addresses only until 20
+  revealed-but-unused are outstanding, then recycles the oldest unused one
+  (`MAX_UNUSED_AHEAD = 20` in wallet-btcx, `STOP_GAP = 25` in
+  electrum-btcx) — the on-chain gap is bounded by construction, so a
+  restore's full scan is complete without any "deep rescan" affordance.
 - **O3 — CLOSED by D7** (wallet exclusivity: no seed-wallet sweeps for
-  node-backed coins). Original question: whether the nodeless wallet should also serve as the *sweep
-  target* for Core-backed coins (today sweeps go to the Core wallet;
-  keeping that unchanged is the default).
+  node-backed coins; who wants proceeds on the seed switches the coin to
+  Electrum mode wholesale). Original question: whether the nodeless wallet
+  should also serve as the *sweep target* for Core-backed coins.
+
+## Appendix — decisions absorbed from the 2026-07-03 run
+
+Durable residue of the overnight decision log (NODELESS_DECISIONS.md,
+folded in here and deleted). Numbering is the log's own and is distinct
+from §2 — code citations of `NODELESS_WALLET.md D<n>` always mean §2.
+
+- **D1 — `listcoins` carries a `nodeless` flag.** Shipped:
+  `Engine::coin_nodeless` mirrors the §2-D5 dispatch without building a
+  backend; the UI keys the whole send/receive/activity surface (and the
+  "pact seed" wallet label) off it.
+- **D5 — Nodeless config = `funding_wallet: "pact-seed"` + `extra_backends`.**
+  Shipped in `satchel/src/compose.rs`: no new satchel.json fields — the
+  Electrum URLs join verbatim as the chain-data list, and non-`tcp://`/
+  `ssl://` URLs are refused.
+- **D6 — Wallet actions are dialogs on the wallet card, not a new screen.**
+  Shipped as `satchel/ui/src/dialogs/WalletActions.tsx` (Receive / Send /
+  Activity), shown only when `listcoins.nodeless`.
+- **D7 — i18n: new keys optional in `Bundle`, English fallback per key.**
+  Shipped; the deferred translation pass has since filled all 26 locales.
+- **D8 — Nodeless playground variant, with a faucet.** Survives the harness
+  consolidation as `python -m play --btcx nodeless [--electrs N]
+  [--board nostr]` (the ps1 wrappers are gone — TEST_FRAMEWORK_PLAN.md §2.5).
+- **D10 — Electrum capability handshake + pre-shipped server defaults.**
+  Shipped: `server.version` negotiation (protocol 1.4+), `server.features`
+  genesis check, PRUNED servers refused — the handshake now lives in
+  `electrum-btcx`'s backend; coins.toml `connection` blocks carry
+  `electrum = [...]` defaults (BTCX mainnet/testnet still TODO until public
+  PoCX servers are live).
+- **D11 — O2 closed: Electrum-style handout cap** (shipped shape in §7 O2;
+  a unit test pins reveal→cap→recycle→payment-frees-a-slot).
+- **D12 — O3 closed: wallet exclusivity elevated to design principle.**
+  Full wording is §2 D7.
+
+Dropped as pure harness journal — their substance lives where it acts:
+D2/D9 (bindex REST-port workarounds, :18443/:18332 →
+`pact/harness/framework/node.py` + TEST_FRAMEWORK_PLAN.md Appendix B),
+D3 (electrs `headers.subscribe`-panic probe → `framework/node.py`),
+D4 (nodeless parity scenario pick → `pact/harness/tests/nodeless.py`).

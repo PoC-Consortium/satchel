@@ -32,7 +32,7 @@ cargo clippy --workspace    # lints
 
 The harness lives in `pact/harness/`, is Python 3.10+ stdlib-only, and is
 structured like Bitcoin Core's functional-test framework (design + history in
-`docs/TEST_FRAMEWORK_PLAN.md`): an importable `framework/` package, asserting
+`docs/design/TEST_FRAMEWORK_PLAN.md`): an importable `framework/` package, asserting
 suites under `tests/` (one scenario class per cell), and `test_runner.py` as
 the single entry that runs them all. `framework/node.py`'s `Harness`:
 
@@ -74,7 +74,7 @@ cache under `pact/harness/cache/` — copied per scenario instead of re-mining
 The seed-only mid-swap **rescue matrix** (#54 — {maker,taker} × wipe-stage ×
 {v1,v2} plus a refund variant) lives beside it in `tests/swap_v1_rescue.py`,
 and the dormant-observer **state-reconstruction cells** (#166,
-`docs/STATE_RECONSTRUCTION.md`) in `tests/follow.py`. `tests/multimachine.py`
+`docs/design/STATE_RECONSTRUCTION.md`) in `tests/follow.py`. `tests/multimachine.py`
 carries the automatable #122 checks (data-dir lock, distinct machine scopes,
 derive-scope partition), and `tests/framework_selftest.py` is the fast no-node
 preflight (port registry, allocator, binary resolver).

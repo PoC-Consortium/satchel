@@ -365,7 +365,7 @@ export const es: Bundle = {
     checkUpdate: "Buscar actualizaciones",
     protocols: "Protocolos de swap",
     protocolsHint:
-      "Lo que habla esta versión: las ofertas con una versión distinta se pueden ver pero no tomar. Ambas partes del swap deben coincidir.",
+      "Lo que habla esta compilación — los números son la versión del formato de mensajes de cada protocolo (no clasifican los protocolos). Las ofertas con otra versión se pueden ver pero no tomar; ambos lados de un swap deben coincidir.",
     machine: "Esta máquina",
     machineHint:
       "El id de esta instalación. Si ejecutas la misma semilla en más de una máquina, cada una gestiona sus propios swaps — las demás aparecen de solo lectura como \"Otra máquina\" en el panel de swaps, y puedes tomarlas aquí si una se detiene. El uso multimáquina es para conmutación por error y recuperación, no para operar desde dos máquinas a la vez (comparten un único saldo).",

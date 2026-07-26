@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Multi-machine safety (issue #122) — the automatable half of the #122 test
-matrix (docs/MULTI_MACHINE_122.md, Testing section), ported from the retired
+matrix (docs/design/MULTI_MACHINE_122.md, Testing section), ported from the retired
 tools/playground-multimachine.ps1. Two pactds on the SAME seed in SEPARATE
 data dirs ("machine A" + "machine B") verify the seed-scoped partition —
 no nodes, board or Electrum needed (offline derivation + the data-dir lock):
