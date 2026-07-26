@@ -42,8 +42,12 @@ pub struct Apply {
     sent_outbox: Vec<i64>,
     inbox: Vec<(String, String, u64)>,
     offers: Vec<(String, String, String, u64, u64)>,
-    /// `swap_id`s revoked via an incoming NIP-09 deletion (offers to drop).
-    revoked: Vec<String>,
+    /// Offers revoked via an incoming NIP-09 deletion: `(swap_id, the
+    /// deletion event's created_at)`. The timestamp is load-bearing — per
+    /// NIP-09 a deletion covers only listing versions up to its own
+    /// `created_at`, and [`apply`] uses it to tell a genuine (same-key)
+    /// withdrawal from the stale echo of our own soft de-list-on-close.
+    revoked: Vec<(String, u64)>,
     offers_since: u64,
     mailbox_since: u64,
     deletions_since: u64,
@@ -125,8 +129,34 @@ pub fn apply(store: &Store, a: &Apply) -> Result<()> {
     // may ignore NIP-09, so a revoked offer can keep showing up in the offer
     // fetch (this round or later) — the tombstone makes the upsert below skip it
     // every time, so it never reappears on the board.
-    for swap_id in &a.revoked {
-        store.meta_set(&format!("nostr_revoked:{swap_id}"), "1")?;
+    //
+    // ORDERING (NIP-09): a deletion covers only listing versions up to its own
+    // `created_at` — newer re-advertisements survive it. Without this check,
+    // the soft de-list-on-close's kind-5 echoes back from the relays on the
+    // next boot and self-revokes every offer the boot just re-advertised
+    // (observed in the field on the first MSI upgrade: 9 offers gone,
+    // staggered by relay lag; the #97 config-relaunch skip dodged only one
+    // instance of the same race). The tombstone therefore stores the
+    // deletion's timestamp, and both the eviction and our own-ledger
+    // reconcile compare against it.
+    for (swap_id, del_created) in &a.revoked {
+        // Our OWN still-live offer, advertised more recently than the deletion
+        // was signed → the deletion is a stale echo of our previous session's
+        // soft de-list (or an out-of-date withdrawal from another same-seed
+        // machine). Ignore it entirely: no tombstone, no eviction, no revoke.
+        if let Some(o) = store.my_offer_get(swap_id)? {
+            if o.state == "live" && *del_created < o.last_refresh.max(o.created) {
+                tracing::info!(
+                    offer = %swap_id,
+                    "stale NIP-09 self-deletion ignored (offer re-advertised since)"
+                );
+                continue;
+            }
+        }
+        store.meta_set(
+            &format!("nostr_revoked:{swap_id}"),
+            &del_created.to_string(),
+        )?;
         store.nostr_offer_cache_remove(swap_id)?;
         // Reconcile our OWN ledger. A deletion for one of our still-live offers
         // is a (same-key) withdrawal — honor it everywhere by marking the offer
@@ -144,8 +174,18 @@ pub fn apply(store: &Store, a: &Apply) -> Result<()> {
         }
     }
     for (event_id, d_tag, envelope, created, expires) in &a.offers {
-        if store.meta_get(&format!("nostr_revoked:{d_tag}"))?.is_some() {
-            continue; // revoked offer still lingering on the relay — stay dropped
+        if let Some(v) = store.meta_get(&format!("nostr_revoked:{d_tag}"))? {
+            // The tombstone value is the deletion's created_at (NIP-09: only
+            // versions up to it are deleted) — a listing NEWER than the
+            // deletion is a legitimate re-post and passes through. Legacy
+            // tombstones stored "1"; treat those as permanent.
+            let del_ts = match v.parse::<u64>() {
+                Ok(1) | Err(_) => u64::MAX,
+                Ok(ts) => ts,
+            };
+            if *created <= del_ts {
+                continue; // revoked offer still lingering on the relay — stay dropped
+            }
         }
         store.nostr_offer_cache_upsert(event_id, d_tag, envelope, *created, *expires)?;
     }
@@ -288,7 +328,7 @@ impl NostrService {
             for ev in events {
                 let created = ev.created_at.as_secs();
                 if let Some(swap_id) = pn::revoked_offer_from_event(&ev) {
-                    out.revoked.push(swap_id);
+                    out.revoked.push((swap_id, created));
                 }
                 out.deletions_since = advance_cursor(out.deletions_since, created, now);
             }
@@ -567,8 +607,12 @@ mod tests {
             .unwrap();
         assert_eq!(p.store.my_offers_live().unwrap().len(), 1);
 
+        // Deletion signed AFTER our last advertisement → a genuine withdrawal.
         let a = Apply {
-            revoked: vec!["mineLive".into(), "notMine".into()],
+            revoked: vec![
+                ("mineLive".into(), 1_700_000_100),
+                ("notMine".into(), 1_700_000_100),
+            ],
             ..Apply::default()
         };
         apply(&p.store, &a).unwrap();
@@ -597,6 +641,111 @@ mod tests {
             .unwrap()
             .iter()
             .all(|o| o.offer_id != "notMine"));
+    }
+
+    #[test]
+    fn stale_self_deletion_echo_is_ignored() {
+        // The MSI-upgrade field case: the previous session's soft de-list
+        // kind-5 echoes back AFTER the boot re-advertise. NIP-09 ordering: the
+        // deletion (created 1_700_000_400) predates the re-advertisement
+        // (last_refresh 1_700_000_500), so it must be ignored entirely — no
+        // revoke, no tombstone.
+        let p = party("stale-echo");
+        p.store
+            .my_offer_put("echoed", "{\"e\":1}", 1_700_000_000, 0, 1_700_000_500)
+            .unwrap();
+
+        let a = Apply {
+            revoked: vec![("echoed".into(), 1_700_000_400)],
+            ..Apply::default()
+        };
+        apply(&p.store, &a).unwrap();
+
+        assert_eq!(
+            p.store.my_offers_live().unwrap().len(),
+            1,
+            "stale echo must not revoke a re-advertised live offer"
+        );
+        assert!(
+            p.store.meta_get("nostr_revoked:echoed").unwrap().is_none(),
+            "stale echo must not tombstone"
+        );
+    }
+
+    #[test]
+    fn tombstone_lets_newer_repost_through() {
+        // A deletion tombstones versions up to its created_at; a listing NEWER
+        // than the deletion is a legitimate re-post and must cache again.
+        let p = party("tombstone-order");
+        let del_at = 1_700_000_200u64;
+        let a = Apply {
+            revoked: vec![("re-posted".into(), del_at)],
+            ..Apply::default()
+        };
+        apply(&p.store, &a).unwrap();
+        assert_eq!(
+            p.store
+                .meta_get("nostr_revoked:re-posted")
+                .unwrap()
+                .as_deref(),
+            Some("1700000200")
+        );
+
+        // Older-or-equal listing stays dropped; newer one passes.
+        let far = del_at + 100_000; // expires comfortably in the future
+        let a = Apply {
+            offers: vec![
+                (
+                    "ev-old".into(),
+                    "re-posted".into(),
+                    "{\"e\":1}".into(),
+                    del_at,
+                    far,
+                ),
+                (
+                    "ev-new".into(),
+                    "re-posted".into(),
+                    "{\"e\":2}".into(),
+                    del_at + 1,
+                    far,
+                ),
+            ],
+            ..Apply::default()
+        };
+        apply(&p.store, &a).unwrap();
+        let active = p.store.nostr_offer_cache_active(del_at + 2).unwrap();
+        assert_eq!(
+            active.len(),
+            1,
+            "newer re-post must break through the tombstone"
+        );
+        assert!(active[0].contains("\"e\":2"));
+    }
+
+    #[test]
+    fn legacy_tombstone_stays_permanent() {
+        // Pre-fix tombstones stored "1" — they must keep dropping every
+        // version, whatever its created_at.
+        let p = party("legacy-tomb");
+        p.store.meta_set("nostr_revoked:old", "1").unwrap();
+        let a = Apply {
+            offers: vec![(
+                "ev".into(),
+                "old".into(),
+                "{\"e\":1}".into(),
+                1_900_000_000,
+                2_000_000_000,
+            )],
+            ..Apply::default()
+        };
+        apply(&p.store, &a).unwrap();
+        assert!(
+            p.store
+                .nostr_offer_cache_active(1_900_000_001)
+                .unwrap()
+                .is_empty(),
+            "legacy tombstone must stay permanent"
+        );
     }
 
     #[test]
