@@ -56,13 +56,18 @@ fn save_state(path: &PathBuf, state: &StateFile) {
     }
 }
 
-/// Where announcements go.
+/// Where announcements go. The announcer fans one rendered announcement out
+/// to every configured sink (Discord channel, Telegram chat, stdout).
 pub enum Sink {
     /// --dry-run: print what WOULD be posted.
     Stdout,
     Discord {
         http: Arc<serenity::Http>,
         channel_id: u64,
+    },
+    Telegram {
+        tg: Arc<crate::telegram::Telegram>,
+        chat_id: String,
     },
 }
 
@@ -87,6 +92,17 @@ impl Sink {
                     .await
                 {
                     tracing::warn!("discord: announce post failed: {err:#}");
+                }
+            }
+            Sink::Telegram { tg, chat_id } => {
+                let html = format!(
+                    "<b>{}</b>\n{}\n<i>{}</i>",
+                    crate::telegram::md_to_html(&a.title),
+                    crate::telegram::md_to_html(&a.body),
+                    crate::telegram::md_to_html(&a.footer),
+                );
+                if let Err(err) = tg.send_html(chat_id, &html).await {
+                    tracing::warn!("telegram: announce post failed: {err:#}");
                 }
             }
         }
@@ -119,7 +135,7 @@ pub async fn run(
     book: Arc<RwLock<Book>>,
     cfg: Arc<Config>,
     cash: CashRate,
-    sink: Sink,
+    sinks: Vec<Sink>,
     persist_state: bool,
 ) {
     let started = unix_now();
@@ -161,7 +177,9 @@ pub async fn run(
             ) {
                 let ctx = RenderCtx::for_pair(&cfg, pair, cash.fresh());
                 let announcement = render_announcement(&entry.sig, &current, &ctx);
-                sink.post(&announcement).await;
+                for sink in &sinks {
+                    sink.post(&announcement).await;
+                }
                 entry.sig = current;
                 entry.last_post = now;
                 *pending_since = None;

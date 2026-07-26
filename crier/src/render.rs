@@ -103,13 +103,17 @@ impl RenderCtx {
         fmt_amount(size_base_sats as f64 / 10f64.powi(self.base.decimals as i32))
     }
 
-    /// `(spread, pct, mid)` display strings.
-    fn spread_parts(&self, ask: Ratio, bid: Ratio) -> (String, String, String) {
+    /// `(spread, pct, mid, mid_usd)` display strings.
+    fn spread_parts(&self, ask: Ratio, bid: Ratio) -> (String, String, String, Option<String>) {
         let (a, b) = (self.display_price(ask), self.display_price(bid));
         let spread = a - b;
         let mid = (a + b) / 2.0;
         let pct = if mid > 0.0 { spread / mid * 100.0 } else { 0.0 };
-        (fmt_price(spread), fmt_pct(pct), fmt_price(mid))
+        let mid_usd = match (self.usd_price(ask), self.usd_price(bid)) {
+            (Some(ua), Some(ub)) => Some(fmt_usd((ua + ub) / 2.0)),
+            _ => None,
+        };
+        (fmt_price(spread), fmt_pct(pct), fmt_price(mid), mid_usd)
     }
 }
 
@@ -257,8 +261,11 @@ pub fn render_book(ladder: &Ladder, ctx: &RenderCtx) -> String {
 fn push_spread(body: &mut String, ladder: &Ladder, ctx: &RenderCtx) {
     match (ladder.asks.first(), ladder.bids.first()) {
         (Some(a), Some(b)) => {
-            let (s, pct, mid) = ctx.spread_parts(a.price, b.price);
-            body.push_str(&format!("  ───  spread {s} ({pct} %) · mid {mid}  ───\n"));
+            let (s, pct, mid, mid_usd) = ctx.spread_parts(a.price, b.price);
+            let usd = mid_usd.map(|u| format!(" (${u})")).unwrap_or_default();
+            body.push_str(&format!(
+                "  ───  spread {s} ({pct} %) · mid {mid}{usd}  ───\n"
+            ));
         }
         (Some(_), None) => body.push_str("  ───  (no bids)  ───\n"),
         (None, Some(_)) => body.push_str("  ───  (no asks)  ───\n"),
@@ -348,8 +355,10 @@ pub fn render_announcement(prev: &TopSig, new: &TopSig, ctx: &RenderCtx) -> Anno
         ctx, "Bid", &new.bid, &prev.bid, bid_change, decimals,
     ));
     if let (Some(a), Some(b)) = (&new.ask, &new.bid) {
-        let (s, pct, mid) = ctx.spread_parts(Ratio::new(a.num, a.den), Ratio::new(b.num, b.den));
-        lines.push(format!("**Spread** `{s}` ({pct} %) · mid `{mid}`"));
+        let (s, pct, mid, mid_usd) =
+            ctx.spread_parts(Ratio::new(a.num, a.den), Ratio::new(b.num, b.den));
+        let usd = mid_usd.map(|u| format!(" (${u})")).unwrap_or_default();
+        lines.push(format!("**Spread** `{s}` ({pct} %) · mid `{mid}`{usd}"));
     }
 
     Announcement {
@@ -493,7 +502,7 @@ BID  400 BTCX @ 0.655\n\
             a.body,
             "**Ask** `37 BTCX @ 0.676 ($79.77)` *(was 0.691)*\n\
              **Bid** `26 BTCX @ 0.670 ($79.06)`\n\
-             **Spread** `0.006` (0.9 %) · mid `0.673`"
+             **Spread** `0.006` (0.9 %) · mid `0.673` ($79.41)"
         );
         assert_eq!(a.footer, "prices in mBTC/BTCX · 1 BTC ≈ $118 000.00 ref");
     }

@@ -89,6 +89,14 @@ pub struct DiscordCfg {
 }
 
 #[derive(Debug, Clone)]
+pub struct TelegramCfg {
+    pub token: Option<String>,
+    /// Numeric chat/group id or "@channelname"; empty = no Telegram
+    /// announcements (commands still work whenever a token is set).
+    pub announce_chat_id: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct AnnounceCfg {
     pub debounce_secs: u64,
     pub min_interval_secs: u64,
@@ -144,6 +152,7 @@ pub struct Config {
     pub state_file: PathBuf,
     pub coins: HashMap<String, CoinInfo>,
     pub discord: DiscordCfg,
+    pub telegram: TelegramCfg,
     pub announce: AnnounceCfg,
     pub render: RenderCfg,
     pub cash: CashCfg,
@@ -162,6 +171,8 @@ struct Raw {
     #[serde(default)]
     discord: RawDiscord,
     #[serde(default)]
+    telegram: RawTelegram,
+    #[serde(default)]
     announce: RawAnnounce,
     #[serde(default)]
     render: RawRender,
@@ -175,6 +186,13 @@ struct RawDiscord {
     token: Option<String>,
     guild_id: Option<u64>,
     announce_channel_id: Option<u64>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTelegram {
+    token: Option<String>,
+    announce_chat_id: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -303,10 +321,9 @@ impl Config {
             other => bail!("render.btc_unit '{other}' (btc|mbtc|sat)"),
         };
 
-        let token = std::env::var("CRIER_DISCORD_TOKEN")
-            .ok()
-            .filter(|t| !t.trim().is_empty())
-            .or(raw.discord.token);
+        let env_token = |name: &str| std::env::var(name).ok().filter(|t| !t.trim().is_empty());
+        let discord_token = env_token("CRIER_DISCORD_TOKEN").or(raw.discord.token);
+        let telegram_token = env_token("CRIER_TELEGRAM_TOKEN").or(raw.telegram.token);
 
         let state_file = raw
             .state_file
@@ -322,9 +339,13 @@ impl Config {
             state_file,
             coins,
             discord: DiscordCfg {
-                token,
+                token: discord_token,
                 guild_id: raw.discord.guild_id.unwrap_or(0),
                 announce_channel_id: raw.discord.announce_channel_id.unwrap_or(0),
+            },
+            telegram: TelegramCfg {
+                token: telegram_token,
+                announce_chat_id: raw.telegram.announce_chat_id.unwrap_or_default(),
             },
             announce: AnnounceCfg {
                 debounce_secs: raw.announce.debounce_secs.unwrap_or(30),

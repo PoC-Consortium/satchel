@@ -1,5 +1,5 @@
-//! crier — read-only Discord announcer for the Pact orderbook on Nostr.
-//! See PLAN.md for the design and README.md for deployment.
+//! crier — read-only Discord/Telegram announcer for the Pact orderbook on
+//! Nostr. See PLAN.md for the design and README.md for deployment.
 
 mod announce;
 mod book;
@@ -9,6 +9,8 @@ mod discord;
 mod ingest;
 mod offer;
 mod render;
+mod telegram;
+mod views;
 
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
@@ -80,7 +82,7 @@ async fn main() -> Result<()> {
             book,
             cfg,
             cash,
-            announce::Sink::Stdout,
+            vec![announce::Sink::Stdout],
             false,
         ));
         tokio::signal::ctrl_c().await?;
@@ -88,7 +90,64 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    discord::run(cfg, book, cash, nostr_client).await
+    // ---- announcement sinks (any subset of protocols may be configured) ----
+    let mut sinks: Vec<announce::Sink> = Vec::new();
+    if let (Some(token), channel_id) = (&cfg.discord.token, cfg.discord.announce_channel_id) {
+        if channel_id != 0 {
+            // A bare HTTP client posts embeds fine — no gateway needed.
+            sinks.push(announce::Sink::Discord {
+                http: Arc::new(poise::serenity_prelude::Http::new(token)),
+                channel_id,
+            });
+        } else {
+            tracing::info!("discord: announce_channel_id = 0 — commands only");
+        }
+    }
+    let tg = match &cfg.telegram.token {
+        Some(token) => Some(telegram::Telegram::new(token)?),
+        None => None,
+    };
+    if let Some(tg) = &tg {
+        if cfg.telegram.announce_chat_id.is_empty() {
+            tracing::info!("telegram: announce_chat_id empty — commands only");
+        } else {
+            sinks.push(announce::Sink::Telegram {
+                tg: tg.clone(),
+                chat_id: cfg.telegram.announce_chat_id.clone(),
+            });
+        }
+    }
+    if !sinks.is_empty() {
+        tokio::spawn(announce::run(
+            book.clone(),
+            cfg.clone(),
+            cash.clone(),
+            sinks,
+            true,
+        ));
+    }
+    if let Some(tg) = tg {
+        tokio::spawn(tg.run_commands(
+            book.clone(),
+            cfg.clone(),
+            cash.clone(),
+            nostr_client.clone(),
+            config::unix_now(),
+        ));
+    }
+
+    if cfg.discord.token.is_some() {
+        discord::run(cfg, book, cash, nostr_client).await
+    } else if cfg.telegram.token.is_some() {
+        tracing::info!("no Discord token — running Telegram-only");
+        tokio::signal::ctrl_c().await?;
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "no Discord or Telegram token configured — set CRIER_DISCORD_TOKEN / \
+             CRIER_TELEGRAM_TOKEN (or run --dry-run)"
+        )
+    }
 }
 
 /// --dry-run: print each configured pair's ladder whenever the book changed.

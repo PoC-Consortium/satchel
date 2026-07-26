@@ -23,6 +23,12 @@ state_file = "crier-state.json"    # last-announced tops (restart hygiene)
 guild_id = 0                       # 0 = register slash commands globally
 announce_channel_id = 0            # 0 = announcer off, commands only
 
+[telegram]
+# token = "..."                    # PREFER the CRIER_TELEGRAM_TOKEN env var
+announce_chat_id = ""              # numeric chat/group id or "@channelname";
+                                   # "" = announcer off, commands only.
+                                   # Either protocol (or both) may be active.
+
 [announce]
 debounce_secs = 30                 # coalesce churn before posting
 min_interval_secs = 60             # per-pair posting floor

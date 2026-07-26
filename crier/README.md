@@ -1,13 +1,14 @@
 # crier
 
-A read-only Discord bot that cries the Pact orderbook. It watches the public
-offer adverts (Nostr kind 31510) and maker revocations (kind 5) on the same
-relays Satchel uses, rebuilds the book, and:
+A read-only Discord/Telegram bot that cries the Pact orderbook. It watches
+the public offer adverts (Nostr kind 31510) and maker revocations (kind 5) on
+the same relays Satchel uses, rebuilds the book, and:
 
 - answers **`/book`** (price ladder), **`/top`** (best bid/ask per pair), and
-  **`/status`** (relay health) on demand;
-- **announces top-of-book changes** for configured pairs into a channel —
-  debounced, so maker refresh churn stays silent.
+  **`/status`** (relay health) on demand — same commands on both protocols;
+- **announces top-of-book changes** for configured pairs into a Discord
+  channel and/or a Telegram chat — debounced, so maker refresh churn stays
+  silent. One announcer, fanned out to every configured protocol.
 
 Prices are unit prices (what 1 BTCX costs, in mBTC by default), with an
 optional USD reference annotation. crier holds no funds, has no identity, and
@@ -62,7 +63,8 @@ Discord → User Settings → Advanced → enable **Developer Mode**. Then:
 
 ```sh
 cp crier.example.toml crier.toml    # edit: guild_id, announce_channel_id, pairs
-export CRIER_DISCORD_TOKEN='<the bot token>'   # never commit the token
+export CRIER_DISCORD_TOKEN='<the bot token>'    # never commit tokens
+export CRIER_TELEGRAM_TOKEN='<botfather token>' # optional, see Telegram below
 ```
 
 Defaults: mainnet, Satchel's public relay set, pair `btc/btcx`, prices in
@@ -79,6 +81,24 @@ On start you should see `slash commands registered…`; `/status` in your
 server shows relay connectivity. The announcer stays quiet for
 `initial_sync_secs` after start and only posts genuine diffs vs its persisted
 state (`crier-state.json`) — restarts don't cause announcement storms.
+
+### Telegram (optional — instead of or alongside Discord)
+
+1. Message **@BotFather** on Telegram → `/newbot` → pick a name and username.
+   The token it replies with is `CRIER_TELEGRAM_TOKEN`.
+2. For announcements, add the bot to your group/channel (as admin for
+   channels) and put the chat id in `telegram.announce_chat_id`:
+   - public channel: just `"@yourchannelname"`,
+   - group/private chat: the numeric id — easiest way: add the bot, send any
+     message in the chat, open
+     `https://api.telegram.org/bot<token>/getUpdates` in a browser and read
+     `chat.id` from the JSON (group ids are negative, keep the minus).
+3. Commands (`/book`, `/top`, `/status`) work in any chat the bot can read —
+   DM it directly or add it to a group. `announce_chat_id = ""` gives a
+   commands-only bot.
+
+Either protocol alone is fine: with only a Telegram token, crier runs
+Telegram-only; with both, the same announcements go to both.
 
 ### systemd
 
