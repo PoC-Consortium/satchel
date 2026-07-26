@@ -155,13 +155,15 @@ own swaps:
   condition: *only if that machine is stopped*. Confirm, and this machine
   adopts those swaps and drives them to completion — the standby becoming the
   main, in one click. (One special case: a **Private (v2) swap** whose payout is
-  pinned to a node wallet this machine doesn't control is still adopted, but
-  **refund-only**, with a warning — this machine won't complete the trade into
-  a wallet it doesn't own, so that swap rides to its timelock and refunds to an
-  address this machine *does* own. Nothing is skipped or left undriven. All v1
-  swaps, and v2 swaps that pay a seed-derived address, adopt and complete
-  without conditions.) Make absolutely sure the dead machine is
-  genuinely off
+  pinned to a node wallet this machine doesn't control — or can't prove it
+  controls — is still adopted, but **refund-only**, and the activity log says
+  so at take-over: this machine won't complete the trade into a wallet it
+  doesn't own, so left alone that swap rides to its timelock and refunds to an
+  address this machine *does* own. The engine re-checks on every pass, so
+  attaching the payout wallet later lets the swap complete normally after all.
+  Nothing is skipped or left undriven. All v1 swaps, and v2 swaps that pay a
+  seed-derived address, adopt and complete without conditions.) Make
+  absolutely sure the dead machine is genuinely off
   first: two machines driving the same swap at once can lose money, and the
   confirmation is your promise that it can't happen.
 

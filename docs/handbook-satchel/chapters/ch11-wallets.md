@@ -8,6 +8,14 @@ connected. Click **Wallets** in the left navigation to open it.
 You'll see one card per configured coin, each with the coin's icon, name, symbol,
 and a large balance figure. The balances come live from your own coin nodes.
 
+The headline figure counts **everything that's yours** — spendable funds plus any
+money still confirming — so a deposit or a sweep on its way in never makes the
+card read as an empty wallet. While something is in flight, a small
+warning-coloured **"*amount* pending"** row appears under the figure and
+disappears once the coins confirm (freshly mined coins maturing count as pending
+too). Only the **spendable** part can actually be spent: the send form works
+from that alone, so a send never trips over money that hasn't confirmed yet.
+
 Each card also tells you **where that coin's wallet lives**:
 
 - A coin connected to **your own node** (RPC) uses the node's wallet. If you've

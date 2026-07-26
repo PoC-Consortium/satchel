@@ -1,7 +1,9 @@
 # Swap state reconstruction from chain ground truth — design (follow / rescue / takeover)
 
 Status: IMPLEMENTED — #167 (§1–§5, §7 items 1–9), #168 (follower progress
-line, was §7.10) and #171 (wallet-assisted tier L+, see §4.1a below);
+line, was §7.10), #171 (wallet-assisted tier L+, see §4.1a below), #201
+(driver reconcile-before-drive, §5.4) and #212 (tier-L block-scan spend
+recovery, §1.1/§4/§5.3);
 deferred: subscription pokes and the tier-L scan throttle (§7.11/P5).
 Companion to `MULTI_MACHINE_122.md` (#122/#134/#163/#164) and the #54 rescue
 path. Triggered by the 2026-07-12 mainnet field bug: a follower that first
@@ -81,11 +83,17 @@ tx in history with an input spending that outpoint (exactly what Electrum
 self-verifying against locally reconstructed bytes — a lying server can withhold,
 never substitute (the `chain.rs:1-6` doctrine).
 
-**Live-only backend (Tier L, §4):** degrade to today's primitives — known pointer →
-`get_txout` (live/spent), no pointer → `find_funding` — plus `find_spend_witness`
-bounded by the *persisted funding height* (§5.3). A leg whose funding was spent
-before this machine ever saw it live is `Unknown` on Tier L; the age-out (§4.2)
-is the terminal decision there.
+**Live-only backend (Tier L, §4):** funding discovery degrades to today's
+primitives — known pointer → `get_txout` (live/spent), no pointer →
+`find_funding`. But a spend of a **known funding outpoint** is conclusive even
+here (#212): `ChainBackend::find_spend_tx` recovers the full spending tx —
+witness included — via a `gettxout` gate, then a mempool scan, then a
+`getblock`-verbosity-2 block scan (full blocks carry witnesses, no `-txindex`),
+bounded by the persisted funding height or, when none was ever recorded, a
+`created_at`-derived age floor plus a 144-block reorg margin (§5.3);
+`classify_spent_by_scan` then classifies the witness and reads depth from the
+tip. Only a leg whose funding *outpoint* was never learned stays `Unknown` on
+Tier L; the age-out (§4.2) is the terminal decision for those.
 
 ### 1.2 v1 spend classification (P2WSH witness shapes — deterministic)
 
@@ -151,8 +159,9 @@ derive(v, LegA, LegB, clock) -> DerivedSwap
 Terminal purge condition (replaces the tip-advance memo where depth is knowable):
 **every funded leg is Spent\* with `spend_confs ≥ max(n_a, n_b)`** — direct spend
 depth from history heights, not `FOREIGN_RESOLVED_AT_PREFIX` tip-drift
-(`engine.rs:5225-5271`). The memo mechanism is retained **only** for Tier L, where a
-known-pointer spend is visible (`get_txout → None`) but its depth is not.
+(`engine.rs:5225-5271`). The memo mechanism is retained **only** for legs with no
+known outpoint: a known-pointer spend on Tier L now recovers the spending tx and
+its depth via the block scan (#212), so those purge depth-verified too.
 
 The same table serves v1 and v2; only §1.2 vs §1.3 differ. `RedeemedB`-style
 intermediate driver states never appear here — they are *action* states, not chain
@@ -222,15 +231,18 @@ inherit a follower-fabricated driving state.
 | tier | backends | guarantee |
 |---|---|---|
 | **H — history** | any coin with ≥1 Electrum view: all nodeless coins (`wallet_bdk.rs` delegates to the pool), and Core-primary coins with Electrum views configured in the MultiBackend | full front-to-back reconstruction, §1 |
-| **L+ — wallet-assisted** (#171) | Core-RPC-only coins, via the SHARED node wallet (the backup-session contract) | everything the merchant side did: fundings we sent (pointer survives the spend), claims/refunds we received (full spend classification incl. witness). Counterparty-only history stays invisible → resolved via the pointer-vanished tip-drift buffer |
-| **L — live-only** | Core-RPC-only coins, wallet inconclusive (fresh node, oversized scan) | in-flight detection (live UTXO + pointer + bounded spend scan) + **age-out** as the terminal fallback |
+| **L+ — wallet-assisted** (#171) | Core-RPC-only coins, via the SHARED node wallet (the backup-session contract) | everything the merchant side did: fundings we sent (pointer survives the spend), claims/refunds we received (full spend classification incl. witness). A counterparty-only spend of a known outpoint (wallet `Vanished`, or the record's own pointer) upgrades to a conclusive `Spent` via the block scan (#212, `scan_upgrade_leg`) |
+| **L — live-only** | Core-RPC-only coins, wallet inconclusive (fresh node, oversized scan) | in-flight detection (live UTXO + pointer) + **conclusive spend classification of any known funding outpoint** (mempool + full-block scan, #212) + **age-out** as the terminal fallback for unknown outpoints |
 
 Detection is structural, not probed: a new trait method returns `Ok(None)` where
 unsupported (§7 item 2), and MultiBackend fans out to capable views — the tier is
 simply "did any view answer". Important floor fact: Core has **no**
 script→history index at all — `txindex=1` is txid→tx only, so Tier L cannot be
 upgraded by txindex for *funding* discovery of an already-spent spk; only the
-spend-of-known-outpoint scan benefits (`chain.rs:732-782` block-scan fallback).
+spend-of-known-outpoint scan is index-free (`ChainBackend::find_spend_tx` —
+trait `chain.rs:165`, Core impl `chain.rs:890-949`: `gettxout` gate → mempool
+scan → `getblock`-verbosity-2 block scan; `find_spend_witness` is a thin
+reader over it, `chain.rs:866`).
 
 ### 4.1a Wallet-assisted evidence (#171)
 
@@ -245,8 +257,11 @@ rebuilt one; v2 — the refund leaf byte-equals, or a key-path spend sweeps to
 the record's negotiated per-swap sweep address. Absence proves NOTHING (the
 counterparty's transactions never touch our wallet): the evidence augments
 classification (`LegClass::Vanished` for proven-funded-but-gone), it never
-implements `spk_history`. Follow-evaluator scans are throttled to block
-cadence (`follow_wallet_tip:` memo) and end once evidence is cached.
+implements `spk_history`. A `Vanished` pointer then feeds the spend scan
+(#212, `scan_upgrade_leg` `engine.rs:6749`), which recovers the spending tx
+and upgrades the leg to a conclusive `Spent`. Follow-evaluator scans are
+throttled to block cadence (`follow_wallet_tip:` memo) and end once evidence
+is cached.
 
 ### 4.2 Timelock age-out (universal fallback — needs zero new chain capability)
 
@@ -265,7 +280,8 @@ aged_out :=
 - `AGE_OUT_MARGIN = max(24h, 6 × max(n_a,n_b) × target_spacing_secs)`; `0` on
   regtest, matching the `action_margins` house style, so the e2e cell is cheap.
 - Semantics when it fires: past T, every rational path is closed — any funding that
-  existed was redeemed or refunded (we just can't see which on Tier L). Purge with
+  existed was redeemed or refunded (we just can't see which without a known
+  outpoint to scan). Purge with
   a `followed-aged-out` event + the `PURGED_FOREIGN_PREFIX` memo (`engine.rs:5262`)
   so the lingering snapshot never re-imports (`engine.rs:6424-6433`).
 - **The one deliberate exception:** a leg that still shows a **live funded UTXO**
@@ -298,8 +314,10 @@ the field ghost came from exactly such a snapshot) sees "not funded" and **funds
 again**. That violates the no-double-fund invariant the brief names. Fix: guard =
 `classify_leg` — `Funded` → adopt (today's behavior); `SpentRedeem/SpentRefund/
 SpentUnknown` → **refuse + fast-forward to the derived terminal** with a clear
-event; `Unfunded` → proceed. Tier L keeps today's live guard plus the §7.4/age-out
-clock refusals (a swap past its windows is never funded — cheap and universal).
+event; `Unfunded` → proceed. On Tier L the guard concludes too whenever the
+funding outpoint is known — the classification rides the §1.1 block scan (#212)
+— and keeps the §7.4/age-out clock refusals for the rest (a swap past its
+windows is never funded — cheap and universal).
 Anti-DoS: a refusal based on a *spend* requires that spend confirmed ≥1 under the
 quorum-min read, so a fabricated unconfirmed spend from one server cannot stall a
 live swap (§6.4).
@@ -326,16 +344,21 @@ learn the reveal already happened). On adoption (and equally on #54
 
 ### 5.3 Persist funding heights for both legs, both protocols
 
-Only `htlc_b_height` exists today (`store.rs:85`). The Core spend-scan bound for a
-taken-over swap is broken without heights: `funding_scan_from_height`
-(`engine.rs:2591-2600`) leans on `tx_confirmations`, which on Core answers via the
-*wallet* (`gettransaction`, `chain.rs:797-811`) — a foreign machine's funding is not
-in this wallet, `getrawtransaction` needs txindex, result 0 → scan starts at the
-tip → a mined reveal below it is invisible → a taken-over participant on Tier L
-never extracts `s`/`t`. Add `htlc_a_height` (v1) and `funding_a_height`/
-`funding_b_height` (v2), stamped wherever a funding is first seen (follower hint
-writes, `locate_funding`, the v2 rediscovery, `funded` message handling) and used as
-`from_height` everywhere `find_spend_witness` is called.
+The Core spend-scan bound for a taken-over swap needs heights:
+`funding_scan_from_height` (`engine.rs:2793-2810`) leans on `tx_confirmations`,
+which on Core answers via the *wallet* (`gettransaction`) — a foreign machine's
+funding is not in this wallet and `getrawtransaction` needs txindex, so
+`confs = 0` there does NOT mean unconfirmed. `htlc_a_height`/`htlc_b_height`
+(v1, `store.rs:88-90`) and `funding_a_height`/`funding_b_height` (v2,
+`store.rs:200-202`) are stamped wherever a funding is first seen (follower hint
+writes, `locate_funding`, the v2 rediscovery, `funded` message handling) and
+used as `from_height` everywhere the spend scan runs. When no height was ever
+recorded (a snapshot taken before the leg confirmed), the floor degrades to a
+`created_at`-derived age in blocks plus a 144-block reorg margin
+(`scan_spent_leg`, `engine.rs:6699-6747`) — never the tip — so a mined reveal
+below it stays visible and a taken-over participant on Tier L extracts `s`/`t`
+from the block scan (#212). A per-outpoint in-memory watermark (resume at
+mark − 6) keeps the retry cadence incremental.
 
 ### 5.4 Driver reconcile-before-drive on resume (#201)
 

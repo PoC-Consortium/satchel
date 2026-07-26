@@ -87,16 +87,18 @@ The policy object is a flat shape:
 | Method | Params | Returns | Mutates |
 |---|---|---|---|
 | `createseed` | `passphrase?` | `{ mnemonic, encrypted }` | yes (writes seed) |
-| `generateseed` | — | `{ mnemonic }` | no |
+| `generateseed` | `words?` (12 default, or 24) | `{ mnemonic }` | no |
 | `importseed` | `mnemonic`, `passphrase?` | `{ mnemonic, encrypted, identity }` | yes (writes seed) |
 | `unlock` | `passphrase` | `{ unlocked, identity }` | yes (in-memory) |
 
 - `createseed` — generates and **persists** a new BIP39 seed. The `mnemonic`
   is returned exactly once, for the user to back up. `encrypted` is true iff a
   non-empty `passphrase` was supplied.
-- `generateseed` — generates a mnemonic but does **not** persist it. Used by
-  the onboarding flow to preview-then-confirm a phrase before committing it
-  with `importseed`.
+- `generateseed` — generates a mnemonic but does **not** persist it. Fully
+  stateless: it needs no active merchant and touches no store, so the
+  onboarding wizard can show the phrase *before* the merchant exists — the
+  merchant and seed are committed together only at the wizard's final step
+  (`createmerchant` + `importseed`).
 - `importseed` — installs a supplied `mnemonic` (optionally encrypted under
   `passphrase`). Echoes the normalized phrase plus the derived `identity`
   (npub-style pubkey). Refuses to overwrite an existing seed.
@@ -233,12 +235,18 @@ per-server detail.
 
 | Method | Params | Returns | Mutates |
 |---|---|---|---|
-| `getbalance` | `chain` | `{ balance_sat }` | no |
+| `getbalance` | `chain` | `{ balance_sat, pending_sat, immature_sat }` | no |
 | `getnewaddress` | `chain` | `{ address }` | yes (advances HD index) |
 | `estimatesendfee` | `chain` | `{ min_sat_per_vb, fast, normal, slow }` | no |
 | `sendtoaddress` | `chain`, `address`, `amount`, `conf_target?`, `fee_rate?` | `{ txid }` | yes (broadcasts) |
 | `bumpfee` | `chain`, `txid`, `fee_rate` | `{ txid }` | yes (broadcasts replacement) |
 | `listtransactions` | `chain` | `{ transactions: [...] }` | no |
+
+`getbalance`'s `balance_sat` is the **spendable** balance and stays the only
+spend gate; `pending_sat` (untrusted incoming) and `immature_sat` (immature
+coinbase) are display-only extras so a wallet card can show money in flight
+instead of an empty wallet. Satchel's balance card folds both into one
+"pending" row; the send dialog sees `balance_sat` alone.
 
 `chain` is a coin id (e.g. `btc`). `amount` for `sendtoaddress` is a decimal
 string in whole coin units — or the literal string `"all"`, which **sweeps

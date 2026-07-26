@@ -73,7 +73,9 @@ The **state** is colour-coded so you can scan the page quickly:
 
 Alongside the state, Satchel shows the engine's own narration — a plain-language,
 verbatim description of what happened at each step. This is the same calm,
-running commentary you see in the activity log.
+running commentary you see in the activity log. It marks the turning points for
+you: the moment your lock transaction goes out, the story says so — and notes
+that from here the timelocks, not cancelling, are your safety net.
 
 ### The live progress line
 
@@ -195,15 +197,26 @@ more than one machine"* in the *Backup, Seeds & Safety* chapter), the dock also
 shows the *other* machine's in-flight swaps, grouped per machine under a heading
 like **Another machine · M-7f3a**. Those cards are **read-only**: this machine
 watches them on-chain but never acts on them, and they don't appear in the Swaps
-ledger. Each group carries one **Take over** button. Press it — and confirm that
+ledger. The narration keeps the roles straight — when the next move is your own
+side's lock, the card says so plainly: *your side's lock is next — the machine
+driving this swap sends it*, so you're never tempted to act from here. And the
+watching is careful, even on a coin reached only through your own node: a swap
+that already finished elsewhere never imports as a ghost card, and a card
+leaves the dock only once its settlement is genuinely confirmed at depth — not
+merely because time has passed. Each group carries one **Take over** button.
+Press it — and confirm that
 the other machine really is stopped — and this machine adopts **all** of the
 group's swaps and starts driving them, ledger and all. One kind adopts with a
 caveat: a **Private (v2)** swap whose payout is pinned to a node wallet this
-machine doesn't control is taken over **refund-only**, with a warning — this
-machine won't complete the trade into a wallet it doesn't own, so that swap
+machine doesn't control — or can't positively prove it controls — is taken over
+**refund-only**, and the activity log tells you so at take-over: this machine
+won't complete the trade into a wallet it doesn't own, so left alone that swap
 simply rides to its timelock and refunds to an address this machine *does* own.
-Nothing is skipped, and nothing is left undriven. All v1 swaps, and v2 swaps
-that pay a seed-derived address, adopt and complete without conditions.
+That verdict isn't final, though — the engine re-checks it on every pass, so
+attaching the payout wallet to this machine lets the same swap complete
+normally after all, with no second take-over needed. Nothing is skipped, and
+nothing is left undriven. All v1 swaps, and v2 swaps that pay a seed-derived
+address, adopt and complete without conditions.
 
 > **Note** — If the group holds a swap that hasn't locked anything yet, the
 > confirmation dialog says so honestly: taking over a pre-funding swap is
@@ -220,7 +233,9 @@ it won't fight you for them or re-broadcast anything.
 > **Note** — Upgrading from an older Satchel needs no ceremony here: your
 > **finished** swaps stay in the ledger automatically. A swap that was still
 > **in flight** when you upgraded shows up once under **Another machine** —
-> one **Take over** and it carries on as this machine's swap.
+> one **Take over** and it carries on as this machine's swap. (A followed card
+> an older version left stuck showing **active** needs nothing from you either:
+> it sorts itself out on the first pass after the upgrade.)
 
 ### Dump logs: diagnostics for support
 
