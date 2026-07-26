@@ -108,6 +108,13 @@ pub struct Engine {
     /// steady-state anomaly triggers ([`Engine::request_reconcile`]) re-arm a
     /// swap whose tracked leg unexpectedly vanished.
     reconciled: Mutex<HashSet<String>>,
+    /// Tier-L block-scan watermarks: `coin:outpoint` → the tip height when the
+    /// last spend scan came up empty. The reconcile cadence retries an
+    /// inconclusive swap every tick; the watermark makes each retry INCREMENTAL
+    /// (only blocks since the last scan, with a small reorg overlap) instead of
+    /// re-reading the whole range against the user's node. In-memory on
+    /// purpose: a restart pays one full-range scan, then increments again.
+    scan_tips: Mutex<HashMap<String, u64>>,
 }
 
 fn chain_params(chain: &ChainRef) -> Result<&'static ChainParams> {
@@ -852,6 +859,7 @@ impl Engine {
             // the install's real machine.json scope after construction.
             machine_scope: crate::keys::DeriveScope::LEGACY,
             reconciled: Mutex::new(HashSet::new()),
+            scan_tips: Mutex::new(HashMap::new()),
         })
     }
 
@@ -6554,6 +6562,98 @@ impl Engine {
         }
     }
 
+    /// Tier-L spend recovery for one leg: when no script-index view exists but
+    /// the funding OUTPOINT is known, recover the spending tx by scanning the
+    /// mempool/blocks ([`crate::reconstruct::classify_spent_by_scan`] over
+    /// [`ChainBackend::find_spend_tx`] — the same lookup the live driver uses
+    /// to extract a counterparty's reveal). The scan floor is the recorded
+    /// funding height when we have one; otherwise (a followed snapshot taken
+    /// before the leg confirmed) the swap's age in blocks plus a reorg margin.
+    /// A per-outpoint watermark keeps the reconcile retry cadence incremental:
+    /// each empty scan advances it to the tip, and the next resumes just below
+    /// it (6-block overlap so a mempool-then-mined spend is never missed).
+    fn scan_spent_leg(
+        &self,
+        chain: &ChainRef,
+        outpoint: &OutPoint,
+        spk: &ScriptBuf,
+        funding_height: u64,
+        created_at: u64,
+        classify: &dyn Fn(&[Vec<u8>]) -> crate::reconstruct::SpendKind,
+    ) -> Option<crate::reconstruct::SpentLeg> {
+        let backend = self.backend(chain).ok()?;
+        let tip = backend.tip_height().ok()?;
+        let base = if funding_height > 0 {
+            funding_height
+        } else {
+            let spacing = u64::from(backend.params().target_spacing_secs.max(1));
+            let blocks = local_now().saturating_sub(created_at) / spacing + 144;
+            tip.saturating_sub(blocks)
+        };
+        let key = format!("{}:{}:{}", chain.coin_id, outpoint.txid, outpoint.vout);
+        let floor = self
+            .scan_tips
+            .lock()
+            .ok()
+            .and_then(|marks| marks.get(&key).map(|mark| mark.saturating_sub(6)))
+            .map_or(base, |resume| resume.max(base));
+        let found = crate::reconstruct::classify_spent_by_scan(
+            &backend,
+            outpoint,
+            spk,
+            funding_height,
+            floor,
+            classify,
+        )
+        .ok()?;
+        if found.is_none() {
+            if let Ok(mut marks) = self.scan_tips.lock() {
+                marks.insert(key, tip);
+            }
+        }
+        found
+    }
+
+    /// Combine tier-L wallet evidence with the block-scan fallback: a
+    /// conclusive wallet `Spent` (or a live `Funded`) stands as-is; otherwise,
+    /// when a funding outpoint is known — from the wallet's `Vanished` pointer
+    /// or the record's own — try to upgrade it to a conclusive `Spent` by
+    /// scanning for the spending tx. This is what lets a swap whose co-leg was
+    /// settled by the COUNTERPARTY (never a wallet tx on any of our machines)
+    /// still classify on a script-index-less node. Falls back to whatever the
+    /// wallet said (possibly nothing) when no spend is visible.
+    fn scan_upgrade_leg(
+        &self,
+        chain: &ChainRef,
+        spk: &ScriptBuf,
+        created_at: u64,
+        classify: &dyn Fn(&[Vec<u8>]) -> crate::reconstruct::SpendKind,
+        wallet_class: Option<crate::reconstruct::LegClass>,
+        record_ptr: Option<(OutPoint, u64)>,
+    ) -> Option<crate::reconstruct::LegClass> {
+        use crate::reconstruct::LegClass;
+        match wallet_class {
+            Some(LegClass::Spent(_)) | Some(LegClass::Funded { .. }) => wallet_class,
+            other => {
+                let ptr = match &other {
+                    Some(LegClass::Vanished {
+                        outpoint,
+                        funding_height,
+                    }) => Some((*outpoint, *funding_height)),
+                    _ => record_ptr,
+                };
+                if let Some((op, funding_height)) = ptr {
+                    if let Some(spent) =
+                        self.scan_spent_leg(chain, &op, spk, funding_height, created_at, classify)
+                    {
+                        return Some(LegClass::Spent(spent));
+                    }
+                }
+                other
+            }
+        }
+    }
+
     /// Fresh (cache-free) classification of a v1 record's two legs from chain
     /// history. `None` on any inconclusiveness — handshake incomplete, no
     /// history-capable view (tier L), chain error.
@@ -6567,12 +6667,17 @@ impl Engine {
         let htlc_b = params.htlc_b().ok()?;
         let hash_h = params.hash_h;
         let classify = |w: &[Vec<u8>]| classify_v1_spend(w, &hash_h);
-        let leg = |chain: &ChainRef, htlc: &crate::htlc::Htlc, amount: u64| -> Option<LegClass> {
+        let leg = |chain: &ChainRef,
+                   htlc: &crate::htlc::Htlc,
+                   amount: u64,
+                   ptr: Option<(OutPoint, u64)>|
+         -> Option<LegClass> {
             let spk = htlc.script_pubkey();
             match classify_leg(&self.backend(chain).ok()?, &spk, amount, &classify) {
                 Ok(Some(c)) => Some(c),
                 // Tier L → wallet-assisted (#171): a v1 claim/refund of our
-                // leg reveals the exact witness script we can rebuild.
+                // leg reveals the exact witness script we can rebuild — then
+                // the block-scan fallback for spends no wallet can see.
                 Ok(None) => {
                     let ws = htlc.witness_script();
                     let probe = |tx: &bitcoin::Transaction, idx: usize| {
@@ -6582,21 +6687,33 @@ impl Engine {
                             .map(|w| w == ws.as_bytes())
                             .unwrap_or(false)
                     };
-                    let ev = self.wallet_leg_evidence(
-                        chain,
-                        &spk,
-                        amount,
-                        rec.created_at,
-                        &classify,
-                        &probe,
-                    )?;
-                    self.wallet_evidence_class(chain, &spk, ev)
+                    let wallet_class = self
+                        .wallet_leg_evidence(chain, &spk, amount, rec.created_at, &classify, &probe)
+                        .and_then(|ev| self.wallet_evidence_class(chain, &spk, ev));
+                    self.scan_upgrade_leg(chain, &spk, rec.created_at, &classify, wallet_class, ptr)
                 }
                 Err(_) => None,
             }
         };
-        let a = leg(&rec.chain_a, &htlc_a, rec.amount_a)?;
-        let b = leg(&rec.chain_b, &htlc_b, rec.amount_b)?;
+        let ptr = |txid: &Option<String>,
+                   vout: Option<u32>,
+                   height: &Option<u64>|
+         -> Option<(OutPoint, u64)> {
+            let txid = bitcoin::Txid::from_str(txid.as_deref()?).ok()?;
+            Some((OutPoint { txid, vout: vout? }, height.unwrap_or(0)))
+        };
+        let a = leg(
+            &rec.chain_a,
+            &htlc_a,
+            rec.amount_a,
+            ptr(&rec.htlc_a_txid, rec.htlc_a_vout, &rec.htlc_a_height),
+        )?;
+        let b = leg(
+            &rec.chain_b,
+            &htlc_b,
+            rec.amount_b,
+            ptr(&rec.htlc_b_txid, rec.htlc_b_vout, &rec.htlc_b_height),
+        )?;
         Some((a, b))
     }
 
@@ -6629,7 +6746,8 @@ impl Engine {
                    spk: &ScriptBuf,
                    amount: u64,
                    refund_script: &ScriptBuf,
-                   sweep: &Option<ScriptBuf>|
+                   sweep: &Option<ScriptBuf>,
+                   ptr: Option<(OutPoint, u64)>|
          -> Option<LegClass> {
             let classify = |w: &[Vec<u8>]| classify_v2_spend(w, refund_script);
             match classify_leg(&self.backend(chain).ok()?, spk, amount, &classify) {
@@ -6654,21 +6772,45 @@ impl Engine {
                             _ => false,
                         }
                     };
-                    let ev = self.wallet_leg_evidence(
-                        chain,
-                        spk,
-                        amount,
-                        rec.created_at,
-                        &classify,
-                        &probe,
-                    )?;
-                    self.wallet_evidence_class(chain, spk, ev)
+                    let wallet_class = self
+                        .wallet_leg_evidence(chain, spk, amount, rec.created_at, &classify, &probe)
+                        .and_then(|ev| self.wallet_evidence_class(chain, spk, ev));
+                    self.scan_upgrade_leg(chain, spk, rec.created_at, &classify, wallet_class, ptr)
                 }
                 Err(_) => None,
             }
         };
-        let a = leg(&rec.chain_a, &spk_a, rec.amount_a, &refund_a, &sweep_a)?;
-        let b = leg(&rec.chain_b, &spk_b, rec.amount_b, &refund_b, &sweep_b)?;
+        let ptr = |txid: &Option<String>,
+                   vout: Option<u32>,
+                   height: &Option<u64>|
+         -> Option<(OutPoint, u64)> {
+            let txid = bitcoin::Txid::from_str(txid.as_deref()?).ok()?;
+            Some((OutPoint { txid, vout: vout? }, height.unwrap_or(0)))
+        };
+        let a = leg(
+            &rec.chain_a,
+            &spk_a,
+            rec.amount_a,
+            &refund_a,
+            &sweep_a,
+            ptr(
+                &rec.funding_a_txid,
+                rec.funding_a_vout,
+                &rec.funding_a_height,
+            ),
+        )?;
+        let b = leg(
+            &rec.chain_b,
+            &spk_b,
+            rec.amount_b,
+            &refund_b,
+            &sweep_b,
+            ptr(
+                &rec.funding_b_txid,
+                rec.funding_b_vout,
+                &rec.funding_b_height,
+            ),
+        )?;
         Some((a, b))
     }
 
