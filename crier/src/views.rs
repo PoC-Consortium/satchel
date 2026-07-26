@@ -55,28 +55,28 @@ pub fn top_view(book: &Arc<RwLock<Book>>, cfg: &Config, cash: &CashRate) -> Stri
     if known.is_empty() {
         return "the board is empty".to_string();
     }
-    let mut lines = Vec::new();
+    let mut blocks = Vec::new();
     for pair in &known {
         let ladder = guard.ladder(pair, 1);
         let rctx = RenderCtx::for_pair(cfg, pair, cash.fresh());
-        let fmt_side = |lv: Option<&crate::book::Level>| match lv {
+        let fmt_side = |label: &str, lv: Option<&crate::book::Level>| match lv {
             Some(l) => format!(
-                "{} {} @ {}",
+                "**{label}** `{} {} @ {}`",
                 rctx.size_str(l.size_base_sats),
                 rctx.base.symbol,
-                rctx.price_str_natural(l.price)
+                rctx.price_natural_with_usd(l.price)
             ),
-            None => "—".to_string(),
+            None => format!("**{label}** *none*"),
         };
-        lines.push(format!(
-            "**{}** ({}) · bid {} · ask {}",
+        blocks.push(format!(
+            "**{}** ({})\n{}\n{}",
             rctx.pair_label(),
             rctx.unit_label(),
-            fmt_side(ladder.bids.first()),
-            fmt_side(ladder.asks.first()),
+            fmt_side("Ask", ladder.asks.first()),
+            fmt_side("Bid", ladder.bids.first()),
         ));
     }
-    lines.join("\n")
+    blocks.join("\n\n")
 }
 
 /// The /status response: relay connectivity + book freshness + cash ref.

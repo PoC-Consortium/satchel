@@ -94,6 +94,14 @@ impl RenderCtx {
         fmt_price(self.display_price(price))
     }
 
+    /// Natural price + USD annotation when available — /top lines.
+    pub fn price_natural_with_usd(&self, price: Ratio) -> String {
+        match self.usd_price(price) {
+            Some(usd) => format!("{} (${})", self.price_str_natural(price), fmt_usd(usd)),
+            None => self.price_str_natural(price),
+        }
+    }
+
     fn price_with_usd(&self, price: Ratio, decimals: usize) -> String {
         match self.usd_price(price) {
             Some(usd) => format!("{} (${})", self.price_str(price, decimals), fmt_usd(usd)),
@@ -272,10 +280,12 @@ pub fn render_book(ladder: &Ladder, ctx: &RenderCtx) -> String {
 fn push_spread(body: &mut String, ladder: &Ladder, ctx: &RenderCtx) {
     match (ladder.asks.first(), ladder.bids.first()) {
         (Some(a), Some(b)) => {
+            // Two short divider lines: a one-liner overflows a phone-width
+            // code block and wraps mid-number.
             let (s, pct, mid, mid_usd) = ctx.spread_parts(a.price, b.price);
             let usd = mid_usd.map(|u| format!(" (${u})")).unwrap_or_default();
             body.push_str(&format!(
-                "  ───  spread {s} ({pct} %) · mid {mid}{usd}  ───\n"
+                "  ───  spread {s} ({pct} %)\n  ───  mid    {mid}{usd}\n"
             ));
         }
         (Some(_), None) => body.push_str("  ───  (no bids)  ───\n"),
@@ -478,7 +488,8 @@ mod tests {
 ASK  120 BTCX @ 0.691\n  \
 ASK   50 BTCX @ 0.683\n  \
 ASK   37 BTCX @ 0.676\n  \
-───  spread 0.006 (0.9 %) · mid 0.673  ───\n  \
+───  spread 0.006 (0.9 %)\n  \
+───  mid    0.673\n  \
 BID   26 BTCX @ 0.670\n  \
 BID  400 BTCX @ 0.655\n\
 ```";
