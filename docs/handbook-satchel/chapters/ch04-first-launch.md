@@ -43,9 +43,11 @@ Let's create a new one.
 
 1. Click **Create new**.
 2. Satchel asks for a **Merchant name** — just a friendly label so you can tell
-   your merchants apart (for example, `Main`). It's only for your own eyes.
-3. Click to continue. Satchel creates the merchant and moves you straight to the
-   seed step.
+   your merchants apart (for example, `Main`). It's only for your own eyes, and
+   you can leave it blank — Satchel falls back to a default label.
+3. Click to continue. Satchel moves you straight to the seed step. Nothing has
+   been created yet — the merchant only comes into being at the wizard's final
+   step, so backing out anywhere before that leaves no trace.
 
 ![Naming your first merchant.](images/processed/ch04-merchant-name.png){width=70%}
 
@@ -56,8 +58,8 @@ slowly.
 
 ### What a recovery phrase is
 
-When Satchel creates your merchant, it generates a *recovery phrase* (also called
-a *seed phrase* or *mnemonic*) — a list of **12 or 24 ordinary words**, like
+Satchel now generates a *recovery phrase* (also called a *seed phrase* or
+*mnemonic*) — a list of **12 or 24 ordinary words**, like
 `ripple cabin lunar quote …`. Those words are a human-readable backup of your
 seed, the master secret behind every key your merchant uses.
 
@@ -160,7 +162,11 @@ Last, Satchel asks how to store your seed on disk. Two cards:
 > sweep any sizeable proceeds out to your own main wallet rather than letting them
 > pile up here.
 
-Make your choice and finish. Your merchant is ready.
+Make your choice and finish. This is the moment your merchant is actually
+created — name, seed, and storage choice are committed together in one step.
+Everything before it was just collecting your answers, so cancelling at any
+earlier screen leaves nothing half-made behind (and if you were adding a second
+merchant later, the one you were using stays active). Your merchant is ready.
 
 ## Later launches: unlocking
 

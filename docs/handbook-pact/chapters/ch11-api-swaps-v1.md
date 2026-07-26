@@ -77,7 +77,7 @@ blocks (initiator and counterparty legs respectively).
 | `redeem` | `swap_id` | `{ record }` | yes (broadcasts) | Redeem the counterparty HTLC (reveals secret). |
 | `refund` | `swap_id` | `{ record }` | yes (broadcasts) | Reclaim our funded HTLC after timeout. |
 | `abort` | `swap_id`, `reason?` | `{ record }` or `{ cancelled_pending_take }` | yes | Cancel an unfunded swap, a v2 adaptor swap, or an unanswered pending take. |
-| `takeover` | `swap_id` | `{ taken_over, swap_id }` | yes | Adopt another machine's swap (same seed). |
+| `takeover` | `swap_id` | `{ taken_over, swap_id, refund_only }` | yes | Adopt another machine's swap (same seed). |
 | `tick` | — | `{ events:[…] }` | yes | Advance the scheduler one pass. |
 
 - `offer` — initiates a swap with the given terms and returns the signed
@@ -105,8 +105,15 @@ blocks (initiator and counterparty legs respectively).
   machine's swap on the same seed, or this machine's own after a
   scope-rotating re-import. Only call it once that machine is confirmed
   stopped — two live drivers can double-fund a swap. Dispatch covers v1 and v2
-  ids alike. See "One seed on more than one machine" in the chapter "Seeds,
-  Wallets & Merchants".
+  ids alike. `refund_only` surfaces the adoption verdict: always `false` for
+  v1 (no pinned payout destination); `true` for a v2 whose pinned
+  cooperative-redeem payout wallet is not on this machine — **or whose
+  ownership probe is inconclusive** (fail-closed) — meaning the swap is
+  adopted but will ride to its timelock refund unless the owning wallet is
+  attached. The gate re-probes per tick, so a later successful probe
+  re-enables cooperative completion without another takeover. See "One seed
+  on more than one machine" in the chapter "Seeds, Wallets & Merchants" and
+  the takeover bullet in "Network Support, Reorgs & Safety".
 - `tick` — runs one scheduler pass (board sync + engine tick) and returns the
   resulting `events`, each `{ swap_id, action, detail }`.
 

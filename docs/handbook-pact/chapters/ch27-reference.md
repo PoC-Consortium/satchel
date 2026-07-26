@@ -45,7 +45,9 @@ the same catalog live: `help` (by category, plain text) and `listmethods`
 **Seed-only rescue / multi-machine** (same chapter; full mechanics in "Seeds,
 Wallets & Merchants"): `restorefromrelay` (adopt rescuable relay snapshots),
 `rescuestatus` (read-only preview + the two-machines warning), `takeover`
-(adopt another machine's swap after confirming that machine is stopped).
+(adopt another machine's swap after confirming that machine is stopped;
+returns `refund_only` — true for a v2 whose payout wallet is not provably
+on this machine).
 
 **Seed lifecycle** (same chapter): `createseed`, `generateseed`, `importseed`,
 `unlock`.
