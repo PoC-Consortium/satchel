@@ -47,10 +47,12 @@ impl RenderCtx {
         format!("{quote_unit}/{}", self.base.symbol)
     }
 
+    /// The once-per-message legend; the cash ref gets its OWN line so a
+    /// client can never wrap mid-number.
     pub fn legend(&self) -> String {
         let mut s = format!("prices in {}", self.unit_label());
         if let Some(rate) = self.usd_per_btc {
-            s.push_str(&format!(" · 1 BTC ≈ ${} ref", fmt_usd(rate)));
+            s.push_str(&format!("\n1 BTC ≈ ${} ref", fmt_usd(rate)));
         }
         s
     }
@@ -119,12 +121,20 @@ impl RenderCtx {
 
 // ---- number formatting ----
 
+/// Thousands separator: NO-BREAK SPACE, so a chat client can never wrap a
+/// line in the middle of a number.
+const THIN_SEP: char = '\u{00A0}';
+
 fn group_thousands(int_part: &str) -> String {
+    group_with(int_part, THIN_SEP)
+}
+
+fn group_with(int_part: &str, sep: char) -> String {
     let mut out = String::new();
     let bytes = int_part.as_bytes();
     for (i, ch) in bytes.iter().enumerate() {
         if i > 0 && (bytes.len() - i).is_multiple_of(3) {
-            out.push(' ');
+            out.push(sep);
         }
         out.push(*ch as char);
     }
@@ -187,7 +197,8 @@ pub fn fmt_amount(v: f64) -> String {
     }
 }
 
-/// USD: 2 decimals (Cashrate convention), 4 below a cent, grouped.
+/// USD: 2 decimals (Cashrate convention), 4 below a cent, comma-grouped —
+/// the conventional dollar format, and commas never wrap.
 pub fn fmt_usd(v: f64) -> String {
     if !v.is_finite() || v <= 0.0 {
         return "0".to_string();
@@ -195,8 +206,8 @@ pub fn fmt_usd(v: f64) -> String {
     let decimals = if v < 0.01 { 4 } else { 2 };
     let s = format!("{v:.decimals$}");
     match s.split_once('.') {
-        Some((int, frac)) => format!("{}.{frac}", group_thousands(int)),
-        None => group_thousands(&s),
+        Some((int, frac)) => format!("{}.{frac}", group_with(int, ',')),
+        None => group_with(&s, ','),
     }
 }
 
@@ -434,11 +445,11 @@ mod tests {
         assert_eq!(fmt_price(0.676), "0.676");
         assert_eq!(fmt_price(0.006), "0.006");
         assert_eq!(fmt_price(0.00003), "0.00003");
-        assert_eq!(fmt_price(1480.0), "1 480");
+        assert_eq!(fmt_price(1480.0), "1\u{a0}480"); // NBSP: numbers never wrap
         assert_eq!(fmt_price(14.8), "14.8");
         assert_eq!(fmt_amount(400.0), "400");
-        assert_eq!(fmt_amount(1500.25), "1 500.25");
-        assert_eq!(fmt_usd(118432.1), "118 432.10");
+        assert_eq!(fmt_amount(1500.25), "1\u{a0}500.25");
+        assert_eq!(fmt_usd(118432.1), "118,432.10");
         assert_eq!(fmt_usd(0.79), "0.79");
     }
 
@@ -504,7 +515,7 @@ BID  400 BTCX @ 0.655\n\
              **Bid** `26 BTCX @ 0.670 ($79.06)`\n\
              **Spread** `0.006` (0.9 %) · mid `0.673` ($79.41)"
         );
-        assert_eq!(a.footer, "prices in mBTC/BTCX · 1 BTC ≈ $118 000.00 ref");
+        assert_eq!(a.footer, "prices in mBTC/BTCX\n1 BTC ≈ $118,000.00 ref");
     }
 
     #[test]
