@@ -722,6 +722,17 @@ export const nl: Bundle = {
     back: "Terug",
     continue: "Doorgaan",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Je aanbiedingen opnieuw plaatsen?",
+    intro: "Deze aanbiedingen zijn van het bord gehaald toen de app werd gesloten. De prijzen kunnen verouderd zijn — herplaats ze als verse aanbiedingen met dezelfde voorwaarden, of negeer ze zodat ze ingetrokken blijven.",
+    timelocks: "timelocks {t1}u/{t2}u",
+    reviveAll: "Alles herplaatsen",
+    revive: "Herplaatsen",
+    dismiss: "Negeren",
+    close: "Sluiten",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "overname {id}: de uitbetalingswallet staat niet op deze machine — voorlopig alleen terugbetaling; koppel de eigenaarswallet om de swap te voltooien",
@@ -735,7 +746,7 @@ export const nl: Bundle = {
     noTauri: "draait niet binnen Satchel — deze UI heeft de Tauri-brug nodig",
     startupError: "opstarten: {err}",
     notConnected: "niet verbonden: {err}",
-    connected: "verbonden met pactd {version} ({protocol})",
+    connected: "verbonden met pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "overgeschakeld naar merchant {id}",
     renamedMerchant: "merchant hernoemd naar {name}",
@@ -756,6 +767,11 @@ export const nl: Bundle = {
     withdrawError: "terugtrekken: {err}",
     postedOffer: "aanbod {id} geplaatst — trek het op elk moment terug; er wordt niets vergrendeld",
     postOfferError: "aanbod plaatsen: {err}",
+    offerRevived: "aanbod {old} herplaatst als vers aanbod {id}",
+    reviveError: "aanbod {id} herplaatsen: {err}",
+    offerDismissed: "aanbod {id} genegeerd — blijft ingetrokken",
+    offerDismissedDeadPair: "aanbod {id} genegeerd — het paar is niet meer geconfigureerd",
+    dismissError: "aanbod {id} negeren: {err}",
     createdSlip: "een privé aanbod-slip aangemaakt — stuur het naar je vriend",
     tookPrivateOffer: "privé aanbod {id} aangenomen — het verschijnt nu in je actieve swaps",
     cancelledPrivateOffer: "privé aanbod {id} geannuleerd",

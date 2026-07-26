@@ -722,6 +722,17 @@ export const lt: Bundle = {
     back: "Atgal",
     continue: "Tęsti",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Grąžinti jūsų pasiūlymus?",
+    intro: "Šie pasiūlymai buvo nuimti nuo lentos uždarant programą. Kainos gali būti pasenusios — atgaivinkite juos, kad būtų iš naujo paskelbti kaip švieži pasiūlymai tomis pačiomis sąlygomis, arba atmeskite, kad liktų pašalinti.",
+    timelocks: "laiko užraktai {t1} val./{t2} val.",
+    reviveAll: "Atgaivinti visus",
+    revive: "Atgaivinti",
+    dismiss: "Atmesti",
+    close: "Uždaryti",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "perėmimas {id}: išmokos piniginė ne šiame įrenginyje — kol kas tik grąžinimas; prijunkite savininko piniginę mainams užbaigti",
@@ -735,7 +746,7 @@ export const lt: Bundle = {
     noTauri: "nevykdoma Satchel viduje — šiai sąsajai reikia Tauri tilto",
     startupError: "paleidimas: {err}",
     notConnected: "neprijungta: {err}",
-    connected: "prisijungta prie pactd {version} ({protocol})",
+    connected: "prisijungta prie pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "perjungta į prekiautoją {id}",
     renamedMerchant: "prekiautojas pervadintas į {name}",
@@ -756,6 +767,11 @@ export const lt: Bundle = {
     withdrawError: "pašalinimas: {err}",
     postedOffer: "paskelbtas pasiūlymas {id} — pašalinkite bet kada; niekas neužrakinta",
     postOfferError: "pasiūlymo skelbimas: {err}",
+    offerRevived: "pasiūlymas {old} atgaivintas kaip šviežias pasiūlymas {id}",
+    reviveError: "pasiūlymo {id} atgaivinimas: {err}",
+    offerDismissed: "pasiūlymas {id} atmestas — lieka pašalintas",
+    offerDismissedDeadPair: "pasiūlymas {id} atmestas — jo pora nebesukonfigūruota",
+    dismissError: "pasiūlymo {id} atmetimas: {err}",
     createdSlip: "sukurtas privataus pasiūlymo lapelis — nusiųskite jį draugui",
     tookPrivateOffer: "priimtas privatus pasiūlymas {id} — jis dabar pasirodo jūsų aktyviuose mainuose",
     cancelledPrivateOffer: "atšauktas privatus pasiūlymas {id}",

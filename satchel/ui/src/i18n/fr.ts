@@ -724,6 +724,17 @@ export const fr: Bundle = {
     back: "Retour",
     continue: "Continuer",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Republier vos offres ?",
+    intro: "Ces offres ont été retirées du tableau à la fermeture de l'application. Les prix peuvent être obsolètes — ravivez-les pour les republier comme offres neuves aux mêmes conditions, ou ignorez-les pour qu'elles restent retirées.",
+    timelocks: "timelocks {t1} h/{t2} h",
+    reviveAll: "Tout raviver",
+    revive: "Raviver",
+    dismiss: "Ignorer",
+    close: "Fermer",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "reprise {id} : le portefeuille de paiement n'est pas sur cette machine — remboursement uniquement pour l'instant ; attachez le portefeuille propriétaire pour terminer le swap",
@@ -737,7 +748,7 @@ export const fr: Bundle = {
     noTauri: "ne s'exécute pas dans Satchel — cette interface a besoin du pont Tauri",
     startupError: "démarrage : {err}",
     notConnected: "non connecté : {err}",
-    connected: "connecté à pactd {version} ({protocol})",
+    connected: "connecté à pactd {version}",
     listcoinsError: "listcoins : {err}",
     switchedMerchant: "basculé sur le merchant {id}",
     renamedMerchant: "merchant renommé en {name}",
@@ -758,6 +769,11 @@ export const fr: Bundle = {
     withdrawError: "retrait : {err}",
     postedOffer: "offre {id} publiée — retirez-la à tout moment ; rien n'est verrouillé",
     postOfferError: "publication de l'offre : {err}",
+    offerRevived: "offre {old} ravivée comme offre neuve {id}",
+    reviveError: "raviver l'offre {id} : {err}",
+    offerDismissed: "offre {id} ignorée — reste retirée",
+    offerDismissedDeadPair: "offre {id} ignorée — sa paire n'est plus configurée",
+    dismissError: "ignorer l'offre {id} : {err}",
     createdSlip: "slip d'offre privée créé — envoyez-le à votre ami",
     tookPrivateOffer: "offre privée {id} prise — elle apparaît maintenant dans vos swaps actifs",
     cancelledPrivateOffer: "offre privée {id} annulée",

@@ -354,11 +354,13 @@ impl Store {
                  expires  INTEGER NOT NULL DEFAULT 0 -- 0 = no NIP-40 expiry
              );
              -- The maker's OWN posted offers (offer-lifecycle). Drives the refresh
-             -- loop, revoke-on-close, and the My-offers view. The signed envelope is
+             -- loop, revoke-on-open, and the My-offers view. The signed envelope is
              -- kept so a live offer can be re-published (Nostr addressable replace /
              -- HTTP re-POST) to roll its short relay TTL forward until
              -- `created + valid_for` (the maker-set FINAL expiry). state advances
-             -- live -> taken | revoked | expired.
+             -- live -> taken | revoked | expired | revoked_on_open (boot-time
+             -- retirement; revivable from the UI as a FRESH post, or dismissed
+             -- to plain revoked).
              CREATE TABLE IF NOT EXISTS my_offers (
                  offer_id     TEXT PRIMARY KEY,      -- = offer envelope swap_id
                  envelope     TEXT NOT NULL,         -- signed offer envelope JSON
@@ -820,7 +822,8 @@ impl Store {
         })
     }
 
-    /// Offers still in `live` state — for the refresh loop and revoke-on-close.
+    /// Offers still in `live` state — for the refresh loop, the shutdown
+    /// courtesy de-list, and revoke-on-open.
     pub fn my_offers_live(&self) -> Result<Vec<MyOffer>> {
         let mut stmt = self.conn.prepare(
             "SELECT offer_id, envelope, created, valid_for, last_refresh, state
@@ -832,10 +835,12 @@ impl Store {
 
     /// One of our offers by id, **ignoring lifecycle state** — the ownership
     /// *existence* check the maker-take gate keys on (§2 of
-    /// docs/design/MULTI_MACHINE_122.md). Deliberately not `my_offers_live`: after a
-    /// legit serve the row flips to `taken`/`revoked`, so a liveness gate would
-    /// wrongly refuse the real owner's retry; existence is enough because a
-    /// foreign machine (scope-distinct coordinates, §1) holds no such row at all.
+    /// docs/design/MULTI_MACHINE_122.md). Deliberately not `my_offers_live`:
+    /// existence decides silent-drop vs proceed (a foreign machine —
+    /// scope-distinct coordinates, §1 — holds no such row at all and must stay
+    /// mute). The take arm then reads the returned row's `state` in its own
+    /// lifecycle gate, AFTER take-deduplication, to refuse takes on retired
+    /// offers explicitly.
     pub fn my_offer_get(&self, offer_id: &str) -> Result<Option<MyOffer>> {
         let mut stmt = self.conn.prepare(
             "SELECT offer_id, envelope, created, valid_for, last_refresh, state
@@ -858,7 +863,8 @@ impl Store {
         rows.map(|r| Ok(r?)).collect()
     }
 
-    /// Advance an offer's lifecycle state (`taken` | `revoked` | `expired`).
+    /// Advance an offer's lifecycle state
+    /// (`taken` | `revoked` | `expired` | `revoked_on_open`).
     pub fn my_offer_set_state(&self, offer_id: &str, state: &str) -> Result<()> {
         self.conn.execute(
             "UPDATE my_offers SET state = ?2 WHERE offer_id = ?1",

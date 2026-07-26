@@ -722,6 +722,17 @@ export const ja: Bundle = {
     back: "戻る",
     continue: "続ける",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "オファーを再掲載しますか？",
+    intro: "これらのオファーはアプリ終了時にボードから取り下げられました。価格が古くなっている可能性があります — 再掲載すると同じ条件の新しいオファーとして掲載し直され、破棄すると取り下げたままになります。",
+    timelocks: "タイムロック {t1}時間/{t2}時間",
+    reviveAll: "すべて再掲載",
+    revive: "再掲載",
+    dismiss: "破棄",
+    close: "閉じる",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "テイクオーバー {id}: 受取ウォレットがこのマシンにありません — 当面は返金のみ。スワップを完了するには所有ウォレットを接続してください",
@@ -735,7 +746,7 @@ export const ja: Bundle = {
     noTauri: "Satchel 内で実行されていません — この UI には Tauri ブリッジが必要です",
     startupError: "起動: {err}",
     notConnected: "未接続: {err}",
-    connected: "pactd {version} に接続しました（{protocol}）",
+    connected: "pactd {version} に接続しました",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "マーチャント {id} に切り替えました",
     renamedMerchant: "マーチャント名を {name} に変更しました",
@@ -756,6 +767,11 @@ export const ja: Bundle = {
     withdrawError: "取り下げ: {err}",
     postedOffer: "オファー {id} を投稿しました — いつでも取り下げ可能、何もロックされません",
     postOfferError: "オファーの投稿: {err}",
+    offerRevived: "オファー {old} を新しいオファー {id} として再掲載しました",
+    reviveError: "オファー {id} の再掲載: {err}",
+    offerDismissed: "オファー {id} を破棄しました — 取り下げたままになります",
+    offerDismissedDeadPair: "オファー {id} を破棄しました — そのペアは設定されていません",
+    dismissError: "オファー {id} の破棄: {err}",
     createdSlip: "プライベートオファースリップを作成しました — 友人に送ってください",
     tookPrivateOffer: "プライベートオファー {id} を取得しました — 進行中スワップに表示されます",
     cancelledPrivateOffer: "プライベートオファー {id} をキャンセルしました",

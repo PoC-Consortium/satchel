@@ -33,6 +33,7 @@ import CoinWizard from "./dialogs/CoinWizard";
 import Unlock from "./dialogs/Unlock";
 import MerchantManager from "./dialogs/MerchantManager";
 import ExitGate from "./components/ExitGate";
+import ReviveOffersDialog from "./components/ReviveOffersDialog";
 
 type Modal = { kind: "merchants" } | { kind: "wizard"; mode: "create" | "import" } | null;
 
@@ -191,6 +192,7 @@ export default function App() {
           )}
 
           <ExitGate />
+          <ReviveOffersDialog />
           <UpdateDialog />
           <Toasts />
         </DialogsCtx.Provider>

@@ -189,12 +189,6 @@ struct App {
     /// Expected `Authorization` header values (cookie and/or pact.conf).
     auth_headers: Arc<Vec<String>>,
     shutdown: Arc<Notify>,
-    /// Set by `stop skip_delist=true` (Satchel's config-change relaunch) so the
-    /// clean-shutdown path SKIPS the soft de-list — surviving offers keep their
-    /// relay listings across the ~2s relaunch instead of being pulled and then
-    /// re-read as a self-revocation on boot (#97). A plain `stop`/ctrl_c leaves it
-    /// false, so a genuine close still de-lists.
-    skip_delist_on_stop: Arc<std::sync::atomic::AtomicBool>,
     /// The process-wide Nostr relay client (None when no relays configured).
     /// Carried here so the `boardstatus` RPC can report relay connectivity and
     /// so merchant-load can kick an immediate relay pass (no wait for a tick).
@@ -512,14 +506,6 @@ impl Params {
             .ok()
             .and_then(|v| v.as_str())
             .map(str::to_string)
-    }
-    fn opt_bool(&self, i: usize, name: &str) -> Option<bool> {
-        let v = self.get(i, name).ok()?;
-        v.as_bool().or_else(|| match v.as_str()? {
-            "true" | "1" => Some(true),
-            "false" | "0" => Some(false),
-            _ => None,
-        })
     }
     fn envelope(&self, i: usize, name: &str) -> Result<Envelope> {
         serde_json::from_value(self.get(i, name)?.clone())
@@ -945,6 +931,12 @@ const METHODS: &[(&str, &str, &str, &str)] = &[
         "boardrevoke",
         "<offer_id>",
         "Withdraw one of our board offers (terminal).",
+    ),
+    (
+        "board",
+        "offerdismiss",
+        "<offer_id>",
+        "Settle a boot-retired (revoked_on_open) offer as revoked instead of reviving it.",
     ),
     (
         "board",
@@ -1415,11 +1407,10 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             Ok(blocking_registry(app, move |r| r.info(id.as_deref())).await?)
         }
         "stop" => {
-            // `stop skip_delist=true` (Satchel's config-change relaunch) suppresses
-            // the shutdown soft de-list so surviving offers ride the relaunch (#97).
-            let skip_delist = p.opt_bool(0, "skip_delist").unwrap_or(false);
-            app.skip_delist_on_stop
-                .store(skip_delist, std::sync::atomic::Ordering::SeqCst);
+            // The shutdown path courtesy-de-lists live offers from the boards
+            // (local rows untouched): the next boot's revoke-on-open retires
+            // them uniformly — a clean close, a crash, and the #97 config
+            // relaunch all land on the same path.
             app.shutdown.notify_one();
             Ok(json!("pactd stopping"))
         }
@@ -1820,6 +1811,29 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             // immediately followed by a quit (`ExitGate` withdraw & exit).
             flush_nostr(app);
             Ok(json!({ "revoked": true }))
+        }
+        "offerdismiss" => {
+            // Revive dialog's "dismiss": settle a boot-retired offer as a plain
+            // terminal `revoked` (the board de-list already happened at
+            // revoke-on-open, so this is a local state flip only). Strict on
+            // state so a mistargeted id can't silently retire a live offer.
+            let offer_id = p.str(0, "offer_id")?;
+            let oid = offer_id.clone();
+            blocking(app, move |e| {
+                let row = e
+                    .store
+                    .my_offer_get(&offer_id)?
+                    .with_context(|| format!("unknown offer {offer_id}"))?;
+                ensure!(
+                    row.state == "revoked_on_open",
+                    "offer {offer_id} is `{}`, not `revoked_on_open` — nothing to dismiss",
+                    row.state
+                );
+                e.store.my_offer_set_state(&offer_id, "revoked")
+            })
+            .await?;
+            tracing::info!(offer = %oid, "offer dismissed (revoked_on_open -> revoked)");
+            Ok(json!({ "dismissed": true }))
         }
         "revokeoffersforcoin" => {
             // Reconfigure-time cleanup (#97): Satchel calls this before removing a
@@ -2291,7 +2305,6 @@ async fn main() -> Result<()> {
         network,
         auth_headers: Arc::new(auth_headers),
         shutdown: Arc::new(Notify::new()),
-        skip_delist_on_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         nostr,
     };
 
@@ -2299,10 +2312,12 @@ async fn main() -> Result<()> {
         let scheduler = app.clone();
         let interval = Duration::from_secs(args.tick_secs);
         tokio::spawn(async move {
-            // Re-advertise still-valid offers once, the first tick a merchant is
-            // active — so offers soft-de-listed on the last clean close come back
-            // immediately on restart (not after up to a full REFRESH_SECS).
-            let mut readvertised = false;
+            // Revoke-on-open, once, the first tick a merchant is active: retire
+            // every offer still marked `live` (boot-time state is unknowable —
+            // clean close, crash, or a foreign withdrawal all look the same),
+            // firmly de-listing them everywhere. The UI's revive dialog then
+            // offers to re-post them as FRESH offers (new ids).
+            let mut retired_on_open = false;
             let mut rescue_checked = false;
             loop {
                 // Poll-then-sleep: run a pass immediately (no cold-start gap for
@@ -2315,17 +2330,28 @@ async fn main() -> Result<()> {
                     reg.active_id().is_some()
                 };
                 if has_active {
-                    // One-time on boot: re-advertise still-valid offers (queues
-                    // re-listings) BEFORE the first nostr pass, so they publish in
-                    // the same tick.
-                    if !readvertised {
-                        readvertised = true;
-                        match blocking(&scheduler, |e| e.readvertise_offers()).await {
-                            Ok(n) if n > 0 => {
-                                tracing::info!(count = n, "re-advertised offers on boot")
+                    // One-time on boot: retire still-`live` offers (queues the
+                    // signed revocations) BEFORE the first nostr pass, so the
+                    // de-listings publish in the same tick.
+                    if !retired_on_open {
+                        match blocking(&scheduler, |e| e.retire_offers_on_open()).await {
+                            Ok(n) => {
+                                // Latch only on success: a LOCKED seed errors
+                                // (can't sign the revocations yet) and must
+                                // retry each tick until unlock makes the
+                                // retirement possible — same pattern as the
+                                // rescue detection below.
+                                retired_on_open = true;
+                                if n > 0 {
+                                    tracing::info!(
+                                        count = n,
+                                        "revoked live offers on open (revivable from the app)"
+                                    )
+                                }
                             }
-                            Ok(_) => {}
-                            Err(err) => tracing::warn!("re-advertise on boot failed: {err:#}"),
+                            Err(err) => {
+                                tracing::debug!("revoke-on-open deferred: {err:#}")
+                            }
                         }
                     }
                     // Move Nostr mail/offers into the local buffers *before* the
@@ -2429,32 +2455,23 @@ async fn main() -> Result<()> {
         })
         .await?;
 
-    // Offer-lifecycle revoke-on-close: on a clean shutdown (stop RPC or ctrl_c)
-    // withdraw our still-live offers so the board stops advertising what we can no
-    // longer honor. Best-effort; a crash skips this and the short relay TTL drops
-    // the listings within RELAY_TTL_SECS. In C6 detach mode pactd keeps running
+    // Courtesy de-list on a clean shutdown (stop RPC or ctrl_c): drop our live
+    // listings from the boards so other users don't keep seeing offers nobody
+    // will honor until the relay TTL lapses. LOCAL state is untouched — the
+    // NEXT boot's revoke-on-open retires the rows uniformly (a clean close, a
+    // crash, and the #97 config relaunch all land on the same path, with the
+    // UI offering revival as fresh posts), which also makes this deletion's
+    // relay echo inert BY STATE: it lands after the rows left `live`, and the
+    // withdraw-reconcile only flips `live` rows. The user's explicit
+    // "withdraw & exit" goes through ExitGate → revoke_board_offer, which IS
+    // terminal. A crash skips this; the short relay TTL then drops the
+    // listings within RELAY_TTL_SECS. In C6 detach mode pactd keeps running
     // (Satchel sends no stop), so this only fires on a real stop.
     let has_active = {
         let reg = app.registry.lock().expect("registry mutex poisoned");
         reg.active_id().is_some()
     };
-    let skip_delist = app
-        .skip_delist_on_stop
-        .load(std::sync::atomic::Ordering::SeqCst);
-    if has_active && skip_delist {
-        // Config-change relaunch (#97): DON'T de-list. Surviving offers keep their
-        // relay listings across the ~2s restart; emitting the de-list kind-5 here
-        // would get re-read on boot as a self-revocation and permanently withdraw
-        // them. Offers on a removed pair were already revoked at reconfigure time.
-        tracing::info!(
-            "de-list-on-close skipped (config-change relaunch): offers keep their listings"
-        );
-    } else if has_active {
-        // Soft de-list (NOT terminal): drop the relay listings so we don't
-        // advertise while offline, but keep the offers live + unblocked so the
-        // next startup re-advertises them (see readvertise on boot). The user's
-        // explicit "withdraw & exit" goes through ExitGate → revoke_board_offer,
-        // which IS terminal.
+    if has_active {
         match blocking(&app, |e| e.delist_live_offers()).await {
             Ok(n) if n > 0 => tracing::info!(count = n, "de-list-on-close: paused live offers"),
             Ok(_) => {}
@@ -2462,9 +2479,9 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Drain the Nostr outbox one last time before we exit. `boardrevoke` (manual
-    // withdraw) and the soft de-list above only QUEUE their NIP-09 kind-5
-    // deletions; the scheduler that would publish them has already stopped, so
+    // Drain the Nostr outbox one last time before we exit. `boardrevoke`
+    // (manual withdraw) and the courtesy de-list above only QUEUE their NIP-09
+    // kind-5 deletions; the scheduler that would publish them has already stopped, so
     // without this final pass a queued withdrawal never reaches the relay and a
     // remote same-seed observer keeps listing the offer until its NIP-40 TTL
     // lapses. Best-effort and time-boxed so a dead/slow relay can't wedge the
@@ -2581,7 +2598,6 @@ mod tests {
             network: Network::Regtest,
             auth_headers: Arc::new(Vec::new()),
             shutdown: Arc::new(Notify::new()),
-            skip_delist_on_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             nostr: None,
         };
         for (_, name, _, _) in METHODS {

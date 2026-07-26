@@ -722,6 +722,17 @@ export const zhCn: Bundle = {
     back: "返回",
     continue: "继续",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "重新发布您的报价？",
+    intro: "这些报价在应用关闭时已从板上撤下。价格可能已过时 — 恢复会以相同条款将它们重新发布为全新报价；忽略则保持撤回状态。",
+    timelocks: "时间锁 {t1} 小时/{t2} 小时",
+    reviveAll: "全部恢复",
+    revive: "恢复",
+    dismiss: "忽略",
+    close: "关闭",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "接管 {id}：收款钱包不在本机 — 目前仅可退款；接入持有钱包以完成交换",
@@ -735,7 +746,7 @@ export const zhCn: Bundle = {
     noTauri: "未在 Satchel 内运行 — 此界面需要 Tauri 桥接",
     startupError: "启动：{err}",
     notConnected: "未连接：{err}",
-    connected: "已连接到 pactd {version}（{protocol}）",
+    connected: "已连接到 pactd {version}",
     listcoinsError: "listcoins：{err}",
     switchedMerchant: "已切换到商户 {id}",
     renamedMerchant: "商户已重命名为 {name}",
@@ -756,6 +767,11 @@ export const zhCn: Bundle = {
     withdrawError: "撤回：{err}",
     postedOffer: "已发布报价 {id} — 随时可撤回；什么都不会被锁定",
     postOfferError: "发布报价：{err}",
+    offerRevived: "报价 {old} 已作为新报价 {id} 重新发布",
+    reviveError: "恢复报价 {id}：{err}",
+    offerDismissed: "报价 {id} 已忽略 — 保持撤回",
+    offerDismissedDeadPair: "报价 {id} 已忽略 — 其交易对已不再配置",
+    dismissError: "忽略报价 {id}：{err}",
     createdSlip: "已创建一条私下报价凭条 — 把它发给你的朋友",
     tookPrivateOffer: "已接受私下报价 {id} — 它现在出现在你的进行中交换里",
     cancelledPrivateOffer: "已取消私下报价 {id}",

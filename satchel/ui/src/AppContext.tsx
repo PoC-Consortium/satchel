@@ -393,7 +393,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // C10: pactd owns the merchant registry and backfills each merchant's
     // identity into its own manifest on load/seed-provision — no Satchel-side
     // identity cache to keep in sync anymore (this supersedes C1).
-    log(tr("log.connected", { version: gi.version ?? "?", protocol: gi.protocol ?? "?" }));
+    log(tr("log.connected", { version: gi.version ?? "?" }));
 
     // Browsing is always available: after unlock we land straight in the app,
     // regardless of how many coins are configured. There is no hard coin wall to

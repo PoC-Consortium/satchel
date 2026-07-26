@@ -726,6 +726,17 @@ export const el: Bundle = {
     back: "Πίσω",
     continue: "Συνέχεια",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Επαναφορά των προσφορών σας;",
+    intro: "Αυτές οι προσφορές αποσύρθηκαν από τον πίνακα όταν έκλεισε η εφαρμογή. Οι τιμές ίσως είναι ξεπερασμένες — επαναφέρετέ τις για να ξαναδημοσιευτούν ως νέες προσφορές με τους ίδιους όρους, ή απορρίψτε τις για να παραμείνουν αποσυρμένες.",
+    timelocks: "χρονοκλειδώματα {t1}ώ/{t2}ώ",
+    reviveAll: "Επαναφορά όλων",
+    revive: "Επαναφορά",
+    dismiss: "Απόρριψη",
+    close: "Κλείσιμο",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "ανάληψη {id}: το πορτοφόλι πληρωμής δεν είναι σε αυτό το μηχάνημα — προς το παρόν μόνο επιστροφή· συνδέστε το πορτοφόλι-ιδιοκτήτη για να ολοκληρωθεί το swap",
@@ -739,7 +750,7 @@ export const el: Bundle = {
     noTauri: "δεν εκτελείται μέσα στο Satchel — αυτό το περιβάλλον χρειάζεται τη γέφυρα Tauri",
     startupError: "εκκίνηση: {err}",
     notConnected: "χωρίς σύνδεση: {err}",
-    connected: "συνδέθηκε με το pactd {version} ({protocol})",
+    connected: "συνδέθηκε με το pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "έγινε εναλλαγή στον merchant {id}",
     renamedMerchant: "ο merchant μετονομάστηκε σε {name}",
@@ -760,6 +771,11 @@ export const el: Bundle = {
     withdrawError: "απόσυρση: {err}",
     postedOffer: "δημοσιεύτηκε η προσφορά {id} — αποσύρετέ την οποτεδήποτε· τίποτα δεν είναι κλειδωμένο",
     postOfferError: "δημοσίευση προσφοράς: {err}",
+    offerRevived: "η προσφορά {old} επανήλθε ως νέα προσφορά {id}",
+    reviveError: "επαναφορά προσφοράς {id}: {err}",
+    offerDismissed: "η προσφορά {id} απορρίφθηκε — παραμένει αποσυρμένη",
+    offerDismissedDeadPair: "η προσφορά {id} απορρίφθηκε — το ζεύγος της δεν είναι πλέον ρυθμισμένο",
+    dismissError: "απόρριψη προσφοράς {id}: {err}",
     createdSlip: "δημιουργήθηκε ένα ιδιωτικό απόκομμα προσφοράς — στείλτε το στον φίλο σας",
     tookPrivateOffer: "αποδεχτήκατε την ιδιωτική προσφορά {id} — εμφανίζεται τώρα στις ενεργές ανταλλαγές σας",
     cancelledPrivateOffer: "ακυρώθηκε η ιδιωτική προσφορά {id}",

@@ -722,6 +722,17 @@ export const uk: Bundle = {
     back: "Назад",
     continue: "Продовжити",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Повернути ваші оферти?",
+    intro: "Ці оферти було знято з дошки під час закриття застосунку. Ціни могли застаріти — поверніть їх, щоб опублікувати заново як нові оферти на тих самих умовах, або відхиліть, щоб вони залишилися знятими.",
+    timelocks: "таймлоки {t1} год/{t2} год",
+    reviveAll: "Повернути всі",
+    revive: "Повернути",
+    dismiss: "Відхилити",
+    close: "Закрити",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "перехоплення {id}: гаманець виплати не на цій машині — поки лише повернення; підключіть гаманець-власник, щоб завершити своп",
@@ -735,7 +746,7 @@ export const uk: Bundle = {
     noTauri: "не запущено всередині Satchel — цьому інтерфейсу потрібен міст Tauri",
     startupError: "запуск: {err}",
     notConnected: "не підключено: {err}",
-    connected: "підключено до pactd {version} ({protocol})",
+    connected: "підключено до pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "перемкнуто на мерчанта {id}",
     renamedMerchant: "мерчанта перейменовано на {name}",
@@ -756,6 +767,11 @@ export const uk: Bundle = {
     withdrawError: "відкликання: {err}",
     postedOffer: "опубліковано оферту {id} — відкликати можна будь-коли; нічого не заблоковано",
     postOfferError: "публікація оферти: {err}",
+    offerRevived: "оферту {old} повернуто як нову оферту {id}",
+    reviveError: "повернення оферти {id}: {err}",
+    offerDismissed: "оферту {id} відхилено — залишається знятою",
+    offerDismissedDeadPair: "оферту {id} відхилено — її пару більше не налаштовано",
+    dismissError: "відхилення оферти {id}: {err}",
     createdSlip: "створено приватний оферт-слип — надішліть його другові",
     tookPrivateOffer: "прийнято приватну оферту {id} — вона тепер з'являється у ваших активних свопах",
     cancelledPrivateOffer: "скасовано приватну оферту {id}",

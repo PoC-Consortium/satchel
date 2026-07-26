@@ -722,6 +722,17 @@ export const hi: Bundle = {
     back: "वापस",
     continue: "जारी रखें",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "अपने offers वापस लाएँ?",
+    intro: "ऐप बंद होने पर ये offers बोर्ड से हटा दिए गए थे। कीमतें पुरानी हो सकती हैं — वापस लाने पर वे उन्हीं शर्तों के साथ नए offers के रूप में फिर से पोस्ट होंगे; खारिज करने पर वे हटे ही रहेंगे।",
+    timelocks: "timelocks {t1} घं./{t2} घं.",
+    reviveAll: "सभी वापस लाएँ",
+    revive: "वापस लाएँ",
+    dismiss: "खारिज करें",
+    close: "बंद करें",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "अधिग्रहण {id}: भुगतान वॉलेट इस मशीन पर नहीं है — फ़िलहाल केवल रिफ़ंड; स्वैप पूरा करने के लिए स्वामी वॉलेट जोड़ें",
@@ -735,7 +746,7 @@ export const hi: Bundle = {
     noTauri: "Satchel के अंदर नहीं चल रहा — इस UI को Tauri ब्रिज की आवश्यकता है",
     startupError: "startup: {err}",
     notConnected: "कनेक्ट नहीं: {err}",
-    connected: "pactd {version} से कनेक्टेड ({protocol})",
+    connected: "pactd {version} से कनेक्टेड",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "merchant {id} पर स्विच किया गया",
     renamedMerchant: "merchant का नाम बदलकर {name} किया गया",
@@ -756,6 +767,11 @@ export const hi: Bundle = {
     withdrawError: "withdraw: {err}",
     postedOffer: "offer {id} पोस्ट किया गया — कभी भी वापस लें; कुछ भी लॉक नहीं है",
     postOfferError: "offer पोस्ट: {err}",
+    offerRevived: "offer {old} नए offer {id} के रूप में फिर से पोस्ट किया गया",
+    reviveError: "offer {id} वापस लाना: {err}",
+    offerDismissed: "offer {id} खारिज — हटा हुआ ही रहेगा",
+    offerDismissedDeadPair: "offer {id} खारिज — इसका pair अब कॉन्फ़िगर नहीं है",
+    dismissError: "offer {id} खारिज करना: {err}",
     createdSlip: "एक निजी offer slip बनाई गई — इसे अपने मित्र को भेजें",
     tookPrivateOffer: "निजी offer {id} लिया गया — यह अब आपके सक्रिय स्वैप में दिखाई देता है",
     cancelledPrivateOffer: "निजी offer {id} रद्द किया गया",

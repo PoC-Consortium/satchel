@@ -726,6 +726,17 @@ export const bg: Bundle = {
     back: "Назад",
     continue: "Продължи",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Да върнем ли офертите ви?",
+    intro: "Тези оферти бяха свалени от дъската при затварянето на приложението. Цените може да са остарели — върнете ги, за да ги публикувате отново като нови оферти при същите условия, или ги отхвърлете, за да останат оттеглени.",
+    timelocks: "таймлокове {t1}ч/{t2}ч",
+    reviveAll: "Върни всички",
+    revive: "Върни",
+    dismiss: "Отхвърли",
+    close: "Затвори",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "поемане {id}: портфейлът за изплащане не е на тази машина — засега само възстановяване; свържете притежаващия портфейл, за да завършите суапа",
@@ -739,7 +750,7 @@ export const bg: Bundle = {
     noTauri: "не работи вътре в Satchel — този интерфейс изисква моста Tauri",
     startupError: "стартиране: {err}",
     notConnected: "няма връзка: {err}",
-    connected: "свързан с pactd {version} ({protocol})",
+    connected: "свързан с pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "превключено към търговец {id}",
     renamedMerchant: "търговецът преименуван на {name}",
@@ -760,6 +771,11 @@ export const bg: Bundle = {
     withdrawError: "оттегляне: {err}",
     postedOffer: "оферта {id} публикувана — оттеглете по всяко време; нищо не е заключено",
     postOfferError: "публикуване на оферта: {err}",
+    offerRevived: "оферта {old} върната като нова оферта {id}",
+    reviveError: "връщане на оферта {id}: {err}",
+    offerDismissed: "оферта {id} отхвърлена — остава оттеглена",
+    offerDismissedDeadPair: "оферта {id} отхвърлена — двойката ѝ вече не е настроена",
+    dismissError: "отхвърляне на оферта {id}: {err}",
     createdSlip: "създаден личен талон за оферта — изпратете го на приятеля си",
     tookPrivateOffer: "лична оферта {id} приета — сега се появява в активните ви суапове",
     cancelledPrivateOffer: "лична оферта {id} отменена",

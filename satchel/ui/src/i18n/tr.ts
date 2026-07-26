@@ -722,6 +722,17 @@ export const tr: Bundle = {
     back: "Geri",
     continue: "Devam et",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Teklifleriniz geri yayınlansın mı?",
+    intro: "Bu teklifler uygulama kapanırken panodan kaldırıldı. Fiyatlar güncelliğini yitirmiş olabilir — aynı koşullarla taze teklifler olarak yeniden yayınlamak için canlandırın, geri çekilmiş kalmaları için yok sayın.",
+    timelocks: "zaman kilitleri {t1}s/{t2}s",
+    reviveAll: "Tümünü canlandır",
+    revive: "Canlandır",
+    dismiss: "Yoksay",
+    close: "Kapat",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "devralma {id}: ödeme cüzdanı bu makinede değil — şimdilik yalnızca iade; takası tamamlamak için sahibi olan cüzdanı bağlayın",
@@ -735,7 +746,7 @@ export const tr: Bundle = {
     noTauri: "Satchel içinde çalışmıyor — bu arayüz Tauri köprüsüne ihtiyaç duyar",
     startupError: "başlatma: {err}",
     notConnected: "bağlı değil: {err}",
-    connected: "pactd {version} öğesine bağlandı ({protocol})",
+    connected: "pactd {version} öğesine bağlandı",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "{id} satıcısına geçildi",
     renamedMerchant: "satıcı {name} olarak yeniden adlandırıldı",
@@ -756,6 +767,11 @@ export const tr: Bundle = {
     withdrawError: "geri çek: {err}",
     postedOffer: "{id} teklifi yayınlandı — istediğiniz zaman geri çekin; hiçbir şey kilitli değil",
     postOfferError: "teklif yayınlama: {err}",
+    offerRevived: "{old} teklifi taze {id} teklifi olarak yeniden yayınlandı",
+    reviveError: "{id} teklifini canlandırma: {err}",
+    offerDismissed: "{id} teklifi yok sayıldı — geri çekilmiş kalıyor",
+    offerDismissedDeadPair: "{id} teklifi yok sayıldı — çifti artık yapılandırılmış değil",
+    dismissError: "{id} teklifini yok sayma: {err}",
     createdSlip: "özel bir teklif fişi oluşturuldu — arkadaşınıza gönderin",
     tookPrivateOffer: "{id} özel teklifi alındı — artık etkin takaslarınızda görünüyor",
     cancelledPrivateOffer: "{id} özel teklifi iptal edildi",

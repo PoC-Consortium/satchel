@@ -725,6 +725,17 @@ export const de: Bundle = {
     back: "Zurück",
     continue: "Weiter",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Angebote wieder einstellen?",
+    intro: "Diese Angebote wurden beim Schließen der App vom Brett genommen. Die Preise können veraltet sein — beim Wiederbeleben werden sie zu denselben Konditionen als frische Angebote neu eingestellt; beim Verwerfen bleiben sie zurückgezogen.",
+    timelocks: "Timelocks {t1} Std./{t2} Std.",
+    reviveAll: "Alle wieder einstellen",
+    revive: "Wieder einstellen",
+    dismiss: "Verwerfen",
+    close: "Schließen",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "Übernahme {id}: die Auszahlungs-Wallet ist nicht auf dieser Maschine — vorerst nur Rückerstattung; verbinde die besitzende Wallet, um den Swap abzuschließen",
@@ -738,7 +749,7 @@ export const de: Bundle = {
     noTauri: "läuft nicht innerhalb von Satchel — diese Oberfläche braucht die Tauri-Brücke",
     startupError: "Start: {err}",
     notConnected: "nicht verbunden: {err}",
-    connected: "verbunden mit pactd {version} ({protocol})",
+    connected: "verbunden mit pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "zu Merchant {id} gewechselt",
     renamedMerchant: "Merchant umbenannt in {name}",
@@ -759,6 +770,11 @@ export const de: Bundle = {
     withdrawError: "Zurückziehen: {err}",
     postedOffer: "Angebot {id} eingestellt — jederzeit zurückziehbar; nichts ist gesperrt",
     postOfferError: "Angebot einstellen: {err}",
+    offerRevived: "Angebot {old} als frisches Angebot {id} neu eingestellt",
+    reviveError: "Angebot {id} wieder einstellen: {err}",
+    offerDismissed: "Angebot {id} verworfen — bleibt zurückgezogen",
+    offerDismissedDeadPair: "Angebot {id} verworfen — sein Paar ist nicht mehr eingerichtet",
+    dismissError: "Angebot {id} verwerfen: {err}",
     createdSlip: "einen privaten Angebots-Slip erstellt — schicke ihn deinem Freund",
     tookPrivateOffer: "privates Angebot {id} angenommen — es erscheint nun in deinen aktiven Swaps",
     cancelledPrivateOffer: "privates Angebot {id} abgebrochen",

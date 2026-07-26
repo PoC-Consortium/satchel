@@ -722,6 +722,17 @@ export const hr: Bundle = {
     back: "Natrag",
     continue: "Nastavi",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Vratiti vaše ponude?",
+    intro: "Ove su ponude skinute s ploče pri zatvaranju aplikacije. Cijene su možda zastarjele — oživite ih da ih ponovno objavite kao svježe ponude pod istim uvjetima, ili ih odbacite pa ostaju povučene.",
+    timelocks: "vremenske brave {t1} h/{t2} h",
+    reviveAll: "Oživi sve",
+    revive: "Oživi",
+    dismiss: "Odbaci",
+    close: "Zatvori",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "preuzimanje {id}: novčanik isplate nije na ovom stroju — zasad samo povrat; priključite vlasnički novčanik za dovršetak swapa",
@@ -735,7 +746,7 @@ export const hr: Bundle = {
     noTauri: "ne radi unutar Satchela — ovom sučelju treba Tauri most",
     startupError: "pokretanje: {err}",
     notConnected: "nije povezano: {err}",
-    connected: "povezano s pactd {version} ({protocol})",
+    connected: "povezano s pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "prebačeno na trgovca {id}",
     renamedMerchant: "trgovac preimenovan u {name}",
@@ -756,6 +767,11 @@ export const hr: Bundle = {
     withdrawError: "povlačenje: {err}",
     postedOffer: "objavljena ponuda {id} — povucite bilo kada; ništa nije zaključano",
     postOfferError: "objava ponude: {err}",
+    offerRevived: "ponuda {old} oživljena kao svježa ponuda {id}",
+    reviveError: "oživljavanje ponude {id}: {err}",
+    offerDismissed: "ponuda {id} odbačena — ostaje povučena",
+    offerDismissedDeadPair: "ponuda {id} odbačena — njezin par više nije postavljen",
+    dismissError: "odbacivanje ponude {id}: {err}",
     createdSlip: "stvoren privatni slip ponude — pošaljite ga svom prijatelju",
     tookPrivateOffer: "preuzeta privatna ponuda {id} — sada se pojavljuje u vašim aktivnim swapovima",
     cancelledPrivateOffer: "otkazana privatna ponuda {id}",

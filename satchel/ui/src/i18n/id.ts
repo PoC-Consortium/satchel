@@ -722,6 +722,17 @@ export const id: Bundle = {
     back: "Kembali",
     continue: "Lanjutkan",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Pasang kembali penawaran Anda?",
+    intro: "Penawaran ini diturunkan dari papan saat aplikasi ditutup. Harganya mungkin sudah usang — pulihkan untuk memasangnya kembali sebagai penawaran baru dengan syarat yang sama, atau abaikan agar tetap ditarik.",
+    timelocks: "kunci waktu {t1}j/{t2}j",
+    reviveAll: "Pulihkan semua",
+    revive: "Pulihkan",
+    dismiss: "Abaikan",
+    close: "Tutup",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "ambil alih {id}: dompet pembayaran tidak ada di mesin ini — untuk saat ini hanya refund; hubungkan dompet pemilik untuk menyelesaikan swap",
@@ -735,7 +746,7 @@ export const id: Bundle = {
     noTauri: "tidak berjalan di dalam Satchel — antarmuka ini membutuhkan jembatan Tauri",
     startupError: "startup: {err}",
     notConnected: "tidak terhubung: {err}",
-    connected: "terhubung ke pactd {version} ({protocol})",
+    connected: "terhubung ke pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "beralih ke merchant {id}",
     renamedMerchant: "merchant diganti namanya menjadi {name}",
@@ -756,6 +767,11 @@ export const id: Bundle = {
     withdrawError: "tarik: {err}",
     postedOffer: "memasang penawaran {id} — tarik kapan saja; tidak ada yang dikunci",
     postOfferError: "pasang penawaran: {err}",
+    offerRevived: "penawaran {old} dipulihkan sebagai penawaran baru {id}",
+    reviveError: "memulihkan penawaran {id}: {err}",
+    offerDismissed: "penawaran {id} diabaikan — tetap ditarik",
+    offerDismissedDeadPair: "penawaran {id} diabaikan — pasangannya tidak lagi dikonfigurasi",
+    dismissError: "mengabaikan penawaran {id}: {err}",
     createdSlip: "membuat slip penawaran privat — kirim ke teman Anda",
     tookPrivateOffer: "mengambil penawaran privat {id} — sekarang muncul di swap aktif Anda",
     cancelledPrivateOffer: "membatalkan penawaran privat {id}",
