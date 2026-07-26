@@ -792,8 +792,6 @@ export const zhCn: Bundle = {
     created: "报价已发出 — 正等待对方同意。没有任何承诺。",
     acceptedMaker: "条款已达成。下一步：锁定你的 {a}。在你注资之前，仍可自由取消。",
     acceptedTaker: "条款已达成。对方会先锁定他们的 {a} — 你绝不会先支付。",
-    noncesExchanged:
-      "正在搭建私密交换 — 交换签名材料。目前什么都没有被锁定。",
     signedMaker:
       "双方都已签名，你的 {a} 已锁定。一旦对方锁定并确认，你的守护进程会自动认领 {b}。若有任何停滞，你的 {a} 将于 {t1} 退回。",
     signedTaker:

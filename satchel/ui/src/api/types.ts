@@ -209,9 +209,8 @@ export type SwapState =
   | "initiating"
   | "created"
   | "accepted"
-  // v2-only handshake states (AdaptorState): MuSig2 nonces traded, then both
-  // adaptor signatures aggregated + verified. Both are pre-redeem / non-terminal.
-  | "nonces_exchanged"
+  // v2-only handshake state (AdaptorState): both adaptor signatures
+  // aggregated + verified. Pre-redeem / non-terminal.
   | "signed"
   | "funded_a"
   | "funded_b"

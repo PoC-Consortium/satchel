@@ -99,19 +99,19 @@ def pactd():
     return os.path.join(PACT_DIR, "target", "debug", "pactd" + EXE)
 
 
-def find_pactd_rc16():
+def find_pactd_rc19():
     """The LAST-RELEASE pactd for the upgrade-path suite (tests/upgrade.py),
-    built from the immutable tag v0.1.0-rc16. In CI ci/fetch-binaries.sh
+    built from the immutable tag v0.1.0-rc19. In CI ci/fetch-binaries.sh
     provisions it; locally build the tag once:
-      git worktree add ../satchel-rc16 v0.1.0-rc16
-      cargo build -p pactd --manifest-path ../satchel-rc16/pact/Cargo.toml
-      cp ../satchel-rc16/pact/target/debug/pactd(.exe) harness/bin/pactd-rc16(.exe)
+      git worktree add ../satchel-rc19 v0.1.0-rc19
+      cargo build -p pactd --manifest-path ../satchel-rc19/pact/Cargo.toml
+      cp ../satchel-rc19/pact/target/debug/pactd(.exe) harness/bin/pactd-rc19(.exe)
     """
     return _find(
-        "PACT_RC16_PACTD", ["pactd-rc16"], [],
-        "rc16 pactd not found. Build tag v0.1.0-rc16 and copy it to "
-        "harness/bin/pactd-rc16" + EXE + " or set PACT_RC16_PACTD "
-        "(see framework/binaries.py find_pactd_rc16).")
+        "PACT_RC19_PACTD", ["pactd-rc19"], [],
+        "rc19 pactd not found. Build tag v0.1.0-rc19 and copy it to "
+        "harness/bin/pactd-rc19" + EXE + " or set PACT_RC19_PACTD "
+        "(see framework/binaries.py find_pactd_rc19).")
 
 
 def pact_cli():

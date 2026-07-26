@@ -241,8 +241,8 @@ trade.
 > stuck pre-funding self-aborts after `PRE_FUNDING_TIMEOUT_SECS` (15 minutes) —
 > since rc15 this includes a `Created` swap whose accept never arrives, which
 > previously errored every tick forever instead of aborting. A v2 adaptor
-> handshake stalled in `created`, `accepted`, or
-> `nonces_exchanged` — before either leg is funded — now does the same,
+> handshake stalled in `created` or
+> `accepted` — before either leg is funded — now does the same,
 > silently and independently on each side's own clock (`signed` is excluded, as
 > funding may already be in flight by then). Previously a stalled pre-`signed`
 > v2 handshake was inert to the ticker: neither the `abort` RPC (which only

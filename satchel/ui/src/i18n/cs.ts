@@ -795,8 +795,6 @@ export const cs: Bundle = {
     created: "Nabídka odeslána — čeká se, až druhá strana souhlasí. Nic není závazné.",
     acceptedMaker: "Podmínky odsouhlaseny. Dále: uzamkněte své {a}. Dokud nepošlete financování, můžete stále volně zrušit.",
     acceptedTaker: "Podmínky odsouhlaseny. Druhá strana uzamkne své {a} jako první — vy nikdy neposíláte první.",
-    noncesExchanged:
-      "Nastavování soukromého swapu — výměna podpisového materiálu. Zatím není nic uzamčeno.",
     signedMaker:
       "Obě strany podepsaly a vaše {a} jsou uzamčené. Váš daemon automaticky nárokuje {b}, jakmile druhá strana uzamkne a potvrdí svou stranu. Pokud cokoli uvázne, vaše {a} se vrátí v {t1}.",
     signedTaker:

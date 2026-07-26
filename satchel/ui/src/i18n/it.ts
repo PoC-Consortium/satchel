@@ -790,8 +790,6 @@ export const it: Bundle = {
     created: "Offerta inviata — in attesa che l'altra parte accetti. Nulla è impegnato.",
     acceptedMaker: "Termini concordati. Prossimo passo: blocca i tuoi {a}. Finché non effettui il funding, puoi ancora annullare liberamente.",
     acceptedTaker: "Termini concordati. L'altra parte blocca i suoi {a} per prima — tu non invii mai per primo.",
-    noncesExchanged:
-      "Configurazione dello swap privato — scambio del materiale di firma. Nulla è ancora bloccato.",
     signedMaker:
       "Entrambe le parti hanno firmato e i tuoi {a} sono bloccati. Il tuo daemon reclama i {b} automaticamente non appena l'altra parte blocca e conferma. Se qualcosa si blocca, i tuoi {a} tornano alle {t1}.",
     signedTaker:

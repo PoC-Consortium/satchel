@@ -138,9 +138,12 @@ driven by the clock rather than by a message.
 
 ## v2 state machine — `AdaptorState`
 
-The v2 lifecycle is `AdaptorState` (`adaptor_swap.rs:34-48`). It is the same
-shape as v1 with **two extra pre-funding states** for the MuSig2 adaptor
-ceremony that must complete *before* either party puts coins on chain.
+The v2 lifecycle is `AdaptorState` (`adaptor_swap.rs:34-47`). It is
+**shorter** than v1's: the MuSig2 adaptor ceremony runs off-chain inside the
+`Accepted → Signed` transition (the nonce and partial-signature round-trips
+are message exchanges, not persisted states), and funding both legs happens
+entirely *within* `Signed` — sub-divided by the progress display, never by
+state transitions.
 
 ```text
                         ┌─────────────────┐
@@ -150,22 +153,12 @@ ceremony that must complete *before* either party puts coins on chain.
                         ┌────────▼────────┐
                         │    Accepted     │
                         └────────┬────────┘
-                                 │  exchange MuSig2 nonces (both redeem sessions)
-                        ┌────────▼────────┐
-                        │ NoncesExchanged │
-                        └────────┬────────┘
-                                 │  aggregate + verify both adaptor sigs vs T
-                        ┌────────▼────────┐
-                        │     Signed      │   both legs pre-signed, fund-safe
-                        └────────┬────────┘
-                                 │  Alice funds leg A (T1)
-                        ┌────────▼────────┐
-                        │     FundedA     │
-                        └────────┬────────┘
-                                 │  Bob funds leg B (T2 < T1)
-                        ┌────────▼────────┐
-                        │     FundedB     │
-                        └────────┬────────┘
+                                 │  exchange MuSig2 nonces (both redeem
+                                 │  sessions), then aggregate + verify
+                                 │  both adaptor sigs vs T
+                        ┌────────▼────────┐   both legs pre-signed, fund-safe;
+                        │     Signed      │   Alice funds leg A (T1), then Bob
+                        └────────┬────────┘   funds leg B (T2 < T1) — in here
                                  │  Alice adapts + broadcasts leg-B redeem
                         ┌────────▼────────┐                ┌────────────┐
                         │    RedeemedB    │  t now public  │  Refunded  │
@@ -173,28 +166,28 @@ ceremony that must complete *before* either party puts coins on chain.
                                  │  Bob extracts t,              │ clock:
                                  │  adapts + redeems A           │ MTP ≥ T &
                         ┌────────▼────────┐                      │ leg unspent
-                        │    Completed    │    (from any FundedA/FundedB)
+                        │    Completed    │   (from Signed, a leg funded)
                         └─────────────────┘
                                                             ┌────────────┐
               Aborted ◄──── handshake/validation failure    │  Aborted   │
                                                             └────────────┘
 ```
 
-The two added states are the heart of v2's safety:
+The `Accepted → Signed` transition is the heart of v2's safety:
 
-- `Accepted → NoncesExchanged`: both parties exchange fresh MuSig2 secret
-  nonces for the two redeem sessions (one per leg). Nonces are generated from a
-  CSPRNG, never the seed, and persisted write-ahead — reuse is structurally
-  impossible. See the chapter "v2 Taproot/MuSig2 Adaptor Swaps".
-- `NoncesExchanged → Signed`: both adaptor signatures are aggregated and
-  **verified against the adaptor point `T`** before anyone funds. Reaching
-  `Signed` is the guarantee that the cooperative redeems will work and that
-  Alice's broadcast will reveal `t` to Bob.
+- Both parties exchange fresh MuSig2 secret nonces for the two redeem sessions
+  (one per leg). Nonces are generated from a CSPRNG, never the seed, and
+  persisted write-ahead — reuse is structurally impossible. See the chapter
+  "v2 Taproot/MuSig2 Adaptor Swaps".
+- Both adaptor signatures are then aggregated and **verified against the
+  adaptor point `T`** before anyone funds. Reaching `Signed` is the guarantee
+  that the cooperative redeems will work and that Alice's broadcast will
+  reveal `t` to Bob.
 
 > **Note** — In v2 the legs are pre-signed (state `Signed`) before any funding
 > transaction is broadcast. By the time a party commits coins, the redeem
-> messages already exist and have been checked against `T`. From `FundedB`
-> onward, v2 behaves like v1: Alice's redeem reveals the secret on chain, Bob's
+> messages already exist and have been checked against `T`. Once both legs are
+> funded, v2 behaves like v1: Alice's redeem reveals the secret on chain, Bob's
 > daemon extracts it and claims his leg.
 
 ## Where the secret lives

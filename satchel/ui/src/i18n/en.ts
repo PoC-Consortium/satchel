@@ -826,8 +826,6 @@ export const en = {
     created: "Offer sent — waiting for the other side to agree. Nothing is committed.",
     acceptedMaker: "Terms agreed. Next: lock your {a}. Until you fund, you can still cancel freely.",
     acceptedTaker: "Terms agreed. The other side locks their {a} first — you never send first.",
-    noncesExchanged:
-      "Setting up the private swap — exchanging signing material. Nothing is locked yet.",
     signedMaker:
       "Both sides signed and your {a} is locked. Your daemon claims the {b} automatically once the other side locks and confirms it. If anything stalls, your {a} returns at {t1}.",
     signedTaker:

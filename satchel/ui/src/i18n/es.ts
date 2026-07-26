@@ -794,8 +794,6 @@ export const es: Bundle = {
     created: "Oferta enviada — esperando a que la otra parte acepte. No se compromete nada.",
     acceptedMaker: "Términos acordados. Siguiente: bloquea tus {a}. Hasta que financies, aún puedes cancelar libremente.",
     acceptedTaker: "Términos acordados. La otra parte bloquea sus {a} primero — tú nunca envías primero.",
-    noncesExchanged:
-      "Configurando el swap privado — intercambiando material de firma. Aún no se bloquea nada.",
     signedMaker:
       "Ambas partes han firmado y tus {a} están bloqueados. Tu daemon reclama los {b} automáticamente en cuanto la otra parte bloquea y lo confirma. Si algo se atasca, tus {a} vuelven a las {t1}.",
     signedTaker:

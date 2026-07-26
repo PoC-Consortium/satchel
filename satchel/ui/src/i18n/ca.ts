@@ -794,8 +794,6 @@ export const ca: Bundle = {
     created: "Oferta enviada — esperant que l'altra part hi accedeixi. No s'ha compromès res.",
     acceptedMaker: "Termes acordats. Següent: bloqueja els teus {a}. Fins que no financis, encara pots cancel·lar lliurement.",
     acceptedTaker: "Termes acordats. L'altra part bloqueja els seus {a} primer — tu mai envies primer.",
-    noncesExchanged:
-      "Preparant l'intercanvi privat — intercanviant material de signatura. Encara no es bloqueja res.",
     signedMaker:
       "Les dues parts han signat i els teus {a} estan bloquejats. El teu dimoni reclama els {b} automàticament tan bon punt l'altra part bloqueja i ho confirma. Si alguna cosa s'encalla, els teus {a} tornen a {t1}.",
     signedTaker:

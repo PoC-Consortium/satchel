@@ -124,7 +124,7 @@ blocks (initiator and counterparty legs respectively).
 > already committed on-chain.
 
 > **Note** — A v2 handshake that stalls before either leg is funded — stuck at
-> `created`, `accepted`, or `nonces_exchanged` — also **self-aborts after 15
+> `created` or `accepted` — also **self-aborts after 15
 > minutes** (`PRE_FUNDING_TIMEOUT_SECS`) without any `abort` call or relay
 > message: both sides' schedulers independently time out their own copy of the
 > stalled handshake. `signed` is excluded from this auto-timeout, since funding

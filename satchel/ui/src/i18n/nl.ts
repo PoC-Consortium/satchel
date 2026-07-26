@@ -792,8 +792,6 @@ export const nl: Bundle = {
     created: "Aanbod verstuurd — wachten tot de andere kant akkoord gaat. Er is niets vastgelegd.",
     acceptedMaker: "Voorwaarden overeengekomen. Volgende: vergrendel je {a}. Tot je fundt, kun je nog vrij annuleren.",
     acceptedTaker: "Voorwaarden overeengekomen. De andere kant vergrendelt zijn {a} eerst — jij stuurt nooit als eerste.",
-    noncesExchanged:
-      "De privé swap opzetten — ondertekeningsmateriaal uitwisselen. Er is nog niets vergrendeld.",
     signedMaker:
       "Beide kanten hebben ondertekend en je {a} is vergrendeld. Je daemon claimt de {b} automatisch zodra de andere kant vergrendelt en bevestigt. Als er iets vastloopt, komt je {a} terug om {t1}.",
     signedTaker:
