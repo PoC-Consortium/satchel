@@ -206,11 +206,12 @@ Out of scope for v1: per-channel `/watch` subscriptions, price-move thresholds
 in quote terms, historical charts, multi-network instances (run one crier per
 network instead), any write path to Nostr.
 
-## 9. Open questions (defaults chosen, flag if wrong)
+## 9. Decisions & open questions
 
-- **Rust + serenity/poise** assumed (matches repo toolchain; corkboard is the
-  precedent for a sibling server crate). A TS bot would be lighter on Discord
-  glue but would have to reimplement canonical-JSON + tagged-hash verification.
+- **Language: Rust** (DECIDED 2026-07-26) — matches the repo toolchain,
+  corkboard is the precedent for a sibling server crate, and `pact-proto`'s
+  canonical-JSON + tagged-hash verification is reused instead of reimplemented.
+  Discord via serenity 0.12 + poise.
 - Announce channel: one global channel per crier instance for v1 (config), not
   per-guild discovery.
 - Depth shown fixed at 8 (UI parity) — could become a `/book depth:` option.
