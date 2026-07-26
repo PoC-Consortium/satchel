@@ -76,6 +76,9 @@ pub fn top_view(book: &Arc<RwLock<Book>>, cfg: &Config, cash: &CashRate) -> Stri
             fmt_side("Bid", ladder.bids.first()),
         ));
     }
+    if let Some(rate) = cash.fresh() {
+        blocks.push(format!("*1 BTC ≈ ${} ref*", fmt_usd(rate)));
+    }
     blocks.join("\n\n")
 }
 
