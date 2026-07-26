@@ -1,0 +1,48 @@
+# crier configuration. Copy to crier.toml next to the binary (or pass
+# --config <path>). Every key is optional — the values shown are the defaults.
+
+network = "mainnet"                # offers on other networks are ignored
+
+# Satchel's recommended public relay set (defaults if omitted).
+relays = [
+  "wss://relay.damus.io",
+  "wss://nos.lol",
+  "wss://relay.primal.net",
+  "wss://nostr.mom",
+  "wss://nostr-pub.wellorder.net",
+  "wss://offchain.pub",
+]
+
+poll_secs = 30                     # relay poll cadence
+state_file = "crier-state.json"    # last-announced tops (restart hygiene)
+# coins_file = "../satchel/coins.toml"  # extra coin symbols/decimals; builtin
+                                        # table covers btcx/btc/ltc/doge
+
+[discord]
+# token = "..."                    # PREFER the CRIER_DISCORD_TOKEN env var
+guild_id = 0                       # 0 = register slash commands globally
+announce_channel_id = 0            # 0 = announcer off, commands only
+
+[telegram]
+# token = "..."                    # PREFER the CRIER_TELEGRAM_TOKEN env var
+announce_chat_id = ""              # numeric chat/group id or "@channelname";
+                                   # "" = announcer off, commands only.
+                                   # Either protocol (or both) may be active.
+announce_thread_id = 0             # topic id inside a forum supergroup
+                                   # (t.me/c/<chat>/<topic>); 0 = General
+
+[announce]
+debounce_secs = 30                 # coalesce churn before posting
+min_interval_secs = 60             # per-pair posting floor
+min_size_delta_pct = 10            # top-size change worth announcing
+initial_sync_secs = 60             # post-start grace before judging diffs
+pairs = ["btc/btcx"]               # whitelist of pairs crier cries for
+                                   # (unordered; empty = announce nothing)
+
+[render]
+btc_unit = "mbtc"                  # BTC-quoted price unit: btc | mbtc | sat
+
+[cash]
+enabled = true                     # USD reference annotations
+refresh_secs = 300                 # rate refresh (CoinGecko, Coinbase fallback)
+max_age_secs = 1800                # hide USD rather than show a staler rate
