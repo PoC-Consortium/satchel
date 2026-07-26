@@ -38,6 +38,7 @@ jobs:
           cargo fmt --manifest-path satchel/Cargo.toml --all --check
           cargo fmt --manifest-path corkboard/Cargo.toml --all --check
           cargo fmt --manifest-path pact-proto/Cargo.toml --all --check
+          cargo fmt --manifest-path crier/Cargo.toml --all --check
 
   engine:
     name: Engine (clippy + tests)
@@ -54,6 +55,7 @@ jobs:
             pact-nostr
             corkboard
             pact-proto
+            crier
       - name: System deps
         run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libssl-dev
       - name: Clippy (deny warnings)
@@ -62,6 +64,7 @@ jobs:
           cargo clippy --manifest-path pact-nostr/Cargo.toml --all-targets -- -D warnings
           cargo clippy --manifest-path corkboard/Cargo.toml --all-targets -- -D warnings
           cargo clippy --manifest-path pact-proto/Cargo.toml --all-targets -- -D warnings
+          cargo clippy --manifest-path crier/Cargo.toml --all-targets -- -D warnings
       - name: Test pact workspace (libswap + pactd + cli)
         run: cargo test --manifest-path pact/Cargo.toml --workspace
       - name: Test pact-nostr
@@ -70,6 +73,8 @@ jobs:
         run: cargo test --manifest-path corkboard/Cargo.toml
       - name: Test pact-proto
         run: cargo test --manifest-path pact-proto/Cargo.toml
+      - name: Test crier
+        run: cargo test --manifest-path crier/Cargo.toml
 
   app:
     name: Satchel app (clippy + build + tests)

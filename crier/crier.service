@@ -1,0 +1,27 @@
+# systemd unit for crier. Install:
+#   sudo cp crier.service /etc/systemd/system/ && sudo systemctl daemon-reload
+#   sudo systemctl enable --now crier
+# Token lives in /etc/crier/crier.env (CRIER_DISCORD_TOKEN=..., mode 0600).
+[Unit]
+Description=crier — Pact orderbook Discord announcer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=crier
+Group=crier
+WorkingDirectory=/var/lib/crier
+ExecStart=/usr/local/bin/crier --config /etc/crier/crier.toml
+EnvironmentFile=/etc/crier/crier.env
+Restart=on-failure
+RestartSec=10
+# Read-only bot: lock it down.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/crier
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

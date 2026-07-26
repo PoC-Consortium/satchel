@@ -1,0 +1,36 @@
+[package]
+name = "crier"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Read-only Discord bot announcing the Pact orderbook: watches public offer adverts (kind 31510) and revocations (kind 5) on Nostr, answers /book on demand, and cries top-of-book changes into a channel. Holds no funds, signs nothing."
+
+# Standalone crate (like ../corkboard) — not part of the pact/ workspace.
+[workspace]
+
+[dependencies]
+pact-nostr = { path = "../pact-nostr" }
+pact-proto = { path = "../pact-proto" }
+nostr-sdk = "0.44"
+# Only to install a process-wide rustls CryptoProvider at startup (see main()):
+# nostr-sdk → tokio-rustls pulls rustls 0.23, which refuses to auto-pick a
+# provider when both aws-lc-rs and ring are linked, breaking all wss:// relays.
+# Same footgun pactd hit (pactd/src/main.rs).
+rustls = "0.23"
+poise = "0.6"
+# BTC/USD reference rate fetch (cash annotations). rustls-tls so the whole
+# binary shares one TLS story and never links a system OpenSSL.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "time"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+# Build/sign offer envelopes and events in tests, mirroring pact-nostr's tests.
+nostr = "0.44"
+bitcoin = "0.32"
