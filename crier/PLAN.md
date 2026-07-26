@@ -141,7 +141,10 @@ price** — `<size> BTCX @ <price>`, e.g. `37 BTCX @ 0.676`. Order lines are
 bare numbers, symmetric across sides; the unit is stated exactly ONCE per
 message as a legend: the Discord embed footer (small type) `prices in
 mBTC/BTCX` for announcements, the header line for the `/book` ladder. Ladder
-rows right-align sizes so the `@` and price columns line up.
+rows right-align sizes so the `@` and price columns line up. The `/book`
+header is ONLY `<pair> — prices in mBTC/BTCX`: no network name (one crier
+instance = one network, it's config) and no "updated N s ago" (a static
+message can't stay current; Discord timestamps every message anyway).
 
 **Restart hygiene**: last-announced top signatures persisted to a small state
 file (`state.json`); on restart crier rebuilds the book from relays first
