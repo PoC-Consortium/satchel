@@ -473,6 +473,31 @@ def scenario_taker_committed_takeover_v2(h, ep, eb):
                 mine_and_sync(h, ep, eb)
         assert sid, "taker never committed leg B"
         pre_b = swap_of(taker, sid)["funding_b_txid"]
+
+        # Deflake (artifact gate): the kill used to race the taker's OWN
+        # outbox — its partial_sigs to the maker and its Signed snapshot to
+        # the relay. A taker killed before those flushed strands the maker at
+        # `accepted` and leaves the follower material-less, so the cell failed
+        # without testing anything real. Hold the kill until BOTH artifacts
+        # provably landed: the maker assembled (partials delivered) and the
+        # standby's followed record carries the adaptor material (snapshot
+        # delivered + refreshed). The taker stays ALIVE (its relay service
+        # drains the outbox on its own) but is never ticked, and nothing is
+        # mined — leg B stays shallow under the maker's btc=3 gate, so the
+        # committed window this cell exists to test stays open.
+        settled = False
+        for _ in range(60):
+            tick_all("settle", maker)
+            tick_all("standby", standby)
+            m = swap_of(maker, sid)
+            s = swap_of(standby, sid)
+            if (m is not None
+                    and m["state"] in ("signed", "redeemed_b", "completed")
+                    and s is not None and s.get("adaptor_sig_a")):
+                settled = True
+                break
+        assert settled, (f"relay artifacts never landed: maker={swap_of(maker, sid)} "
+                         f"standby={swap_of(standby, sid)}")
         print(f"[takeover-e2e] taker committed leg B ({pre_b[:16]}) — killing it")
         _kill(taker)
 
@@ -825,6 +850,26 @@ def scenario_taker_post_reveal_takeover_v2(h, ep, eb):
                 mine_and_sync(h, ep, eb)
         assert sid, "taker never committed leg B"
         pre_b = swap_of(taker, sid)["funding_b_txid"]
+
+        # Deflake (artifact gate, twin of the committed cell): before wedging,
+        # wait until the taker's partial_sigs reached the maker (state signed)
+        # and its Signed snapshot reached the standby (adaptor material
+        # present) — the taker's relay service drains its outbox without
+        # ticks, and NO mining here keeps leg B shallow so the maker cannot
+        # reveal while we wait.
+        settled = False
+        for _ in range(60):
+            tick_all("settle", maker)
+            tick_all("standby", standby)
+            m = swap_of(maker, sid)
+            s = swap_of(standby, sid)
+            if (m is not None
+                    and m["state"] in ("signed", "redeemed_b", "completed")
+                    and s is not None and s.get("adaptor_sig_a")):
+                settled = True
+                break
+        assert settled, (f"relay artifacts never landed: maker={swap_of(maker, sid)} "
+                         f"standby={swap_of(standby, sid)}")
 
         # Phase 2: the taker is WEDGED (no more ticks — a hung machine) while
         # the maker buries leg B and reveals t. A ticking v2 taker claims
