@@ -78,12 +78,23 @@ active; safety comes from **partitioning**, not from electing an owner:
   explicit confirm ("confirm that machine is stopped") — the `takeover` RPC or
   the dock's "Take over" button. Takeover never skips a swap. A v2 record
   whose pinned cooperative-redeem sweep address is not owned by this machine's
-  wallet is adopted anyway, with a warning, as **refund-only**: a refund pays a
+  wallet is adopted anyway as **refund-only**: a refund pays a
   fresh owned address and needs no sweep custody, so the payout check
   (`v2_owns_redeem_payout`, gating both `adaptor_redeem` call sites) refuses
   only the cooperative *completion* to the foreign wallet and rides the swap
-  to its timelock refund. v1 pins no destination, and a sweep-unset v2 falls
-  back to a seed-derived address, so those adopt with full redeem capability.
+  to its timelock refund. An **inconclusive** ownership probe counts as
+  not-owned — the gate fails closed rather than paying a wallet it cannot
+  prove is ours. The verdict is returned as the `takeover` response's
+  `refund_only` field (always `false` for v1 — it pins no destination, and a
+  sweep-unset v2 falls back to a seed-derived address, so those adopt with
+  full redeem capability), and the gate re-probes per tick: attaching the
+  owning wallet later re-enables completion without another takeover. A
+  takeover also inherits whatever shape the follower's chain-derived ratchet
+  reached — in particular the post-reveal `redeemed_b` shape now drives in
+  both protocols: the adopted participant claims leg A off the public
+  reveal (v1 via the on-chain preimage, v2 via a dedicated
+  `(participant, redeemed_b)` drive arm) instead of idling on a state no
+  driven participant writes itself.
 - **Reconcile before drive.** On every restart, a driven swap first derives
   its true status from chain before its drive arms act — the same
   classification and depth gate the follower uses (`reconcile_driven_v1`/`_v2`,
@@ -98,6 +109,24 @@ active; safety comes from **partitioning**, not from electing an owner:
   spent deep at its own confirmation target — a shallow spend keeps the record
   driving, so a reorg cannot fake a completion. Each reconciliation surfaces
   as a `"reconciled"` tick event ("chain truth → {State}: …").
+- **Chain truth without a script index.** On a Core-RPC-only coin (no
+  Electrum view, no script→history index — `-txindex` is txid→tx only and
+  would not help), a spend of a **known funding outpoint** is still
+  conclusively classifiable: `ChainBackend::find_spend_tx` gates on
+  `gettxout` (one cheap call while the output is live), then scans the
+  mempool, then full blocks at `getblock` verbosity 2 — full blocks carry
+  witnesses, so no `-txindex` is needed. Classification
+  (`classify_spent_by_scan`) reads redeem-vs-refund from the recovered
+  witness and depth from the tip; the scan floor is the recorded funding
+  height, or a floor derived from the swap's age in blocks plus a 144-block
+  reorg margin when no height was ever recorded, and a per-outpoint
+  watermark keeps retries incremental. Every consumer of leg classification
+  gains this floor: the fund ghost check, the takeover fast-forward,
+  reconcile-before-drive, and the follow evaluation and purge belts all
+  reach a conclusive verdict on a node-only coin once the funding outpoint
+  is known — followers purge on depth-verified spends instead of tip-drift
+  or age-out alone. Only a leg whose outpoint was never learned still falls
+  back to the age-out clock.
 - **Upgrade path.** Pre-upgrade records carry the legacy scope. Terminal
   legacy records are auto-claimed as this machine's history on the first tick
   (they stay in the Swaps ledger); active legacy swaps appear under "Another
@@ -116,7 +145,9 @@ active; safety comes from **partitioning**, not from electing an owner:
 
 The full design — the partitioning model, the followed-swap auto-purge at deep
 terminal, the scope-rotation self-heal on re-import — is
-`docs/MULTI_MACHINE_122.md`.
+`docs/MULTI_MACHINE_122.md`; the chain-truth reconstruction (leg
+classification, backend capability tiers, the block-scan floor) is
+`docs/STATE_RECONSTRUCTION.md`.
 
 ## Protocol selection prefers HTLC
 

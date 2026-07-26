@@ -78,7 +78,10 @@ swap in flight.
 To switch, click either one. The merchant chip opens a dropdown with
 **Manage Merchants…** and a list of your other merchants. Choosing **Manage
 Merchants…** opens the full manager, where you can create a new merchant, import
-one from a recovery phrase, or load a different one.
+one from a recovery phrase, or load a different one. Creating runs the same
+short wizard as first launch — and the new merchant only comes into being at the
+wizard's final step, so backing out part-way changes nothing and your current
+merchant stays active.
 
 > **Note** — Satchel won't let you switch away from a merchant that has a swap in
 > flight. That's a safety rule: a running swap needs its own seed available to

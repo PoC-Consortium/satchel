@@ -9,7 +9,7 @@
 - **Request:** `{ jsonrpc, id, method, params }`. `params` accept either a **positional array or a named object**.
 - **Response:** `{ jsonrpc:"2.0", id, result }` on success, or `{ …, error:{ code, message } }` on failure. An unknown method returns the standard `-32601` code with a *did-you-mean* suggestion for near-miss names; every other error is `-1` today.
 - **No platform fees:** `platform_fee_sat` is hard-wired `0` everywhere fees are reported.
-- All swap/board/seed methods act on the **active merchant's engine**; with none loaded they error `"no active merchant — create or load one first"`.
+- All swap/board/seed methods act on the **active merchant's engine**; with none loaded they error `"no active merchant — create or load one first"`. (`generateseed` is the one seed method exempt — it needs no merchant.)
 
 ## Node / info
 
@@ -28,7 +28,7 @@
 | Method | Purpose |
 |---|---|
 | `createseed` | Create + persist a seed; returns the mnemonic once (encrypted iff a passphrase is given). |
-| `generateseed` | Generate a mnemonic preview **without** persisting it (onboarding). |
+| `generateseed` | Generate a mnemonic preview **without** persisting it (onboarding). Stateless: needs no merchant and stores nothing — the wizard commits merchant + seed together only at its final step. |
 | `importseed` | Import a mnemonic (optional passphrase); returns identity. |
 | `unlock` | Unlock an encrypted seed by trial-decrypt; holds the passphrase in memory. |
 
@@ -40,7 +40,7 @@ A machine restored from the seed alone can rediscover in-flight swaps from encry
 |---|---|
 | `restorefromrelay` | Adopt every rescuable relay snapshot not already held locally; `{ restored, seen }`. |
 | `rescuestatus` | Read-only preview — how many *would* be adopted, plus a two-machines double-fund warning; `{ pending, seen, warning? }`. |
-| `takeover` | Adopt a followed swap (another machine's on the same seed, or one recovered after re-import) so this machine drives it — only once that machine is stopped (`swap_id`). A v2 swap whose cooperative-redeem payout pays a wallet this machine doesn't control is adopted anyway, with a warning, but **refund-only**: completing it would pay the other machine, so the driver refuses the cooperative redeem and rides the swap to its timelock refund (which pays a fresh address this machine owns); v1 and seed-derived v2 adopt fully. |
+| `takeover` | Adopt a followed swap (another machine's on the same seed, or one recovered after re-import) so this machine drives it — only once that machine is stopped (`swap_id`). A v2 swap whose cooperative-redeem payout pays a wallet this machine doesn't control is adopted anyway, with a warning, but **refund-only**: completing it would pay the other machine, so the driver refuses the cooperative redeem and rides the swap to its timelock refund (which pays a fresh address this machine owns); v1 and seed-derived v2 adopt fully. The result reports the verdict: `{ taken_over, swap_id, refund_only }` — `refund_only` is always `false` for v1, and `true` for a v2 whose payout wallet this machine doesn't own *or can't prove it owns* (an inconclusive wallet probe fails closed). The gate re-probes every tick, so attaching the owning wallet later re-enables cooperative completion without a second takeover. |
 
 ## Merchants
 
@@ -123,7 +123,7 @@ v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed). T
 |---|---|
 | `estimateswapfees` | Per-leg fee estimate (`platform_fee_sat:0`). Params: `give_coin`, `get_coin` only. |
 | `estimatesendfee` | Fee preview for the wallet send form. Params: `chain`. Returns `{ min_sat_per_vb, fast, normal, slow }` — raw estimator answers as **decimal sat/vB at full sat/kvB resolution** (e.g. `1.08`) at 1/6/144-block targets, `null` where the estimator has no data. |
-| `getbalance` | Balance for one chain. |
+| `getbalance` | Balance for one chain: `balance_sat` (spendable — the only spend gate) plus display-only `pending_sat` and `immature_sat` (money still confirming / immature coinbase). |
 | `getnewaddress` | Fresh HD address for one chain. |
 | `sendtoaddress` | Send from one chain (broadcasts BIP125-replaceable). Params: `chain`, `address`, `amount`, optional `conf_target` (block target, default 6), optional `fee_rate` (explicit **decimal** sat/vB, e.g. `1.08` — wins over `conf_target`; carried internally at sat/kvB resolution, so the fraction is paid, not rounded away). `amount` may be the literal `"all"` to sweep the wallet — the fee then comes out of the swept amount. |
 | `bumpfee` | RBF-bump an unconfirmed wallet send. Params: `chain`, `txid`, `fee_rate` (sat/vB — must beat what the tx pays now). Returns the replacement `txid`. Refuses a txid that funds a live swap — the engine manages those fees itself (see `get`/`setfeepolicy`). Satchel surfaces it for nodeless coins; a node-backed wallet is bumped with the node's own tooling. |

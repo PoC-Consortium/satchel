@@ -91,7 +91,10 @@ never be signed again.
 Entries carry the same `source` (`"local"` / `"foreign"`) and `machine_label`
 fields as `listswaps` — a `"foreign"` record is another machine's swap on the
 same seed, followed read-only until an explicit `takeover` (see the chapter
-"API: v1 HTLC Swaps").
+"API: v1 HTLC Swaps"). A v2 takeover's `refund_only` result flags an adoption
+whose pinned cooperative-redeem payout wallet is not (provably) on this
+machine — adopted, but riding to its timelock refund until the owning wallet
+attaches.
 
 ## Handshake & lifecycle methods
 
