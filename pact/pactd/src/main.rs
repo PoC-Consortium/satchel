@@ -43,7 +43,7 @@ const CONF_FILE: &str = "pact.conf";
 const LOCK_FILE: &str = ".lock";
 
 /// Take an exclusive advisory OS lock on `<data-dir>/.lock` so at most one pactd
-/// runs per data dir (§0 of docs/MULTI_MACHINE_122.md). This is the guard the
+/// runs per data dir (§0 of docs/design/MULTI_MACHINE_122.md). This is the guard the
 /// whole seed-scope partition rests on: two pactd on one data dir would share
 /// `machine.json` → identical derive_scope → initiator secret reuse, and two
 /// writers would race the same SQLite/bdk store. Mirrors Bitcoin Core's data-dir
@@ -408,7 +408,7 @@ const SNAPSHOTS_SINCE_KEY: &str = "nostr_since:snapshots";
 static FOLLOW_FULL_SCAN_DONE: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
-/// One followed-import scan (#163/#165, §3–§5 of docs/MULTI_MACHINE_122.md):
+/// One followed-import scan (#163/#165, §3–§5 of docs/design/MULTI_MACHINE_122.md):
 /// fetch our encrypted-to-self snapshots and import OTHER machines' in-flight
 /// swaps as FOLLOWED records — read-only, `adopted` forced false — so a
 /// same-seed standby sees the primary's swaps in its dock ("Another machine ·
@@ -540,7 +540,7 @@ fn fee_policy_json(p: &libswap::FeeBumpPolicy) -> Value {
 }
 
 /// Serialize a swap record and stamp its multi-machine fields (§4 of
-/// docs/MULTI_MACHINE_122.md): `source` = `"local"` (driven by this machine —
+/// docs/design/MULTI_MACHINE_122.md): `source` = `"local"` (driven by this machine —
 /// own scope or taken over) or `"foreign"` (another machine's swap we only
 /// follow read-only), and `machine_label` = the short one-way tag of the swap's
 /// originating machine, so the UI can GROUP followed swaps per machine. Both are

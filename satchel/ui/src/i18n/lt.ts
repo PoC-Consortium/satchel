@@ -365,7 +365,7 @@ export const lt: Bundle = {
     checkUpdate: "Tikrinti naujinimus",
     protocols: "Mainų protokolai",
     protocolsHint:
-      "Ką palaiko ši versija — kitos versijos pasiūlymus galima peržiūrėti, bet ne priimti. Abi mainų pusės turi sutapti.",
+      "Ką ši versija supranta — skaičiai yra kiekvieno protokolo pranešimų formato versija (tai ne protokolų reitingas). Kitos versijos pasiūlymus galima peržiūrėti, bet ne priimti; abi mainų pusės turi sutapti.",
     machine: "Šis įrenginys",
     machineHint:
       "Šio įdiegimo id. Jei tą pačią sėklą paleidžiate daugiau nei viename įrenginyje, kiekvienas valdo savo mainus — kiti rodomi tik skaitymui kaip „Kitas įrenginys“ mainų doke, ir jei vienas sustotų, galite juos perimti čia. Kelių įrenginių naudojimas skirtas atsarginiam perėmimui ir atkūrimui, o ne prekybai iš dviejų įrenginių vienu metu (jie dalijasi vienu likučiu).",

@@ -127,7 +127,10 @@ Worst-case vsize: `KEYPATH_REDEEM_VSIZE = 111` (`taproot.rs:40`).
 > pre-rc10 peer that never sends `wire` still fails partial-signature
 > verification at the handshake, a clean pre-funding abort with no funds at
 > risk (deliberately no compat shim). Future amendments bump the epoch
-> (`libswap::wire_epoch`) and gate the same way. In-flight v2
+> (`libswap::wire_epoch`) and gate the same way. (An epoch is *not* the
+> family number in the wire-id string: the "v2"/"v3" Satchel shows next to
+> "Standard (HTLC)"/"Private (Taproot)" are these epochs — see
+> `spec/README.md` § Naming & versioning.) In-flight v2
 > swaps that already exchanged partial signatures keep working on the version
 > that made them; **settle or abort live v2 swaps before upgrading**.
 

@@ -3,7 +3,7 @@
 The regtest e2e framework + interactive playgrounds for the Pact swap engine.
 Python 3.10+, **stdlib only** — no venv/pip needed on a fresh box. Structure
 follows Bitcoin Core's functional-test framework; the full design and roadmap
-live in `docs/TEST_FRAMEWORK_PLAN.md`.
+live in `docs/design/TEST_FRAMEWORK_PLAN.md`.
 
 ```
 framework/          the importable library

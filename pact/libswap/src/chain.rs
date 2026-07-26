@@ -199,7 +199,7 @@ pub trait ChainBackend: Send + Sync {
 
     /// The NODE WALLET's own transactions (full, decoded) with their block
     /// heights (0 = unconfirmed), from `since_height` to the tip — the
-    /// wallet-assisted reconstruction source (#171, docs/STATE_RECONSTRUCTION.md
+    /// wallet-assisted reconstruction source (#171, docs/design/STATE_RECONSTRUCTION.md
     /// §4). The multi-machine backup-session contract makes this history
     /// SHARED across a merchant's machines (a backup MUST point at the same
     /// wallet — takeovers fund from it and v2 sweeps pay into it), so it
@@ -1570,7 +1570,7 @@ impl MultiBackend {
 
     /// Assemble from prebuilt backends — the nodeless path builds its own
     /// primary (a `wallet_bdk::BdkWalletBackend`) before the remaining
-    /// Electrum views join (docs/NODELESS_WALLET.md D5). `backends[0]` is
+    /// Electrum views join (docs/design/NODELESS_WALLET.md D5). `backends[0]` is
     /// the primary, exactly as with [`MultiBackend::new`].
     pub fn from_backends(backends: Vec<Box<dyn ChainBackend>>) -> Result<Self> {
         anyhow::ensure!(!backends.is_empty(), "no backends given");

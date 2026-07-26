@@ -1,5 +1,5 @@
 //! Per-machine seed-derivation scope — the `machine.json` backbone of the
-//! multi-machine partition (§1 of docs/MULTI_MACHINE_122.md).
+//! multi-machine partition (§1 of docs/design/MULTI_MACHINE_122.md).
 //!
 //! Every pactd install owns one random **62-bit** [`DeriveScope`], persisted in
 //! a dedicated `machine.json` at the pactd data-dir **root** (above any

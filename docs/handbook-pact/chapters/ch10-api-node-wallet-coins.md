@@ -21,7 +21,11 @@ merchant* error) are covered in the chapter "JSON-RPC Conventions".
   rc12-recut per-side-confirmations bump:
   `{ "pact-htlc-v1": 2, "pact-htlc-v2": 3 }`; rc10 spoke `1`/`2`) — a UI
   badges offers whose
-  signed `wire` differs as un-takeable; `network` is the lowercased network
+  signed `wire` differs as un-takeable. Note these epochs are flag-day
+  message-format counters, *not* the family numbers in the wire-id strings —
+  the "v2"/"v3" Satchel shows next to "Standard (HTLC)"/"Private (Taproot)"
+  are the epochs (see `spec/README.md` § Naming & versioning);
+  `network` is the lowercased network
   name (`regtest`/`testnet`/`mainnet`); `coins` is the list of configured coin
   ids. Tolerates a missing or locked seed — `identity` is `null` until a seed is
   present **and** unlocked. `machine_label` is the short one-way label of this

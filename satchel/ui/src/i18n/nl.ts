@@ -365,7 +365,7 @@ export const nl: Bundle = {
     checkUpdate: "Controleren op updates",
     protocols: "Swap-protocollen",
     protocolsHint:
-      "Wat deze versie spreekt — aanbiedingen met een andere versie zijn zichtbaar maar niet te nemen. Beide kanten van een swap moeten overeenkomen.",
+      "Wat deze build spreekt — de nummers zijn de berichtformaat-versie van elk protocol (geen rangorde van de protocollen). Aanbiedingen met een andere versie kun je bekijken maar niet aannemen; beide kanten van een swap moeten overeenkomen.",
     machine: "Deze machine",
     machineHint:
       "De id van deze installatie. Als je hetzelfde seed op meer dan één machine draait, bestuurt elk zijn eigen swaps — de andere verschijnen alleen-lezen als “Een andere machine” in de swaps-dock, en je kunt ze hier overnemen als er een stopt. Gebruik op meerdere machines is voor failover en herstel, niet om vanaf twee machines tegelijk te handelen (ze delen één saldo).",

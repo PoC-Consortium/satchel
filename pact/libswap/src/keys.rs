@@ -90,7 +90,7 @@ fn anchor_levels(anchor: &[u8]) -> [u32; 4] {
 }
 
 /// Per-machine seed-derivation scope — the backbone of the multi-machine
-/// partition (§1 of docs/MULTI_MACHINE_122.md). A random **62-bit** value,
+/// partition (§1 of docs/design/MULTI_MACHINE_122.md). A random **62-bit** value,
 /// one per install, injected as **two hardened 31-bit BIP32 levels** into every
 /// *initiator / counter-based* derivation so two machines on the same seed
 /// derive **different** preimages / adaptor secrets / swap keys at the same
@@ -502,7 +502,7 @@ mod tests {
         }
     }
 
-    // ---- nodeless wallet branch (keys-btcx; docs/NODELESS_WALLET.md D1) ----
+    // ---- nodeless wallet branch (keys-btcx; docs/design/NODELESS_WALLET.md D1) ----
 
     #[test]
     fn pact_tree_is_disjoint_from_wallet_branches() {

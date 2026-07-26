@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Compatibility shim — the regtest harness moved into the framework package
-(Phase 2, docs/TEST_FRAMEWORK_PLAN.md): nodes/electrs/Harness live in
+(Phase 2, docs/design/TEST_FRAMEWORK_PLAN.md): nodes/electrs/Harness live in
 framework/node.py, binary resolution in framework/binaries.py. Everything is
 re-exported here so the pre-Phase-3 playground drivers keep importing from
 this module unchanged.

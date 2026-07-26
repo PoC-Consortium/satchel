@@ -365,7 +365,7 @@ export const it: Bundle = {
     checkUpdate: "Controlla aggiornamenti",
     protocols: "Protocolli di swap",
     protocolsHint:
-      "Ciò che parla questa versione — le offerte con una versione diversa si possono sfogliare ma non prendere. Le due parti dello swap devono coincidere.",
+      "Ciò che questa build parla — i numeri sono la versione del formato messaggi di ciascun protocollo (non classificano i protocolli). Le offerte con versione diversa si possono sfogliare ma non accettare; i due lati di uno swap devono coincidere.",
     machine: "Questa macchina",
     machineHint:
       "L'id di questa installazione. Se esegui lo stesso seed su più di una macchina, ciascuna gestisce i propri swap — le altre compaiono in sola lettura come \"Un'altra macchina\" nel dock degli swap, e puoi rilevarle qui se una si ferma. L'uso multi-macchina serve per failover e recupero, non per fare trading da due macchine contemporaneamente (condividono un unico saldo).",

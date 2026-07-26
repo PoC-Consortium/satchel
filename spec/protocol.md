@@ -2,6 +2,11 @@
 
 Status: DRAFT (Phase 1). Protocol version string: `pact-htlc-v1`.
 
+> Naming note: "v1" names this protocol *family* — Standard (HTLC) in the
+> apps — and is distinct from the family's wire epoch (a flag-day
+> message-format counter, currently 2); see
+> [`README.md` § Naming & versioning](README.md#naming--versioning).
+
 This document specifies the v1 atomic-swap protocol used by Pact: classic
 hash-time-locked contracts (HTLCs) on two Bitcoin-derived UTXO chains, with
 CHECKLOCKTIMEVERIFY (BIP65) refunds. It is written so that a third party can

@@ -1,7 +1,10 @@
 # Pact Swap Protocol v2 — Taproot/MuSig2 adaptor swaps Bitcoin PoCX ↔ BTC
 
 `pact-htlc-v2`. Companion to [`protocol.md`](protocol.md) (v1) — this
-document specifies only what v2 changes. Everything not restated here
+document specifies only what v2 changes. (Naming note: "v2" names this
+protocol *family* — Private (Taproot) in the apps — and is distinct from the
+family's wire epoch, a flag-day message-format counter currently at 3; see
+[`README.md` § Naming & versioning](README.md#naming--versioning).) Everything not restated here
 (roles, transport, persistence philosophy, swap index `i`, the identity
 key) is inherited from v1 verbatim.
 

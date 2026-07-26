@@ -145,9 +145,9 @@ active; safety comes from **partitioning**, not from electing an owner:
 
 The full design — the partitioning model, the followed-swap auto-purge at deep
 terminal, the scope-rotation self-heal on re-import — is
-`docs/MULTI_MACHINE_122.md`; the chain-truth reconstruction (leg
+`docs/design/MULTI_MACHINE_122.md`; the chain-truth reconstruction (leg
 classification, backend capability tiers, the block-scan floor) is
-`docs/STATE_RECONSTRUCTION.md`.
+`docs/design/STATE_RECONSTRUCTION.md`.
 
 ## Protocol selection prefers HTLC
 

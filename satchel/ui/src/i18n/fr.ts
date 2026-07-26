@@ -365,7 +365,7 @@ export const fr: Bundle = {
     checkUpdate: "Rechercher des mises à jour",
     protocols: "Protocoles de swap",
     protocolsHint:
-      "Ce que parle cette version — les offres d'une autre version restent visibles mais ne peuvent pas être prises. Les deux côtés d'un swap doivent correspondre.",
+      "Ce que parle cette version — les nombres sont la version du format de messages de chaque protocole (ils ne classent pas les protocoles). Les offres d'une autre version peuvent être consultées mais pas prises ; les deux côtés d'un swap doivent correspondre.",
     machine: "Cette machine",
     machineHint:
       "L'id de cette installation. Si vous exécutez la même seed sur plus d'une machine, chacune pilote ses propres swaps — les autres apparaissent en lecture seule comme « Une autre machine » dans le dock des swaps, et vous pouvez les reprendre ici si l'une s'arrête. L'usage multi-machine sert au basculement et à la récupération, pas à trader depuis deux machines à la fois (elles partagent un seul solde).",

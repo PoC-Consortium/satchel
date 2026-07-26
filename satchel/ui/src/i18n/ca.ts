@@ -365,7 +365,7 @@ export const ca: Bundle = {
     checkUpdate: "Comprova si hi ha actualitzacions",
     protocols: "Protocols d'intercanvi",
     protocolsHint:
-      "El que parla aquesta versió — les ofertes amb una versió diferent es poden consultar però no acceptar. Les dues parts de l'intercanvi han de coincidir.",
+      "El que parla aquesta compilació — els nombres són la versió del format de missatges de cada protocol (no classifiquen els protocols). Les ofertes amb una altra versió es poden consultar però no prendre; els dos costats d'un intercanvi han de coincidir.",
     machine: "Aquesta màquina",
     machineHint:
       "L'id d'aquesta instal·lació. Si executes la mateixa llavor en més d'una màquina, cadascuna condueix els seus propis intercanvis — les altres apareixen només de lectura com a \"Una altra màquina\" al plafó d'intercanvis, i les pots assumir des d'aquí si alguna s'atura. L'ús de múltiples màquines és per a la commutació per error i la recuperació, no per operar des de dues màquines alhora (comparteixen un sol saldo).",

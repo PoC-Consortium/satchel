@@ -365,7 +365,7 @@ export const ptBR: Bundle = {
     checkUpdate: "Verificar atualizações",
     protocols: "Protocolos de swap",
     protocolsHint:
-      "O que esta versão fala — ofertas com versão diferente podem ser vistas, mas não aceitas. Os dois lados do swap precisam coincidir.",
+      "O que esta build fala — os números são a versão do formato de mensagens de cada protocolo (não classificam os protocolos). Ofertas com versão diferente podem ser vistas mas não aceitas; os dois lados de um swap devem coincidir.",
     machine: "Esta máquina",
     machineHint:
       "O id desta instalação. Se você rodar a mesma seed em mais de uma máquina, cada uma conduz seus próprios swaps — as outras aparecem apenas para leitura como “Outra máquina” no dock de swaps, e você pode assumi-las aqui se uma parar. O uso em várias máquinas é para failover e recuperação, não para negociar de duas máquinas ao mesmo tempo (elas compartilham um único saldo).",

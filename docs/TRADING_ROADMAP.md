@@ -110,8 +110,9 @@ relay for swap coordination.
   faked and are provably tied to a key. The board verifies the envelope
   signature and stores the offer.
 - **Blind relay.** `POST /v1/relay` is store-and-forward keyed by recipient;
-  the relayed blob is opaque to the board (a serialized envelope today, an
-  encrypted blob with client-side E2E encryption). `POST /v1/relay/poll`
+  the relayed blob is opaque to the board — a sealed envelope with
+  client-side E2E encryption, the same sealing that rides Nostr gift wraps
+  (shipped). `POST /v1/relay/poll`
   takes a signed poll and returns messages since a cursor. The board never
   inspects relayed payloads, and the relay enforces a size cap — it is for
   coordination, not bulk data.
@@ -176,6 +177,11 @@ thin client of `pactd`'s local API.
   freshness, and timelocks; plus a noticeboard configuration.
 - Swaps view: active and historical swaps, including v2 adaptor swaps marked
   with a "Private (Taproot)" badge.
+- Multi-machine standby: run the same seed on a second machine and swaps
+  driven elsewhere appear in the active dock as read-only foreign-swap
+  groups, one per machine label. Each group carries a per-machine "Take
+  over" for when that machine is down — and states its verdict up-front
+  when an adopted swap can only be refunded, not completed.
 
 Design references: the [Satchel handbook](handbook-satchel/) and the
 [Pact handbook](handbook-pact/) API part.
@@ -184,7 +190,8 @@ The Discord front-end (**Crier**) is a Corkboard front-end only — browse/post
 offers and notifications, deep-linking into the user's local Satchel/Pact to
 execute. It never touches keys or funds.
 
-> **TODO:** Crier (Discord bot) — scaffolded only; not yet implemented.
+> **TODO:** Crier (Discord bot) — in development (separate branch); not yet
+> in this repo.
 
 ## Phase 4 — External venues, on our terms
 

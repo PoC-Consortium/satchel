@@ -107,7 +107,7 @@ pub struct SwapRecord {
     /// post-load tick is free to act.
     #[serde(default)]
     pub last_action_height: u64,
-    /// Per-machine seed-derivation scope (§1 of docs/MULTI_MACHINE_122.md) this
+    /// Per-machine seed-derivation scope (§1 of docs/design/MULTI_MACHINE_122.md) this
     /// swap's INITIATOR keys/preimage were derived under — the immutable salt.
     /// Stamped with the creating machine's scope at creation and NEVER changed
     /// (an adopted swap keeps its originating machine's scope forever and
@@ -542,7 +542,7 @@ impl Store {
 
     /// Delete a v1 swap record. Used ONLY to purge a *followed* (another
     /// machine's) swap once it has reached deep terminal (§5 of
-    /// docs/MULTI_MACHINE_122.md) — own/adopted swaps go terminal and STAY as
+    /// docs/design/MULTI_MACHINE_122.md) — own/adopted swaps go terminal and STAY as
     /// ledger history, they are never deleted. Idempotent.
     pub fn delete(&self, swap_id: &str) -> Result<()> {
         self.conn
@@ -832,7 +832,7 @@ impl Store {
 
     /// One of our offers by id, **ignoring lifecycle state** — the ownership
     /// *existence* check the maker-take gate keys on (§2 of
-    /// docs/MULTI_MACHINE_122.md). Deliberately not `my_offers_live`: after a
+    /// docs/design/MULTI_MACHINE_122.md). Deliberately not `my_offers_live`: after a
     /// legit serve the row flips to `taken`/`revoked`, so a liveness gate would
     /// wrongly refuse the real owner's retry; existence is enough because a
     /// foreign machine (scope-distinct coordinates, §1) holds no such row at all.

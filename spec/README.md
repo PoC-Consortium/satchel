@@ -20,6 +20,27 @@ independently of Pact.
 - `vectors/htlc_v2.json` — v2 vectors (regenerate:
   `cargo run -p libswap --example gen-vectors-v2`; pinned by `tests/vectors_v2.rs`)
 
+## Naming & versioning
+
+There are two protocol **families**, and — separately — each family carries a
+**wire epoch**:
+
+| Family (user-facing name) | Spec doc | Wire-id string | Current wire epoch |
+|---|---|---|---|
+| Standard (HTLC) | [`protocol.md`](protocol.md) ("v1") | `pact-htlc-v1` | 2 |
+| Private (Taproot) | [`protocol-v2.md`](protocol-v2.md) ("v2") | `pact-htlc-v2` | 3 |
+
+The "v1"/"v2" in the spec filenames and wire-id strings number the
+*families* and never change. The wire epoch is a per-family flag-day counter
+for message-format amendments (`WIRE_V1`/`WIRE_V2` and `wire_epoch()` in
+`pact/libswap/src/lib.rs`), exposed by `pactd` as `getinfo.wire_epochs`;
+both sides of a swap must speak the same epoch for a family — unequal epochs
+are refused up-front (offers badge un-takeable, handshakes reject cleanly).
+The version numbers Satchel displays — "Standard (HTLC) v2 · Private
+(Taproot) v3" on the About page and Corkboard offer chips — are these wire
+epochs, **not** the family numbers. The family names, not any number, are
+the user-facing identifiers.
+
 ## Safety property to preserve
 
 The protocol must never depend on Electrum servers being honest for

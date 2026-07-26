@@ -365,7 +365,7 @@ export const de: Bundle = {
     checkUpdate: "Nach Updates suchen",
     protocols: "Swap-Protokolle",
     protocolsHint:
-      "Was diese Version spricht — Angebote mit abweichender Version lassen sich ansehen, aber nicht annehmen. Beide Seiten eines Swaps müssen übereinstimmen.",
+      "Was dieser Build spricht — die Zahlen sind die Nachrichtenformat-Version des jeweiligen Protokolls (keine Rangfolge der Protokolle). Angebote mit anderer Version lassen sich ansehen, aber nicht annehmen; beide Seiten eines Swaps müssen übereinstimmen.",
     machine: "Dieser Rechner",
     machineHint:
       "Die ID dieser Installation. Wenn du dasselbe Seed auf mehr als einem Rechner betreibst, steuert jeder seine eigenen Swaps — die anderen erscheinen schreibgeschützt als \"Anderer Rechner\" im Swap-Dock, und du kannst sie hier übernehmen, falls einer ausfällt. Der Mehr-Rechner-Betrieb dient dem Failover und der Wiederherstellung, nicht dem Handeln von zwei Rechnern gleichzeitig (sie teilen sich ein Guthaben).",

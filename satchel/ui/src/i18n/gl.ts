@@ -365,7 +365,7 @@ export const gl: Bundle = {
     checkUpdate: "Buscar actualizacións",
     protocols: "Protocolos de intercambio",
     protocolsHint:
-      "O que fala esta versión — as ofertas cunha versión distinta pódense ver pero non tomar. As dúas partes do intercambio deben coincidir.",
+      "O que fala esta compilación — os números son a versión do formato de mensaxes de cada protocolo (non clasifican os protocolos). As ofertas con outra versión pódense ver pero non tomar; os dous lados dun intercambio deben coincidir.",
     machine: "Esta máquina",
     machineHint:
       "O id desta instalación. Se executas a mesma semente en máis dunha máquina, cada unha xestiona os seus propios intercambios — as demais aparecen en modo só lectura como «Outra máquina» no panel de intercambios, e podes tomalas aquí se unha se detén. O uso multimáquina é para conmutación por erro e recuperación, non para negociar desde dúas máquinas á vez (comparten un único saldo).",

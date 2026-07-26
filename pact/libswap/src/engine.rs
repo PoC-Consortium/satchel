@@ -75,7 +75,7 @@ pub struct Engine {
     progress: Mutex<HashMap<String, SwapProgress>>,
     /// Per-coin nodeless (bdk) wallets, opened lazily by [`Engine::backend`]
     /// for coins configured with Electrum URLs only
-    /// (docs/NODELESS_WALLET.md D2/D5). Stateful — sync position, revealed
+    /// (docs/design/NODELESS_WALLET.md D2/D5). Stateful — sync position, revealed
     /// indexes, sqlite store — so it lives here rather than being rebuilt
     /// per backend construction.
     wallet_manager: crate::wallet_bdk::WalletManager,
@@ -91,7 +91,7 @@ pub struct Engine {
     /// list adds backup depth, never latency.
     server_set: crate::server_health::ServerSet,
     /// This install's per-machine seed-derivation scope (§1 of
-    /// docs/MULTI_MACHINE_122.md) — stamped into every NEW swap record and used
+    /// docs/design/MULTI_MACHINE_122.md) — stamped into every NEW swap record and used
     /// as the derivation salt for its initiator keys/preimage, and as the drive
     /// discriminator (`rec.derive_scope == machine_scope || adopted`). Loaded
     /// from the pactd data-dir root's `machine.json` and injected by the merchant
@@ -864,7 +864,7 @@ impl Engine {
     }
 
     /// Whether THIS machine drives `(derive_scope, adopted)` — the drive rule of
-    /// §1/§5 (docs/MULTI_MACHINE_122.md): a record is driven when its scope is
+    /// §1/§5 (docs/design/MULTI_MACHINE_122.md): a record is driven when its scope is
     /// ours OR it has been explicitly adopted. A LEGACY machine scope (bare
     /// `Engine::open` — harness/CLI, no `machine.json`) drives everything, so the
     /// unpartitioned single-machine path behaves exactly as before. A followed
@@ -887,7 +887,7 @@ impl Engine {
     }
 
     /// The single choke point every swap-tx broadcast funnels through (§3/§5 of
-    /// docs/MULTI_MACHINE_122.md). A **followed** record (foreign scope AND not
+    /// docs/design/MULTI_MACHINE_122.md). A **followed** record (foreign scope AND not
     /// adopted) must never sign or broadcast — it is another machine's swap that
     /// we only observe; broadcasting for it would double-drive. Keyed on the
     /// drive decision, so an *adopted* foreign-scope swap (taken over behind the
@@ -933,7 +933,7 @@ impl Engine {
         let params = chain_params(chain)?;
         let first = urls.split(',').map(str::trim).find(|u| !u.is_empty());
         let backend = match first {
-            // No Core-RPC primary ⇒ nodeless mode (docs/NODELESS_WALLET.md D5).
+            // No Core-RPC primary ⇒ nodeless mode (docs/design/NODELESS_WALLET.md D5).
             Some(url) if !url.starts_with("http://") => {
                 self.nodeless_backend(&chain.coin_id, params, urls)?
             }
@@ -1056,7 +1056,7 @@ impl Engine {
         let wallet = match self.store.seed() {
             Ok(seed) => {
                 // The nodeless wallet is the BIP-86 branch of the same
-                // mnemonic (docs/NODELESS_WALLET.md D1) — the descriptor
+                // mnemonic (docs/design/NODELESS_WALLET.md D1) — the descriptor
                 // kind is now explicit at open (wallet-btcx).
                 let handle = self.wallet_manager.open(
                     coin_id,
@@ -1202,7 +1202,7 @@ impl Engine {
         (!name.is_empty()).then(|| name.to_string())
     }
 
-    /// Whether `coin_id` is configured NODELESS (docs/NODELESS_WALLET.md D5):
+    /// Whether `coin_id` is configured NODELESS (docs/design/NODELESS_WALLET.md D5):
     /// its backend list has no Core-RPC primary, so the wallet is the bdk one
     /// derived from the Pact seed. Mirrors the [`Engine::backend`] dispatch
     /// without building a backend; the UI keys the send/receive/activity
@@ -2592,7 +2592,7 @@ impl Engine {
                 return self.adaptor_funding_ready(swap, &op.txid.to_string(), op.vout);
             }
         }
-        // Idempotency guard 3 (historical, docs/STATE_RECONSTRUCTION.md §5.1):
+        // Idempotency guard 3 (historical, docs/design/STATE_RECONSTRUCTION.md §5.1):
         // the live reads above cannot see a funding that was already SPENT — a
         // rescued/taken-over record of a settled swap must never fund "again".
         let leg_a_class = self.classify_v2_legs(&rec).map(|(a, _)| a);
@@ -2662,7 +2662,7 @@ impl Engine {
                 return self.adaptor_funding_ready(swap, &op.txid.to_string(), op.vout);
             }
         }
-        // Historical guard (docs/STATE_RECONSTRUCTION.md §5.1): a leg-B funding
+        // Historical guard (docs/design/STATE_RECONSTRUCTION.md §5.1): a leg-B funding
         // that was already spent is invisible to the live reads above — never
         // build/reserve inputs for a swap that settled.
         match self.classify_v2_legs(&rec).map(|(_, b)| b) {
@@ -2807,7 +2807,7 @@ impl Engine {
         // the funding is another machine's wallet tx (`gettransaction` misses,
         // `getrawtransaction` needs -txindex), so `confs = 0` here does NOT
         // mean unconfirmed. Fall back to the height persisted when the pointer
-        // was recorded (docs/STATE_RECONSTRUCTION.md §5.3) so a mined spend
+        // was recorded (docs/design/STATE_RECONSTRUCTION.md §5.3) so a mined spend
         // below the tip stays visible to the block scan.
         if let Some(height) = recorded_height {
             return Ok(height);
@@ -3187,7 +3187,7 @@ impl Engine {
                     }
                 }
             }
-            // Historical rediscovery (docs/STATE_RECONSTRUCTION.md §5.1): the
+            // Historical rediscovery (docs/design/STATE_RECONSTRUCTION.md §5.1): the
             // live scan above cannot see a funding that is ALREADY SPENT — a
             // taken-over participant whose counterparty revealed while we were
             // down would never find leg B, so it could never extract `t` and
@@ -4317,7 +4317,7 @@ impl Engine {
         let (txid, vout) = match self.locate_funding(&rec, leg)? {
             Some((op, _)) => (op.txid.to_string(), op.vout),
             None => {
-                // Historical guard (docs/STATE_RECONSTRUCTION.md §5.1): the
+                // Historical guard (docs/design/STATE_RECONSTRUCTION.md §5.1): the
                 // live reads above cannot see a funding that is ALREADY SPENT
                 // — for a rescued or taken-over record of a swap that settled
                 // long ago, funding "again" here would be a real double-fund.
@@ -4522,7 +4522,7 @@ impl Engine {
                 // driven participant goes FundedB → Completed atomically, but a
                 // followed record ratcheted to RedeemedB off the maker's reveal
                 // and then taken over must still be able to claim leg A — the
-                // preimage is public either way (docs/STATE_RECONSTRUCTION.md).
+                // preimage is public either way (docs/design/STATE_RECONSTRUCTION.md).
                 ensure!(
                     matches!(
                         rec.state,
@@ -5052,7 +5052,7 @@ impl Engine {
     }
 
     /// Progress for a FOLLOWED swap — another machine's, observed read-only
-    /// (§5 / docs/STATE_RECONSTRUCTION.md §7.10), shared by v1 and v2. Every
+    /// (§5 / docs/design/STATE_RECONSTRUCTION.md §7.10), shared by v1 and v2. Every
     /// wait here is the OTHER machine's work, so both legs surface in the
     /// counterparty voice using EXISTING display keys (no new locale strings):
     /// a discovered lock burying → `their_lock` with the same `confs/needed`
@@ -5481,7 +5481,7 @@ impl Engine {
         // advances by chain only), so the driven (role, state) derivations
         // below would show the import-time phase forever — the "locking… with
         // no block count" observer gap. Derive from the chain pointers the
-        // follow evaluator persists instead (docs/STATE_RECONSTRUCTION.md
+        // follow evaluator persists instead (docs/design/STATE_RECONSTRUCTION.md
         // §7.10), so the dock counts confirmations exactly like the owner.
         if !self.drives(rec.derive_scope, rec.adopted) {
             return self.swap_progress_followed(
@@ -6135,7 +6135,7 @@ impl Engine {
     // leaves the record untouched (a lingering row is harmless — we drive
     // nothing), so a bug here can never delete a live swap's money.
     //
-    // STATE_RECONSTRUCTION (docs/STATE_RECONSTRUCTION.md): every evaluation is
+    // STATE_RECONSTRUCTION (docs/design/STATE_RECONSTRUCTION.md): every evaluation is
     // an idempotent reconstruction from chain ground truth. On a history-capable
     // backend ([`ChainBackend::spk_history`], Electrum) a leg classifies
     // front-to-back — including swaps that were ALREADY OVER when first
@@ -7039,7 +7039,7 @@ impl Engine {
         }
     }
 
-    // ---- adoption fast-forward (docs/STATE_RECONSTRUCTION.md §5.2) --------
+    // ---- adoption fast-forward (docs/design/STATE_RECONSTRUCTION.md §5.2) --------
     //
     // A snapshot freezes the record at accept (v1) / Signed (v2); a takeover
     // or #54 rescue that adopts it long after may be adopting a swap whose
@@ -8970,7 +8970,7 @@ impl Engine {
     }
 
     /// Take over a **followed** swap so THIS machine starts driving it (§4/§5 of
-    /// docs/MULTI_MACHINE_122.md): set the mutable `adopted` flag on the local
+    /// docs/design/MULTI_MACHINE_122.md): set the mutable `adopted` flag on the local
     /// record — the `derive_scope` (immutable salt) is never touched, so the
     /// swap keeps re-deriving its keys from the ORIGINATING machine's scope. From
     /// the next tick the drive rule (`drives`) returns true and the swap graduates
@@ -8992,7 +8992,7 @@ impl Engine {
     pub fn take_over_swap(&self, swap_id: &str) -> Result<bool> {
         if let Ok(mut rec) = self.store.get(swap_id) {
             rec.adopted = true;
-            // §5.2 (docs/STATE_RECONSTRUCTION.md): align the snapshot-frozen
+            // §5.2 (docs/design/STATE_RECONSTRUCTION.md): align the snapshot-frozen
             // state with fresh chain reality BEFORE the first driving tick —
             // an already-settled swap becomes history (never re-driven, never
             // re-funded), an in-flight one resumes at the right arm.
@@ -9088,7 +9088,7 @@ impl Engine {
 
     /// Auto-import OTHER machines' relay snapshots as FOLLOWED records — the
     /// ungated visibility half of the multi-machine design (#163, §3–§5 of
-    /// docs/MULTI_MACHINE_122.md). The confirm gate protects DRIVING (takeover /
+    /// docs/design/MULTI_MACHINE_122.md). The confirm gate protects DRIVING (takeover /
     /// `restorefromrelay`), not read-only visibility: a same-seed standby must
     /// see the primary's in-flight swaps in its dock without any confirm.
     ///
@@ -9157,7 +9157,7 @@ impl Engine {
             if self.drives(scope, false) || scope == 0 {
                 continue; // ours-to-drive or legacy — both stay confirm-gated
             }
-            // Import-time reconstruction (docs/STATE_RECONSTRUCTION.md): a
+            // Import-time reconstruction (docs/design/STATE_RECONSTRUCTION.md): a
             // snapshot whose swap is provably settled on-chain must not enter
             // the dock as a ghost (the 2026-07-12 "Locking your BTC… forever"
             // field bug — the snapshot lingers because only the owner
@@ -10287,7 +10287,7 @@ impl Engine {
                 detail,
             }))
         };
-        // §2 (docs/MULTI_MACHINE_122.md): a FOLLOWED record (foreign scope, not
+        // §2 (docs/design/MULTI_MACHINE_122.md): a FOLLOWED record (foreign scope, not
         // adopted) ignores inbound protocol messages — a follower advances by
         // chain only, never by the handshake. Load-bearing with the #163
         // auto-follow: machines on one seed share the identity mailbox, so a
@@ -10326,7 +10326,7 @@ impl Engine {
             "take" => {
                 let me = self.identity()?;
                 let (offer, body) = crate::board::offer_from_take(envelope, &me)?;
-                // §2 (docs/MULTI_MACHINE_122.md): serve a take ONLY if THIS
+                // §2 (docs/design/MULTI_MACHINE_122.md): serve a take ONLY if THIS
                 // machine holds the originating offer — keyed on ownership
                 // *existence*, not liveness. `offer_from_take` only checks
                 // `offer.from == our identity`, which BOTH machines on a shared

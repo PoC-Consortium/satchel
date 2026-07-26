@@ -365,7 +365,7 @@ export const id: Bundle = {
     checkUpdate: "Periksa pembaruan",
     protocols: "Protokol swap",
     protocolsHint:
-      "Apa yang didukung build ini — penawaran dengan versi berbeda bisa dilihat tetapi tidak bisa diambil. Kedua sisi swap harus cocok.",
+      "Apa yang dipahami build ini — angka adalah versi format pesan tiap protokol (bukan peringkat protokol). Penawaran dengan versi berbeda bisa dilihat tapi tidak bisa diambil; kedua sisi swap harus cocok.",
     machine: "Mesin ini",
     machineHint:
       "Id instalasi ini. Jika Anda menjalankan seed yang sama di lebih dari satu mesin, masing-masing menggerakkan swap-nya sendiri — yang lain muncul hanya-baca sebagai \"Mesin lain\" di dok swap, dan Anda bisa mengambil alihnya di sini jika salah satu berhenti. Penggunaan multi-mesin ditujukan untuk failover dan pemulihan, bukan untuk berdagang dari dua mesin sekaligus (keduanya berbagi satu saldo).",
