@@ -131,9 +131,10 @@ network other than the configured one.
 
 **Message content (user-reviewed 2026-07-26)**: unit prices in mBTC with a
 "was X" comparison on the changed side; top-of-book both sides; spread + mid.
-Explicitly EXCLUDED from announcements: ask/bid counts, maker npub, protocol
-version (v1/v2), accumulated book volume (spoofable by unbacked offers), and
-any "take it in Satchel" footer. (`/book` keeps per-level offer counts.)
+Explicitly EXCLUDED everywhere: ask/bid counts, per-level offer counts,
+maker npub, protocol version (v1/v2), accumulated book volume (spoofable by
+unbacked offers), and any "take it in Satchel" footer. A ladder level is just
+`<summed size> BTCX @ <price>` regardless of how many offers sit at it.
 
 **Line format (user-decided 2026-07-26): order convention, size before
 price** — `<size> BTCX @ <price>`, e.g. `37 BTCX @ 0.676`. Order lines are
