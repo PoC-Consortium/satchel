@@ -130,16 +130,17 @@ network other than the configured one.
   principle as the no-staleness-guessing rule in Satchel).
 
 **Message content (user-reviewed 2026-07-26)**: unit prices in mBTC with a
-"was X" comparison on the changed side; top-of-book both sides; spread + mid;
-ask/bid counts. Explicitly EXCLUDED: maker npub, protocol version (v1/v2),
-accumulated book volume (spoofable by unbacked offers), and any
-"take it in Satchel" footer.
+"was X" comparison on the changed side; top-of-book both sides; spread + mid.
+Explicitly EXCLUDED from announcements: ask/bid counts, maker npub, protocol
+version (v1/v2), accumulated book volume (spoofable by unbacked offers), and
+any "take it in Satchel" footer. (`/book` keeps per-level offer counts.)
 
 **Line format (user-decided 2026-07-26): order convention, size before
-price** — `<size> BTCX @ <price>`, e.g. `120 BTCX @ 0.691 mBTC/BTCX`.
-The full `mBTC/BTCX` unit suffix appears on the lead line of an announcement;
-in the `/book` ladder the unit is stated once in the header and rows are bare
-numbers. Ladder rows right-align sizes so the `@` and price columns line up.
+price** — `<size> BTCX @ <price>`, e.g. `37 BTCX @ 0.676`. Order lines are
+bare numbers, symmetric across sides; the unit is stated exactly ONCE per
+message as a legend: the Discord embed footer (small type) `prices in
+mBTC/BTCX` for announcements, the header line for the `/book` ladder. Ladder
+rows right-align sizes so the `@` and price columns line up.
 
 **Restart hygiene**: last-announced top signatures persisted to a small state
 file (`state.json`); on restart crier rebuilds the book from relays first
