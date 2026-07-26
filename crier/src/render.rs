@@ -348,6 +348,17 @@ fn side_headline(side: &str, change: SideChange) -> Option<String> {
     }
 }
 
+/// Direction of a re-price, as a neutral blue arrow (NEVER red/green —
+/// whether a falling ask is good depends on which side of it you stand).
+fn direction_arrow(prev: &Option<SideTop>, new: &Option<SideTop>) -> Option<&'static str> {
+    let (p, n) = (prev.as_ref()?, new.as_ref()?);
+    match Ratio::new(n.num, n.den).cmp(&Ratio::new(p.num, p.den)) {
+        std::cmp::Ordering::Less => Some("⬇️"),
+        std::cmp::Ordering::Greater => Some("⬆️"),
+        std::cmp::Ordering::Equal => None,
+    }
+}
+
 pub fn render_announcement(prev: &TopSig, new: &TopSig, ctx: &RenderCtx) -> Announcement {
     let ask_change = classify(&prev.ask, &new.ask);
     let bid_change = classify(&prev.bid, &new.bid);
@@ -356,7 +367,16 @@ pub fn render_announcement(prev: &TopSig, new: &TopSig, ctx: &RenderCtx) -> Anno
         side_headline("bid", bid_change),
     ) {
         (Some(_), Some(_)) => "top of book moved".to_string(),
-        (Some(h), None) | (None, Some(h)) => h,
+        // Single-side move: the direction arrow rides the headline, so the
+        // notification preview already tells the story.
+        (Some(h), None) => match direction_arrow(&prev.ask, &new.ask) {
+            Some(arrow) => format!("{h} {arrow}"),
+            None => h,
+        },
+        (None, Some(h)) => match direction_arrow(&prev.bid, &new.bid) {
+            Some(arrow) => format!("{h} {arrow}"),
+            None => h,
+        },
         (None, None) => "book update".to_string(),
     };
 
@@ -407,9 +427,20 @@ fn side_line(
     );
     if change == SideChange::New {
         if let Some(p) = prev {
+            if let Some(arrow) = direction_arrow(prev, side) {
+                line.push_str(&format!(" {arrow}"));
+            }
+            let prev_price = Ratio::new(p.num, p.den);
+            // The was-USD converts the OLD price at the CURRENT rate — it
+            // isolates the pair's move rather than mixing in BTC/USD drift
+            // (crier keeps no rate history).
+            let was_usd = ctx
+                .usd_price(prev_price)
+                .map(|u| format!(" · ${}", fmt_usd(u)))
+                .unwrap_or_default();
             line.push_str(&format!(
-                " *(was {})*",
-                ctx.price_str(Ratio::new(p.num, p.den), decimals)
+                " *(was {}{was_usd})*",
+                ctx.price_str(prev_price, decimals)
             ));
         }
     }
@@ -517,10 +548,10 @@ BID  400 BTCX @ 0.655\n\
             ..prev.clone()
         };
         let a = render_announcement(&prev, &new, &ctx(Some(118_000.0)));
-        assert_eq!(a.title, "BTCX/BTC — new best ask");
+        assert_eq!(a.title, "BTCX/BTC — new best ask ⬇️");
         assert_eq!(
             a.body,
-            "**Ask** `37 BTCX @ 0.676 ($79.77)` *(was 0.691)*\n\
+            "**Ask** `37 BTCX @ 0.676 ($79.77)` ⬇️ *(was 0.691 · $81.54)*\n\
              **Bid** `26 BTCX @ 0.670 ($79.06)`\n\
              **Spread** `0.006` (0.9 %) · mid `0.673` ($79.41)"
         );
