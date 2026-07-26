@@ -1,8 +1,17 @@
 # crier — Discord orderbook announcer (design plan)
 
-Status: PLANNED (no code yet). Lives in `crier/` as a standalone server crate,
-sibling to `corkboard/` (same pattern: independent crate at repo root, path-deps
-into `pact-nostr` / `pact-proto`).
+Status: IMPLEMENTED 2026-07-26 (M1–M4; awaiting user dry-run review). Lives in
+`crier/` as a standalone server crate, sibling to `corkboard/` (same pattern:
+independent crate at repo root, path-deps into `pact-nostr` / `pact-proto`).
+Implementation deltas from the original plan, both deliberate:
+- **Ingest is poll-per-tick** (30 s, `since` cursors + #146 clamp), not a
+  long-lived subscription — reuses pactd's proven `nostr_service` shape; the
+  announcer debounces 30 s anyway, so subscription latency buys nothing.
+- **Cash annotations** (user ask, 2026-07-26): a BTC/USD reference rate
+  (CoinGecko, Coinbase-spot fallback, 5-min refresh) annotates BTC-quoted
+  prices — `0.676 ($0.79)` — plus `1 BTC ≈ $… ref` in the legend. Reference
+  display only; annotations silently disappear when the rate is stale
+  (`cash.max_age_secs`) rather than mislead.
 
 ## 1. What it is
 
@@ -50,11 +59,12 @@ advertised", never "filled".
 
 Three tasks over one shared `BookState` (`tokio::sync::watch` / `RwLock`):
 
-1. **Ingest** — `nostr-sdk` relay pool, long-lived subscription on
-   `offers_filter()` + `deletions_filter()` (both already in `pact-nostr`),
-   plus a periodic full refetch (resilience against missed events / relay
-   flaps). Applies the same hygiene pactd does: clamp peer `created_at` to
-   `now + 15 min` before advancing any `since` cursor (#146 lesson).
+1. **Ingest** — `nostr-sdk` relay pool, poll-per-tick (30 s) over
+   `offers_filter()` + `deletions_filter()` (both already in `pact-nostr`)
+   with `since` cursors — pactd's proven fetch-per-tick shape, sidestepping
+   subscription/reconnect lifecycle. Applies the same hygiene pactd does:
+   clamp peer `created_at` to `now + 15 min` before advancing any `since`
+   cursor (#146 lesson).
 2. **Book engine** — pure library (`crier::book`), no I/O, fully unit-testable:
    - Key: `(author_pubkey, swap_id)`; keep highest `created_at` (NIP-33 replace).
    - Tombstone on verified kind-5 (same-author check via
