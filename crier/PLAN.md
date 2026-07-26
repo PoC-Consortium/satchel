@@ -64,8 +64,9 @@ Three tasks over one shared `BookState` (`tokio::sync::watch` / `RwLock`):
    - Derives per-pair ladders exactly like the Satchel UI (`format.ts` logic,
      ported): bid = maker gives quote / gets base, ask = the reverse;
      `price = quote_sats / base_sats`; levels grouped by reduced rational
-     (gcd) price key; bids high→low, asks low→high; base/quote chosen by
-     `QUOTE_PRIORITY = [btcx, doge, ltc, btc]`.
+     (gcd) price key; bids high→low, asks low→high. (Classification math
+     only — *display* uses unit-price orientation, see §5, which flips
+     base/quote relative to the Corkboard's `QUOTE_PRIORITY`.)
 3. **Discord** — serenity 0.12 + poise (slash-command framework):
    - `/book [pair]` — ladder embed, depth 8 per side (same `DEPTH_CAP` as UI),
      spread + mid banner.
@@ -128,6 +129,12 @@ network other than the configured one.
   advertised" — crier never claims *filled/taken* (not observable; same product
   principle as the no-staleness-guessing rule in Satchel).
 
+**Message content (user-reviewed 2026-07-26)**: unit prices in mBTC with a
+"was X" comparison on the changed side; top-of-book both sides; spread + mid;
+ask/bid counts. Explicitly EXCLUDED: maker npub, protocol version (v1/v2),
+accumulated book volume (spoofable by unbacked offers), and any
+"take it in Satchel" footer.
+
 **Restart hygiene**: last-announced top signatures persisted to a small state
 file (`state.json`); on restart crier rebuilds the book from relays first
 (initial-sync grace period, default 60 s) and only announces *diffs vs the
@@ -156,13 +163,22 @@ min_size_delta_pct = 10
 pairs = ["btc/btcx"]               # whitelist of pairs crier cries for.
                                    # DEFAULT = ["btc/btcx"]; empty list = announce
                                    # nothing (commands still browse all pairs).
+
+[render]
+btc_unit = "mbtc"                  # unit for BTC-quoted prices: btc|mbtc|sat
 ```
 
 Pair entries are unordered coin-id sets — `"btc/btcx"` and `"btcx/btc"` mean
-the same pair; display orientation (base vs quote) always follows the UI's
-`QUOTE_PRIORITY`, so a BTCX↔BTC pair renders as **BTC priced in BTCX**.
-Unknown coin ids in `pairs` are a startup error (fail fast, not silent).
-Slash commands are not restricted by the whitelist; only the announcer is.
+the same pair. Unknown coin ids in `pairs` are a startup error (fail fast,
+not silent). Slash commands are not restricted by the whitelist; only the
+announcer is.
+
+**Display orientation (DECIDED 2026-07-26): unit prices.** crier deliberately
+diverges from the Corkboard's `QUOTE_PRIORITY` orientation: for BTC pairs, BTC
+is the *quote*, so a price is always "what 1 BTCX costs", shown in **mBTC**
+(`render.btc_unit`, default `mbtc`) — comparable at a glance across offers of
+any size. Sizes render in base-coin units (BTCX). Internal book math is
+unchanged (exact rational price keys); only rendering flips.
 
 Relays are duplicated from Satchel's defaults on purpose — they live in
 `satchel.json` (per-user state), not in any shared config; `coins.toml` is the
