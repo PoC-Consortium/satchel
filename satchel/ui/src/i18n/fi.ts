@@ -727,6 +727,7 @@ export const fi: Bundle = {
   },
   // UI-4 docked activity log.
   log: {
+    takeoverRefundOnly: "haltuunotto {id}: maksulompakko ei ole tällä koneella — toistaiseksi vain palautus; liitä omistava lompakko viimeistelläksesi vaihdon",
     title: "Toiminta",
     empty: "— toimintaloki —",
     count: "{count} riviä",
@@ -786,6 +787,8 @@ export const fi: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    locking: "Lukitaan {coin} — lukitustapahtuma lähtee nyt. Tästä eteenpäin timelockit suojaavat sinua; peruutus ei ole enää turvaverkko.",
+    awaitingOurLock: "Seuraavaksi sinun puolesi lukitsee {coin} — sen lähettää tätä vaihtoa ohjaava kone.",
     finalizing: "Lunastit {got} — viimeiset vahvistukset. Pidä sovellus auki, kunnes se hautautuu; {gave} pysyvät suojattuina siihen asti.",
     initiating:
       "Otto lähetetty — odotetaan tekijää aloittamaan swapin. Mitään ei vielä lukita; se peruuntuu itsestään, jos he eivät vastaa.",

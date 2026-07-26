@@ -30,11 +30,15 @@ export function milestone(s: Swap): { rank: number; event: NotifyEvent | null } 
     case "nonces_exchanged":
       // v2 maker broadcasts its lock on accept — once the progress line tracks
       // it, "one leg is locked" is the honest milestone (same split as below).
-      if (maker && (w === "our_lock" || w === "awaiting_lock")) return { rank: 2, event: "locks" };
+      // `funding` (wallet mid-lock, U-3) counts the same as `our_lock`,
+      // matching narrate's progress-first override.
+      if (maker && (w === "our_lock" || w === "awaiting_lock" || w === "funding")) {
+        return { rank: 2, event: "locks" };
+      }
       return { rank: 1, event: "swap_started" };
     case "signed":
       if (maker) return { rank: w === "their_lock" ? 3 : 2, event: "locks" };
-      return w === "our_lock" || w === "awaiting_claim"
+      return w === "our_lock" || w === "awaiting_claim" || w === "funding"
         ? { rank: 3, event: "locks" }
         : { rank: 1, event: "swap_started" };
     case "funded_a":
@@ -42,6 +46,8 @@ export function milestone(s: Swap): { rank: number; event: NotifyEvent | null } 
     case "funded_b":
       return { rank: 3, event: "locks" };
     case "redeemed_b":
+      // Deliberately silent (event null) for BOTH roles, so no role split is
+      // needed here even though narrate's redeemed_b params are role-mapped.
       return { rank: 4, event: null };
     case "completed":
       // Finalizing (isFinalizing's definition) stays silent; the terminal
@@ -67,6 +73,19 @@ export function narrate(s: Swap): string {
   const t2 = new Date(s.t2 * 1000).toLocaleTimeString();
   const maker = s.role === "initiator";
   const v = { a, b, t1, t2 };
+  // Progress-first overrides (state-matrix audit U-3): the engine emits these
+  // `watching` values only pre-lock, where the chain-derived state would still
+  // narrate "you can cancel freely" — override with the honest in-flight story.
+  // `funding` = THIS machine's wallet is sending the lock right now;
+  // `awaiting_our_lock` exists only on followed rows — our side locks next,
+  // but another of this merchant's machines drives the send.
+  const wNow = s.progress?.watching;
+  if (wNow === "funding") {
+    return tr("narrate.locking", { coin: maker ? a : b });
+  }
+  if (wNow === "awaiting_our_lock") {
+    return tr("narrate.awaitingOurLock", { coin: maker ? a : b });
+  }
   switch (s.state) {
     case "initiating":
       return tr("narrate.initiating");

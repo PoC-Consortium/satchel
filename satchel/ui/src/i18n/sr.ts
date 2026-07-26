@@ -724,6 +724,7 @@ export const sr: Bundle = {
   },
   // UI-4 docked activity log.
   log: {
+    takeoverRefundOnly: "преузимање {id}: новчаник исплате није на овој машини — засад само повраћај; повежите власнички новчаник да довршите своп",
     title: "Активност",
     empty: "— дневник активности —",
     count: "{count} редова",
@@ -783,6 +784,8 @@ export const sr: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    locking: "Закључавамо ваше {coin} — трансакција закључавања управо излази. Одавде вас штите тајмлокови; отказивање више није сигурносна мрежа.",
+    awaitingOurLock: "Следећа закључава ваша страна {coin} — шаље је машина која води овај своп.",
     finalizing: "Затражили сте своје {got} — завршне потврде. Држите апликацију отвореном док се не закопа; ваши {gave} остају заштићени до тада.",
     initiating:
       "Прихватање послато — чека се да maker покрене своп. Ништа још није закључано; отказује се само од себе ако не одговоре.",

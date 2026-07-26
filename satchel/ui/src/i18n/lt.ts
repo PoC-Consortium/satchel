@@ -724,6 +724,7 @@ export const lt: Bundle = {
   },
   // UI-4 docked activity log.
   log: {
+    takeoverRefundOnly: "perėmimas {id}: išmokos piniginė ne šiame įrenginyje — kol kas tik grąžinimas; prijunkite savininko piniginę mainams užbaigti",
     title: "Veikla",
     empty: "— veiklos žurnalas —",
     count: "{count} eilučių",
@@ -783,6 +784,8 @@ export const lt: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    locking: "Užrakiname jūsų {coin} — užrakto transakcija siunčiama dabar. Nuo šiol jus saugo timelock'ai; atšaukimas nebėra apsaugos tinklas.",
+    awaitingOurLock: "Toliau jūsų pusė užrakina {coin} — ją išsiųs šiuos mainus valdantis įrenginys.",
     finalizing: "Atsiėmėte savo {got} — galutiniai patvirtinimai. Laikykite programėlę atvirą, kol bus palaidota; jūsų {gave} iki tol lieka apsaugoti.",
     initiating:
       "Priėmimas išsiųstas — laukiama, kol sudarytojas pradės mainus. Niekas dar neužrakinta; jie atsišaukia savaime, jei jis neatsako.",

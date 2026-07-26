@@ -724,6 +724,7 @@ export const tr: Bundle = {
   },
   // UI-4 docked activity log.
   log: {
+    takeoverRefundOnly: "devralma {id}: ödeme cüzdanı bu makinede değil — şimdilik yalnızca iade; takası tamamlamak için sahibi olan cüzdanı bağlayın",
     title: "Etkinlik",
     empty: "— etkinlik günlüğü —",
     count: "{count} satır",
@@ -783,6 +784,8 @@ export const tr: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    locking: "{coin} kilitleniyor — kilit işlemi şu anda gönderiliyor. Buradan itibaren sizi timelock'lar korur; iptal artık güvenlik ağı değildir.",
+    awaitingOurLock: "Sıradaki kilit sizin tarafınızın {coin} kilidi — bu takası yürüten makine gönderecek.",
     finalizing: "{got} talebinizi yaptınız — son onaylar. Gömülene kadar uygulamayı açık tutun; {gave} o zamana dek korunur.",
     initiating:
       "Alma gönderildi — maker'ın takası başlatmasını bekliyor. Henüz hiçbir şey kilitli değil; yanıt vermezlerse kendi kendine iptal olur.",

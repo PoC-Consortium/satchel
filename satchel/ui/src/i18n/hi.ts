@@ -724,6 +724,7 @@ export const hi: Bundle = {
   },
   // UI-4 docked activity log.
   log: {
+    takeoverRefundOnly: "अधिग्रहण {id}: भुगतान वॉलेट इस मशीन पर नहीं है — फ़िलहाल केवल रिफ़ंड; स्वैप पूरा करने के लिए स्वामी वॉलेट जोड़ें",
     title: "गतिविधि",
     empty: "— गतिविधि लॉग —",
     count: "{count} लाइनें",
@@ -783,6 +784,8 @@ export const hi: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    locking: "आपके {coin} लॉक हो रहे हैं — लॉक ट्रांज़ैक्शन अभी भेजा जा रहा है। यहाँ से टाइमलॉक आपकी सुरक्षा करते हैं; रद्द करना अब सुरक्षा-जाल नहीं है।",
+    awaitingOurLock: "अगला लॉक आपकी ओर से {coin} का है — इसे वह मशीन भेजेगी जो यह स्वैप चला रही है।",
     finalizing: "आपने अपने {got} का दावा किया — अंतिम पुष्टियाँ। इसके पक्का होने तक ऐप खुला रखें; तब तक आपके {gave} सुरक्षित रहते हैं।",
     initiating:
       "Take भेजा गया — maker द्वारा स्वैप शुरू करने की प्रतीक्षा में। अभी कुछ भी लॉक नहीं है; यदि वे जवाब नहीं देते तो यह अपने आप रद्द हो जाता है।",

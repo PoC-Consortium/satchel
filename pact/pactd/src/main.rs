@@ -1775,8 +1775,15 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         // trusts the caller made that call, per the design's safety model.
         "takeover" => {
             let swap_id = p.str(0, "swap_id")?;
-            blocking(app, move |e| e.take_over_swap(&swap_id)).await?;
-            Ok(json!({ "taken_over": true, "swap_id": p.str(0, "swap_id")? }))
+            // `refund_only` = a v2 whose cooperative-redeem payout this machine
+            // cannot (or cannot PROVE it can) receive — surfaced so the UI can
+            // say so instead of the verdict living only in the daemon log.
+            let refund_only = blocking(app, move |e| e.take_over_swap(&swap_id)).await?;
+            Ok(json!({
+                "taken_over": true,
+                "swap_id": p.str(0, "swap_id")?,
+                "refund_only": refund_only,
+            }))
         }
         "boardpostoffer" => {
             let give = parse_coin_amount(&p.str(0, "give")?)?;

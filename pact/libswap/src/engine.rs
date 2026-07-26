@@ -4518,8 +4518,16 @@ impl Engine {
                 rec.state = State::RedeemedB;
             }
             Role::Participant => {
+                // `RedeemedB` is admitted for the FOLLOW-RATCHET shape: a
+                // driven participant goes FundedB → Completed atomically, but a
+                // followed record ratcheted to RedeemedB off the maker's reveal
+                // and then taken over must still be able to claim leg A — the
+                // preimage is public either way (docs/STATE_RECONSTRUCTION.md).
                 ensure!(
-                    matches!(rec.state, State::FundedB | State::Completed),
+                    matches!(
+                        rec.state,
+                        State::FundedB | State::RedeemedB | State::Completed
+                    ),
                     "redeem in state {:?}",
                     rec.state
                 );
@@ -6155,6 +6163,7 @@ impl Engine {
         chain: &ChainRef,
         spk: &ScriptBuf,
         amount: u64,
+        created_at: u64,
         ptr_txid: &Option<String>,
         ptr_vout: Option<u32>,
         classify_spend: &dyn Fn(&[Vec<u8>]) -> crate::reconstruct::SpendKind,
@@ -6296,9 +6305,37 @@ impl Engine {
                                         }
                                     }
                                     // We PROVED the funding; the output is
-                                    // gone → unambiguous spend, depth
+                                    // gone → unambiguous spend. Recover the
+                                    // spending tx by block scan (#212) for a
+                                    // conclusive kind + depth; only when even
+                                    // that can't see it does depth stay
                                     // unknowable (tip-drift buffer).
-                                    Ok(None) => return LegVerdict::ResolvedNoDepth,
+                                    Ok(None) => {
+                                        if let Some(s) = self.scan_spent_leg(
+                                            chain,
+                                            &outpoint,
+                                            spk,
+                                            height,
+                                            created_at,
+                                            classify_spend,
+                                        ) {
+                                            if s.spend_height > 0 {
+                                                let cache = FollowSpendCache {
+                                                    txid: s.spend_txid.clone(),
+                                                    height: s.spend_height,
+                                                    kind: s.kind,
+                                                };
+                                                if let Ok(json) = serde_json::to_string(&cache) {
+                                                    let _ = self.store.meta_set(&cache_key, &json);
+                                                }
+                                            }
+                                            return LegVerdict::Spent {
+                                                kind: s.kind,
+                                                spend_confs: s.spend_confs,
+                                            };
+                                        }
+                                        return LegVerdict::ResolvedNoDepth;
+                                    }
                                     Err(_) => return LegVerdict::Unknown,
                                 }
                             }
@@ -6308,10 +6345,32 @@ impl Engine {
                         let _ = self.store.meta_set(&throttle_key, &t.to_string());
                     }
                 }
-                if ptr_txid.is_some() && ptr_vout.is_some() {
+                if let (Some(txid), Some(vout)) = (ptr_txid.as_deref(), ptr_vout) {
                     // We reached here through `get_txout → None` on a pointer
-                    // we once saw live — an unambiguous spend, depth
-                    // unknowable without history (legacy tip-drift buffer).
+                    // we once saw live — an unambiguous spend. Block-scan for
+                    // the spending tx first (#212); the legacy tip-drift
+                    // buffer stays the fallback when nothing is recoverable.
+                    if let Ok(txid) = bitcoin::Txid::from_str(txid) {
+                        let op = OutPoint { txid, vout };
+                        if let Some(s) =
+                            self.scan_spent_leg(chain, &op, spk, 0, created_at, classify_spend)
+                        {
+                            if s.spend_height > 0 {
+                                let cache = FollowSpendCache {
+                                    txid: s.spend_txid.clone(),
+                                    height: s.spend_height,
+                                    kind: s.kind,
+                                };
+                                if let Ok(json) = serde_json::to_string(&cache) {
+                                    let _ = self.store.meta_set(&cache_key, &json);
+                                }
+                            }
+                            return LegVerdict::Spent {
+                                kind: s.kind,
+                                spend_confs: s.spend_confs,
+                            };
+                        }
+                    }
                     return LegVerdict::ResolvedNoDepth;
                 }
                 match backend.find_funding(spk) {
@@ -7668,6 +7727,7 @@ impl Engine {
             &rec.chain_a,
             &spk_a,
             rec.amount_a,
+            rec.created_at,
             &rec.htlc_a_txid,
             rec.htlc_a_vout,
             &classify,
@@ -7680,6 +7740,7 @@ impl Engine {
             &rec.chain_b,
             &spk_b,
             rec.amount_b,
+            rec.created_at,
             &rec.htlc_b_txid,
             rec.htlc_b_vout,
             &classify,
@@ -7714,39 +7775,25 @@ impl Engine {
         }
         // The purge's fresh re-verification — bypasses every cache and hint, and
         // applies the SAME our-leg gate as the cached decision (OUR settlement leg
-        // spent deep at ITS OWN target; the co-leg need only be spent).
-        let fresh_verify = || {
-            let spent_leg = |chain: &ChainRef,
-                             spk: &ScriptBuf,
-                             amount: u64,
-                             wallet: &dyn Fn() -> Option<crate::reconstruct::WalletEvidence>|
-             -> Option<(SpendKind, u64)> {
-                let backend = self.backend(chain).ok()?;
-                match crate::reconstruct::classify_leg(&backend, spk, amount, &classify) {
-                    Ok(Some(LegClass::Spent(s))) if s.kind != SpendKind::Unknown => {
-                        Some((s.kind, s.spend_confs))
-                    }
-                    // Tier L: re-derive the wallet evidence fresh (#171).
-                    Ok(None) => match wallet() {
-                        Some(crate::reconstruct::WalletEvidence::Spent(s))
-                            if s.kind != SpendKind::Unknown =>
-                        {
-                            Some((s.kind, s.spend_confs))
-                        }
-                        _ => None,
-                    },
-                    _ => None,
-                }
-            };
-            match (
-                spent_leg(&rec.chain_a, &spk_a, rec.amount_a, &wallet_a),
-                spent_leg(&rec.chain_b, &spk_b, rec.amount_b, &wallet_b),
-            ) {
-                (Some((ka, ca)), Some((kb, cb))) => {
-                    Self::follow_purge_ok(rec.role, &ka, &kb, ca, cb, rec.n_a, rec.n_b)
-                }
-                _ => false,
+        // spent deep at ITS OWN target; the co-leg need only be spent). One source
+        // of chain truth: the same classification the driven reconcile uses —
+        // history where indexed; wallet evidence + the #212 block scan on tier L —
+        // so the belt can conclude on a script-index-less view too.
+        let fresh_verify = || match self.classify_v1_legs(rec) {
+            Some((LegClass::Spent(sa), LegClass::Spent(sb)))
+                if sa.kind != SpendKind::Unknown && sb.kind != SpendKind::Unknown =>
+            {
+                Self::follow_purge_ok(
+                    rec.role,
+                    &sa.kind,
+                    &sb.kind,
+                    sa.spend_confs,
+                    sb.spend_confs,
+                    rec.n_a,
+                    rec.n_b,
+                )
             }
+            _ => false,
         };
         self.follow_settle(
             &rec.swap_id,
@@ -7847,6 +7894,7 @@ impl Engine {
             &rec.chain_a,
             &spk_a,
             rec.amount_a,
+            rec.created_at,
             &rec.funding_a_txid,
             rec.funding_a_vout,
             &classify_a,
@@ -7859,6 +7907,7 @@ impl Engine {
             &rec.chain_b,
             &spk_b,
             rec.amount_b,
+            rec.created_at,
             &rec.funding_b_txid,
             rec.funding_b_vout,
             &classify_b,
@@ -7887,40 +7936,25 @@ impl Engine {
             return Ok(None);
         }
         // Fresh re-verification applying the same our-leg gate as the cached
-        // decision (OUR settlement leg spent deep at ITS OWN target; co-leg spent).
-        let fresh_verify = || {
-            let spent_leg = |chain: &ChainRef,
-                             spk: &ScriptBuf,
-                             amount: u64,
-                             classify: &dyn Fn(&[Vec<u8>]) -> SpendKind,
-                             wallet: &dyn Fn() -> Option<crate::reconstruct::WalletEvidence>|
-             -> Option<(SpendKind, u64)> {
-                let backend = self.backend(chain).ok()?;
-                match crate::reconstruct::classify_leg(&backend, spk, amount, classify) {
-                    Ok(Some(LegClass::Spent(s))) if s.kind != SpendKind::Unknown => {
-                        Some((s.kind, s.spend_confs))
-                    }
-                    // Tier L: re-derive the wallet evidence fresh (#171).
-                    Ok(None) => match wallet() {
-                        Some(crate::reconstruct::WalletEvidence::Spent(s))
-                            if s.kind != SpendKind::Unknown =>
-                        {
-                            Some((s.kind, s.spend_confs))
-                        }
-                        _ => None,
-                    },
-                    _ => None,
-                }
-            };
-            match (
-                spent_leg(&rec.chain_a, &spk_a, rec.amount_a, &classify_a, &wallet_a),
-                spent_leg(&rec.chain_b, &spk_b, rec.amount_b, &classify_b, &wallet_b),
-            ) {
-                (Some((ka, ca)), Some((kb, cb))) => {
-                    Self::follow_purge_ok(rec.role, &ka, &kb, ca, cb, rec.n_a, rec.n_b)
-                }
-                _ => false,
+        // decision (OUR settlement leg spent deep at ITS OWN target; co-leg
+        // spent). Reuses the driven reconcile's classification — history where
+        // indexed; wallet evidence + the #212 block scan on tier L — so the
+        // belt can conclude on a script-index-less view too.
+        let fresh_verify = || match self.classify_v2_legs(rec) {
+            Some((LegClass::Spent(sa), LegClass::Spent(sb)))
+                if sa.kind != SpendKind::Unknown && sb.kind != SpendKind::Unknown =>
+            {
+                Self::follow_purge_ok(
+                    rec.role,
+                    &sa.kind,
+                    &sb.kind,
+                    sa.spend_confs,
+                    sb.spend_confs,
+                    rec.n_a,
+                    rec.n_b,
+                )
             }
+            _ => false,
         };
         self.follow_settle(
             &rec.swap_id,
@@ -8106,7 +8140,16 @@ impl Engine {
             }
             // Bob with both legs funded: watch chain B for Alice's reveal;
             // redeem chain A when it appears, refund chain B after T2.
-            (Role::Participant, State::FundedB) => {
+            // `RedeemedB` matches here too: no driven writer produces it for a
+            // participant (FundedB → Completed is atomic), but a FOLLOWED
+            // record is ratcheted there off the maker's reveal
+            // (`followed_display_state_v1`, one-leg-redeemed) and a takeover
+            // inherits it — takeover fast-forward cannot repair it either (its
+            // conclusive mapping targets FundedB, which the rank-only-forward
+            // guard refuses over RedeemedB). Every sub-step below is
+            // chain-guarded, so driving the ratcheted state through the same
+            // arm is safe: the reveal is public → claim leg A.
+            (Role::Participant, State::FundedB | State::RedeemedB) => {
                 let backend_b = self.backend(&rec.chain_b)?;
                 // Nurse our own (leg-B) funding while it is unconfirmed.
                 if let Some(ev) = self.maybe_bump_funding_v1(rec, "b", &backend_b)? {
@@ -8939,7 +8982,14 @@ impl Engine {
     /// "the other machine is stopped" / "recovered after re-import" dialog) —
     /// that confirmation IS the safety model. Two live machines both driving one
     /// swap can double-fund it. Idempotent; errors only if no such swap exists.
-    pub fn take_over_swap(&self, swap_id: &str) -> Result<()> {
+    ///
+    /// Returns whether the adoption is REFUND-ONLY (v2 whose cooperative-redeem
+    /// payout this machine cannot receive — including an INCONCLUSIVE wallet
+    /// probe, which the redeem gates treat identically), so the caller can
+    /// surface the verdict instead of it living only in a log line (state-matrix
+    /// audit X-2). The gate itself is re-evaluated per tick, so a later
+    /// successful probe re-enables completion without another takeover.
+    pub fn take_over_swap(&self, swap_id: &str) -> Result<bool> {
         if let Ok(mut rec) = self.store.get(swap_id) {
             rec.adopted = true;
             // §5.2 (docs/STATE_RECONSTRUCTION.md): align the snapshot-frozen
@@ -8950,7 +9000,7 @@ impl Engine {
                 eprintln!("takeover {swap_id}: {note}");
             }
             self.store.put(&rec)?;
-            return Ok(());
+            return Ok(false); // v1 pins no payout destination — never gated
         }
         if let Ok(mut rec) = self.store.get_adaptor(swap_id) {
             // Payout-custody note (multi-machine): a v2 cooperative redeem is
@@ -8966,7 +9016,8 @@ impl Engine {
             // refund instead. A sweep-unset v2 falls back to a seed-derived
             // destination (always ours); v1 pins no destination, so neither is
             // gated here.
-            if !self.v2_owns_redeem_payout(&rec)? {
+            let refund_only = !self.v2_owns_redeem_payout(&rec)?;
+            if refund_only {
                 eprintln!(
                     "takeover {swap_id}: the cooperative-redeem payout is a wallet this \
                      machine does not control — adopted REFUND-ONLY. To complete a \
@@ -8979,7 +9030,7 @@ impl Engine {
                 eprintln!("takeover {swap_id}: {note}");
             }
             self.store.put_adaptor(&rec)?;
-            return Ok(());
+            return Ok(refund_only);
         }
         bail!("unknown swap {swap_id} — nothing to take over");
     }

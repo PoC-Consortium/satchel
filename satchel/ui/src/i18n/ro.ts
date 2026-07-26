@@ -724,6 +724,7 @@ export const ro: Bundle = {
   },
   // UI-4 docked activity log.
   log: {
+    takeoverRefundOnly: "preluare {id}: portofelul de plată nu este pe această mașină — deocamdată doar rambursare; atașează portofelul deținător pentru a finaliza swapul",
     title: "Activitate",
     empty: "— jurnal de activitate —",
     count: "{count} linii",
@@ -783,6 +784,8 @@ export const ro: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    locking: "Îți blocăm {coin} — tranzacția de blocare pleacă acum. De aici te protejează timelock-urile; anularea nu mai este plasa de siguranță.",
+    awaitingOurLock: "Urmează ca partea ta să blocheze {coin} — o trimite mașina care conduce acest swap.",
     finalizing: "Ți-ai revendicat {got} — confirmări finale. Ține aplicația deschisă până se îngroapă; {gave} tăi rămân protejați până atunci.",
     initiating:
       "Acceptare trimisă — se așteaptă ca maker-ul să pornească swap-ul. Nimic nu este blocat încă; se anulează singur dacă nu răspund.",
