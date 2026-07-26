@@ -792,8 +792,6 @@ export const sk: Bundle = {
     created: "Ponuka odoslaná — čaká sa, kým druhá strana súhlasí. Nič nie je viazané.",
     acceptedMaker: "Podmienky dohodnuté. Ďalej: zamknite svoje {a}. Kým nepodfinancujete, môžete stále voľne zrušiť.",
     acceptedTaker: "Podmienky dohodnuté. Druhá strana zamkne svoje {a} ako prvá — vy nikdy neposielate ako prví.",
-    noncesExchanged:
-      "Nastavovanie súkromného swapu — výmena podpisového materiálu. Nič nie je ešte zamknuté.",
     signedMaker:
       "Obe strany podpísali a vaše {a} sú uzamknuté. Váš démon automaticky nárokuje {b}, hneď ako druhá strana zamkne a potvrdí svoju stranu. Ak sa čokoľvek zasekne, vaše {a} sa vrátia o {t1}.",
     signedTaker:

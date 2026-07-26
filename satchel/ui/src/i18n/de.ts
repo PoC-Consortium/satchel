@@ -795,8 +795,6 @@ export const de: Bundle = {
     created: "Angebot gesendet — Warten darauf, dass die andere Seite zustimmt. Nichts ist festgelegt.",
     acceptedMaker: "Bedingungen vereinbart. Als Nächstes: sperre deine {a}. Bis du finanzierst, kannst du frei abbrechen.",
     acceptedTaker: "Bedingungen vereinbart. Die andere Seite sperrt ihre {a} zuerst — du sendest nie zuerst.",
-    noncesExchanged:
-      "Der private Swap wird eingerichtet — Signiermaterial wird ausgetauscht. Noch ist nichts gesperrt.",
     signedMaker:
       "Beide Seiten haben signiert und deine {a} sind gesperrt. Dein Daemon beansprucht die {b} automatisch, sobald die andere Seite sperrt und bestätigt. Falls etwas stockt, kommen deine {a} um {t1} zurück.",
     signedTaker:

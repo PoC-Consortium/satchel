@@ -792,8 +792,6 @@ export const id: Bundle = {
     created: "Penawaran terkirim — menunggu sisi lain menyetujui. Tidak ada yang berkomitmen.",
     acceptedMaker: "Syarat disepakati. Berikutnya: kunci {a} Anda. Sampai Anda mendanai, Anda masih bisa membatalkan dengan bebas.",
     acceptedTaker: "Syarat disepakati. Sisi lain mengunci {a} mereka lebih dulu — Anda tidak pernah mengirim duluan.",
-    noncesExchanged:
-      "Menyiapkan swap privat — bertukar materi penandatanganan. Belum ada yang dikunci.",
     signedMaker:
       "Kedua sisi menandatangani dan {a} Anda terkunci. Begitu sisi lain mengunci dan mengonfirmasinya, daemon Anda mengklaim {b} secara otomatis. Jika ada yang macet, {a} Anda kembali pada {t1}.",
     signedTaker:

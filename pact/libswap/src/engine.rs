@@ -3122,7 +3122,7 @@ impl Engine {
         // belt-and-braces; `created_at == 0` (pre-timestamp records) must
         // not be judged infinitely old.
         let window = pre_funding_timeout_secs();
-        if matches!(rec.state, Created | Accepted | NoncesExchanged)
+        if matches!(rec.state, Created | Accepted)
             && rec.funding_a_txid.is_none()
             && rec.funding_b_txid.is_none()
             && rec.created_at > 0
@@ -5390,10 +5390,7 @@ impl Engine {
         let rank = |s: AdaptorState| match s {
             AdaptorState::Created => 0,
             AdaptorState::Accepted => 1,
-            AdaptorState::NoncesExchanged => 2,
             AdaptorState::Signed => 3,
-            AdaptorState::FundedA => 4,
-            AdaptorState::FundedB => 5,
             AdaptorState::RedeemedB => 6,
             AdaptorState::Completed | AdaptorState::Refunded | AdaptorState::Aborted => 7,
         };
@@ -5852,14 +5849,14 @@ impl Engine {
             ),
             // Pre-Signed (handshake): leg A is broadcast the INSTANT the taker's
             // `accept` lands (the autopilot funds on that message), but the swap
-            // sits in these states for two more relay round-trips (nonces, then
+            // sits in this state for two more relay round-trips (nonces, then
             // partial sigs) before `Signed`. Mirror v1's maker once the lock is
             // out: `our_lock · confs/n_a` while it buries, then an anchored
             // liveness wait — a stale "funding" here reads as "not committed yet"
             // (and narrate's accepted line even offered free cancel) while the
             // coins are already locked. No pointer yet = the fund really is
             // pending (locked wallet, retry) → keep the "funding" hint.
-            (Role::Initiator, Accepted | NoncesExchanged) => match rec.funding_a_txid.as_deref() {
+            (Role::Initiator, Accepted) => match rec.funding_a_txid.as_deref() {
                 Some(txid_a) => {
                     let confs_a = self
                         .lock_confs(&rec.chain_a, txid_a, rec.funding_a_vout, leg_spk(true))
@@ -5888,7 +5885,7 @@ impl Engine {
                 }
                 None => self.progress_awaiting(&rec.swap_id, &rec.chain_a, "funding", prev),
             },
-            (Role::Participant, Accepted | NoncesExchanged) => match &rec.funding_a_txid {
+            (Role::Participant, Accepted) => match &rec.funding_a_txid {
                 Some(txid) => self.progress_confirming(
                     &rec.swap_id,
                     &rec.chain_a,
@@ -7215,10 +7212,7 @@ impl Engine {
         let rank = |s: AdaptorState| match s {
             AdaptorState::Created => 0,
             AdaptorState::Accepted => 1,
-            AdaptorState::NoncesExchanged => 2,
             AdaptorState::Signed => 3,
-            AdaptorState::FundedA => 4,
-            AdaptorState::FundedB => 5,
             AdaptorState::RedeemedB => 6,
             AdaptorState::Completed | AdaptorState::Refunded | AdaptorState::Aborted => 7,
         };
@@ -8880,7 +8874,7 @@ impl Engine {
         // rescued maker restored to `accepted` cannot re-handshake (the
         // counterparty's nonces are consumed) and would strand until refund.
         let seq = match rec.state {
-            AdaptorState::Created | AdaptorState::Accepted | AdaptorState::NoncesExchanged => 0,
+            AdaptorState::Created | AdaptorState::Accepted => 0,
             _ => 1,
         };
         self.publish_snapshot_body(&rec.swap_id, body, seq)
@@ -10080,10 +10074,7 @@ impl Engine {
         // re-arms the nonce/partial steps below — re-opening a signing session
         // that nonce-safety has already dead-ended — and their early returns
         // starve the scheduler-driven redeem forever.
-        if !matches!(
-            rec.state,
-            AdaptorState::Created | AdaptorState::Accepted | AdaptorState::NoncesExchanged
-        ) {
+        if !matches!(rec.state, AdaptorState::Created | AdaptorState::Accepted) {
             return ev("adaptor-recv", msg_type.into());
         }
 
@@ -13847,9 +13838,9 @@ mod tests {
             AdaptorState::Aborted
         );
 
-        // NoncesExchanged is still strictly pre-funding → also covered.
+        // Accepted is still strictly pre-funding → also covered.
         let mut rec = v2_record(&alice);
-        rec.state = AdaptorState::NoncesExchanged;
+        rec.state = AdaptorState::Accepted;
         rec.created_at = stale;
         alice.store.put_adaptor(&rec).unwrap();
         let ev = alice.adaptor_tick_one(&rec).unwrap().unwrap();

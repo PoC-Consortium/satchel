@@ -792,8 +792,6 @@ export const tr: Bundle = {
     created: "Teklif gönderildi — diğer tarafın kabul etmesini bekliyor. Hiçbir şey taahhüt edilmedi.",
     acceptedMaker: "Şartlar kabul edildi. Sıradaki: {a} miktarınızı kilitleyin. Fonlamadığınız sürece hâlâ serbestçe iptal edebilirsiniz.",
     acceptedTaker: "Şartlar kabul edildi. Diğer taraf {a} miktarını önce kilitler — siz asla önce göndermezsiniz.",
-    noncesExchanged:
-      "Özel takas kuruluyor — imzalama materyali değişiliyor. Henüz hiçbir şey kilitli değil.",
     signedMaker:
       "Her iki taraf da imzaladı ve {a} miktarınız kilitli. Diğer taraf kilitleyip onayladığında, daemon'ınız {b} miktarını otomatik olarak talep eder. Bir şey takılırsa, {a} miktarınız {t1} zamanında geri döner.",
     signedTaker:

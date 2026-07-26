@@ -792,8 +792,6 @@ export const hr: Bundle = {
     created: "Ponuda poslana — čeka se da druga strana pristane. Ništa nije obvezano.",
     acceptedMaker: "Uvjeti dogovoreni. Sljedeće: zaključajte svoj {a}. Dok ne financirate, još uvijek možete slobodno otkazati.",
     acceptedTaker: "Uvjeti dogovoreni. Druga strana prva zaključava svoj {a} — vi nikad ne šaljete prvi.",
-    noncesExchanged:
-      "Postavljanje privatnog swapa — razmjena materijala za potpisivanje. Ništa još nije zaključano.",
     signedMaker:
       "Obje strane potpisale i vaš {a} je zaključan. Vaš daemon automatski preuzima {b} čim druga strana zaključa i potvrdi svoju stranu. Ako išta zapne, vaš {a} se vraća u {t1}.",
     signedTaker:

@@ -790,8 +790,6 @@ export const gl: Bundle = {
     created: "Oferta enviada — agardando a que a outra parte acepte. Non hai nada comprometido.",
     acceptedMaker: "Termos acordados. A continuación: bloquea os teus {a}. Ata que financies, aínda podes cancelar libremente.",
     acceptedTaker: "Termos acordados. A outra parte bloquea os seus {a} primeiro — ti nunca envías primeiro.",
-    noncesExchanged:
-      "Configurando o intercambio privado — intercambiando material de sinatura. Aínda non se bloqueou nada.",
     signedMaker:
       "Ambas as partes asinaron e os teus {a} están bloqueados. O teu daemon reclama os {b} automaticamente en canto a outra parte bloquea e o confirma. Se algo se atasca, os teus {a} retornan ás {t1}.",
     signedTaker:

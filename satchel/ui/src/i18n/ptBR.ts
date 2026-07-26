@@ -792,8 +792,6 @@ export const ptBR: Bundle = {
     created: "Oferta enviada — aguardando o outro lado concordar. Nada está comprometido.",
     acceptedMaker: "Termos acordados. A seguir: bloqueie seu {a}. Até fazer o funding, você ainda pode cancelar livremente.",
     acceptedTaker: "Termos acordados. O outro lado bloqueia o {a} dele primeiro — você nunca envia primeiro.",
-    noncesExchanged:
-      "Configurando o swap privado — trocando material de assinatura. Nada está bloqueado ainda.",
     signedMaker:
       "Ambos os lados assinaram e seu {a} está bloqueado. Seu daemon reivindica o {b} automaticamente assim que o outro lado bloqueia e confirma. Se algo travar, seu {a} retorna às {t1}.",
     signedTaker:

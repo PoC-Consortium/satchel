@@ -794,8 +794,6 @@ export const fr: Bundle = {
     created: "Offre envoyée — en attente que l'autre côté accepte. Rien n'est engagé.",
     acceptedMaker: "Conditions acceptées. Ensuite : verrouillez vos {a}. Tant que vous ne financez pas, vous pouvez encore annuler librement.",
     acceptedTaker: "Conditions acceptées. L'autre côté verrouille ses {a} en premier — vous n'envoyez jamais en premier.",
-    noncesExchanged:
-      "Mise en place du swap privé — échange du matériel de signature. Rien n'est encore verrouillé.",
     signedMaker:
       "Les deux côtés ont signé et vos {a} sont verrouillés. Votre daemon réclame les {b} automatiquement dès que l'autre côté verrouille et confirme. Si quelque chose se bloque, vos {a} reviennent à {t1}.",
     signedTaker:

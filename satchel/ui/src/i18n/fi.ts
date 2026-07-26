@@ -795,8 +795,6 @@ export const fi: Bundle = {
     created: "Tarjous lähetetty — odotetaan toista osapuolta hyväksymään. Mitään ei ole sidottu.",
     acceptedMaker: "Ehdot sovittu. Seuraavaksi: lukitse {a}. Kunnes rahoitat, voit silti peruuttaa vapaasti.",
     acceptedTaker: "Ehdot sovittu. Toinen osapuoli lukitsee {a} ensin — sinä et koskaan lähetä ensimmäisenä.",
-    noncesExchanged:
-      "Määritetään yksityistä swapia — vaihdetaan allekirjoitusmateriaalia. Mitään ei vielä lukita.",
     signedMaker:
       "Molemmat osapuolet allekirjoittivat ja {a} on lukittu. Kun toinen osapuoli lukitsee ja vahvistaa sen, daemonisi lunastaa {b} automaattisesti. Jos jokin jumiutuu, {a} palautuu ajankohtana {t1}.",
     signedTaker:

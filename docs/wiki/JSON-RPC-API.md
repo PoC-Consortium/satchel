@@ -81,7 +81,7 @@ A machine restored from the seed alone can rediscover in-flight swaps from encry
 
 ## Swaps — v2 adaptor (Taproot/MuSig2)
 
-v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed). There is no separate `adaptorabort` — the shared `abort` method above cancels a v2 record too (refused once our leg is funded); a handshake stalled before either leg funds (`created`/`accepted`/`nonces_exchanged`) also self-cancels after 15 minutes with no RPC call needed.
+v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed). There is no separate `adaptorabort` — the shared `abort` method above cancels a v2 record too (refused once our leg is funded); a handshake stalled before either leg funds (`created`/`accepted`) also self-cancels after 15 minutes with no RPC call needed.
 
 | Method | Purpose |
 |---|---|

@@ -18,22 +18,25 @@ A v2 swap is an `AdaptorSwapRecord` whose `state` advances through this enum
 (snake_case in JSON):
 
 ```text
-created → accepted → nonces_exchanged → signed
-        → funded_a → funded_b → redeemed_b → completed
+created → accepted → signed → redeemed_b → completed
 ```
 
 | State | Meaning |
 |---|---|
 | `created` | Initiator created the adaptor swap; terms set. |
 | `accepted` | Counterparty accepted the terms. |
-| `nonces_exchanged` | MuSig2 nonces exchanged for both legs. |
-| `signed` | Adaptor + partial signatures produced. |
-| `funded_a` | The first leg's funding tx is confirmed. |
-| `funded_b` | The second leg's funding tx is confirmed. |
+| `signed` | Adaptor + partial signatures produced (`adaptor_assemble` moves the record straight from `accepted` to `signed`). |
 | `redeemed_b` | The B-side has been redeemed (adaptor secret revealed). |
 | `completed` | Both legs settled successfully. |
 
 Terminal failure states: `refunded`, `aborted`.
+
+The off-chain MuSig2 nonce and partial-signature round-trips all happen
+*within* the `accepted → signed` transition, and funding and settlement both
+run entirely *within* `signed` — they are sub-divided by the progress display,
+never by state transitions. (Earlier revisions of the enum also carried
+`nonces_exchanged`, `funded_a`, and `funded_b` placeholders, but no production
+writer ever reached them; they have been removed.)
 
 ## Handshake order
 
@@ -72,8 +75,8 @@ persisted MuSig2 nonce sessions are deliberately **kept**, since the store's
 overwrite-refusal on an existing session is what guarantees an aborted swap can
 never be signed again.
 
-> **Note** — A handshake stalled in `created`, `accepted`, or
-> `nonces_exchanged` — i.e. before either leg has funded — also **times out on
+> **Note** — A handshake stalled in `created` or `accepted` — i.e. before
+> either leg has funded — also **times out on
 > its own after 15 minutes** (`PRE_FUNDING_TIMEOUT_SECS`, `engine.rs`), with no
 > `abort` call and no relay message: each side's scheduler independently
 > retires its own stalled copy of the handshake. `signed` is deliberately

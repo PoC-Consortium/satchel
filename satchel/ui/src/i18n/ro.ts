@@ -792,8 +792,6 @@ export const ro: Bundle = {
     created: "Ofertă trimisă — se așteaptă ca cealaltă parte să fie de acord. Nimic nu este angajat.",
     acceptedMaker: "Termeni conveniți. Următorul pas: blochează-ți {a}. Până când finanțezi, poți încă anula liber.",
     acceptedTaker: "Termeni conveniți. Cealaltă parte își blochează {a} primul — tu nu trimiți niciodată primul.",
-    noncesExchanged:
-      "Se pregătește swap-ul privat — se schimbă materialul de semnare. Nimic nu este blocat încă.",
     signedMaker:
       "Ambele părți au semnat și {a} sunt blocate. Daemon-ul tău revendică {b} automat de îndată ce cealaltă parte blochează și confirmă. Dacă ceva se blochează, {a} se întorc la {t1}.",
     signedTaker:

@@ -27,7 +27,6 @@ export function milestone(s: Swap): { rank: number; event: NotifyEvent | null } 
     case "created":
       return { rank: 0, event: null };
     case "accepted":
-    case "nonces_exchanged":
       // v2 maker broadcasts its lock on accept — once the progress line tracks
       // it, "one leg is locked" is the honest milestone (same split as below).
       // `funding` (wallet mid-lock, U-3) counts the same as `our_lock`,
@@ -91,21 +90,18 @@ export function narrate(s: Swap): string {
       return tr("narrate.initiating");
     case "created":
       return tr("narrate.created");
-    // v2 (Taproot/MuSig2 adaptor) handshake states. Funding + the claim run
+    // v2 (Taproot/MuSig2 adaptor) handshake. Funding + the claim run
     // automatically from "signed"; the timelock refund is the safety net.
     // The v2 maker broadcasts its lock the moment `accept` arrives but stays in
-    // these states through the nonce/sig round-trips — once the progress line
+    // this state through the nonce/sig round-trips — once the progress line
     // tracks that lock, "you can still cancel freely" / "nothing is locked yet"
     // would be false: the honest story is the funded-maker one.
-    case "accepted":
-    case "nonces_exchanged": {
+    case "accepted": {
       const w = s.progress?.watching;
       if (maker && (w === "our_lock" || w === "awaiting_lock")) {
         return tr("narrate.fundedAMaker", v);
       }
-      return s.state === "accepted"
-        ? tr(maker ? "narrate.acceptedMaker" : "narrate.acceptedTaker", v)
-        : tr("narrate.noncesExchanged");
+      return tr(maker ? "narrate.acceptedMaker" : "narrate.acceptedTaker", v);
     }
     // v2 "signed" is a single state spanning the whole execution phase, so a
     // flat story freezes there while only the progress bar moves. Sub-divide it

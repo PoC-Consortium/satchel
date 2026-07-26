@@ -792,8 +792,6 @@ export const lt: Bundle = {
     created: "Pasiūlymas išsiųstas — laukiama, kol kita pusė sutiks. Niekas neįsipareigota.",
     acceptedMaker: "Sąlygos suderintos. Toliau: užrakinkite savo {a}. Kol nefinansuojate, vis dar galite laisvai atšaukti.",
     acceptedTaker: "Sąlygos suderintos. Kita pusė pirma užrakina savo {a} — jūs niekada nesiunčiate pirmi.",
-    noncesExchanged:
-      "Ruošiami privatūs mainai — keičiamasi pasirašymo medžiaga. Niekas dar neužrakinta.",
     signedMaker:
       "Abi pusės pasirašė ir jūsų {a} užrakinti. Jūsų demonas automatiškai pasiima {b}, kai tik kita pusė užrakina ir patvirtina savo pusę. Jei kas užstringa, jūsų {a} grįžta {t1}.",
     signedTaker:
