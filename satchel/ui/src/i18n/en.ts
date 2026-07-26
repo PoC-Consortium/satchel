@@ -759,6 +759,7 @@ export const en = {
   },
   // UI-4 docked activity log.
   log: {
+    takeoverRefundOnly: "take over {id}: the payout wallet is not on this machine — refund-only for now; attach the owning wallet to complete the swap",
     title: "Activity",
     empty: "— activity log —",
     count: "{count} lines",
@@ -818,6 +819,8 @@ export const en = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    locking: "Locking your {coin} — the lock transaction is going out now. Timelocks protect you from here; cancelling is no longer the safety net.",
+    awaitingOurLock: "Your side's {coin} lock is next — the machine driving this swap sends it.",
     initiating:
       "Take sent — waiting for the maker to start the swap. Nothing is locked yet; it cancels on its own if they don't respond.",
     created: "Offer sent — waiting for the other side to agree. Nothing is committed.",

@@ -724,6 +724,7 @@ export const ja: Bundle = {
   },
   // UI-4 docked activity log.
   log: {
+    takeoverRefundOnly: "テイクオーバー {id}: 受取ウォレットがこのマシンにありません — 当面は返金のみ。スワップを完了するには所有ウォレットを接続してください",
     title: "アクティビティ",
     empty: "— アクティビティログ —",
     count: "{count} 行",
@@ -783,6 +784,8 @@ export const ja: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    locking: "{coin} をロック中 — ロックのトランザクションを送信しています。ここからはタイムロックが保護します。キャンセルはもう安全網ではありません。",
+    awaitingOurLock: "次はあなた側の {coin} のロックです — このスワップを進めているマシンが送信します。",
     finalizing: "{got} を請求しました — 最終確認中。埋まるまでアプリを開いたままにしてください。それまで {gave} は保護されます。",
     initiating:
       "テイクを送信 — メーカーがスワップを開始するのを待っています。まだ何もロックされていません。相手が応答しなければ自動でキャンセルされます。",

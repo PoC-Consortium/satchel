@@ -724,6 +724,7 @@ export const nl: Bundle = {
   },
   // UI-4 docked activity log.
   log: {
+    takeoverRefundOnly: "overname {id}: de uitbetalingswallet staat niet op deze machine — voorlopig alleen terugbetaling; koppel de eigenaarswallet om de swap te voltooien",
     title: "Activiteit",
     empty: "— activiteitenlog —",
     count: "{count} regels",
@@ -783,6 +784,8 @@ export const nl: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    locking: "Je {coin} wordt vergrendeld — de vergrendeltransactie gaat nu de deur uit. Vanaf hier beschermen de timelocks je; annuleren is niet langer het vangnet.",
+    awaitingOurLock: "Jouw kant vergrendelt {coin} als volgende — de machine die deze swap aanstuurt verstuurt hem.",
     finalizing: "Je hebt je {got} geclaimd — laatste bevestigingen. Houd de app open tot het begraven is; je {gave} blijven tot dan beschermd.",
     initiating:
       "Aanname verstuurd — wachten tot de maker de swap start. Er is nog niets vergrendeld; het annuleert vanzelf als zij niet reageren.",

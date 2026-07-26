@@ -102,8 +102,15 @@ export default function ActiveSwaps() {
     if (!ok) return;
     for (const s of group) {
       try {
-        await rpc("takeover", [s.swap_id]);
-        log(t("log.actionOk", { action: "takeover", id: s.swap_id }));
+        const r = (await rpc("takeover", [s.swap_id])) as { refund_only?: boolean };
+        // X-2 (state-matrix audit): a refund-only adoption used to live only in
+        // the daemon log — say it where the user acted. The gate re-probes per
+        // tick, so attaching the owning wallet later re-enables completion.
+        log(
+          r.refund_only
+            ? t("log.takeoverRefundOnly", { id: s.swap_id })
+            : t("log.actionOk", { action: "takeover", id: s.swap_id }),
+        );
       } catch (e) {
         log(t("log.actionError", { action: "takeover", id: s.swap_id, err: errMsg(e) }));
       }

@@ -724,6 +724,7 @@ export const zhCn: Bundle = {
   },
   // UI-4 docked activity log.
   log: {
+    takeoverRefundOnly: "接管 {id}：收款钱包不在本机 — 目前仅可退款；接入持有钱包以完成交换",
     title: "活动",
     empty: "— 活动日志 —",
     count: "{count} 行",
@@ -783,6 +784,8 @@ export const zhCn: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    locking: "正在锁定你的 {coin} — 锁定交易正在发出。此后由时间锁保护你；取消不再是安全网。",
+    awaitingOurLock: "接下来由你这一方锁定 {coin} — 由驱动此交换的机器发送。",
     finalizing: "您已认领您的 {got} — 最终确认中。请保持应用开启直至其被埋入区块；在此之前您的 {gave} 受到保护。",
     initiating:
       "接受请求已发出 — 正等待做市方启动交换。目前什么都没有被锁定；若对方不响应，它会自行取消。",

@@ -724,6 +724,7 @@ export const id: Bundle = {
   },
   // UI-4 docked activity log.
   log: {
+    takeoverRefundOnly: "ambil alih {id}: dompet pembayaran tidak ada di mesin ini — untuk saat ini hanya refund; hubungkan dompet pemilik untuk menyelesaikan swap",
     title: "Aktivitas",
     empty: "— log aktivitas —",
     count: "{count} baris",
@@ -783,6 +784,8 @@ export const id: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    locking: "Mengunci {coin} Anda — transaksi penguncian sedang dikirim. Mulai sekarang timelock yang melindungi Anda; membatalkan bukan lagi jaring pengaman.",
+    awaitingOurLock: "Berikutnya pihak Anda mengunci {coin} — dikirim oleh mesin yang menjalankan swap ini.",
     finalizing: "Anda mengklaim {got} Anda — konfirmasi akhir. Biarkan aplikasi terbuka sampai terkubur; {gave} Anda tetap terlindungi sampai saat itu.",
     initiating:
       "Pengambilan terkirim — menunggu maker memulai swap. Belum ada yang dikunci; otomatis dibatalkan jika mereka tidak menanggapi.",

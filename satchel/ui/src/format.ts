@@ -429,9 +429,11 @@ export const TERMINAL_STATES: SwapState[] = ["completed", "refunded", "aborted"]
 /** Finalizing = our claim is broadcast but still burying. The state reads
  *  `completed`, yet the scheduler is still nursing it to depth (a `settlement`
  *  progress bar is present) and the refund stays armed — so it is NOT done: the
- *  funds aren't final and the app must stay open. The taker hits this because it
- *  goes straight to `completed` on broadcast (the maker stays in `redeemed_b`
- *  until buried, so it never lands here). */
+ *  funds aren't final and the app must stay open. A DRIVEN taker hits this
+ *  because it goes straight to `completed` on broadcast (the driven maker stays
+ *  in `redeemed_b` until buried); a FOLLOWED record of either role can also
+ *  land here via the chain-watcher ratchet — the predicate is role-agnostic on
+ *  purpose. */
 export const isFinalizing = (s: Swap): boolean =>
   s.state === "completed" && s.progress?.watching === "settlement";
 /** Terminal = finished AND final (history). Finalizing is excluded — it is still

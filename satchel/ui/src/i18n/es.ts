@@ -726,6 +726,7 @@ export const es: Bundle = {
   },
   // UI-4 docked activity log.
   log: {
+    takeoverRefundOnly: "tomar control {id}: la cartera de pago no está en esta máquina — solo reembolso por ahora; conecta la cartera propietaria para completar el swap",
     title: "Actividad",
     empty: "— registro de actividad —",
     count: "{count} líneas",
@@ -785,6 +786,8 @@ export const es: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    locking: "Bloqueando tus {coin} — la transacción de bloqueo está saliendo ahora. Desde aquí te protegen los timelocks; cancelar ya no es la red de seguridad.",
+    awaitingOurLock: "Tu lado bloquea {coin} a continuación — la máquina que dirige este swap la envía.",
     finalizing: "Reclamaste tus {got} — confirmaciones finales. Mantén la app abierta hasta que se entierre; tus {gave} quedan protegidos hasta entonces.",
     initiating:
       "Toma enviada — esperando a que el maker inicie el swap. Aún no se bloquea nada; se cancela solo si no responde.",

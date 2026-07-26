@@ -727,6 +727,7 @@ export const cs: Bundle = {
   },
   // UI-4 docked activity log.
   log: {
+    takeoverRefundOnly: "převzetí {id}: peněženka pro výplatu není na tomto stroji — prozatím jen refundace; připojte vlastnící peněženku pro dokončení swapu",
     title: "Aktivita",
     empty: "— log aktivity —",
     count: "{count} řádků",
@@ -786,6 +787,8 @@ export const cs: Bundle = {
   // when" framing shown on every active swap. {a}/{b} are coin tickers; {t1}/{t2}
   // are local refund times. Rendered via tr() (narrate() is a pure helper).
   narrate: {
+    locking: "Zamykáme vaše {coin} — zamykací transakce právě odchází. Odteď vás chrání timelocky; zrušení už není záchranná síť.",
+    awaitingOurLock: "Další zamyká vaše strana {coin} — odešle ho stroj, který tento swap řídí.",
     finalizing: "Nárokovali jste své {got} — finální potvrzení. Nechte aplikaci otevřenou, dokud se nezahrabe; vaše {gave} zůstávají do té doby chráněné.",
     initiating:
       "Přijetí odesláno — čeká se, až maker zahájí swap. Zatím není nic uzamčeno; pokud neodpoví, swap se sám zruší.",
