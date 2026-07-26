@@ -153,8 +153,16 @@ announce_channel_id = 0            # 0 = announcer disabled, commands only
 debounce_secs = 30
 min_interval_secs = 60
 min_size_delta_pct = 10
-pairs = []                         # empty = all pairs seen on the board
+pairs = ["btc/btcx"]               # whitelist of pairs crier cries for.
+                                   # DEFAULT = ["btc/btcx"]; empty list = announce
+                                   # nothing (commands still browse all pairs).
 ```
+
+Pair entries are unordered coin-id sets — `"btc/btcx"` and `"btcx/btc"` mean
+the same pair; display orientation (base vs quote) always follows the UI's
+`QUOTE_PRIORITY`, so a BTCX↔BTC pair renders as **BTC priced in BTCX**.
+Unknown coin ids in `pairs` are a startup error (fail fast, not silent).
+Slash commands are not restricted by the whitelist; only the announcer is.
 
 Relays are duplicated from Satchel's defaults on purpose — they live in
 `satchel.json` (per-user state), not in any shared config; `coins.toml` is the
@@ -198,9 +206,12 @@ only shared artifact and carries no relay info.
    from mainnet relays.
 2. **M2 — Discord read**: serenity/poise bootstrap, `/book` `/top` `/status`.
 3. **M3 — announcer**: top-signature diffing, debounce, state file, wording.
-4. **M4 — ops**: Dockerfile + systemd unit sample, structured logs
-   (tracing), README with bot-token/permission setup (scopes: `bot`,
-   `applications.commands`; perms: Send Messages, Embed Links).
+4. **M4 — ops**: Dockerfile + systemd unit sample, structured logs (tracing),
+   and `crier/README.md` with a full **deploy runbook**: create the Discord
+   application + bot, invite URL (scopes `bot` + `applications.commands`;
+   perms: Send Messages, Embed Links), obtain channel/guild ids (developer
+   mode), write `crier.toml`, set `CRIER_DISCORD_TOKEN`, verify with
+   `--dry-run`, then run under systemd or Docker; upgrade + log-reading notes.
 
 Out of scope for v1: per-channel `/watch` subscriptions, price-move thresholds
 in quote terms, historical charts, multi-network instances (run one crier per
