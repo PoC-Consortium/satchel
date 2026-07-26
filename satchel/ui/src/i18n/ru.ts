@@ -722,6 +722,17 @@ export const ru: Bundle = {
     back: "Назад",
     continue: "Продолжить",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Вернуть ваши офферы?",
+    intro: "Эти офферы были сняты с доски при закрытии приложения. Цены могли устареть — верните их, чтобы разместить заново как новые офферы на тех же условиях, или скройте, чтобы они остались снятыми.",
+    timelocks: "таймлоки {t1} ч/{t2} ч",
+    reviveAll: "Вернуть все",
+    revive: "Вернуть",
+    dismiss: "Скрыть",
+    close: "Закрыть",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "перехват {id}: кошелёк выплаты не на этой машине — пока только возврат; подключите кошелёк-владелец, чтобы завершить своп",
@@ -735,7 +746,7 @@ export const ru: Bundle = {
     noTauri: "не запущено внутри Satchel — этому интерфейсу нужен мост Tauri",
     startupError: "запуск: {err}",
     notConnected: "нет соединения: {err}",
-    connected: "подключено к pactd {version} ({protocol})",
+    connected: "подключено к pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "переключено на мерчанта {id}",
     renamedMerchant: "мерчант переименован в {name}",
@@ -756,6 +767,11 @@ export const ru: Bundle = {
     withdrawError: "снятие: {err}",
     postedOffer: "оффер {id} размещён — снимайте в любой момент; ничего не заблокировано",
     postOfferError: "размещение оффера: {err}",
+    offerRevived: "оффер {old} возвращён как новый оффер {id}",
+    reviveError: "возврат оффера {id}: {err}",
+    offerDismissed: "оффер {id} скрыт — остаётся снятым",
+    offerDismissedDeadPair: "оффер {id} скрыт — его пара больше не настроена",
+    dismissError: "скрытие оффера {id}: {err}",
     createdSlip: "создан приватный слип оффера — отправьте его другу",
     tookPrivateOffer: "принят приватный оффер {id} — теперь он появляется в ваших активных свопах",
     cancelledPrivateOffer: "приватный оффер {id} отменён",

@@ -130,8 +130,8 @@ pub fn apply(store: &Store, a: &Apply) -> Result<()> {
         store.nostr_offer_cache_remove(swap_id)?;
         // Reconcile our OWN ledger. A deletion for one of our still-live offers
         // is a (same-key) withdrawal — honor it everywhere by marking the offer
-        // revoked, so refresh/readvertise stop republishing it. Without this,
-        // `my_offers` keeps it "live" and re-advertises a fresh event ON TOP of
+        // revoked, so the refresh loop stops republishing it. Without this,
+        // `my_offers` keeps it "live" and republishes a fresh event ON TOP of
         // the deletion every cycle — resurrecting it for other sessions while our
         // own tombstone hides it from us: a split-brain "posting…" limbo. No-op
         // for foreign offers (not in `my_offers`) or already-terminal ones
@@ -560,7 +560,7 @@ mod tests {
     fn received_deletion_revokes_our_own_live_offer() {
         // A relay round delivered deletions for one of OUR live offers and for a
         // stranger's. apply() must reconcile our ledger: mark our own revoked (so
-        // refresh/readvertise stop republishing it), and no-op the foreign one.
+        // the refresh loop stops republishing it), and no-op the foreign one.
         let p = party("reconcile-del");
         p.store
             .my_offer_put("mineLive", "{\"e\":1}", 1_700_000_000, 1800, 1_700_000_000)

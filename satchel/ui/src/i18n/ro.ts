@@ -722,6 +722,17 @@ export const ro: Bundle = {
     back: "Înapoi",
     continue: "Continuă",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Republici ofertele tale?",
+    intro: "Aceste oferte au fost retrase de pe panou la închiderea aplicației. Prețurile pot fi învechite — reactivează-le pentru a le republica drept oferte proaspete în aceiași termeni, sau respinge-le ca să rămână retrase.",
+    timelocks: "timelock-uri {t1}h/{t2}h",
+    reviveAll: "Reactivează-le pe toate",
+    revive: "Reactivează",
+    dismiss: "Respinge",
+    close: "Închide",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "preluare {id}: portofelul de plată nu este pe această mașină — deocamdată doar rambursare; atașează portofelul deținător pentru a finaliza swapul",
@@ -735,7 +746,7 @@ export const ro: Bundle = {
     noTauri: "nu rulează în interiorul Satchel — această interfață are nevoie de puntea Tauri",
     startupError: "pornire: {err}",
     notConnected: "neconectat: {err}",
-    connected: "conectat la pactd {version} ({protocol})",
+    connected: "conectat la pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "s-a schimbat la merchant-ul {id}",
     renamedMerchant: "merchant redenumit în {name}",
@@ -756,6 +767,11 @@ export const ro: Bundle = {
     withdrawError: "retragere: {err}",
     postedOffer: "ofertă postată {id} — retrage oricând; nimic nu este blocat",
     postOfferError: "postarea ofertei: {err}",
+    offerRevived: "oferta {old} reactivată ca ofertă proaspătă {id}",
+    reviveError: "reactivarea ofertei {id}: {err}",
+    offerDismissed: "oferta {id} respinsă — rămâne retrasă",
+    offerDismissedDeadPair: "oferta {id} respinsă — perechea sa nu mai este configurată",
+    dismissError: "respingerea ofertei {id}: {err}",
     createdSlip: "s-a creat un bilet de ofertă privată — trimite-l prietenului tău",
     tookPrivateOffer: "ofertă privată acceptată {id} — apare acum în swap-urile tale active",
     cancelledPrivateOffer: "ofertă privată anulată {id}",

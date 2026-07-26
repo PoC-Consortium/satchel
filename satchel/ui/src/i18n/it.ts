@@ -720,6 +720,17 @@ export const it: Bundle = {
     back: "Indietro",
     continue: "Continua",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Ripubblicare le tue offerte?",
+    intro: "Queste offerte sono state ritirate dalla bacheca alla chiusura dell'app. I prezzi potrebbero non essere più attuali — ravvivale per ripubblicarle come offerte fresche alle stesse condizioni, oppure ignorale perché restino ritirate.",
+    timelocks: "timelock {t1}h/{t2}h",
+    reviveAll: "Ravviva tutte",
+    revive: "Ravviva",
+    dismiss: "Ignora",
+    close: "Chiudi",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "presa in carico {id}: il portafoglio di incasso non è su questa macchina — per ora solo rimborso; collega il portafoglio proprietario per completare lo swap",
@@ -733,7 +744,7 @@ export const it: Bundle = {
     noTauri: "non in esecuzione dentro Satchel — questa UI richiede il bridge Tauri",
     startupError: "avvio: {err}",
     notConnected: "non connesso: {err}",
-    connected: "connesso a pactd {version} ({protocol})",
+    connected: "connesso a pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "passato al merchant {id}",
     renamedMerchant: "merchant rinominato in {name}",
@@ -754,6 +765,11 @@ export const it: Bundle = {
     withdrawError: "ritiro: {err}",
     postedOffer: "offerta {id} pubblicata — ritirala in qualsiasi momento; nulla è bloccato",
     postOfferError: "pubblicazione offerta: {err}",
+    offerRevived: "offerta {old} ravvivata come offerta fresca {id}",
+    reviveError: "ravvivare l'offerta {id}: {err}",
+    offerDismissed: "offerta {id} ignorata — resta ritirata",
+    offerDismissedDeadPair: "offerta {id} ignorata — la sua coppia non è più configurata",
+    dismissError: "ignorare l'offerta {id}: {err}",
     createdSlip: "creata una slip di offerta privata — inviala al tuo amico",
     tookPrivateOffer: "accettata l'offerta privata {id} — ora appare nei tuoi swap attivi",
     cancelledPrivateOffer: "offerta privata {id} annullata",

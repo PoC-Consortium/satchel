@@ -724,6 +724,17 @@ export const ca: Bundle = {
     back: "Enrere",
     continue: "Continua",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Tornar a publicar les teves ofertes?",
+    intro: "Aquestes ofertes es van retirar del tauler en tancar l'aplicació. Els preus poden haver quedat desfasats — reviu-les per tornar-les a publicar com a ofertes noves amb les mateixes condicions, o descarta-les perquè es mantinguin retirades.",
+    timelocks: "timelocks {t1}h/{t2}h",
+    reviveAll: "Reviu-les totes",
+    revive: "Reviu",
+    dismiss: "Descarta",
+    close: "Tanca",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "presa de control {id}: la cartera de pagament no és en aquesta màquina — de moment només reemborsament; connecta la cartera propietària per completar l'intercanvi",
@@ -737,7 +748,7 @@ export const ca: Bundle = {
     noTauri: "no s'està executant dins de Satchel — aquesta interfície necessita el pont Tauri",
     startupError: "inici: {err}",
     notConnected: "no connectat: {err}",
-    connected: "connectat a pactd {version} ({protocol})",
+    connected: "connectat a pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "canviat al comerciant {id}",
     renamedMerchant: "comerciant reanomenat a {name}",
@@ -758,6 +769,11 @@ export const ca: Bundle = {
     withdrawError: "retirada: {err}",
     postedOffer: "oferta {id} publicada — retira-la quan vulguis; no es bloqueja res",
     postOfferError: "publicació de l'oferta: {err}",
+    offerRevived: "oferta {old} reviscuda com a oferta nova {id}",
+    reviveError: "reviure l'oferta {id}: {err}",
+    offerDismissed: "oferta {id} descartada — es manté retirada",
+    offerDismissedDeadPair: "oferta {id} descartada — el seu parell ja no està configurat",
+    dismissError: "descartar l'oferta {id}: {err}",
     createdSlip: "val d'oferta privada creat — envia'l al teu amic",
     tookPrivateOffer: "oferta privada {id} acceptada — ara apareix als teus intercanvis actius",
     cancelledPrivateOffer: "oferta privada {id} cancel·lada",

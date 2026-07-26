@@ -9456,8 +9456,9 @@ impl Engine {
 
     /// Terminally revoke every live offer whose pair involves `coin_id` (either
     /// leg). Called at reconfigure time when a coin is removed — those offers can
-    /// no longer be honored, so withdraw them explicitly (the relaunch's skip-of-
-    /// de-list leaves the SURVIVING offers listed). Returns the revoked offer ids.
+    /// no longer be honored, so withdraw them for good BEFORE the relaunch's
+    /// revoke-on-open would park them as `revoked_on_open`; a terminal `revoked`
+    /// keeps them out of the revival dialog. Returns the revoked offer ids.
     /// Best-effort per offer: a board rejecting one revocation doesn't abort the
     /// rest, so a removed coin never leaves a serveable-looking listing behind.
     pub fn revoke_offers_for_coin(&self, coin_id: &str) -> Result<Vec<String>> {
@@ -9528,31 +9529,16 @@ impl Engine {
         Ok(events)
     }
 
-    /// Revoke every still-live offer — called on graceful shutdown (revoke-on-close)
-    /// so a maker who quits cleanly stops advertising offers they can no longer
-    /// honor. A crash skips this; the short relay TTL then drops the listings
-    /// within `pact_nostr::RELAY_TTL_SECS`. Returns how many were withdrawn.
-    pub fn revoke_live_offers(&self) -> Result<usize> {
-        let live = self.store.my_offers_live()?;
-        let n = live.len();
-        for o in live {
-            if let Err(err) = self.revoke_board_offer(&o.offer_id) {
-                eprintln!(
-                    "warning: revoke-on-close failed for {}: {err:#}",
-                    o.offer_id
-                );
-            }
-        }
-        Ok(n)
-    }
-
     /// SOFT de-list of every live offer on a clean shutdown: tell the boards to
-    /// drop the listing (so we don't advertise while offline) but keep the offer
-    /// LIVE and unblocked locally, so the next startup re-advertises it
-    /// ([`Self::readvertise_offers`]). This is the auto-on-close path; it is
-    /// deliberately NOT terminal — unlike the user's explicit withdraw
-    /// ([`Self::revoke_board_offer`]), which records a local block and marks the
-    /// offer revoked for good.
+    /// drop the listing (so we don't advertise while offline) without touching
+    /// any local state. Pure courtesy toward other users — without it their
+    /// boards would keep showing our unhonorable listings until the relay TTL
+    /// lapses. The deletion's own echo (a relay feeding it back to us on the
+    /// next boot) is inert BY STATE: by the time it arrives,
+    /// [`Self::retire_offers_on_open`] has already moved the rows to
+    /// `revoked_on_open`/`expired`, and the withdraw-reconcile
+    /// (`my_offer_mark_revoked`) only ever flips `live` rows — so the echo
+    /// finds nothing to touch.
     pub fn delist_live_offers(&self) -> Result<usize> {
         let live = self.store.my_offers_live()?;
         let n = live.len();
@@ -9575,31 +9561,59 @@ impl Engine {
         Ok(n)
     }
 
-    /// On startup, re-advertise still-valid offers — those soft-de-listed on the
-    /// last clean close, or whose relay TTL lapsed while offline — so a maker who
-    /// returns within an offer's `valid_for` resumes advertising instead of
-    /// silently losing it. Re-posts the stored signed envelope to every board and
-    /// rolls the relay TTL. Offers past their final expiry are skipped (the next
-    /// `refresh_offers` retires them). Returns how many were re-advertised.
-    pub fn readvertise_offers(&self) -> Result<usize> {
+    /// On startup, sweep the offer ledger (revoke-on-open). Boot-time state is
+    /// unknowable — the previous session may have closed cleanly, crashed, or
+    /// an offer may have been withdrawn from another machine while we were
+    /// offline — so instead of guessing and re-advertising possibly-stale
+    /// terms, the engine retires firmly, per offer:
+    ///  - a `live` OR already-parked (`revoked_on_open`) row past its own
+    ///    validity (`created + valid_for`, when `valid_for != 0`) → terminal
+    ///    `expired`, plus a board revocation as cleanup;
+    ///  - a `live` row still within its validity → `revoked_on_open` + a signed
+    ///    revocation to every board — parked for the UI's revive dialog;
+    ///  - a parked row still within its validity stays parked untouched (e.g.
+    ///    the app died mid-dialog — it is simply offered again).
+    ///
+    /// Revival is a FRESH post (`post_board_offer` with the same terms) under a
+    /// NEW id — which also heals stale viewer-side tombstones by construction
+    /// (an old deletion can never cover a new id). Returns how many offers are
+    /// newly parked as revivable.
+    pub fn retire_offers_on_open(&self) -> Result<usize> {
+        // Fail closed while the seed is locked/unavailable: we could flip the
+        // rows but not SIGN the board revocations, leaving stale listings up
+        // with no queued deletion. Erroring out keeps the rows as they are so
+        // the caller retries after unlock.
+        self.store.seed()?;
         let now = local_now();
-        let mut n = 0;
-        for o in self.store.my_offers_live()? {
-            let final_expiry = o.created.saturating_add(o.valid_for);
-            if o.valid_for != 0 && now >= final_expiry {
-                continue; // expired — leave it for refresh_offers to retire
+        let mut parked = 0;
+        for o in self.store.my_offers_all()? {
+            let live = o.state == "live";
+            if !live && o.state != "revoked_on_open" {
+                continue; // terminal (taken/revoked/expired) — nothing to do
             }
-            let offer: Envelope = match serde_json::from_str(&o.envelope) {
-                Ok(env) => env,
-                Err(_) => continue,
-            };
-            for (_, board) in self.boards()? {
-                let _ = board.post_offer(&offer); // queues a fresh-TTL (re)listing
+            // Mark FIRST in both arms so the revoke's auto-mark (which only
+            // flips `live` → `revoked`) is a no-op and the row keeps its
+            // terminal/revivable state — the same mark-first pattern as
+            // `refresh_offers`' expiry path.
+            if o.valid_for != 0 && now >= o.created.saturating_add(o.valid_for) {
+                // Past its validity — no longer revivable, retire for good.
+                self.store.my_offer_set_state(&o.offer_id, "expired")?;
+                if let Err(err) = self.revoke_board_offer(&o.offer_id) {
+                    eprintln!(
+                        "warning: expiry sweep de-list failed for {}: {err:#}",
+                        o.offer_id
+                    );
+                }
+            } else if live {
+                self.store
+                    .my_offer_set_state(&o.offer_id, "revoked_on_open")?;
+                if let Err(err) = self.revoke_board_offer(&o.offer_id) {
+                    eprintln!("warning: revoke-on-open failed for {}: {err:#}", o.offer_id);
+                }
+                parked += 1;
             }
-            self.store.my_offer_touch_refresh(&o.offer_id, now)?;
-            n += 1;
         }
-        Ok(n)
+        Ok(parked)
     }
 
     /// Take an offer from the board: remember it, signal interest to the
@@ -10329,10 +10343,13 @@ impl Engine {
                 // answers; a second reject would just be noise). We hold an
                 // offer if it's in our board `my_offers` registry OR our local
                 // `private_offer:<id>` store (private slips never hit
-                // `my_offers`). Existence not liveness: after a legit serve the
-                // board row flips to taken/revoked, and a liveness gate would
-                // then wrongly refuse the owner's own retry — idempotency stays
-                // with the `offer_served`/staleness checks below.
+                // `my_offers`). Existence not liveness: THIS gate only decides
+                // silent-drop vs proceed (a foreign machine must stay mute so
+                // the real owner answers). Liveness is enforced separately by
+                // the lifecycle gate further down — AFTER the duplicate-take
+                // guard, so the served taker's retries are still ignored
+                // silently while a genuinely retired offer gets an explicit
+                // permanent refusal.
                 let we_own_offer = self.store.my_offer_get(&offer.swap_id)?.is_some()
                     || self
                         .store
@@ -10405,9 +10422,40 @@ impl Engine {
                         ),
                     );
                 }
+                // Lifecycle gate (revoke-on-open model): honor a take ONLY
+                // while our own ledger row says `live`. Everything else —
+                // `revoked_on_open` (the boot-time firm de-list), a manual
+                // `revoked`, `expired`, `taken` — is a permanent refusal: the
+                // taker holds our valid signature, so retirement must be
+                // enforced here, not just on the board listing. This runs
+                // AFTER the duplicate-take guard above, so the served taker's
+                // transport duplicates are still ignored silently instead of
+                // being rejected. Private slips have no ledger row (they never
+                // hit `my_offers`) and stay governed by the meta/served guards
+                // below.
+                if let Some(row) = self.store.my_offer_get(&offer.swap_id)? {
+                    if row.state != "live" {
+                        let reason = match row.state.as_str() {
+                            "revoked_on_open" => {
+                                "offer was de-listed when the maker's app closed (not re-posted)"
+                            }
+                            "revoked" => "offer withdrawn",
+                            "expired" => "offer expired",
+                            "taken" => "offer no longer available",
+                            _ => "offer is not live",
+                        };
+                        self.reject_take(&envelope.from, &offer.swap_id, reason)?;
+                        return event(
+                            &offer.swap_id,
+                            "take-rejected",
+                            format!("offer state `{}` — {reason}", row.state),
+                        );
+                    }
+                }
                 // Withdrawn or expired offers are refused even though the
                 // taker holds our valid signature — revocation is enforced
-                // here, not just on the board listing.
+                // here, not just on the board listing (belt for private slips
+                // and pre-registry offers, which have no `my_offers` row).
                 if self
                     .store
                     .meta_get(&format!("offer_revoked:{}", offer.swap_id))?
@@ -12473,6 +12521,174 @@ mod tests {
             "only the non-btc offer survives"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn retire_offers_on_open_parks_live_rows_and_leaves_terminal_states() {
+        // Revoke-on-open is an expiry sweep over `live` AND already-parked
+        // rows: past its own validity (`created + valid_for`) → terminal
+        // `expired`; a `live` row within validity → the revivable
+        // `revoked_on_open` (mark-first, so the revoke's auto-mark is a
+        // no-op) with the board revocation queued; a parked row within
+        // validity stays parked; rows already terminal — a manual `revoked`,
+        // `expired`, `taken` — are untouched.
+        let (mut engine, dir) = engine_with("retire-on-open", None);
+        engine.nostr_relays = Some("wss://test.invalid".into());
+        let now = local_now();
+        let put = |id: &str, created: u64, valid_for: u64| {
+            let body = serde_json::to_value(crate::board::OfferBody {
+                protocol: "pact-htlc-v1".into(),
+                wire: 1,
+                network: "regtest".into(),
+                give_asset: "btcx".into(),
+                give_amount: 1,
+                get_asset: "btc".into(),
+                get_amount: 1,
+                t1_secs: 3600,
+                t2_secs: 1800,
+                ttl_secs: Some(3600),
+                created,
+            })
+            .unwrap();
+            let env = engine.signed_envelope("offer", id, body).unwrap();
+            engine
+                .store
+                .my_offer_put(
+                    id,
+                    &serde_json::to_string(&env).unwrap(),
+                    created,
+                    valid_for,
+                    created,
+                )
+                .unwrap();
+        };
+        // Within validity: valid_for 0 = no expiry, or a window still open.
+        put("o_live1", now, 0);
+        put("o_live2", now, 24 * 3600);
+        // Live but past its validity — the sweep expires it instead of parking.
+        put("o_live_expired", now.saturating_sub(7200), 3600);
+        // Parked from a previous boot: fresh stays parked, lapsed expires.
+        put("o_parked_fresh", now, 24 * 3600);
+        put("o_parked_expired", now.saturating_sub(7200), 3600);
+        for id in ["o_taken", "o_revoked", "o_expired"] {
+            put(id, now, 0);
+        }
+        for (id, state) in [
+            ("o_parked_fresh", "revoked_on_open"),
+            ("o_parked_expired", "revoked_on_open"),
+            ("o_taken", "taken"),
+            ("o_revoked", "revoked"),
+            ("o_expired", "expired"),
+        ] {
+            engine.store.my_offer_set_state(id, state).unwrap();
+        }
+
+        let outbox_before = engine.store.nostr_outbox_pending().unwrap().len();
+        // Newly parked = the two live-within-validity rows only.
+        assert_eq!(engine.retire_offers_on_open().unwrap(), 2);
+        let outbox_after = engine.store.nostr_outbox_pending().unwrap().len();
+
+        let state_of = |id: &str| engine.store.my_offer_get(id).unwrap().unwrap().state;
+        assert_eq!(state_of("o_live1"), "revoked_on_open");
+        assert_eq!(state_of("o_live2"), "revoked_on_open");
+        assert_eq!(state_of("o_live_expired"), "expired");
+        assert_eq!(state_of("o_parked_fresh"), "revoked_on_open");
+        assert_eq!(state_of("o_parked_expired"), "expired");
+        assert_eq!(state_of("o_taken"), "taken");
+        assert_eq!(state_of("o_revoked"), "revoked");
+        assert_eq!(state_of("o_expired"), "expired");
+        // The de-list went through revoke_board_offer: local block recorded and
+        // a kind-5 deletion queued — for the swept rows only.
+        assert!(engine
+            .store
+            .meta_get("offer_revoked:o_live1")
+            .unwrap()
+            .is_some());
+        assert!(engine
+            .store
+            .meta_get("offer_revoked:o_live_expired")
+            .unwrap()
+            .is_some());
+        assert!(engine
+            .store
+            .meta_get("offer_revoked:o_taken")
+            .unwrap()
+            .is_none());
+        assert!(
+            outbox_after >= outbox_before + 2,
+            "retirements queue their board revocations ({outbox_before} -> {outbox_after})"
+        );
+        // Idempotent: nothing left `live`, a second boot parks nothing new and
+        // leaves the parked-fresh row waiting for the dialog.
+        assert_eq!(engine.retire_offers_on_open().unwrap(), 0);
+        assert_eq!(state_of("o_parked_fresh"), "revoked_on_open");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn take_on_a_boot_retired_offer_is_permanently_refused() {
+        // The taker still holds our valid signed offer, so retirement must be
+        // enforced at the take arm: a `revoked_on_open` row is refused via the
+        // reject path (permanent refusal with a clear reason), never served.
+        let (mut maker, md) = engine_with("roo-take-maker", None);
+        maker.nostr_relays = Some("wss://test.invalid".into());
+        let (taker, td) = engine_with("roo-take-taker", None);
+        let offer_id = "offer-roo-test";
+
+        let proto = crate::adaptor_swap::PROTOCOL_V2;
+        let offer_body = serde_json::json!({
+            "protocol": proto,
+            "wire": crate::wire_epoch(proto),
+            "network": "regtest",
+            "give_asset": "btcx", "give_amount": 50_000_000u64,
+            "get_asset": "btc", "get_amount": 100_000u64,
+            "t1_secs": 40_000u32, "t2_secs": 20_000u32,
+            "ttl_secs": serde_json::Value::Null,
+            "created": local_now(),
+        });
+        let offer = maker
+            .signed_envelope("offer", offer_id, offer_body)
+            .unwrap();
+        maker
+            .store
+            .my_offer_put(
+                offer_id,
+                &serde_json::to_string(&offer).unwrap(),
+                local_now(),
+                0,
+                local_now(),
+            )
+            .unwrap();
+        assert_eq!(maker.retire_offers_on_open().unwrap(), 1);
+
+        // A take arrives AFTER the boot retirement (fresh stamp, right wire).
+        let take = taker
+            .signed_envelope(
+                "take",
+                offer_id,
+                serde_json::json!({
+                    "offer": serde_json::to_value(&offer).unwrap(),
+                    "taken_at": local_now(),
+                    "wire": crate::wire_epoch(proto),
+                }),
+            )
+            .unwrap();
+        let ev = maker.handle_relay_envelope(&take).unwrap().unwrap();
+        assert_eq!(ev.action, "take-rejected", "{}", ev.detail);
+        assert!(
+            ev.detail.contains("revoked_on_open"),
+            "the refusal names the lifecycle state: {}",
+            ev.detail
+        );
+        // Never served: no swap record was created for this take.
+        assert!(maker
+            .store
+            .meta_get(&format!("offer_served:{offer_id}"))
+            .unwrap()
+            .is_none());
+
+        std::fs::remove_dir_all(&md).ok();
+        std::fs::remove_dir_all(&td).ok();
     }
 
     #[test]

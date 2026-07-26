@@ -725,6 +725,17 @@ export const fi: Bundle = {
     back: "Takaisin",
     continue: "Jatka",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Palautetaanko tarjouksesi?",
+    intro: "Nämä tarjoukset poistettiin taululta, kun sovellus suljettiin. Hinnat voivat olla vanhentuneita — palauta ne julkaistaksesi ne uudelleen tuoreina tarjouksina samoin ehdoin, tai hylkää ne, jolloin ne pysyvät pois vedettyinä.",
+    timelocks: "aikalukot {t1} h/{t2} h",
+    reviveAll: "Palauta kaikki",
+    revive: "Palauta",
+    dismiss: "Hylkää",
+    close: "Sulje",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "haltuunotto {id}: maksulompakko ei ole tällä koneella — toistaiseksi vain palautus; liitä omistava lompakko viimeistelläksesi vaihdon",
@@ -738,7 +749,7 @@ export const fi: Bundle = {
     noTauri: "ei käynnissä Satchelin sisällä — tämä käyttöliittymä tarvitsee Tauri-sillan",
     startupError: "käynnistys: {err}",
     notConnected: "ei yhdistetty: {err}",
-    connected: "yhdistetty pactd {version} ({protocol})",
+    connected: "yhdistetty pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "vaihdettu kauppiaaseen {id}",
     renamedMerchant: "kauppias nimetty uudelleen: {name}",
@@ -759,6 +770,11 @@ export const fi: Bundle = {
     withdrawError: "vedä pois: {err}",
     postedOffer: "julkaistu tarjous {id} — vedä pois milloin tahansa; mitään ei lukita",
     postOfferError: "tarjouksen julkaisu: {err}",
+    offerRevived: "tarjous {old} palautettu tuoreena tarjouksena {id}",
+    reviveError: "tarjouksen {id} palautus: {err}",
+    offerDismissed: "tarjous {id} hylätty — pysyy pois vedettynä",
+    offerDismissedDeadPair: "tarjous {id} hylätty — sen pari ei ole enää määritettynä",
+    dismissError: "tarjouksen {id} hylkäys: {err}",
     createdSlip: "luotu yksityinen tarjouslipuke — lähetä se ystävällesi",
     tookPrivateOffer: "otettu yksityinen tarjous {id} — se näkyy nyt aktiivisissa swapeissasi",
     cancelledPrivateOffer: "peruutettu yksityinen tarjous {id}",

@@ -722,6 +722,17 @@ export const ptBR: Bundle = {
     back: "Voltar",
     continue: "Continuar",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Republicar suas ofertas?",
+    intro: "Estas ofertas foram retiradas do quadro quando o app foi fechado. Os preços podem estar desatualizados — reviva-as para republicá-las como ofertas novas com os mesmos termos, ou dispense-as para que permaneçam retiradas.",
+    timelocks: "timelocks {t1}h/{t2}h",
+    reviveAll: "Reviver todas",
+    revive: "Reviver",
+    dismiss: "Dispensar",
+    close: "Fechar",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "assumir {id}: a carteira de pagamento não está nesta máquina — por enquanto apenas reembolso; conecte a carteira proprietária para concluir o swap",
@@ -735,7 +746,7 @@ export const ptBR: Bundle = {
     noTauri: "não rodando dentro do Satchel — esta interface precisa da ponte Tauri",
     startupError: "inicialização: {err}",
     notConnected: "não conectado: {err}",
-    connected: "conectado ao pactd {version} ({protocol})",
+    connected: "conectado ao pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "trocado para o merchant {id}",
     renamedMerchant: "merchant renomeado para {name}",
@@ -756,6 +767,11 @@ export const ptBR: Bundle = {
     withdrawError: "retirar: {err}",
     postedOffer: "oferta {id} publicada — retire quando quiser; nada fica bloqueado",
     postOfferError: "publicar oferta: {err}",
+    offerRevived: "oferta {old} revivida como oferta nova {id}",
+    reviveError: "reviver oferta {id}: {err}",
+    offerDismissed: "oferta {id} dispensada — permanece retirada",
+    offerDismissedDeadPair: "oferta {id} dispensada — seu par não está mais configurado",
+    dismissError: "dispensar oferta {id}: {err}",
     createdSlip: "comprovante de oferta privada criado — envie ao seu amigo",
     tookPrivateOffer: "oferta privada {id} aceita — agora aparece nos seus swaps ativos",
     cancelledPrivateOffer: "oferta privada {id} cancelada",

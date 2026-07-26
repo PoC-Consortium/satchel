@@ -33,6 +33,7 @@ from framework.util import (  # noqa: E402
     regtest_timelocks,
     save_msg,
     swap_id_from,
+    wait_until,
 )
 
 
@@ -786,6 +787,79 @@ def test_corkboard_swap(h):
         board.stop()
 
 
+def test_offer_revoke_on_open(h):
+    """Offer restart lifecycle (revoke-on-open): after a pactd restart a
+    previously-live offer is firmly retired — state `revoked_on_open` in the
+    maker's ledger and de-listed from the board — because boot-time state is
+    unknowable (clean close / crash / foreign withdrawal) and the engine never
+    guesses and re-advertises possibly-stale terms. Revival is a FRESH
+    `boardpostoffer` with the same terms under a NEW id (which also heals any
+    stale viewer tombstones by construction); `offerdismiss` settles a retired
+    row as plain `revoked` and refuses anything not in `revoked_on_open`."""
+    board = Corkboard(h.workdir)
+    board.start()
+    # tick_secs=1: the retire pass runs on the background scheduler's first
+    # tick after boot — which `--tick-secs 0` (tick-on-demand) daemons never
+    # run, so this cell needs the real boot path.
+    maker = Party("roo1", h, h.workdir, "alice_pocx", "alice_btc",
+                  board_url=board.url, tick_secs=1).start()
+    try:
+        offer_id = maker.rpc(
+            "boardpostoffer", f"btcx:{GIVE_POCX}", f"btc:{GET_BTC}",
+            4 * 3600, 2 * 3600, "pact-htlc-v1")["offer_id"]
+        assert any(o["swap_id"] == offer_id
+                   for o in maker.rpc("boardlistoffers")["offers"]), \
+            "offer not listed after post"
+
+        # Plain restart, no withdraw: the next boot must retire the offer.
+        maker.stop()
+        maker.start()
+
+        def boot_retired():
+            rows = maker.rpc("listmyoffers")
+            row = next((r for r in rows if r["offer_id"] == offer_id), None)
+            return row is not None and row["state"] == "revoked_on_open"
+
+        wait_until(boot_retired, timeout=30,
+                   what="boot-retire (state revoked_on_open)")
+        assert not any(o["swap_id"] == offer_id
+                       for o in maker.rpc("boardlistoffers")["offers"]), \
+            "boot-retired offer still listed on the board"
+        print("[e2e] restart retired the live offer (revoked_on_open + de-listed)")
+
+        # Revival = a FRESH post with the same terms: a NEW id, listed again.
+        new_id = maker.rpc(
+            "boardpostoffer", f"btcx:{GIVE_POCX}", f"btc:{GET_BTC}",
+            4 * 3600, 2 * 3600, "pact-htlc-v1")["offer_id"]
+        assert new_id != offer_id, "revival must mint a fresh offer id"
+        assert any(o["swap_id"] == new_id
+                   for o in maker.rpc("boardlistoffers")["offers"]), \
+            "revived offer not listed"
+
+        # Dismiss settles the retired row as a plain terminal `revoked`…
+        maker.rpc("offerdismiss", offer_id)
+        rows = maker.rpc("listmyoffers")
+        assert next(r for r in rows
+                    if r["offer_id"] == offer_id)["state"] == "revoked", rows
+        # …and is strict: a second dismiss (now `revoked`) and a dismiss of the
+        # LIVE revival are both refused — only `revoked_on_open` rows qualify.
+        for bad in (offer_id, new_id):
+            try:
+                maker.rpc("offerdismiss", bad)
+            except RuntimeError as exc:
+                assert "revoked_on_open" in str(exc), exc
+            else:
+                raise AssertionError(f"offerdismiss must refuse {bad}")
+        # The revival stays live through all of it.
+        rows = maker.rpc("listmyoffers")
+        assert next(r for r in rows
+                    if r["offer_id"] == new_id)["state"] == "live", rows
+        print("[e2e] revoke-on-open + revive-as-fresh-post + dismiss OK")
+    finally:
+        maker.stop()
+        board.stop()
+
+
 def test_private_offer_swap(h):
     """Private (off-market) offers, PRIVATE_OFFERS.md: the maker builds a
     signed offer with `makeprivateoffer` (NOT boardpostoffer) — it is NEVER
@@ -910,6 +984,11 @@ class CorkboardSwap(PactTestFramework):
         test_corkboard_swap(self.h)
 
 
+class OfferRevokeOnOpen(PactTestFramework):
+    def run_test(self):
+        test_offer_revoke_on_open(self.h)
+
+
 class BoardResetRecovery(PactTestFramework):
     def run_test(self):
         test_board_reset_recovery(self.h)
@@ -941,6 +1020,7 @@ SCENARIOS = [
     CreateImportThenSwap,
     CoinSetup,
     CorkboardSwap,
+    OfferRevokeOnOpen,
     BoardResetRecovery,
     NostrRelaySwap,
     ConcurrentDrainNoDoubleSend,

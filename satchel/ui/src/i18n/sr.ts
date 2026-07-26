@@ -722,6 +722,17 @@ export const sr: Bundle = {
     back: "Назад",
     continue: "Настави",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Вратити ваше понуде?",
+    intro: "Ове понуде су скинуте са табле при затварању апликације. Цене су можда застареле — оживите их да их поново објавите као свеже понуде под истим условима, или их одбаците па остају повучене.",
+    timelocks: "временске браве {t1}ч/{t2}ч",
+    reviveAll: "Оживи све",
+    revive: "Оживи",
+    dismiss: "Одбаци",
+    close: "Затвори",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "преузимање {id}: новчаник исплате није на овој машини — засад само повраћај; повежите власнички новчаник да довршите своп",
@@ -735,7 +746,7 @@ export const sr: Bundle = {
     noTauri: "не ради унутар Satchel-а — овом UI-ју је потребан Tauri мост",
     startupError: "покретање: {err}",
     notConnected: "није повезано: {err}",
-    connected: "повезано са pactd {version} ({protocol})",
+    connected: "повезано са pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "пребачено на трговца {id}",
     renamedMerchant: "трговац преименован у {name}",
@@ -756,6 +767,11 @@ export const sr: Bundle = {
     withdrawError: "повлачење: {err}",
     postedOffer: "објављена понуда {id} — повуците у било ком тренутку; ништа није закључано",
     postOfferError: "објављивање понуде: {err}",
+    offerRevived: "понуда {old} оживљена као свежа понуда {id}",
+    reviveError: "оживљавање понуде {id}: {err}",
+    offerDismissed: "понуда {id} одбачена — остаје повучена",
+    offerDismissedDeadPair: "понуда {id} одбачена — њен пар више није подешен",
+    dismissError: "одбацивање понуде {id}: {err}",
     createdSlip: "направљен приватни листић са понудом — пошаљите га свом пријатељу",
     tookPrivateOffer: "прихваћена приватна понуда {id} — сада се појављује у вашим активним своповима",
     cancelledPrivateOffer: "отказана приватна понуда {id}",

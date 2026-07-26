@@ -757,6 +757,17 @@ export const en = {
     back: "Back",
     continue: "Continue",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Bring back your offers?",
+    intro: "These offers were de-listed when the app closed. Prices may be stale — revive to re-post them as fresh offers at the same terms, or dismiss to keep them withdrawn.",
+    timelocks: "timelocks {t1}h/{t2}h",
+    reviveAll: "Revive all",
+    revive: "Revive",
+    dismiss: "Dismiss",
+    close: "Close",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "take over {id}: the payout wallet is not on this machine — refund-only for now; attach the owning wallet to complete the swap",
@@ -770,7 +781,7 @@ export const en = {
     noTauri: "not running inside Satchel — this UI needs the Tauri bridge",
     startupError: "startup: {err}",
     notConnected: "not connected: {err}",
-    connected: "connected to pactd {version} ({protocol})",
+    connected: "connected to pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "switched to merchant {id}",
     renamedMerchant: "renamed merchant to {name}",
@@ -791,6 +802,11 @@ export const en = {
     withdrawError: "withdraw: {err}",
     postedOffer: "posted offer {id} — withdraw any time; nothing is locked",
     postOfferError: "post offer: {err}",
+    offerRevived: "offer {old} revived as fresh offer {id}",
+    reviveError: "revive offer {id}: {err}",
+    offerDismissed: "offer {id} dismissed — stays withdrawn",
+    offerDismissedDeadPair: "offer {id} dismissed — its pair is no longer configured",
+    dismissError: "dismiss offer {id}: {err}",
     createdSlip: "created a private offer slip — send it to your friend",
     tookPrivateOffer: "took private offer {id} — it now appears in your active swaps",
     cancelledPrivateOffer: "cancelled private offer {id}",

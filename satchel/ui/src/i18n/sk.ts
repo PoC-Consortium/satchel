@@ -722,6 +722,17 @@ export const sk: Bundle = {
     back: "Späť",
     continue: "Pokračovať",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Vystaviť ponuky znova?",
+    intro: "Tieto ponuky boli pri zatvorení aplikácie stiahnuté z nástenky. Ceny môžu byť zastarané — oživte ich, aby sa vystavili znova ako čerstvé ponuky za rovnakých podmienok, alebo ich zamietnite a zostanú stiahnuté.",
+    timelocks: "časové zámky {t1} h/{t2} h",
+    reviveAll: "Oživiť všetky",
+    revive: "Oživiť",
+    dismiss: "Zamietnuť",
+    close: "Zavrieť",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "prevzatie {id}: peňaženka výplaty nie je na tomto stroji — zatiaľ len refundácia; pripojte vlastniacu peňaženku na dokončenie swapu",
@@ -735,7 +746,7 @@ export const sk: Bundle = {
     noTauri: "nebeží vnútri Satchel — toto rozhranie potrebuje most Tauri",
     startupError: "spustenie: {err}",
     notConnected: "nepripojené: {err}",
-    connected: "pripojené k pactd {version} ({protocol})",
+    connected: "pripojené k pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "prepnuté na obchodníka {id}",
     renamedMerchant: "obchodník premenovaný na {name}",
@@ -756,6 +767,11 @@ export const sk: Bundle = {
     withdrawError: "stiahnutie: {err}",
     postedOffer: "ponuka {id} zverejnená — kedykoľvek stiahnite; nič nie je zamknuté",
     postOfferError: "zverejnenie ponuky: {err}",
+    offerRevived: "ponuka {old} oživená ako čerstvá ponuka {id}",
+    reviveError: "oživenie ponuky {id}: {err}",
+    offerDismissed: "ponuka {id} zamietnutá — zostáva stiahnutá",
+    offerDismissedDeadPair: "ponuka {id} zamietnutá — jej pár už nie je nastavený",
+    dismissError: "zamietnutie ponuky {id}: {err}",
     createdSlip: "vytvorený súkromný ponukový lístok — pošlite ho svojmu priateľovi",
     tookPrivateOffer: "súkromná ponuka {id} prijatá — teraz sa zobrazuje vo vašich aktívnych swapoch",
     cancelledPrivateOffer: "súkromná ponuka {id} zrušená",

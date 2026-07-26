@@ -725,6 +725,17 @@ export const cs: Bundle = {
     back: "Zpět",
     continue: "Pokračovat",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Vystavit nabídky znovu?",
+    intro: "Tyto nabídky byly při zavření aplikace staženy z nástěnky. Ceny mohou být zastaralé — oživením je vystavíte znovu jako čerstvé nabídky za stejných podmínek, zavržením zůstanou stažené.",
+    timelocks: "časové zámky {t1} h/{t2} h",
+    reviveAll: "Oživit vše",
+    revive: "Oživit",
+    dismiss: "Zavrhnout",
+    close: "Zavřít",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "převzetí {id}: peněženka pro výplatu není na tomto stroji — prozatím jen refundace; připojte vlastnící peněženku pro dokončení swapu",
@@ -738,7 +749,7 @@ export const cs: Bundle = {
     noTauri: "neběží uvnitř Satchelu — toto UI potřebuje most Tauri",
     startupError: "spuštění: {err}",
     notConnected: "nepřipojeno: {err}",
-    connected: "připojeno k pactd {version} ({protocol})",
+    connected: "připojeno k pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "přepnuto na merchanta {id}",
     renamedMerchant: "merchant přejmenován na {name}",
@@ -759,6 +770,11 @@ export const cs: Bundle = {
     withdrawError: "stažení: {err}",
     postedOffer: "vystavena nabídka {id} — kdykoli ji stáhněte; nic není uzamčeno",
     postOfferError: "vystavení nabídky: {err}",
+    offerRevived: "nabídka {old} oživena jako čerstvá nabídka {id}",
+    reviveError: "oživení nabídky {id}: {err}",
+    offerDismissed: "nabídka {id} zavržena — zůstává stažena",
+    offerDismissedDeadPair: "nabídka {id} zavržena — její pár už není nastaven",
+    dismissError: "zavržení nabídky {id}: {err}",
     createdSlip: "vytvořen soukromý nabídkový lístek — pošlete ho svému příteli",
     tookPrivateOffer: "přijata soukromá nabídka {id} — nyní se objevuje ve vašich aktivních swapech",
     cancelledPrivateOffer: "zrušena soukromá nabídka {id}",

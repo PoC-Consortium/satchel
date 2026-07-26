@@ -722,6 +722,17 @@ export const pl: Bundle = {
     back: "Wstecz",
     continue: "Kontynuuj",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Przywrócić twoje oferty?",
+    intro: "Te oferty zdjęto z tablicy przy zamknięciu aplikacji. Ceny mogą być nieaktualne — przywróć je, aby wystawić je ponownie jako świeże oferty na tych samych warunkach, albo odrzuć, aby pozostały wycofane.",
+    timelocks: "blokady czasowe {t1} godz./{t2} godz.",
+    reviveAll: "Przywróć wszystkie",
+    revive: "Przywróć",
+    dismiss: "Odrzuć",
+    close: "Zamknij",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "przejęcie {id}: portfel wypłaty nie jest na tej maszynie — na razie tylko zwrot; podłącz portfel-właściciela, aby dokończyć swap",
@@ -735,7 +746,7 @@ export const pl: Bundle = {
     noTauri: "nie działa wewnątrz Satchel — ten interfejs potrzebuje mostka Tauri",
     startupError: "uruchamianie: {err}",
     notConnected: "brak połączenia: {err}",
-    connected: "połączono z pactd {version} ({protocol})",
+    connected: "połączono z pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "przełączono na sprzedawcę {id}",
     renamedMerchant: "zmieniono nazwę sprzedawcy na {name}",
@@ -756,6 +767,11 @@ export const pl: Bundle = {
     withdrawError: "wycofanie: {err}",
     postedOffer: "wystawiono ofertę {id} — wycofaj w każdej chwili; nic nie jest blokowane",
     postOfferError: "wystawienie oferty: {err}",
+    offerRevived: "oferta {old} przywrócona jako świeża oferta {id}",
+    reviveError: "przywracanie oferty {id}: {err}",
+    offerDismissed: "oferta {id} odrzucona — pozostaje wycofana",
+    offerDismissedDeadPair: "oferta {id} odrzucona — jej para nie jest już skonfigurowana",
+    dismissError: "odrzucanie oferty {id}: {err}",
     createdSlip: "utworzono prywatny slip ofertowy — wyślij go znajomemu",
     tookPrivateOffer: "przyjęto prywatną ofertę {id} — pojawia się teraz w Twoich aktywnych swapach",
     cancelledPrivateOffer: "anulowano prywatną ofertę {id}",

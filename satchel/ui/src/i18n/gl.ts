@@ -720,6 +720,17 @@ export const gl: Bundle = {
     back: "Atrás",
     continue: "Continuar",
   },
+  // Revive-offers dialog (revoke-on-open): on restart the engine firmly
+  // de-lists any offers left live; this dialog offers them back as fresh posts.
+  revive: {
+    title: "Volver publicar as túas ofertas?",
+    intro: "Estas ofertas retiráronse do taboleiro ao pechar a aplicación. Os prezos poden estar desactualizados — revíveas para publicalas de novo como ofertas novas cos mesmos termos, ou descártaas para que sigan retiradas.",
+    timelocks: "timelocks {t1} h/{t2} h",
+    reviveAll: "Revivir todas",
+    revive: "Revivir",
+    dismiss: "Descartar",
+    close: "Pechar",
+  },
   // UI-4 docked activity log.
   log: {
     takeoverRefundOnly: "toma de control {id}: a carteira de pagamento non está nesta máquina — polo momento só reembolso; conecta a carteira propietaria para completar o intercambio",
@@ -733,7 +744,7 @@ export const gl: Bundle = {
     noTauri: "non se está executando dentro de Satchel — esta interface precisa a ponte Tauri",
     startupError: "inicio: {err}",
     notConnected: "sen conexión: {err}",
-    connected: "conectado a pactd {version} ({protocol})",
+    connected: "conectado a pactd {version}",
     listcoinsError: "listcoins: {err}",
     switchedMerchant: "cambiouse ao comerciante {id}",
     renamedMerchant: "comerciante renomeado a {name}",
@@ -754,6 +765,11 @@ export const gl: Bundle = {
     withdrawError: "retirar: {err}",
     postedOffer: "publicouse a oferta {id} — retíraa cando queiras; non se bloquea nada",
     postOfferError: "publicar oferta: {err}",
+    offerRevived: "oferta {old} revivida como oferta nova {id}",
+    reviveError: "revivir a oferta {id}: {err}",
+    offerDismissed: "oferta {id} descartada — segue retirada",
+    offerDismissedDeadPair: "oferta {id} descartada — o seu par xa non está configurado",
+    dismissError: "descartar a oferta {id}: {err}",
     createdSlip: "creouse un vale de oferta privada — envíallo ao teu amigo",
     tookPrivateOffer: "tomouse a oferta privada {id} — agora aparece nos teus intercambios activos",
     cancelledPrivateOffer: "cancelouse a oferta privada {id}",
