@@ -310,14 +310,16 @@ enum SideChange {
     Same,
     New,
     Gone,
-    Improved,
-    BackedOff,
+    /// Price moved. Headlines state ONLY the observable direction ("best bid
+    /// fell") — never intent ("backed off") or cause: crier cannot tell a
+    /// maker re-pricing from the old best being revoked, expired, or taken
+    /// with the next level surfacing (provable-facts rule, PLAN.md §4).
+    Rose,
+    Fell,
     Size,
 }
 
-/// `better_is_lower`: true for asks (a lower ask improves the book for
-/// takers), false for bids.
-fn classify(prev: &Option<SideTop>, new: &Option<SideTop>, better_is_lower: bool) -> SideChange {
+fn classify(prev: &Option<SideTop>, new: &Option<SideTop>) -> SideChange {
     match (prev, new) {
         (None, None) => SideChange::Same,
         (None, Some(_)) => SideChange::New,
@@ -330,10 +332,10 @@ fn classify(prev: &Option<SideTop>, new: &Option<SideTop>, better_is_lower: bool
                 } else {
                     SideChange::Same
                 }
-            } else if (np < pp) == better_is_lower {
-                SideChange::Improved
+            } else if np < pp {
+                SideChange::Fell
             } else {
-                SideChange::BackedOff
+                SideChange::Rose
             }
         }
     }
@@ -344,15 +346,15 @@ fn side_headline(side: &str, change: SideChange) -> Option<String> {
         SideChange::Same => None,
         SideChange::New => Some(format!("new best {side}")),
         SideChange::Gone => Some(format!("best {side} gone")),
-        SideChange::Improved => Some(format!("best {side} improved")),
-        SideChange::BackedOff => Some(format!("best {side} backed off")),
+        SideChange::Rose => Some(format!("best {side} rose")),
+        SideChange::Fell => Some(format!("best {side} fell")),
         SideChange::Size => Some(format!("best {side} size changed")),
     }
 }
 
 pub fn render_announcement(prev: &TopSig, new: &TopSig, ctx: &RenderCtx) -> Announcement {
-    let ask_change = classify(&prev.ask, &new.ask, true);
-    let bid_change = classify(&prev.bid, &new.bid, false);
+    let ask_change = classify(&prev.ask, &new.ask);
+    let bid_change = classify(&prev.bid, &new.bid);
     let headline = match (
         side_headline("ask", ask_change),
         side_headline("bid", bid_change),
@@ -407,7 +409,7 @@ fn side_line(
         ctx.base.symbol,
         ctx.price_with_usd(price, decimals)
     );
-    if matches!(change, SideChange::Improved | SideChange::BackedOff) {
+    if matches!(change, SideChange::Rose | SideChange::Fell) {
         if let Some(p) = prev {
             line.push_str(&format!(
                 " *(was {})*",
@@ -519,7 +521,7 @@ BID  400 BTCX @ 0.655\n\
             ..prev.clone()
         };
         let a = render_announcement(&prev, &new, &ctx(Some(118_000.0)));
-        assert_eq!(a.title, "BTCX/BTC — best ask improved");
+        assert_eq!(a.title, "BTCX/BTC — best ask fell");
         assert_eq!(
             a.body,
             "**Ask** `37 BTCX @ 0.676 ($79.77)` *(was 0.691)*\n\
