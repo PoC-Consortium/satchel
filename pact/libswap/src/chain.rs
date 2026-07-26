@@ -152,6 +152,25 @@ pub trait ChainBackend: Send + Sync {
         from_height: u64,
     ) -> Result<Option<Vec<Vec<u8>>>>;
 
+    /// The full spending TRANSACTION of `outpoint` plus its block height
+    /// (0 = mempool), searching the mempool and blocks from `from_height` —
+    /// the tier-L reconstruction twin of [`Self::spk_history`] for the one
+    /// question a script-index-less node can still answer: the funding
+    /// OUTPOINT is already known, only its spend is missing. Full blocks
+    /// carry witnesses, so a Core backend needs no `-txindex` for this.
+    /// `Ok(None)` = no spend visible (still unspent, spend below
+    /// `from_height`, or the backend cannot scan — the default). Like every
+    /// backend read the answer is a hint the caller verifies: the returned
+    /// tx must actually spend `outpoint` byte-exactly.
+    fn find_spend_tx(
+        &self,
+        _outpoint: &OutPoint,
+        _watch_spk: &ScriptBuf,
+        _from_height: u64,
+    ) -> Result<Option<(Transaction, u64)>> {
+        Ok(None)
+    }
+
     /// Full transaction history of a script — funding AND spends, past or
     /// present, confirmed or mempool — as `(txid, height)` pairs in server
     /// order (oldest first, mempool entries last with `height <= 0`). This is
@@ -489,6 +508,14 @@ impl<T: ChainBackend + ?Sized> ChainBackend for std::sync::Arc<T> {
     ) -> Result<Option<Vec<Vec<u8>>>> {
         (**self).find_spend_witness(outpoint, watch_spk, from_height)
     }
+    fn find_spend_tx(
+        &self,
+        outpoint: &OutPoint,
+        watch_spk: &ScriptBuf,
+        from_height: u64,
+    ) -> Result<Option<(Transaction, u64)>> {
+        (**self).find_spend_tx(outpoint, watch_spk, from_height)
+    }
     fn spk_history(&self, spk: &ScriptBuf) -> Result<Option<Vec<(String, i64)>>> {
         (**self).spk_history(spk)
     }
@@ -724,14 +751,6 @@ impl CoreRpcBackend {
         vin["txid"].as_str() == Some(outpoint.txid.to_string().as_str())
             && vin["vout"].as_u64() == Some(u64::from(outpoint.vout))
     }
-
-    fn witness_of(vin: &Value) -> Result<Vec<Vec<u8>>> {
-        let items = vin["txinwitness"].as_array().cloned().unwrap_or_default();
-        items
-            .iter()
-            .map(|item| hex::decode(item.as_str().unwrap_or_default()).context("bad witness hex"))
-            .collect()
-    }
 }
 
 impl ChainBackend for CoreRpcBackend {
@@ -850,14 +869,46 @@ impl ChainBackend for CoreRpcBackend {
         watch_spk: &ScriptBuf,
         from_height: u64,
     ) -> Result<Option<Vec<Vec<u8>>>> {
+        // One scan, two consumers: the witness is read out of the full
+        // spending tx `find_spend_tx` locates (same mempool + block search
+        // this method always did).
+        match self.find_spend_tx(outpoint, watch_spk, from_height)? {
+            Some((tx, _height)) => {
+                let input = tx
+                    .input
+                    .iter()
+                    .find(|input| input.previous_output == *outpoint)
+                    .context("spend tx does not spend the watched outpoint")?;
+                Ok(Some(
+                    input.witness.iter().map(|item| item.to_vec()).collect(),
+                ))
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn find_spend_tx(
+        &self,
+        outpoint: &OutPoint,
+        watch_spk: &ScriptBuf,
+        from_height: u64,
+    ) -> Result<Option<(Transaction, u64)>> {
         // Cheap gate: while the HTLC output is still unspent — the whole wait,
         // hours of ticks — `gettxout` (include_mempool) answers in ONE call, so we
         // never enumerate the mempool. It needs no -txindex (reads the UTXO set),
         // and only returns `None` once the output is actually spent (mempool OR a
-        // block). Only then do we do the heavier search for the spending witness.
+        // block). Only then do we do the heavier search for the spending tx.
         if self.get_txout(outpoint, watch_spk)?.is_some() {
             return Ok(None);
         }
+        // Both RPC shapes carry the raw tx under "hex" (getrawtransaction
+        // verbose and getblock verbosity 2), so the full spending tx —
+        // witnesses included — decodes without -txindex.
+        let decode = |tx: &Value| -> Result<Transaction> {
+            let hex = tx["hex"].as_str().context("tx result without hex")?;
+            bitcoin::consensus::encode::deserialize(&hex::decode(hex)?)
+                .context("undecodable tx hex from backend")
+        };
         // Mempool first: with frequent polling the reveal is normally caught here,
         // still unconfirmed, before it is mined. Tolerate the eviction race — a
         // txid from the `getrawmempool` snapshot can be mined/evicted before we
@@ -874,7 +925,7 @@ impl ChainBackend for CoreRpcBackend {
             };
             for vin in tx["vin"].as_array().cloned().unwrap_or_default() {
                 if Self::vin_matches(&vin, outpoint) {
-                    return Ok(Some(Self::witness_of(&vin)?));
+                    return Ok(Some((decode(&tx)?, 0)));
                 }
             }
         }
@@ -888,7 +939,7 @@ impl ChainBackend for CoreRpcBackend {
             for tx in block["tx"].as_array().cloned().unwrap_or_default() {
                 for vin in tx["vin"].as_array().cloned().unwrap_or_default() {
                     if Self::vin_matches(&vin, outpoint) {
-                        return Ok(Some(Self::witness_of(&vin)?));
+                        return Ok(Some((decode(&tx)?, height)));
                     }
                 }
             }
@@ -1798,6 +1849,22 @@ impl ChainBackend for MultiBackend {
             1,
             self.fan_out(|b| b.find_spend_witness(outpoint, watch_spk, from_height)),
         )?;
+        Ok(hits.into_iter().flatten().next())
+    }
+
+    fn find_spend_tx(
+        &self,
+        outpoint: &OutPoint,
+        watch_spk: &ScriptBuf,
+        from_height: u64,
+    ) -> Result<Option<(Transaction, u64)>> {
+        // Positive-only discovery, like `find_spend_witness`: the answer is
+        // self-verifying (the caller checks the tx spends `outpoint`
+        // byte-exactly), so any view's hit wins. No responder quorum — a
+        // pool of scan-incapable views answers `None` by design (trait
+        // default), which must read as "can't see it", not as an outage.
+        let (hits, _errors, _skipped) =
+            self.fan_out(|b| b.find_spend_tx(outpoint, watch_spk, from_height));
         Ok(hits.into_iter().flatten().next())
     }
 

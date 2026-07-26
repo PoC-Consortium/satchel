@@ -239,6 +239,51 @@ pub fn classify_leg(
     }))
 }
 
+/// Tier-L spend recovery — the block-scan fallback.
+///
+/// [`classify_leg`] needs a script index; without one, an already-spent leg
+/// is unknowable through history. But when the funding OUTPOINT is already
+/// known (a recorded pointer, a relay snapshot, wallet evidence), the ONE
+/// missing fact is its spending transaction — and that a bare node can still
+/// dig out of the mempool/blocks ([`ChainBackend::find_spend_tx`], the same
+/// lookup the live driver uses to extract a counterparty's reveal). Verified
+/// like everything here: the returned tx is only accepted if one of its
+/// inputs spends `outpoint` byte-exactly, and the spend KIND is judged from
+/// the witness against locally rebuilt scripts. `Ok(None)` = no spend
+/// visible (still unspent, scan floor too high, or the backend cannot scan)
+/// — inconclusive, exactly as before this fallback existed.
+pub fn classify_spent_by_scan(
+    backend: &dyn ChainBackend,
+    outpoint: &OutPoint,
+    watch_spk: &ScriptBuf,
+    funding_height: u64,
+    scan_floor: u64,
+    classify_spend: &dyn Fn(&[Vec<u8>]) -> SpendKind,
+) -> Result<Option<SpentLeg>> {
+    let Some((tx, spend_height)) = backend.find_spend_tx(outpoint, watch_spk, scan_floor)? else {
+        return Ok(None);
+    };
+    let Some(input) = tx.input.iter().find(|i| i.previous_output == *outpoint) else {
+        return Ok(None); // a hit that doesn't spend our outpoint is not evidence
+    };
+    let witness: Vec<Vec<u8>> = input.witness.iter().map(|item| item.to_vec()).collect();
+    let tip = backend.tip_height()?;
+    let spend_confs = if spend_height > 0 && tip >= spend_height {
+        tip - spend_height + 1
+    } else {
+        0
+    };
+    Ok(Some(SpentLeg {
+        outpoint: *outpoint,
+        funding_height,
+        spend_txid: tx.compute_txid().to_string(),
+        spend_height,
+        spend_confs,
+        kind: classify_spend(&witness),
+        spend_tx_hex: bitcoin::consensus::encode::serialize_hex(&tx),
+    }))
+}
+
 /// Safety margin past a swap's LAST timelock before a followed record with
 /// no visible funds may be aged out (docs/STATE_RECONSTRUCTION.md §4.2):
 /// generous enough that no rational continuation exists, and at least the
@@ -442,6 +487,8 @@ mod tests {
         history: Option<Vec<(String, i64)>>,
         txs: Vec<Transaction>,
         tip: u64,
+        /// What `find_spend_tx` (the tier-L block scan) reports.
+        spend: Option<(Transaction, u64)>,
     }
 
     impl ChainBackend for MockBackend {
@@ -477,6 +524,14 @@ mod tests {
             _from_height: u64,
         ) -> Result<Option<Vec<Vec<u8>>>> {
             anyhow::bail!("mock")
+        }
+        fn find_spend_tx(
+            &self,
+            _outpoint: &bitcoin::OutPoint,
+            _watch_spk: &ScriptBuf,
+            _from_height: u64,
+        ) -> Result<Option<(Transaction, u64)>> {
+            Ok(self.spend.clone())
         }
         fn spk_history(&self, _spk: &ScriptBuf) -> Result<Option<Vec<(String, i64)>>> {
             Ok(self.history.clone())
@@ -572,6 +627,7 @@ mod tests {
             history: None,
             txs: vec![],
             tip: 100,
+            spend: None,
         };
         assert!(
             classify_leg(&none, &spk, 100_000, &kind_always(SpendKind::Unknown))
@@ -583,6 +639,7 @@ mod tests {
             history: Some(vec![]),
             txs: vec![],
             tip: 100,
+            spend: None,
         };
         assert!(matches!(
             classify_leg(&empty, &spk, 100_000, &kind_always(SpendKind::Unknown))
@@ -600,6 +657,7 @@ mod tests {
             history: Some(vec![(f.compute_txid().to_string(), 90)]),
             txs: vec![f.clone()],
             tip: 100,
+            spend: None,
         };
         match classify_leg(&backend, &spk, 100_000, &kind_always(SpendKind::Unknown))
             .unwrap()
@@ -626,6 +684,7 @@ mod tests {
             history: Some(vec![(f.compute_txid().to_string(), 90)]),
             txs: vec![f],
             tip: 100,
+            spend: None,
         };
         assert!(matches!(
             classify_leg(&backend, &spk, 100_000, &kind_always(SpendKind::Unknown))
@@ -658,6 +717,7 @@ mod tests {
             ]),
             txs: vec![f.clone(), sp.clone()],
             tip: 100,
+            spend: None,
         };
         let classify = |w: &[Vec<u8>]| classify_v1_spend(w, &h);
         match classify_leg(&backend, &spk, 100_000, &classify)
@@ -688,6 +748,7 @@ mod tests {
             ]),
             txs: vec![f, sp],
             tip: 100,
+            spend: None,
         };
         match classify_leg(&backend, &spk, 100_000, &kind_always(SpendKind::Redeem))
             .unwrap()
@@ -709,8 +770,112 @@ mod tests {
             history: Some(vec![(f.compute_txid().to_string(), 90)]),
             txs: vec![], // the referenced tx is not retrievable
             tip: 100,
+            spend: None,
         };
         assert!(classify_leg(&backend, &spk, 100_000, &kind_always(SpendKind::Unknown)).is_err());
+    }
+
+    // ---- classify_spent_by_scan (tier-L block-scan fallback) ---------------
+
+    #[test]
+    fn scan_recovers_spend_of_known_outpoint() {
+        let spk = spk();
+        let f = funding_tx(&spk, 100_000);
+        let sp = spend_tx(&f, &[vec![0u8; 64]]); // v2 key-path shape
+        let op = bitcoin::OutPoint {
+            txid: f.compute_txid(),
+            vout: 0,
+        };
+        let backend = MockBackend {
+            history: None, // tier L — classify_leg would give up here
+            txs: vec![],
+            tip: 100,
+            spend: Some((sp.clone(), 95)),
+        };
+        let leg =
+            classify_spent_by_scan(&backend, &op, &spk, 0, 80, &kind_always(SpendKind::Redeem))
+                .unwrap()
+                .expect("spend recovered from the block scan");
+        assert_eq!(leg.spend_txid, sp.compute_txid().to_string());
+        assert_eq!(leg.spend_height, 95);
+        assert_eq!(leg.spend_confs, 6);
+        assert_eq!(leg.kind, SpendKind::Redeem);
+        assert_eq!(
+            leg.spend_tx_hex,
+            bitcoin::consensus::encode::serialize_hex(&sp)
+        );
+    }
+
+    #[test]
+    fn scan_mempool_spend_has_zero_confs() {
+        let spk = spk();
+        let f = funding_tx(&spk, 100_000);
+        let sp = spend_tx(&f, &[vec![0u8; 64]]);
+        let op = bitcoin::OutPoint {
+            txid: f.compute_txid(),
+            vout: 0,
+        };
+        let backend = MockBackend {
+            history: None,
+            txs: vec![],
+            tip: 100,
+            spend: Some((sp, 0)), // still in the mempool
+        };
+        let leg =
+            classify_spent_by_scan(&backend, &op, &spk, 0, 80, &kind_always(SpendKind::Redeem))
+                .unwrap()
+                .unwrap();
+        assert_eq!(leg.spend_confs, 0, "unconfirmed spend must never read deep");
+    }
+
+    #[test]
+    fn scan_rejects_tx_not_spending_the_outpoint() {
+        // A lying/buggy view returning a tx that doesn't spend the watched
+        // outpoint is not evidence.
+        let spk = spk();
+        let f = funding_tx(&spk, 100_000);
+        let other = funding_tx(&spk, 50_000);
+        let sp = spend_tx(&other, &[vec![0u8; 64]]);
+        let op = bitcoin::OutPoint {
+            txid: f.compute_txid(),
+            vout: 0,
+        };
+        let backend = MockBackend {
+            history: None,
+            txs: vec![],
+            tip: 100,
+            spend: Some((sp, 95)),
+        };
+        assert!(classify_spent_by_scan(
+            &backend,
+            &op,
+            &spk,
+            0,
+            80,
+            &kind_always(SpendKind::Redeem)
+        )
+        .unwrap()
+        .is_none());
+    }
+
+    #[test]
+    fn scan_none_when_backend_cannot_scan() {
+        let spk = spk();
+        let op = bitcoin::OutPoint {
+            txid: Txid::from_str(&"44".repeat(32)).unwrap(),
+            vout: 0,
+        };
+        let backend = MockBackend {
+            history: None,
+            txs: vec![],
+            tip: 100,
+            spend: None,
+        };
+        assert!(
+            classify_spent_by_scan(&backend, &op, &spk, 0, 0, &kind_always(SpendKind::Redeem))
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
