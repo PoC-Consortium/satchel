@@ -135,6 +135,12 @@ ask/bid counts. Explicitly EXCLUDED: maker npub, protocol version (v1/v2),
 accumulated book volume (spoofable by unbacked offers), and any
 "take it in Satchel" footer.
 
+**Line format (user-decided 2026-07-26): order convention, size before
+price** — `<size> BTCX @ <price>`, e.g. `120 BTCX @ 0.691 mBTC/BTCX`.
+The full `mBTC/BTCX` unit suffix appears on the lead line of an announcement;
+in the `/book` ladder the unit is stated once in the header and rows are bare
+numbers. Ladder rows right-align sizes so the `@` and price columns line up.
+
 **Restart hygiene**: last-announced top signatures persisted to a small state
 file (`state.json`); on restart crier rebuilds the book from relays first
 (initial-sync grace period, default 60 s) and only announces *diffs vs the
