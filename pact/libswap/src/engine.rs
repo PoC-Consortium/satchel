@@ -6626,6 +6626,7 @@ impl Engine {
         &self,
         chain: &ChainRef,
         spk: &ScriptBuf,
+        amount: u64,
         created_at: u64,
         classify: &dyn Fn(&[Vec<u8>]) -> crate::reconstruct::SpendKind,
         wallet_class: Option<crate::reconstruct::LegClass>,
@@ -6647,6 +6648,28 @@ impl Engine {
                         self.scan_spent_leg(chain, &op, spk, funding_height, created_at, classify)
                     {
                         return Some(LegClass::Spent(spent));
+                    }
+                    // No spend visible. A RECORD pointer whose output is still
+                    // LIVE (right script, right amount) is a conclusive
+                    // `Funded` — parity with the wallet FundingPointer path and
+                    // with what a script-indexed view reports — so a mid-swap
+                    // tier-L reconcile concludes "provably in flight" (and
+                    // stops re-running) instead of staying pending until
+                    // settlement and then preempting the driver's own
+                    // completion event. Skipped after a wallet `Vanished`
+                    // (liveness was just checked and the output is gone).
+                    if other.is_none() {
+                        if let Ok(backend) = self.backend(chain) {
+                            if let Ok(Some(info)) = backend.get_txout(&op, spk) {
+                                if info.value_sat == amount {
+                                    return Some(LegClass::Funded {
+                                        outpoint: op,
+                                        height: funding_height,
+                                        confs: info.confirmations,
+                                    });
+                                }
+                            }
+                        }
                     }
                 }
                 other
@@ -6690,7 +6713,15 @@ impl Engine {
                     let wallet_class = self
                         .wallet_leg_evidence(chain, &spk, amount, rec.created_at, &classify, &probe)
                         .and_then(|ev| self.wallet_evidence_class(chain, &spk, ev));
-                    self.scan_upgrade_leg(chain, &spk, rec.created_at, &classify, wallet_class, ptr)
+                    self.scan_upgrade_leg(
+                        chain,
+                        &spk,
+                        amount,
+                        rec.created_at,
+                        &classify,
+                        wallet_class,
+                        ptr,
+                    )
                 }
                 Err(_) => None,
             }
@@ -6775,7 +6806,15 @@ impl Engine {
                     let wallet_class = self
                         .wallet_leg_evidence(chain, spk, amount, rec.created_at, &classify, &probe)
                         .and_then(|ev| self.wallet_evidence_class(chain, spk, ev));
-                    self.scan_upgrade_leg(chain, spk, rec.created_at, &classify, wallet_class, ptr)
+                    self.scan_upgrade_leg(
+                        chain,
+                        spk,
+                        amount,
+                        rec.created_at,
+                        &classify,
+                        wallet_class,
+                        ptr,
+                    )
                 }
                 Err(_) => None,
             }
