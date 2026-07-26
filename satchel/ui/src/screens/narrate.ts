@@ -118,11 +118,16 @@ export function narrate(s: Swap): string {
     case "funded_b":
       return tr(maker ? "narrate.fundedBMaker" : "narrate.fundedBTaker", v);
     // "Finalizing": the claim is broadcast but still burying — not done yet.
-    // The maker is here at `redeemed_b`; the taker reaches it at `completed`
-    // while its settlement bar is still counting (see isFinalizing). Same wording
-    // for both roles: claimed-coin = {got}, locked-coin = {gave}.
+    // The maker is here at `redeemed_b`; a DRIVEN taker skips it (signed →
+    // completed atomically), but a followed/taken-over taker record can be
+    // ratcheted here by the chain watcher — so claimed/locked must follow the
+    // role: a taker at `redeemed_b` locked coin B and claims coin A. Same
+    // wording for both roles: claimed-coin = {got}, locked-coin = {gave}.
     case "redeemed_b":
-      return tr("narrate.finalizing", { got: b, gave: a });
+      return tr("narrate.finalizing", {
+        got: maker ? b : a,
+        gave: maker ? a : b,
+      });
     case "completed":
       return s.progress?.watching === "settlement"
         ? tr("narrate.finalizing", { got: maker ? b : a, gave: maker ? a : b })

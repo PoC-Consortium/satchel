@@ -732,6 +732,109 @@ def scenario_taker_post_reveal_takeover_v1(h, ep, eb):
         relay.stop()
 
 
+def scenario_taker_post_reveal_takeover_v2(h, ep, eb):
+    """v2 twin of the post-reveal takeover: the maker's key-path redeem of
+    leg B (revealing t) is on chain and the taker dies before claiming leg A.
+    The follower ratchets the imported record to redeemed_b off the leg-B
+    spend — a state a DRIVEN participant never writes (its claim goes
+    signed → completed atomically) — so the takeover lands in the
+    (participant, redeemed_b) drive arm (#211 follow-up), which must extract
+    t from the chain and claim leg A without re-funding anything."""
+    relay = NostrRelay(h.workdir)
+    maker_bx, maker_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
+    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
+    maker = Party("pvmk", h, h.workdir, "alice_pocx", "alice_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
+                  pocx_url=maker_bx, btc_url=maker_bt)
+    taker = Party("pvtk", h, h.workdir, "bob_pocx", "bob_btc",
+                  nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
+                  pocx_url=taker_bx, btc_url=taker_bt)
+    standby = Party("pvsb", h, h.workdir, "bob_pocx", "bob_btc",
+                    nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
+                    pocx_url=taker_bx, btc_url=taker_bt)
+    try:
+        relay.start()
+        maker.start()
+        taker.start()
+        standby.start()
+        mnemonic = taker.setup_seed()
+        standby.setup_seed(mnemonic=mnemonic)
+
+        _relay_handshake(h, maker, taker, "pact-htlc-v2", observers=(standby,))
+
+        def taker_committed():
+            # Chain probe, not the transient funding_b_broadcast flag (same
+            # rationale as the rescue suite's committed_leg_b).
+            t = swap_of(taker)
+            if t is None or not t.get("funding_b_txid"):
+                return False
+            return h.btc.rpc("gettxout", t["funding_b_txid"],
+                             t.get("funding_b_vout") or 0) is not None
+
+        # Phase 1: drive BOTH sides until the taker's leg B is on the wire.
+        sid = None
+        for _ in range(60):
+            tick_all("drive", maker, taker)
+            tick_all("standby", standby)
+            if taker_committed():
+                sid = swap_of(taker)["swap_id"]
+                break
+            if handshake_done(maker, taker):
+                mine_and_sync(h, ep, eb)
+        assert sid, "taker never committed leg B"
+        pre_b = swap_of(taker, sid)["funding_b_txid"]
+
+        # Phase 2: the taker is WEDGED (no more ticks — a hung machine) while
+        # the maker buries leg B and reveals t. A ticking v2 taker claims
+        # leg A off the mempool reveal instantly (no depth gate), so wedging
+        # it is what leaves the post-reveal window open for the kill.
+        revealed = False
+        for _ in range(60):
+            tick_all("reveal", maker)
+            tick_all("standby", standby)
+            m = swap_of(maker, sid)
+            if m is not None and m["state"] in ("redeemed_b", "completed"):
+                revealed = True
+                break
+            mine_and_sync(h, ep, eb)
+        assert revealed, f"maker never revealed: {swap_of(maker, sid)}"
+        print(f"[takeover-e2e] v2 reveal is public ({sid[:16]}) — killing the "
+              "taker before its leg-A claim")
+        _kill(taker)
+
+        _await_follow(standby, sid, "import")
+        standby.rpc("takeover", sid)
+        assert swap_of(standby, sid).get("source") == "local", \
+            "v2 post-reveal takeover did not adopt"
+        done = False
+        for _ in range(40):
+            tick_all("finish", standby, maker)
+            s, m = swap_of(standby, sid), swap_of(maker, sid)
+            if s and m and s["state"] == "completed" and m["state"] == "completed":
+                done = True
+                break
+            mine_and_sync(h, ep, eb)
+        assert done, (f"v2 post-reveal takeover never completed: "
+                      f"standby={swap_of(standby, sid)} maker={swap_of(maker, sid)}")
+        post = swap_of(standby, sid)
+        assert post["funding_b_txid"] == pre_b, \
+            "v2 post-reveal standby re-funded leg B (double-fund!)"
+        # The leg-A funding outpoint must be SPENT — the standby's claim,
+        # made from the chain-visible reveal alone.
+        assert h.pocx.rpc("gettxout", post["funding_a_txid"],
+                          post.get("funding_a_vout") or 0) is None, \
+            f"leg-A funding still unspent — the standby never claimed it: {post}"
+        print("[takeover-e2e] v2 post-reveal taker takeover OK: adopted at "
+              "redeemed_b, claimed leg A from the chain-visible reveal")
+    finally:
+        for p in (maker, taker, standby):
+            try:
+                p.stop()
+            except Exception:  # noqa: BLE001
+                pass
+        relay.stop()
+
+
 def scenario_owner_returns_after_takeover_v1(h, ep, eb):
     """#201 headline: on resume, a DRIVEN swap must derive its true status
     from chain BEFORE driving. The owner dies at both-legs-funded, its warm
@@ -991,6 +1094,10 @@ class TakerPostRevealTakeoverV1(_FollowScenario):
     scenario = staticmethod(scenario_taker_post_reveal_takeover_v1)
 
 
+class TakerPostRevealTakeoverV2(_FollowScenario):
+    scenario = staticmethod(scenario_taker_post_reveal_takeover_v2)
+
+
 class OwnerReturnsAfterTakeoverV1(_FollowScenario):
     scenario = staticmethod(scenario_owner_returns_after_takeover_v1)
 
@@ -1007,6 +1114,7 @@ SCENARIOS = [
     PrefundTakeoverAbortsBlind,
     PrefundTakeoverFundsProvable,
     TakerPostRevealTakeoverV1,
+    TakerPostRevealTakeoverV2,
     OwnerReturnsAfterTakeoverV1,
     OwnerReturnsAfterTakeoverV2,
 ]

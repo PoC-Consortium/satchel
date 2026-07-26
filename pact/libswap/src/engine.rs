@@ -2754,8 +2754,13 @@ impl Engine {
             if backend.get_txout(&op, &spk_b)?.is_some() {
                 return Ok(false); // live on chain or in the mempool
             }
-            let from =
-                self.funding_scan_from_height(&backend, txid, &spk_b, rec.funding_b_height)?;
+            let from = self.funding_scan_from_height(
+                &backend,
+                txid,
+                &spk_b,
+                rec.funding_b_height,
+                rec.created_at,
+            )?;
             Ok(backend.find_spend_witness(&op, &spk_b, from)?.is_none())
         })()
         .unwrap_or(false)
@@ -2784,14 +2789,14 @@ impl Engine {
     /// so its confirmations are readable without `-txindex` (and stay readable
     /// after its output is spent) — turn that into the funding's block height so
     /// the block scan covers `[funding_height, tip]` instead of scanning from
-    /// genesis (which `from_height = 0` would do on mainnet). Falls back to the
-    /// tip when the funding isn't confirmed yet (no mined spend can exist then).
+    /// genesis (which `from_height = 0` would do on mainnet).
     fn funding_scan_from_height(
         &self,
         backend: &MultiBackend,
         funding_txid: &str,
         spk: &ScriptBuf,
         recorded_height: Option<u64>,
+        created_at: u64,
     ) -> Result<u64> {
         let tip = backend.tip_height()?;
         let confs = backend.tx_confirmations(funding_txid, Some(spk))?;
@@ -2803,9 +2808,22 @@ impl Engine {
         // `getrawtransaction` needs -txindex), so `confs = 0` here does NOT
         // mean unconfirmed. Fall back to the height persisted when the pointer
         // was recorded (docs/STATE_RECONSTRUCTION.md §5.3) so a mined spend
-        // below the tip stays visible to the block scan; tip as the last
-        // resort (the pre-reconstruction behavior).
-        Ok(recorded_height.unwrap_or(tip))
+        // below the tip stays visible to the block scan.
+        if let Some(height) = recorded_height {
+            return Ok(height);
+        }
+        // No recorded height either — a followed snapshot is taken BEFORE the
+        // leg confirms, so a taken-over record can carry none. The funding
+        // cannot predate the swap, so the swap's age in blocks (+ reorg
+        // margin) bounds the scan; the old tip fallback would miss any spend
+        // mined before we first looked (#211). Unset created_at (never true
+        // for real records) keeps the tip fallback.
+        if created_at == 0 {
+            return Ok(tip);
+        }
+        let spacing = u64::from(backend.params().target_spacing_secs.max(1));
+        let blocks = local_now().saturating_sub(created_at) / spacing + 144;
+        Ok(tip.saturating_sub(blocks))
     }
 
     /// Redeem: the initiator adapts leg B with her secret `t` and broadcasts
@@ -2902,6 +2920,7 @@ impl Engine {
                     rec.funding_b_txid.as_deref().context("no leg-B funding")?,
                     &leg_b_spk,
                     rec.funding_b_height,
+                    rec.created_at,
                 )?;
                 let witness = backend_b
                     .find_spend_witness(&outpoint_b, &leg_b_spk, from_b)?
@@ -3245,6 +3264,51 @@ impl Engine {
                     true,
                 );
             }
+            (Role::Participant, RedeemedB) => {
+                // A DRIVEN participant never writes RedeemedB itself (its claim
+                // goes Signed → Completed atomically in `adaptor_redeem`): this
+                // state is inherited from a follower's chain-derived ratchet
+                // via takeover (#211). Exit it exactly like the Signed claim
+                // arm would: the counterparty's leg-B claim revealed `t`, so
+                // claim leg A while it is still claimable — no depth gate (a
+                // published `t` stays valid across reorgs), but only inside
+                // the §7.4 redeem deadline (past it the unbumpable redeem
+                // races Alice's refund and cannot win) and only to a payout
+                // wallet this machine controls (multi-machine custody gate).
+                // Anything else — leg A already gone, deadline passed, foreign
+                // payout — is the chain-truth reconcile's to settle, never a
+                // silent idle.
+                if rec.final_txid_a.is_none()
+                    && rec.funding_a_txid.is_some()
+                    && rec.funding_b_txid.is_some()
+                    && self.v2_owns_redeem_payout(rec)?
+                {
+                    let net = rec.chain_a.network;
+                    let (_, _, redeem_a_margin) = action_margins(net);
+                    let now = deadline_clock(
+                        net,
+                        local_now(),
+                        self.backend(&rec.chain_a)?.tip_median_time()?,
+                    );
+                    if action_safe(now, redeem_a_margin, rec.t1) {
+                        let op_a = outpoint(&rec.funding_a_txid, rec.funding_a_vout)?;
+                        let spk_a = p.leg_a(&secp)?.script_pubkey(&secp)?;
+                        if self
+                            .backend(&rec.chain_a)?
+                            .get_txout(&op_a, &spk_a)?
+                            .is_some()
+                        {
+                            let r = self.adaptor_redeem(&rec.swap_id)?;
+                            return ev(
+                                "adaptor-redeem-a",
+                                format!("extracted t; state {:?}", r.state),
+                            );
+                        }
+                    }
+                }
+                self.request_reconcile(&rec.swap_id);
+                return Ok(None);
+            }
             (Role::Participant, Completed) => {
                 return self.adaptor_keep_moving(
                     rec,
@@ -3502,6 +3566,7 @@ impl Engine {
                             rec.funding_b_txid.as_deref().context("no leg-B funding")?,
                             &spk_b,
                             rec.funding_b_height,
+                            rec.created_at,
                         )?;
                         if backend_b
                             .find_spend_witness(&op_b, &spk_b, from_b)?
