@@ -77,16 +77,22 @@ impl Telegram {
         }))
     }
 
-    pub async fn send_html(&self, chat_id: &str, html: &str) -> Result<()> {
+    /// `thread_id` targets a topic inside a forum supergroup (0 = General /
+    /// plain chats).
+    pub async fn send_html(&self, chat_id: &str, thread_id: u64, html: &str) -> Result<()> {
+        let mut payload = serde_json::json!({
+            "chat_id": chat_value(chat_id),
+            "text": html,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": true,
+        });
+        if thread_id != 0 {
+            payload["message_thread_id"] = serde_json::Value::from(thread_id);
+        }
         let resp = self
             .client
             .post(format!("{}/sendMessage", self.base))
-            .json(&serde_json::json!({
-                "chat_id": chat_value(chat_id),
-                "text": html,
-                "parse_mode": "HTML",
-                "disable_web_page_preview": true,
-            }))
+            .json(&payload)
             .send()
             .await?;
         let status = resp.status();
@@ -129,12 +135,17 @@ impl Telegram {
                 let Some(text) = message.get("text").and_then(|v| v.as_str()) else {
                     continue;
                 };
+                // Reply into the same forum topic the command came from.
+                let thread_id = message
+                    .get("message_thread_id")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
                 if let Some(reply_md) = self
                     .handle_command(text, &book, &cfg, &cash, &nostr_client, started)
                     .await
                 {
                     let html = md_to_html(&reply_md);
-                    if let Err(err) = self.send_html(&chat_id.to_string(), &html).await {
+                    if let Err(err) = self.send_html(&chat_id.to_string(), thread_id, &html).await {
                         tracing::warn!("telegram: reply failed: {err:#}");
                     }
                 }

@@ -28,6 +28,8 @@ announce_channel_id = 0            # 0 = announcer off, commands only
 announce_chat_id = ""              # numeric chat/group id or "@channelname";
                                    # "" = announcer off, commands only.
                                    # Either protocol (or both) may be active.
+announce_thread_id = 0             # topic id inside a forum supergroup
+                                   # (t.me/c/<chat>/<topic>); 0 = General
 
 [announce]
 debounce_secs = 30                 # coalesce churn before posting

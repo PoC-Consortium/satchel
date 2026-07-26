@@ -94,6 +94,8 @@ pub struct TelegramCfg {
     /// Numeric chat/group id or "@channelname"; empty = no Telegram
     /// announcements (commands still work whenever a token is set).
     pub announce_chat_id: String,
+    /// Topic (message_thread_id) inside a forum supergroup; 0 = none/General.
+    pub announce_thread_id: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -193,6 +195,7 @@ struct RawDiscord {
 struct RawTelegram {
     token: Option<String>,
     announce_chat_id: Option<String>,
+    announce_thread_id: Option<u64>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -346,6 +349,7 @@ impl Config {
             telegram: TelegramCfg {
                 token: telegram_token,
                 announce_chat_id: raw.telegram.announce_chat_id.unwrap_or_default(),
+                announce_thread_id: raw.telegram.announce_thread_id.unwrap_or(0),
             },
             announce: AnnounceCfg {
                 debounce_secs: raw.announce.debounce_secs.unwrap_or(30),

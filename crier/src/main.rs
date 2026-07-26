@@ -114,6 +114,7 @@ async fn main() -> Result<()> {
             sinks.push(announce::Sink::Telegram {
                 tg: tg.clone(),
                 chat_id: cfg.telegram.announce_chat_id.clone(),
+                thread_id: cfg.telegram.announce_thread_id,
             });
         }
     }

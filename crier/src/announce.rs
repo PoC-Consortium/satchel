@@ -68,6 +68,8 @@ pub enum Sink {
     Telegram {
         tg: Arc<crate::telegram::Telegram>,
         chat_id: String,
+        /// Forum-supergroup topic; 0 = General / plain chats.
+        thread_id: u64,
     },
 }
 
@@ -94,14 +96,18 @@ impl Sink {
                     tracing::warn!("discord: announce post failed: {err:#}");
                 }
             }
-            Sink::Telegram { tg, chat_id } => {
+            Sink::Telegram {
+                tg,
+                chat_id,
+                thread_id,
+            } => {
                 let html = format!(
                     "<b>{}</b>\n{}\n<i>{}</i>",
                     crate::telegram::md_to_html(&a.title),
                     crate::telegram::md_to_html(&a.body),
                     crate::telegram::md_to_html(&a.footer),
                 );
-                if let Err(err) = tg.send_html(chat_id, &html).await {
+                if let Err(err) = tg.send_html(chat_id, *thread_id, &html).await {
                     tracing::warn!("telegram: announce post failed: {err:#}");
                 }
             }
