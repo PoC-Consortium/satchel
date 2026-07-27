@@ -181,12 +181,18 @@ italic **"posting…"** badge (a hollow dot in the ladder), which simply means
 from a relay."* The moment a relay echoes it, the badge becomes the ordinary
 **"your offer"** tag and the dot fills in — it's now fully live.
 
-> **Note** — Your offers also **survive a restart.** When you close Satchel
-> cleanly it quietly stops advertising your offers (so the board doesn't show
-> stale listings while you're away), and the moment you start it again it
-> re-advertises every offer that's still within its valid-for window — before the
-> first new board refresh. You won't lose offers just by closing the app. Only an
-> explicit **withdraw** removes one for good.
+> **Note** — **Closing takes your offers down; restarting offers them back.**
+> When you close Satchel it stops advertising your offers, so the board never
+> shows listings you can't honour while you're away. Nothing is re-posted behind
+> your back: the next time you start Satchel, a **"Bring back your offers?"**
+> dialog lists every offer that was still within its valid-for window. **Revive**
+> re-posts one at the same terms as a brand-new offer (a fresh listing with a
+> full validity window — prices may have moved while you were away, which is
+> exactly why you get the choice); **Dismiss** keeps it withdrawn; closing the
+> dialog dismisses whatever's left. An offer whose coin you've since removed
+> can't come back and is dismissed automatically. Offers past their valid-for
+> window simply expire. And as ever, an explicit **withdraw** removes an offer
+> for good — it never comes back, revived or otherwise.
 
 ## Withdrawing your own offer
 

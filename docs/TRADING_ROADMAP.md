@@ -190,8 +190,10 @@ The Discord front-end (**Crier**) is a Corkboard front-end only — browse/post
 offers and notifications, deep-linking into the user's local Satchel/Pact to
 execute. It never touches keys or funds.
 
-> **TODO:** Crier (Discord bot) — in development (separate branch); not yet
-> in this repo.
+> **Status:** Crier is in-tree (`crier/`) and live as a **read-only**
+> Telegram + Discord orderbook announcer — `/book`, `/top`, `/status` plus
+> debounced top-of-book announcements; it holds no funds and never takes
+> offers. Posting and deep-linking into Satchel remain future work.
 
 ## Phase 4 — External venues, on our terms
 

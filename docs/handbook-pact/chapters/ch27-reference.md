@@ -33,7 +33,7 @@ board)".
 
 ## RPC method index
 
-All methods are JSON-RPC over `POST /` — **66 public methods**, grouped by
+All methods are JSON-RPC over `POST /` — **67 public methods**, grouped by
 area; see the named chapter for params and return shapes. The daemon prints
 the same catalog live: `help` (by category, plain text) and `listmethods`
 (a name array).
@@ -71,7 +71,7 @@ on this machine).
 `adaptorredeem`, `adaptorrefund`.
 
 **Board** (*"API: Board, Private Offers & Fees"*): `boardlistoffers`,
-`boardstatus`, `boardpostoffer`, `boardtake`, `boardrevoke`,
+`boardstatus`, `boardpostoffer`, `boardtake`, `boardrevoke`, `offerdismiss`,
 `revokeoffersforcoin`.
 
 **Private offers** (same chapter, and "Private (Off-Market) Offers"):
