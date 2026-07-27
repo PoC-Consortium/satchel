@@ -167,7 +167,7 @@ with a refresh button beside it. Each row then shows:
 If you have no relays configured (or none are reachable), the screen points you to
 **Settings** to add some.
 
-![The Network monitor's Nostr tab: one row per relay with status, latency, and uptime.](images/processed/ch06-relays.png){width=80%}
+![The Network monitor's Nostr tab: one row per relay with status, latency, and uptime.](images/processed/ch06-network.png){width=80%}
 
 ### Electrum servers (per coin)
 

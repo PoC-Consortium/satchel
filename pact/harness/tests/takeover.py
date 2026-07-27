@@ -52,18 +52,18 @@ def scenario_refund_only_takeover_v2(h, ep, eb):
     # sweep_b — so `wallet_owns_address(sweep_b)` is false and the gate trips.
     # (Its pocx wallet IS shared, so it can still reclaim leg A.)
     h.btc.create_wallet("alice_btc2")
-    owner_bx, owner_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
-    backup_bx, backup_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc2")
-    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
+    owner_bx, owner_bt = multi_urls(h, ep, eb, "alice_btcx", "alice_btc")
+    backup_bx, backup_bt = multi_urls(h, ep, eb, "alice_btcx", "alice_btc2")
+    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_btcx", "bob_btc")
 
     # btc=3 holds the maker at Signed for a few blocks (1-conf regtest otherwise
     # races Signed → redeemed_b → completed within a round, closing the window).
     # Owner: auto_init off so we mint the seed explicitly and can re-import the
     # SAME mnemonic into the backup. Taker keeps its own auto-created seed.
-    maker = Party("tomk", h, h.workdir, "alice_pocx", "alice_btc",
+    maker = Party("tomk", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                   coin_confs={"btc": 3}, pocx_url=owner_bx, btc_url=owner_bt)
-    taker = Party("totk", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("totk", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
                   pocx_url=taker_bx, btc_url=taker_bt)
     backup = None
@@ -133,7 +133,7 @@ def scenario_refund_only_takeover_v2(h, ep, eb):
         maker.proc.wait(timeout=15)
 
         # Backup: SAME seed, FOREIGN btc primary wallet (no sweep_b custody).
-        backup = Party("tobk", h, h.workdir, "alice_pocx", "alice_btc2",
+        backup = Party("tobk", h, h.workdir, "alice_btcx", "alice_btc2",
                        nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                        coin_confs={"btc": 3},
                        pocx_url=backup_bx, btc_url=backup_bt)
@@ -205,16 +205,16 @@ def scenario_hot_standby_takeover_v1(h, ep, eb):
     receives the handshake messages). When the owner is hard-killed mid-swap
     the standby takes over and completes on the ORIGINAL funding."""
     relay = NostrRelay(h.workdir)
-    owner_bx, owner_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
-    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
-    maker = Party("hsmk", h, h.workdir, "alice_pocx", "alice_btc",
+    owner_bx, owner_bt = multi_urls(h, ep, eb, "alice_btcx", "alice_btc")
+    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_btcx", "bob_btc")
+    maker = Party("hsmk", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                   pocx_url=owner_bx, btc_url=owner_bt)
-    taker = Party("hstk", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("hstk", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
                   pocx_url=taker_bx, btc_url=taker_bt)
     # Same seed + same node wallets as the owner, own data dir (own scope).
-    standby = Party("hssb", h, h.workdir, "alice_pocx", "alice_btc",
+    standby = Party("hssb", h, h.workdir, "alice_btcx", "alice_btc",
                     nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                     pocx_url=owner_bx, btc_url=owner_bt)
     try:
@@ -350,15 +350,15 @@ def scenario_taker_hot_standby_v1(h, ep, eb):
     Both legs fund, the taker is hard-killed, its warm standby takes over and
     completes on the ORIGINAL leg-B funding."""
     relay = NostrRelay(h.workdir)
-    maker_bx, maker_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
-    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
-    maker = Party("thmk", h, h.workdir, "alice_pocx", "alice_btc",
+    maker_bx, maker_bt = multi_urls(h, ep, eb, "alice_btcx", "alice_btc")
+    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_btcx", "bob_btc")
+    maker = Party("thmk", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
                   pocx_url=maker_bx, btc_url=maker_bt)
-    taker = Party("thtk", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("thtk", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                   pocx_url=taker_bx, btc_url=taker_bt)
-    standby = Party("thsb", h, h.workdir, "bob_pocx", "bob_btc",
+    standby = Party("thsb", h, h.workdir, "bob_btcx", "bob_btc",
                     nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                     pocx_url=taker_bx, btc_url=taker_bt)
     try:
@@ -432,15 +432,15 @@ def scenario_taker_committed_takeover_v2(h, ep, eb):
     claim leg A — WITHOUT re-funding leg B. The maker's btc=3 conf gate holds
     it at Signed so the kill lands inside the committed window."""
     relay = NostrRelay(h.workdir)
-    maker_bx, maker_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
-    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
-    maker = Party("tcmk", h, h.workdir, "alice_pocx", "alice_btc",
+    maker_bx, maker_bt = multi_urls(h, ep, eb, "alice_btcx", "alice_btc")
+    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_btcx", "bob_btc")
+    maker = Party("tcmk", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
                   coin_confs={"btc": 3}, pocx_url=maker_bx, btc_url=maker_bt)
-    taker = Party("tctk", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("tctk", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                   pocx_url=taker_bx, btc_url=taker_bt)
-    standby = Party("tcsb", h, h.workdir, "bob_pocx", "bob_btc",
+    standby = Party("tcsb", h, h.workdir, "bob_btcx", "bob_btc",
                     nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                     pocx_url=taker_bx, btc_url=taker_bt)
     try:
@@ -536,13 +536,13 @@ def scenario_prefund_takeover_aborts_blind(h, ep, eb):
     (test-shrunk) pre-funding timeout must end the swap in a CLEAN abort that
     also reaches the counterparty. Nothing may hit the chain."""
     relay = NostrRelay(h.workdir)
-    maker = Party("pbmk", h, h.workdir, "alice_pocx", "alice_btc",
+    maker = Party("pbmk", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=False, auto_init=False)
-    taker = Party("pbtk", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("pbtk", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=True)
     # Core-only URLs (the Party default) — the blind-backup shape. The tiny
     # pre-funding window makes the clean abort observable within the test.
-    standby = Party("pbsb", h, h.workdir, "alice_pocx", "alice_btc",
+    standby = Party("pbsb", h, h.workdir, "alice_btcx", "alice_btc",
                     nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                     extra_env={"PACT_TEST_PREFUNDING_TIMEOUT_SECS": "5"})
     try:
@@ -615,15 +615,15 @@ def scenario_prefund_takeover_funds_provable(h, ep, eb):
     completion — the "continues only if this wallet can verify" half of the
     dialog copy."""
     relay = NostrRelay(h.workdir)
-    maker_bx, maker_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
-    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
-    maker = Party("ppmk", h, h.workdir, "alice_pocx", "alice_btc",
+    maker_bx, maker_bt = multi_urls(h, ep, eb, "alice_btcx", "alice_btc")
+    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_btcx", "bob_btc")
+    maker = Party("ppmk", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=False, auto_init=False,
                   pocx_url=maker_bx, btc_url=maker_bt)
-    taker = Party("pptk", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("pptk", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
                   pocx_url=taker_bx, btc_url=taker_bt)
-    standby = Party("ppsb", h, h.workdir, "alice_pocx", "alice_btc",
+    standby = Party("ppsb", h, h.workdir, "alice_btcx", "alice_btc",
                     nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                     pocx_url=maker_bx, btc_url=maker_bt)
     try:
@@ -687,15 +687,15 @@ def scenario_taker_post_reveal_takeover_v1(h, ep, eb):
     adopts and must finish leg A from the chain-visible reveal — the takeover
     twin of the rescue suite's post_reveal cells."""
     relay = NostrRelay(h.workdir)
-    maker_bx, maker_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
-    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
-    maker = Party("prmk", h, h.workdir, "alice_pocx", "alice_btc",
+    maker_bx, maker_bt = multi_urls(h, ep, eb, "alice_btcx", "alice_btc")
+    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_btcx", "bob_btc")
+    maker = Party("prmk", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
                   pocx_url=maker_bx, btc_url=maker_bt)
-    taker = Party("prtk", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("prtk", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                   pocx_url=taker_bx, btc_url=taker_bt)
-    standby = Party("prsb", h, h.workdir, "bob_pocx", "bob_btc",
+    standby = Party("prsb", h, h.workdir, "bob_btcx", "bob_btc",
                     nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                     pocx_url=taker_bx, btc_url=taker_bt)
     try:
@@ -808,15 +808,15 @@ def scenario_taker_post_reveal_takeover_v2(h, ep, eb):
     (participant, redeemed_b) drive arm (#211 follow-up), which must extract
     t from the chain and claim leg A without re-funding anything."""
     relay = NostrRelay(h.workdir)
-    maker_bx, maker_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
-    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
-    maker = Party("pvmk", h, h.workdir, "alice_pocx", "alice_btc",
+    maker_bx, maker_bt = multi_urls(h, ep, eb, "alice_btcx", "alice_btc")
+    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_btcx", "bob_btc")
+    maker = Party("pvmk", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
                   pocx_url=maker_bx, btc_url=maker_bt)
-    taker = Party("pvtk", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("pvtk", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                   pocx_url=taker_bx, btc_url=taker_bt)
-    standby = Party("pvsb", h, h.workdir, "bob_pocx", "bob_btc",
+    standby = Party("pvsb", h, h.workdir, "bob_btcx", "bob_btc",
                     nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                     pocx_url=taker_bx, btc_url=taker_bt)
     try:
@@ -932,16 +932,16 @@ def scenario_owner_returns_after_takeover_v1(h, ep, eb):
     refund against the spent leg. Post-fix the resume reconcile maps the
     stale record to `completed` with ZERO broadcasts and no re-fund."""
     relay = NostrRelay(h.workdir)
-    owner_bx, owner_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
-    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
-    maker = Party("ormk", h, h.workdir, "alice_pocx", "alice_btc",
+    owner_bx, owner_bt = multi_urls(h, ep, eb, "alice_btcx", "alice_btc")
+    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_btcx", "bob_btc")
+    maker = Party("ormk", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                   pocx_url=owner_bx, btc_url=owner_bt)
-    taker = Party("ortk", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("ortk", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
                   pocx_url=taker_bx, btc_url=taker_bt)
     # Same seed + same node wallets as the owner, own data dir (own scope).
-    standby = Party("orsb", h, h.workdir, "alice_pocx", "alice_btc",
+    standby = Party("orsb", h, h.workdir, "alice_btcx", "alice_btc",
                     nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                     pocx_url=owner_bx, btc_url=owner_bt)
     try:
@@ -1042,15 +1042,15 @@ def scenario_owner_returns_after_takeover_v2(h, ep, eb):
     reconcile its stale `signed` record to `completed` — zero broadcasts, no
     reveal, no re-fund."""
     relay = NostrRelay(h.workdir)
-    owner_bx, owner_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
-    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
-    maker = Party("o2mk", h, h.workdir, "alice_pocx", "alice_btc",
+    owner_bx, owner_bt = multi_urls(h, ep, eb, "alice_btcx", "alice_btc")
+    taker_bx, taker_bt = multi_urls(h, ep, eb, "bob_btcx", "bob_btc")
+    maker = Party("o2mk", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                   coin_confs={"btc": 3}, pocx_url=owner_bx, btc_url=owner_bt)
-    taker = Party("o2tk", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("o2tk", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
                   pocx_url=taker_bx, btc_url=taker_bt)
-    standby = Party("o2sb", h, h.workdir, "alice_pocx", "alice_btc",
+    standby = Party("o2sb", h, h.workdir, "alice_btcx", "alice_btc",
                     nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                     coin_confs={"btc": 3}, pocx_url=owner_bx, btc_url=owner_bt)
     try:

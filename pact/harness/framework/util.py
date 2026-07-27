@@ -169,8 +169,8 @@ def expect_fail(party, what, *args):
 
 def balances(h):
     return {
-        "alice_pocx": float(h.pocx.rpc("getbalance", wallet="alice_pocx")),
-        "bob_pocx": float(h.pocx.rpc("getbalance", wallet="bob_pocx")),
+        "alice_btcx": float(h.pocx.rpc("getbalance", wallet="alice_btcx")),
+        "bob_btcx": float(h.pocx.rpc("getbalance", wallet="bob_btcx")),
         "alice_btc": float(h.btc.rpc("getbalance", wallet="alice_btc")),
         "bob_btc": float(h.btc.rpc("getbalance", wallet="bob_btc")),
     }
@@ -210,7 +210,7 @@ def handshake_and_fund(h, alice, bob, prefix):
     bob.cli("accept", "--in", m_init, "--out", m_accept)
     alice.cli("recv", "--in", m_accept)
     alice.cli("fund", "--swap", sid, "--out", m_funded_a)
-    h.pocx.generate(1, "alice_pocx")
+    h.pocx.generate(1, "alice_btcx")
     bob.cli("recv", "--in", m_funded_a)
     bob.cli("fund", "--swap", sid, "--out", m_funded_b)
     h.btc.generate(1, "bob_btc")

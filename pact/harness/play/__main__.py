@@ -132,7 +132,7 @@ def compose_alice_coins(args):
         else:
             btc = satchel.core_rpc_coin("btc", BTC_RPC_PORT, "alice_btc", 6)
     else:
-        btcx = satchel.core_rpc_coin("btcx", POCX_RPC_PORT, "alice_pocx", 10)
+        btcx = satchel.core_rpc_coin("btcx", POCX_RPC_PORT, "alice_btcx", 10)
         btc = satchel.core_rpc_coin("btc", BTC_RPC_PORT, "alice_btc", 6)
     ltc = satchel.core_rpc_coin("ltc", LTC_RPC_PORT, "alice_ltc", 6)
     return [btcx, btc, ltc]
@@ -163,7 +163,7 @@ def print_banner(args, board, relay, electrs_list, tag):
         lines += [
             "", "  FIRST-RUN: no coins pre-wired -> step through onboarding + coin",
             "  setup. Playground node details (auth = user/pass, NOT cookie):",
-            "    BTCX : 127.0.0.1:19443 (node)  or NODELESS tcp://127.0.0.1:19750",
+            "    BTCX : 127.0.0.1:19443   user/pass  pactharness / pactharness  wallet alice_btcx  (or NODELESS tcp://127.0.0.1:19750)",
             "    BTC  : 127.0.0.1:19543   user/pass  pactharness / pactharness  wallet alice_btc",
             "    LTC  : 127.0.0.1:19643   user/pass  pactharness / pactharness  wallet alice_ltc",
             "    (for realistic timing set confirmations BTCX 10 / BTC 6 / LTC 6)",
@@ -297,10 +297,10 @@ def run_regtest(args):
                 electrs_list.append(btc_electrs)
 
             # --- extra wallets for the two-sided book ---------------------
-            h.pocx.create_wallet("carol_pocx")
+            h.pocx.create_wallet("carol_btcx")
             h.btc.create_wallet("carol_btc")
-            h.pocx.generate(110, "carol_pocx")
-            h.pocx.generate(110, "bob_pocx")
+            h.pocx.generate(110, "carol_btcx")
+            h.pocx.generate(110, "bob_btcx")
             h.btc.generate(110, "alice_btc")
             if h.ltc:
                 for w in ("alice_ltc", "bob_ltc", "carol_ltc"):
@@ -315,10 +315,10 @@ def run_regtest(args):
                     else {"board_url": board.url})
             bob_extra = [("ltc", h.ltc.rpc_url(wallet="bob_ltc"))] if h.ltc else []
             carol_extra = [("ltc", h.ltc.rpc_url(wallet="carol_ltc"))] if h.ltc else []
-            bob = Party("bob", h, h.workdir, "bob_pocx", "bob_btc",
+            bob = Party("bob", h, h.workdir, "bob_btcx", "bob_btc",
                         auto_fund=True, tick_secs=2, coins_file=COINS_TOML,
                         coin_confs=confs, extra_coins=bob_extra, **conn).start()
-            carol = Party("carol", h, h.workdir, "carol_pocx", "carol_btc",
+            carol = Party("carol", h, h.workdir, "carol_btcx", "carol_btc",
                           auto_fund=True, tick_secs=2, coins_file=COINS_TOML,
                           coin_confs=confs, extra_coins=carol_extra, **conn).start()
             bots = [bob, carol]
@@ -383,11 +383,11 @@ def run_regtest(args):
 
             # faucet / auto-take per mode
             if observer:
-                faucet = Faucet([("btcx", h.pocx, "carol_pocx", 200.0),
+                faucet = Faucet([("btcx", h.pocx, "carol_btcx", 200.0),
                                  ("btc", h.btc, "bob_btc", 0.05)], tag=tag)
                 autotaker = AutoTaker(carol, tag=tag)
             elif nodeless:
-                targets = [("btcx", h.pocx, "alice_pocx", 100.0)]
+                targets = [("btcx", h.pocx, "alice_btcx", 100.0)]
                 if args.board == "nostr":
                     targets.append(("btc", h.btc, "bob_btc", 0.05))
                 faucet = Faucet(targets, tag=tag)
@@ -396,10 +396,10 @@ def run_regtest(args):
 
             # --- the drive loop --------------------------------------------
             if observer:
-                legs = [(h.pocx, "carol_pocx", "btcx"), (h.btc, "bob_btc", "btc")]
+                legs = [(h.pocx, "carol_btcx", "btcx"), (h.btc, "bob_btc", "btc")]
                 miner = PacedMiner(legs, {"btcx": 8, "btc": 12}, 4, tag=tag)
             else:
-                legs = [(h.pocx, "alice_pocx", "btcx"), (h.btc, "bob_btc", "btc")]
+                legs = [(h.pocx, "alice_btcx", "btcx"), (h.btc, "bob_btc", "btc")]
                 block_secs = {"btcx": 6, "btc": 12}
                 if h.ltc:
                     legs.append((h.ltc, "alice_ltc", "ltc"))

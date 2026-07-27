@@ -39,8 +39,8 @@ def fund_bdk_wallet(h, electrs, party, coins="60.0"):
     stay promptly visible (the wallet ops poke the worker)."""
     addr = party.rpc("getnewaddress", "btcx")["address"]
     assert addr.startswith("rpocx1p"), f"expected a regtest P2TR pocx address: {addr}"
-    h.pocx.rpc("sendtoaddress", addr, float(coins), wallet="alice_pocx")
-    h.pocx.generate(1, "alice_pocx")
+    h.pocx.rpc("sendtoaddress", addr, float(coins), wallet="alice_btcx")
+    h.pocx.generate(1, "alice_btcx")
     electrs.wait_synced(h.pocx.rpc("getblockcount"))
     deadline = time.time() + 30
     while True:
@@ -66,7 +66,7 @@ def drive_to_completion(h, electrs, a, b, rounds=30, label="swap"):
             for ev in party.rpc("tick")["events"]:
                 print(f"[nodeless]   {party.name}: {ev['action']} {ev['detail'][:70]}")
         if handshake_done(a, b):
-            h.pocx.generate(1, "alice_pocx")
+            h.pocx.generate(1, "alice_btcx")
             h.btc.generate(1, "bob_btc")
             electrs.wait_synced(h.pocx.rpc("getblockcount"))
         swaps_a = swaps_of(a)
@@ -84,10 +84,10 @@ def drive_to_completion(h, electrs, a, b, rounds=30, label="swap"):
 def test_v1_nodeless_maker(h, electrs, board):
     """Alice (nodeless btcx) posts a v1 offer giving btcx; Bob (all Core)
     takes. Leg A is funded BY THE BDK WALLET and broadcast over Electrum."""
-    alice = Party("nl-alice1", h, h.workdir, "alice_pocx", "alice_btc",
+    alice = Party("nl-alice1", h, h.workdir, "alice_btcx", "alice_btc",
                   board_url=board.url, auto_fund=True,
                   pocx_url=NODELESS_URL).start()
-    bob = Party("nl-bob1", h, h.workdir, "bob_pocx", "bob_btc",
+    bob = Party("nl-bob1", h, h.workdir, "bob_btcx", "bob_btc",
                 board_url=board.url, auto_fund=True).start()
     try:
         bal_before = fund_bdk_wallet(h, electrs, alice)
@@ -115,10 +115,10 @@ def test_v2_nodeless_taker(h, electrs, board):
     """Bob (Core) posts a v2 offer giving btc, getting btcx; Alice (nodeless
     btcx) takes -> she is the participant and leg B (btcx) goes through the
     bdk two-phase wallet_build_funding + delayed Electrum broadcast."""
-    alice = Party("nl-alice2", h, h.workdir, "alice_pocx", "alice_btc",
+    alice = Party("nl-alice2", h, h.workdir, "alice_btcx", "alice_btc",
                   board_url=board.url, auto_fund=True,
                   pocx_url=NODELESS_URL).start()
-    bob = Party("nl-bob2", h, h.workdir, "bob_pocx", "bob_btc",
+    bob = Party("nl-bob2", h, h.workdir, "bob_btcx", "bob_btc",
                 board_url=board.url, auto_fund=True).start()
     try:
         # Bob needs btc (he gives btc): bob_btc is the funded btc wallet.
@@ -144,10 +144,10 @@ def test_v2_cancel_releases_bdk_inputs(h, electrs, board):
     BUILT in the bdk wallet (inputs reserved) but the maker's leg A never
     confirms enough, so it is never broadcast. Abort must succeed (commitment
     semantics) and wallet_cancel_funding must restore her spendable balance."""
-    alice = Party("nl-alice3", h, h.workdir, "alice_pocx", "alice_btc",
+    alice = Party("nl-alice3", h, h.workdir, "alice_btcx", "alice_btc",
                   board_url=board.url, auto_fund=True,
                   pocx_url=NODELESS_URL).start()
-    bob = Party("nl-bob3", h, h.workdir, "bob_pocx", "bob_btc",
+    bob = Party("nl-bob3", h, h.workdir, "bob_btcx", "bob_btc",
                 board_url=board.url, auto_fund=True).start()
     try:
         bal_before = fund_bdk_wallet(h, electrs, alice)
@@ -199,10 +199,10 @@ def test_v1_nodeless_both_sides(h, electrs, board):
     """Both parties' btcx wallets are nodeless bdk wallets over the SAME
     electrs (different seeds). Alice gives btcx, Bob receives his btcx redeem
     into his own bdk wallet (redeem sweep -> wallet_new_address on bdk)."""
-    alice = Party("nl-alice4", h, h.workdir, "alice_pocx", "alice_btc",
+    alice = Party("nl-alice4", h, h.workdir, "alice_btcx", "alice_btc",
                   board_url=board.url, auto_fund=True,
                   pocx_url=NODELESS_URL).start()
-    bob = Party("nl-bob4", h, h.workdir, "bob_pocx", "bob_btc",
+    bob = Party("nl-bob4", h, h.workdir, "bob_btcx", "bob_btc",
                 board_url=board.url, auto_fund=True,
                 pocx_url=NODELESS_URL).start()
     try:

@@ -39,8 +39,8 @@ the single entry that runs them all. `framework/node.py`'s `Harness`:
 - brings up a **Bitcoin PoCX (btcx)** regtest node and a **Bitcoin (btc)**
   regtest node — always; an optional **Litecoin (ltc)** node starts only with
   `Harness(with_ltc=True)`;
-- funds one wallet per party per chain (e.g. `alice_pocx` funded /
-  `bob_pocx` empty; `bob_btc` funded / `alice_btc` empty);
+- funds one wallet per party per chain (e.g. `alice_btcx` funded /
+  `bob_btcx` empty; `bob_btc` funded / `alice_btc` empty);
 - keeps both chains on a **shared mock clock** (`setmocktime`) and exposes
   `advance_time()` to push median-time-past (MTP) forward — this is how
   CLTV/timelock and refund behaviour is driven deterministically;

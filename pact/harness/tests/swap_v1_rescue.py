@@ -74,7 +74,7 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
       post_reveal  the maker has redeemed leg B, publishing the secret; a
                    wiped taker must finish leg A from the chain alone.
 
-    Balance probes use the clean RECEIVING wallets only (bob_pocx, alice_btc);
+    Balance probes use the clean RECEIVING wallets only (bob_btcx, alice_btc);
     the funding wallets creep from maturing coinbase and mining rewards, so
     settlement and refunds are asserted via swap state / outpoint spends
     where balances can't signal.
@@ -89,11 +89,11 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
     # exactly the state whose snapshot (assembled adaptor sigs) is under test.
     maker_confs = ({"btc": 3} if victim == "maker" and stage == "committed"
                    and protocol.endswith("v2") else None)
-    maker = Party(f"mk{tag}", h, h.workdir, "alice_pocx", "alice_btc",
+    maker = Party(f"mk{tag}", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True,
                   coin_confs=maker_confs,
                   auto_init=(victim != "maker"))
-    taker = Party(f"tk{tag}", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party(f"tk{tag}", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=not refund,
                   auto_init=(victim != "taker"))
     victim_party = maker if victim == "maker" else taker
@@ -206,7 +206,7 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
             # the blocks to keep flowing (reveal, refund).
             if handshake_done(maker, taker) and not (
                     stage == "committed" and committed_leg_b(swap_of(taker))):
-                h.pocx.generate(1, "alice_pocx")
+                h.pocx.generate(1, "alice_btcx")
                 h.btc.generate(1, "bob_btc")
         assert reached, f"stage '{stage}' never reached before the wipe"
         pre_rec = swap_of(victim_party)
@@ -238,7 +238,7 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
         # --- the rescue: a fresh pactd on the SAME (now-wiped) data dir, same
         # seed. The Bitcoin Core wallets are the node's, untouched by the wipe. ---
         fresh = Party(victim_party.name, h, h.workdir,
-                      "alice_pocx" if victim == "maker" else "bob_pocx",
+                      "alice_btcx" if victim == "maker" else "bob_btcx",
                       "alice_btc" if victim == "maker" else "bob_btc",
                       nostr_relays=relay.ws_url,
                       auto_fund=(victim == "maker" or not refund),
@@ -317,7 +317,7 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
             for _ in range(15):
                 for party in (maker, taker):
                     party.rpc("tick")
-                h.pocx.generate(1, "alice_pocx")
+                h.pocx.generate(1, "alice_btcx")
                 h.btc.generate(1, "bob_btc")
                 v = swap_of(victim_party, sid)
                 assert own_leg_txid(v) is None, \
@@ -336,7 +336,7 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
             for _ in range(30):
                 for party in (maker, taker):
                     party.rpc("tick")
-                h.pocx.generate(1, "alice_pocx")
+                h.pocx.generate(1, "alice_btcx")
                 h.btc.generate(1, "bob_btc")
                 v = swap_of(victim_party, sid)
                 if v is not None and v["state"] in ("aborted", "refunded"):
@@ -359,7 +359,7 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
         # rescued party wouldn't SEE its own funding and might re-fund it. This
         # is the exact ordering a real recovery faces.
         for _ in range(4):
-            h.pocx.generate(1, "alice_pocx")
+            h.pocx.generate(1, "alice_btcx")
             h.btc.generate(1, "bob_btc")
 
         if refund:
@@ -378,7 +378,7 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
                     evs = party.rpc("tick")["events"]
                     for ev in evs:
                         print(f"[e2e]   {tag}[{party.name}]: {ev['action']} {ev['detail'][:70]}")
-                h.pocx.generate(1, "alice_pocx")
+                h.pocx.generate(1, "alice_btcx")
                 h.btc.generate(1, "bob_btc")
                 v = swap_of(victim_party, sid)
                 # The funding wallet's balance can't signal (coinbase creep):
@@ -402,11 +402,11 @@ def _rescue_scenario(h, protocol, tag, mnemonic, victim="taker",
                 evs = party.rpc("tick")["events"]
                 for ev in evs:
                     print(f"[e2e]   {tag}[{party.name}]: {ev['action']} {ev['detail'][:70]}")
-            h.pocx.generate(1, "alice_pocx")
+            h.pocx.generate(1, "alice_btcx")
             h.btc.generate(1, "bob_btc")
             now = balances(h)
             # Receiving legs are clean: taker got the POCX leg, maker got the BTC leg.
-            if (now["bob_pocx"] >= before["bob_pocx"] + float(GIVE_POCX) - FEE_SLACK
+            if (now["bob_btcx"] >= before["bob_btcx"] + float(GIVE_POCX) - FEE_SLACK
                     and now["alice_btc"] >= before["alice_btc"] + float(GET_BTC) - 0.0005):
                 done = True
                 break
