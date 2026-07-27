@@ -21,7 +21,7 @@ atomic, still auto-refunding, still safe.
 4. Click **Copy** and send the slip to your counterparty over **any chat** —
    messaging app, email, whatever you both use. Satchel doesn't send it for you.
 
-![Create slip: the offer form produces a copyable pactoffer1: slip.](images/processed/ch12-create-slip.png){width=70%}
+![Create slip: the offer form produces a copyable pactoffer1: slip.](images/processed/ch12-create-slip.png){height=75%}
 
 The slip box also notes that it **expires in about 24 hours**. After that it's no
 good and your counterparty will have to ask for a fresh one.
