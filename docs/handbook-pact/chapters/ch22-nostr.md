@@ -142,7 +142,12 @@ viewers' boards until its NIP-40 expiration lapses.
 
 When a deletion arrives for one of the engine's **own** offers, the engine also
 reconciles its `my_offers` view, so a self-revoked offer is cleared from the
-maker's own listing instead of lingering there in a "posting…" state.
+maker's own listing instead of lingering there in a "posting…" state. This
+reconcile flips only `live` rows — so the shutdown courtesy de-list's own echo,
+replayed by a relay on the next boot, finds nothing to touch (revoke-on-open has
+already moved the rows; see the offer-lifecycle note in "API: Board, Private
+Offers & Fees"). A deletion on the wire therefore means exactly one thing: a
+withdrawal.
 
 ## Subscription filters
 

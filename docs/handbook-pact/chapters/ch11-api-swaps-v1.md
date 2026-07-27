@@ -61,7 +61,11 @@ blocks (initiator and counterparty legs respectively).
 - `listpendingtakes` — takes that have arrived but for which the maker has not
   yet initiated a swap (no `SwapRecord` exists yet — the UI's "initiating"
   pre-swaps).
-- `listmyoffers` — the maker's own offers (the My-offers view). `current_expiry`
+- `listmyoffers` — the maker's own offers (the My-offers view; also what feeds
+  Satchel's boot-time revive dialog). `state` is the lifecycle state — `live`,
+  `taken`, `revoked`, `expired`, or `revoked_on_open` (retired by the boot
+  sweep and awaiting revive-or-dismiss; see the offer-lifecycle note in "API:
+  Board, Private Offers & Fees"). `current_expiry`
   is the rolling expiry (last refresh + relay TTL, capped at `final_expiry`);
   `final_expiry` is the maker-set hard expiry (`created + valid_for`); `now` is
   the server timestamp for client-side countdown rendering.

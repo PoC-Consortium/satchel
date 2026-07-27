@@ -1838,7 +1838,8 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
         "revokeoffersforcoin" => {
             // Reconfigure-time cleanup (#97): Satchel calls this before removing a
             // coin so offers whose pair involves it are withdrawn while pactd still
-            // has it — the surviving offers then ride the skip-de-list relaunch.
+            // has it — a terminal revoke, which also keeps them out of the
+            // relaunch's revive dialog (#225).
             let coin_id = p.str(0, "coin_id")?;
             let cid = coin_id.clone();
             let revoked = blocking(app, move |e| e.revoke_offers_for_coin(&coin_id)).await?;

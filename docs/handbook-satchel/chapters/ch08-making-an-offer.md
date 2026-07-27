@@ -105,7 +105,9 @@ takes longer to unwind. When in doubt, leave it on **Medium**.
 
 **Valid for** sets how long the offer stays listed, in minutes (default 60).
 While Satchel is open, the engine keeps the listing fresh automatically; once the
-window passes, the offer expires. Closing the app also withdraws it.
+window passes, the offer expires. Closing the app takes it off the board too —
+on the next start Satchel asks whether to revive it as a fresh listing or keep
+it withdrawn (see the chapter *"The Corkboard"*).
 
 ## Reviewing and confirming
 

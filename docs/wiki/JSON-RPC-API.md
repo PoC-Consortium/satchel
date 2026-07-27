@@ -1,6 +1,6 @@
 # JSON-RPC API
 
-[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 66 methods, grouped below by area with a one-line purpose each. This is an index; the daemon itself serves the authoritative catalog via the `help` method (`pact-cli help`). For full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
+[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 67 methods, grouped below by area with a one-line purpose each. This is an index; the daemon itself serves the authoritative catalog via the `help` method (`pact-cli help`). For full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
 
 ## Conventions
 
@@ -69,7 +69,7 @@ A machine restored from the seed alone can rediscover in-flight swaps from encry
 | `listswaps` | All v1 swap records; each carries `source` (`local` = driven here, `foreign` = another machine's, followed read-only) and the `machine_label` of its owning machine. |
 | `getswap` | One swap record by id. |
 | `listpendingtakes` | Takes awaiting maker initiation. |
-| `listmyoffers` | My posted offers with expiry/state. |
+| `listmyoffers` | My posted offers with expiry and lifecycle state — `live` / `taken` / `revoked` / `expired` / `revoked_on_open` (boot-retired, awaiting Satchel's revive dialog). |
 | `offer` | Start a swap as initiator (`give`/`get` = `coin:amount`, `t1`/`t2`). |
 | `acceptoffer` | Accept an offer envelope. |
 | `recv` | Receive/ingest a counterparty envelope. |
@@ -105,7 +105,8 @@ v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed). T
 | `boardstatus` | Per-relay connectivity. |
 | `boardpostoffer` | Post an offer; fans out to all configured boards. Rejects an offer if either leg is below the **3,430-sat minimum** (330-sat segwit dust + one redeem's fee at the 20 sat/vB planning rate) — too small to redeem or refund above dust once fees are paid near the deadline. |
 | `boardtake` | Take a posted offer (same 3,430-sat minimum-leg check as `boardpostoffer`). |
-| `boardrevoke` | Revoke one of my offers. |
+| `boardrevoke` | Revoke one of my offers — terminal, from any same-seed machine. |
+| `offerdismiss` | Settle a boot-retired offer (`revoked_on_open`) as plain `revoked` instead of reviving it. Strict: any other state is refused, so a mistargeted id can't retire a live offer. |
 | `revokeoffersforcoin` | Withdraw every live offer whose pair involves a coin (`coin_id`) — Satchel calls it before removing/reconfiguring a coin so its offers de-list cleanly. |
 
 ## Private (off-market) offers

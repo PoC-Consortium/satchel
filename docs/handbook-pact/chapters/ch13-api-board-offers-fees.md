@@ -18,6 +18,7 @@ chooses one transport rather than merging.
 | `boardpostoffer` | `give`, `get`, `t1_secs`, `t2_secs`, `protocol?`, `ttl_secs?` | `{ offer_id }` | yes |
 | `boardtake` | `offer_id` | `{ taken }` | yes |
 | `boardrevoke` | `offer_id` | `{ revoked }` | yes |
+| `offerdismiss` | `offer_id` | `{ dismissed }` | yes |
 | `revokeoffersforcoin` | `coin_id` | `{ revoked }` | yes |
 
 - `boardlistoffers` — lists offers from one board. The optional `board` is an
@@ -32,12 +33,41 @@ chooses one transport rather than merging.
   engine picks the default for the pair. `ttl_secs` (param 5) sets the listing
   validity; omitted, the engine default applies.
 - `boardtake` — takes a posted offer by `offer_id`.
-- `boardrevoke` — revokes one of your own posted offers.
+- `boardrevoke` — revokes one of your own posted offers. A withdrawal is
+  **terminal** — the offer never returns, and this holds from any machine on
+  the same seed.
+- `offerdismiss` — settles a boot-retired offer (state `revoked_on_open`, see
+  the offer-lifecycle note below) as a plain terminal `revoked` instead of
+  reviving it. **Strict on state**: any offer not in `revoked_on_open` is
+  refused with its actual state named, so a mistargeted id can never retire a
+  live offer. The board de-list already happened at revoke-on-open — this is a
+  local state flip only.
 - `revokeoffersforcoin` — withdraws **every** live offer whose pair involves
   `coin_id`, across all boards. Satchel calls this before removing or
   reconfiguring a coin, while `pactd` still has it configured, so the offers are
-  cleanly de-listed rather than orphaned (#97); the surviving offers then ride
-  the skip-de-list relaunch.
+  cleanly de-listed rather than orphaned (#97); the terminal `revoked` also
+  keeps them out of the relaunch's revive dialog.
+
+> **Note** — **Offer lifecycle (revoke-on-open).** A posted offer's registry
+> row advances `live` → `taken` | `revoked` | `expired` | `revoked_on_open`.
+> On **open**, the engine sweeps the ledger instead of guessing what happened
+> while it was down (clean close, crash, or a withdrawal from another machine
+> it never saw): a `live` row past its own validity (`created + valid_for`)
+> becomes terminal `expired`; a `live` row still within validity becomes
+> `revoked_on_open` — firmly de-listed from every board with a signed
+> revocation and *parked* for the UI's revive dialog. Revival is a **fresh**
+> `boardpostoffer` with the same terms — a new id and full validity, which by
+> construction also outruns any stale viewer-side deletion tombstone —
+> followed by `offerdismiss` on the old row; plain dismissal settles it as
+> `revoked` without re-posting. On a clean **close**, live offers are
+> courtesy-de-listed from the boards with local rows untouched; the deletion's
+> own relay echo is inert on the next boot *by state* (the withdraw-reconcile
+> flips only `live` rows, and revoke-on-open has already moved them). The
+> sweep fails closed while the seed is locked (it could not sign the
+> revocations) and retries each tick until unlock. Finally, a **take is
+> honored only on a `live` row** — a take against a parked, revoked, expired,
+> or taken offer is permanently refused with the state named, so retirement
+> binds even against a taker holding the maker's valid signature.
 
 > **Note** — **Cumulative funds gate.** `boardpostoffer` rejects an offer the
 > core wallet could not fund — and "fund" means the **sum** of the give-leg
