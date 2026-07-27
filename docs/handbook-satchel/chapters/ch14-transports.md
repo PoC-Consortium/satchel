@@ -10,7 +10,7 @@ Satchel can use two kinds of noticeboard, and they work side by side. You don't
 have to choose — and most people never think about this screen at all, because
 the default just works.
 
-![Settings, Network tab: the Nostr relays and Corkboards lists.](images/processed/ch13-network-tab.png){width=85%}
+![Settings, Network tab: the Nostr relays and Corkboards lists.](images/processed/ch14-settings-tabs.png){width=85%}
 
 ## The two kinds of noticeboard
 
