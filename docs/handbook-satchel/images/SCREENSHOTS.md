@@ -3,9 +3,9 @@
 The Satchel User Handbook references the screenshots below. Status: ✅ = real
 capture in `images/processed/`; ⬜ = still the auto-generated placeholder;
 🔁 = a raw capture exists but needs a re-shoot (see note). Capture progress
-2026-07-27: 21/24 done (ch13-network-tab merged into ch14-settings-tabs).
-Still open: the ch02 diagram + two re-shoots (ch12-create-slip,
-ch14-settings-tabs — notes inline below).
+2026-07-27: 22/24 done (ch13-network-tab merged into ch14-settings-tabs).
+Still open: the ch02 diagram + one re-shoot (ch14-settings-tabs — note
+inline below).
 
 Capture each on a clean **regtest** Satchel (use the playground:
 `python -m play` from `pact/harness`) so no real funds or live seeds appear. Use a
@@ -36,7 +36,7 @@ path below, then rebuild with `./build.ps1`.
 | ✅ `ch10-dock.png` | 10 — Tracking Swaps | Active-swaps dock (any page) | A live swap row with state + protocol chips, narration, refund time and the dump-logs action |
 | ✅ `ch11-wallets.png` | 11 — Your Wallets | Wallets page | At least two coin cards with balances |
 | ✅ `ch11-send-dialog.png` | 11 — Your Wallets | Send dialog (Electrum coin) | Recipient + amount fields with the **Max** button visible; fee selector showing **Slow / Normal / Fast** presets priced in sat/vB plus **Custom**; fee-preview line below |
-| 🔁 `ch12-create-slip.png` | 12 — Private Offers | Create slip | Generated `pactoffer1:` slip box visible — re-shoot AFTER clicking **Create slip** (the current raw shows the empty form) |
+| ✅ `ch12-create-slip.png` | 12 — Private Offers | Create slip | Filled form + generated `pactoffer1:` slip box with copy button and hand-to-friend hint |
 | ✅ `ch12-my-slips.png` | 12 — Private Offers | My slips | At least one outstanding slip with expiry countdown and **Cancel** |
 | 🔁 `ch14-settings-tabs.png` | 14 — Settings | Settings screen, **Network tab active** | All six tabs visible; Nostr relays list + Corkboards list shown (this one image also illustrates ch13 Transports) — re-shoot with the Network tab selected (the current raw shows General) |
 | ✅ `ch14-fees-tab.png` | 14 — Settings | Settings → Fees tab | The fee-bumping knobs (max feerate + funding bump reservation) with Save and Reset to defaults |
