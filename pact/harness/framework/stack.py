@@ -34,8 +34,15 @@ def build_workspace():
         assert os.path.exists(path), f"missing {path}"
 
 
+# Bump when the cached datadirs' CONTENT changes shape (wallet names, funding
+# scheme, …) — the fingerprint otherwise only tracks node binaries, so a stale
+# cache would keep old wallets while the code asks for new ones. v2: wallet
+# names renamed *_pocx -> *_btcx (BTCX is the currency; pocx names the node).
+_CACHE_SCHEMA = 2
+
+
 def _cache_fingerprint():
-    fp = {}
+    fp = {"schema": _CACHE_SCHEMA}
     for key, path in (("pocx", binaries.find_pocx_bitcoind()),
                       ("btc", binaries.find_btc_bitcoind())):
         st = os.stat(path)
@@ -51,7 +58,7 @@ def ensure_node_cache():
     """Build (once) the funded pocx+btc regtest datadirs; returns
     ({"pocx": dir, "btc": dir}, {"pocx": tip_time, "btc": tip_time}).
     Content matches the uncached Harness bringup: the standard wallet layout
-    (alice_pocx funded / bob_pocx empty; bob_btc funded / alice_btc empty)
+    (alice_btcx funded / bob_btcx empty; bob_btc funded / alice_btc empty)
     with 110 blocks mined under mocktime. The LTC node is never cached
     (rarely used; its callers own its funding).
 
@@ -88,7 +95,7 @@ def ensure_node_cache():
     tips = {}
     specs = (
         ("pocx", binaries.find_pocx_bitcoind(), POCX_RPC_PORT,
-         POCX_REGTEST_GENESIS, ("alice_pocx", "bob_pocx")),
+         POCX_REGTEST_GENESIS, ("alice_btcx", "bob_btcx")),
         ("btc", binaries.find_btc_bitcoind(), BTC_RPC_PORT,
          BTC_REGTEST_GENESIS, ("bob_btc", "alice_btc")),
     )

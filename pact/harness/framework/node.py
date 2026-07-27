@@ -319,7 +319,7 @@ class Harness:
     """Both nodes + funded wallets for Alice and Bob.
 
     Wallet layout (one node per chain, one wallet per party per chain):
-      pocx node: wallets alice_pocx (funded), bob_pocx   (empty)
+      pocx node: wallets alice_btcx (funded), bob_btcx   (empty)
       btc node:  wallets bob_btc    (funded), alice_btc  (empty)
 
     use_cache=True restores the pre-mined funded datadirs from the on-demand
@@ -405,7 +405,7 @@ class Harness:
         if self.ltc:
             self.ltc.set_mocktime(now)
 
-        for node, funded, empty in ((self.pocx, "alice_pocx", "bob_pocx"),
+        for node, funded, empty in ((self.pocx, "alice_btcx", "bob_btcx"),
                                     (self.btc, "bob_btc", "alice_btc")):
             if self.use_cache:
                 # Wallets ride in the cached datadir; re-load them, then mine a
@@ -422,7 +422,7 @@ class Harness:
                 # 110 blocks: >100 for coinbase maturity, headroom for fees.
                 node.generate(110, funded)
         print("[harness] wallets funded "
-              f"(alice_pocx: {self.pocx.rpc('getbalance', wallet='alice_pocx')} POCX, "
+              f"(alice_btcx: {self.pocx.rpc('getbalance', wallet='alice_btcx')} POCX, "
               f"bob_btc: {self.btc.rpc('getbalance', wallet='bob_btc')} BTC)")
         return self
 
@@ -434,7 +434,7 @@ class Harness:
         """
         target = max(self.pocx.rpc("getblockchaininfo")["time"],
                      self.btc.rpc("getblockchaininfo")["time"]) + seconds
-        for node, wallet in ((self.pocx, "alice_pocx"), (self.btc, "bob_btc")):
+        for node, wallet in ((self.pocx, "alice_btcx"), (self.btc, "bob_btc")):
             node.set_mocktime(target)
             node.generate(blocks_each, wallet)
         return target

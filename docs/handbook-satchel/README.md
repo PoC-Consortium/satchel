@@ -53,9 +53,10 @@ with a standard Markdown image plus a width hint, for example:
 
     ![The Corkboard order-book ladder.](images/processed/ch07-corkboard.png){width=85%}
 
-Many screenshots are not yet captured; the chapters that need them carry a
-visible placeholder and an entry in `images/SCREENSHOTS.md` listing the exact
-screen, app state, and filename to capture. Use the chapter prefix (`chNN-…`) in
+All referenced screenshots are captured. If a screen changes, recapture it on a
+clean **regtest** Satchel (`python -m play` from `pact/harness`) and save over
+the existing file in `images/processed/` — never capture a real recovery
+phrase, passphrase, or mainnet balance. Use the chapter prefix (`chNN-…`) in
 the filename to keep image assets grouped with their chapter.
 
 ### Callouts

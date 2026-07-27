@@ -279,9 +279,13 @@ function ActiveSwapRow({
         </Typography>
       </Tooltip>
 
-      <Typography sx={{ fontSize: 11, color: "text.secondary", fontFamily: C.mono, whiteSpace: "nowrap" }}>
-        {t("swaps.refundAt", { when: new Date(refundAt * 1000).toLocaleString() })}
-      </Typography>
+      {/* Pre-agreement states carry no timelocks yet (t = 0) — hide the line
+          rather than render the Unix epoch as "1.1.1970". */}
+      {refundAt > 0 && (
+        <Typography sx={{ fontSize: 11, color: "text.secondary", fontFamily: C.mono, whiteSpace: "nowrap" }}>
+          {t("swaps.refundAt", { when: new Date(refundAt * 1000).toLocaleString() })}
+        </Typography>
+      )}
 
       <Stack direction="row" spacing={0.75}>
         {!readOnly && canCancel(s) && onCancel && (

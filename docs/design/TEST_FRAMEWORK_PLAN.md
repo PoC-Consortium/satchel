@@ -188,8 +188,8 @@ per-scenario bringup would re-mine 110 funding blocks × ~37 scenarios, so we
 adopt Bitcoin Core's cache mechanism:
 
 - `framework/stack.py` builds `pact/harness/cache/` **once, on demand**: start
-  each node type, create the standard wallet layout (`alice_pocx` funded /
-  `bob_pocx` empty; `bob_btc` funded / `alice_btc` empty; ltc variant with
+  each node type, create the standard wallet layout (`alice_btcx` funded /
+  `bob_btcx` empty; `bob_btc` funded / `alice_btc` empty; ltc variant with
   `alice_ltc`/`bob_ltc`/`carol_ltc` for stacks that ask), mine 110 blocks,
   stop cleanly, keep the datadirs.
 - Each scenario **copies** the cached datadirs into its tmpdir and starts the

@@ -44,8 +44,8 @@ def _broadcast_leg_b(bob, chain, wallet, confs=1):
 def test_adaptor_swap(h):
     # auto_init=False: start seedless so setup_seed()'s createseed can run (the
     # default auto_init would create a seed on boot → createseed then conflicts).
-    alice = Party("ad-alice", h, h.workdir, "alice_pocx", "alice_btc", auto_init=False).start()
-    bob = Party("ad-bob", h, h.workdir, "bob_pocx", "bob_btc", auto_init=False).start()
+    alice = Party("ad-alice", h, h.workdir, "alice_btcx", "alice_btc", auto_init=False).start()
+    bob = Party("ad-bob", h, h.workdir, "bob_btcx", "bob_btc", auto_init=False).start()
     try:
         alice.setup_seed()
         bob.setup_seed()
@@ -54,7 +54,7 @@ def test_adaptor_swap(h):
         # Claim-wallet balances before the swap: the redeems must land in these
         # spendable core wallets (fresh sweep addrs), not at a swap-key address.
         alice_btc_before = float(h.btc.rpc("getbalance", wallet="alice_btc"))
-        bob_pocx_before = float(h.pocx.rpc("getbalance", wallet="bob_pocx"))
+        bob_btcx_before = float(h.pocx.rpc("getbalance", wallet="bob_btcx"))
 
         # init / accept — both sides can now rebuild identical Taproot legs.
         init = _env(alice.rpc("adaptorinit", GIVE_POCX, GET_BTC, t1, t2))
@@ -64,7 +64,7 @@ def test_adaptor_swap(h):
 
         # Fund both legs (Alice -> leg A on PoCX, Bob -> leg B on BTC).
         fa = _env(alice.rpc("adaptorfund", sid))
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
         bob.rpc("adaptorrecv", fa)
         fb = _env(bob.rpc("adaptorfund", sid))   # BUILDS leg B (unbroadcast)
         alice.rpc("adaptorrecv", fb)
@@ -99,7 +99,7 @@ def test_adaptor_swap(h):
         alice.rpc("adaptorredeem", sid)
         h.btc.generate(1, "bob_btc")
         bob.rpc("adaptorredeem", sid)
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
 
         # Both Taproot funding outputs are now cooperatively spent.
         assert h.btc.rpc("gettxout", b_txid, b_vout) is None, "leg B (BTC) not redeemed"
@@ -110,11 +110,11 @@ def test_adaptor_swap(h):
         # (the fresh sweep addresses communicated in init/accept) — this is the
         # whole point of fresh-sweep-address and would fail with a swap-key dest.
         alice_btc_after = float(h.btc.rpc("getbalance", wallet="alice_btc"))
-        bob_pocx_after = float(h.pocx.rpc("getbalance", wallet="bob_pocx"))
+        bob_btcx_after = float(h.pocx.rpc("getbalance", wallet="bob_btcx"))
         assert alice_btc_after > alice_btc_before, \
             f"Alice's leg-B redeem missed her core wallet: {alice_btc_before} -> {alice_btc_after}"
-        assert bob_pocx_after > bob_pocx_before, \
-            f"Bob's leg-A redeem missed his core wallet: {bob_pocx_before} -> {bob_pocx_after}"
+        assert bob_btcx_after > bob_btcx_before, \
+            f"Bob's leg-A redeem missed his core wallet: {bob_btcx_before} -> {bob_btcx_after}"
         print("[e2e] redeems landed in spendable core wallets (fresh sweep addrs)")
     finally:
         alice.stop()
@@ -127,8 +127,8 @@ def test_adaptor_refund(h):
     tapleaf (no MuSig2). v1-parity for the M7 happy+refund bar."""
     # auto_init=False: seedless so setup_seed()'s createseed doesn't collide
     # with a boot-created seed (same fix as test_adaptor_swap).
-    alice = Party("adr-alice", h, h.workdir, "alice_pocx", "alice_btc", auto_init=False).start()
-    bob = Party("adr-bob", h, h.workdir, "bob_pocx", "bob_btc", auto_init=False).start()
+    alice = Party("adr-alice", h, h.workdir, "alice_btcx", "alice_btc", auto_init=False).start()
+    bob = Party("adr-bob", h, h.workdir, "bob_btcx", "bob_btc", auto_init=False).start()
     try:
         alice.setup_seed()
         bob.setup_seed()
@@ -144,7 +144,7 @@ def test_adaptor_refund(h):
         # broadcast leg B; THEN the swap stalls at the redeem step and each side
         # reclaims its own funded leg via the CLTV tapleaf.
         fa = _env(alice.rpc("adaptorfund", sid))
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
         bob.rpc("adaptorrecv", fa)
         fb = _env(bob.rpc("adaptorfund", sid))   # BUILDS leg B (unbroadcast)
         alice.rpc("adaptorrecv", fb)
@@ -162,7 +162,7 @@ def test_adaptor_refund(h):
 
         # Each reclaims its own funded leg via the script-path refund.
         alice.rpc("adaptorrefund", sid)   # leg A on PoCX
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
         bob.rpc("adaptorrefund", sid)     # leg B on BTC
         h.btc.generate(1, "bob_btc")
 
@@ -184,8 +184,8 @@ def test_adaptor_refund_feebump(h):
     The cooperative MuSig2 redeem cannot be RBF'd (its fee is sealed in the
     pre-signed adaptor signature); only this single-key refund path can, which
     is exactly what this exercises."""
-    alice = Party("adfb-alice", h, h.workdir, "alice_pocx", "alice_btc", auto_init=False).start()
-    bob = Party("adfb-bob", h, h.workdir, "bob_pocx", "bob_btc", auto_init=False).start()
+    alice = Party("adfb-alice", h, h.workdir, "alice_btcx", "alice_btc", auto_init=False).start()
+    bob = Party("adfb-bob", h, h.workdir, "bob_btcx", "bob_btc", auto_init=False).start()
     try:
         alice.setup_seed()
         bob.setup_seed()
@@ -198,7 +198,7 @@ def test_adaptor_refund_feebump(h):
 
         # Alice funds leg A (PoCX), then the swap stalls.
         fa = _env(alice.rpc("adaptorfund", sid))
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
         a_txid, a_vout = fa["body"]["txid"], fa["body"]["vout"]
 
         # Past T1 so the CLTV leaf unlocks, then refund leg A — but DON'T mine it.
@@ -215,7 +215,7 @@ def test_adaptor_refund_feebump(h):
         assert bumped, "stuck refund was not fee-bumped/rebroadcast"
 
         # Mining settles whichever replacement won; the leg ends up refunded.
-        h.pocx.generate(2, "alice_pocx")
+        h.pocx.generate(2, "alice_btcx")
         assert h.pocx.rpc("gettxout", a_txid, a_vout) is None, "leg A refund never confirmed"
         print("[e2e] adaptor refund fee-bump OK: stuck refund RBF-escalated then confirmed")
     finally:
@@ -230,8 +230,8 @@ def test_adaptor_redeem_cpfp(h):
     redeem's own (wallet-owned sweep) output. We broadcast Alice's leg-B redeem,
     DON'T mine it, drive `tick`, and assert an `adaptor-cpfp` event AND that the
     redeem output is now spent by an in-mempool child — then mining settles both."""
-    alice = Party("adcp-alice", h, h.workdir, "alice_pocx", "alice_btc", auto_init=False).start()
-    bob = Party("adcp-bob", h, h.workdir, "bob_pocx", "bob_btc", auto_init=False).start()
+    alice = Party("adcp-alice", h, h.workdir, "alice_btcx", "alice_btc", auto_init=False).start()
+    bob = Party("adcp-bob", h, h.workdir, "bob_btcx", "bob_btc", auto_init=False).start()
     try:
         alice.setup_seed()
         bob.setup_seed()
@@ -244,7 +244,7 @@ def test_adaptor_redeem_cpfp(h):
 
         # Fund both legs and drive the handshake to Signed.
         fa = _env(alice.rpc("adaptorfund", sid))
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
         bob.rpc("adaptorrecv", fa)
         fb = _env(bob.rpc("adaptorfund", sid))   # BUILDS leg B (unbroadcast)
         alice.rpc("adaptorrecv", fb)
@@ -308,9 +308,9 @@ def test_adaptor_redeem_cpfp_ltc(h):
     h.ltc.create_wallet("bob_ltc")
     h.ltc.generate(110, "bob_ltc")  # >100 for coinbase maturity
 
-    alice = Party("adcpl-alice", h, h.workdir, "alice_pocx", "alice_btc", auto_init=False,
+    alice = Party("adcpl-alice", h, h.workdir, "alice_btcx", "alice_btc", auto_init=False,
                   coins_file=COINS_TOML, extra_coins=[("ltc", h.ltc.rpc_url(wallet="alice_ltc"))]).start()
-    bob = Party("adcpl-bob", h, h.workdir, "bob_pocx", "bob_btc", auto_init=False,
+    bob = Party("adcpl-bob", h, h.workdir, "bob_btcx", "bob_btc", auto_init=False,
                 coins_file=COINS_TOML, extra_coins=[("ltc", h.ltc.rpc_url(wallet="bob_ltc"))]).start()
     try:
         alice.setup_seed()
@@ -324,7 +324,7 @@ def test_adaptor_redeem_cpfp_ltc(h):
         alice.rpc("adaptorrecv", accept)
 
         fa = _env(alice.rpc("adaptorfund", sid))
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
         bob.rpc("adaptorrecv", fa)
         fb = _env(bob.rpc("adaptorfund", sid))   # BUILDS leg B (unbroadcast)
         alice.rpc("adaptorrecv", fb)
@@ -385,14 +385,14 @@ def test_adaptor_funding_cpfp(h):
     confirmation is needed until the reveal/redeem depth gate. That unconfirmed
     window is exactly where the nurse acts. As in the v1 test we fund at the
     regtest 1 sat/vB fallback, then raise the market via `_settestfeerate`."""
-    alice = Party("adfc-alice", h, h.workdir, "alice_pocx", "alice_btc", auto_init=False).start()
-    bob = Party("adfc-bob", h, h.workdir, "bob_pocx", "bob_btc", auto_init=False).start()
+    alice = Party("adfc-alice", h, h.workdir, "alice_btcx", "alice_btc", auto_init=False).start()
+    bob = Party("adfc-bob", h, h.workdir, "bob_btcx", "bob_btc", auto_init=False).start()
     try:
         alice.setup_seed()
         bob.setup_seed()
         t2, t1 = regtest_timelocks(h)
         alice_btc_before = float(h.btc.rpc("getbalance", wallet="alice_btc"))
-        bob_pocx_before = float(h.pocx.rpc("getbalance", wallet="bob_pocx"))
+        bob_btcx_before = float(h.pocx.rpc("getbalance", wallet="bob_btcx"))
 
         init = _env(alice.rpc("adaptorinit", GIVE_POCX, GET_BTC, t1, t2))
         sid = init["swap_id"]
@@ -440,7 +440,7 @@ def test_adaptor_funding_cpfp(h):
 
         # Mine the package, then complete the swap — proving the adaptor sigs over
         # the unchanged outpoint still redeem.
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
         # Two-phase: leg A is confirmed now, so the taker broadcasts its pre-built
         # leg B (it stayed unbroadcast while leg A was unconfirmed — exactly the
         # protection: never commit leg B against a still-bumpable/unconfirmed leg A).
@@ -451,13 +451,13 @@ def test_adaptor_funding_cpfp(h):
         h.btc.generate(1, "bob_btc")
         for ev in bob.rpc("tick")["events"]:     # extract t, redeem leg A
             print(f"[e2e]   v2[bob]: {ev['action']} {ev['detail'][:60]}")
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
 
         assert h.btc.rpc("gettxout", b_txid, b_vout) is None, "leg B (BTC) not redeemed"
         assert h.pocx.rpc("gettxout", a_txid, a_vout) is None, "leg A (PoCX) not redeemed"
         assert float(h.btc.rpc("getbalance", wallet="alice_btc")) > alice_btc_before, \
             "Alice's leg-B redeem missed her core wallet"
-        assert float(h.pocx.rpc("getbalance", wallet="bob_pocx")) > bob_pocx_before, \
+        assert float(h.pocx.rpc("getbalance", wallet="bob_btcx")) > bob_btcx_before, \
             "Bob's leg-A redeem missed his core wallet"
         print("[e2e] funding-cpfp-bump (v2) OK: child bumped the lock, swap completed cleanly")
     finally:
@@ -470,9 +470,9 @@ def test_adaptor_depth_gate(h):
     initiator must NOT publish `t` (redeem leg B) until Bob's leg-B funding is 2
     confirmations deep — a shallow funding could reorg out from under the
     reveal. At 1 conf the auto-redeem tick is a no-op; at 2 it fires."""
-    alice = Party("adg-alice", h, h.workdir, "alice_pocx", "alice_btc",
+    alice = Party("adg-alice", h, h.workdir, "alice_btcx", "alice_btc",
                   auto_init=False, coin_confs={"btc": 2}).start()
-    bob = Party("adg-bob", h, h.workdir, "bob_pocx", "bob_btc", auto_init=False).start()
+    bob = Party("adg-bob", h, h.workdir, "bob_btcx", "bob_btc", auto_init=False).start()
     try:
         alice.setup_seed()
         bob.setup_seed()
@@ -484,7 +484,7 @@ def test_adaptor_depth_gate(h):
         alice.rpc("adaptorrecv", accept)
 
         fa = _env(alice.rpc("adaptorfund", sid))
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
         bob.rpc("adaptorrecv", fa)
         fb = _env(bob.rpc("adaptorfund", sid))   # BUILDS leg B (unbroadcast)
         alice.rpc("adaptorrecv", fb)
@@ -526,9 +526,9 @@ def test_adaptor_corkboard_swap(h):
     board.start()
     # auto_init default (seed created on boot); auto_fund on; no setup_seed —
     # mirrors test_corkboard_swap.
-    maker = Party("adcb-maker", h, h.workdir, "alice_pocx", "alice_btc",
+    maker = Party("adcb-maker", h, h.workdir, "alice_btcx", "alice_btc",
                   board_url=board.url, auto_fund=True).start()
-    taker = Party("adcb-taker", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("adcb-taker", h, h.workdir, "bob_btcx", "bob_btc",
                   board_url=board.url, auto_fund=True).start()
     try:
         # Pin v2 explicitly (param 4) — it's opt-in now that the default is HTLC.
@@ -545,7 +545,7 @@ def test_adaptor_corkboard_swap(h):
             for party in (maker, taker):
                 for ev in party.rpc("tick")["events"]:
                     print(f"[e2e]   v2board[{party.name}]: {ev['action']} {ev['detail'][:60]}")
-                h.pocx.generate(1, "alice_pocx")
+                h.pocx.generate(1, "alice_btcx")
                 h.btc.generate(1, "bob_btc")
             a = maker.rpc("listadaptorswaps")
             b = taker.rpc("listadaptorswaps")

@@ -65,7 +65,7 @@ def relay_handshake(maker, taker, protocol):
 
 
 def mine(h, n=1):
-    h.pocx.generate(n, "alice_pocx")
+    h.pocx.generate(n, "alice_btcx")
     h.btc.generate(n, "bob_btc")
 
 
@@ -85,10 +85,10 @@ def scenario_upgrade_mid_swap_v1(h):
     """v1 upgraded at both-funded (see module docstring)."""
     rc19 = find_pactd_rc19()
     relay = NostrRelay(h.workdir)
-    maker = Party("upmk1", h, h.workdir, "alice_pocx", "alice_btc",
+    maker = Party("upmk1", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
                   pactd_bin=rc19)
-    taker = Party("uptk1", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("uptk1", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
                   pactd_bin=rc19)
     try:
@@ -140,10 +140,10 @@ def scenario_upgrade_mid_swap_v2(h):
     relay = NostrRelay(h.workdir)
     # btc=3 holds the maker at Signed (the same committed-window hold as the
     # rescue/takeover suites) so the upgrade lands mid-flight deterministically.
-    maker = Party("upmk2", h, h.workdir, "alice_pocx", "alice_btc",
+    maker = Party("upmk2", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
                   coin_confs={"btc": 3}, pactd_bin=rc19)
-    taker = Party("uptk2", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("uptk2", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
                   pactd_bin=rc19)
     try:
@@ -204,10 +204,10 @@ def scenario_mixed_version_swap_v1(h):
     one side upgraded first."""
     rc19 = find_pactd_rc19()
     relay = NostrRelay(h.workdir)
-    maker = Party("mxmk", h, h.workdir, "alice_pocx", "alice_btc",
+    maker = Party("mxmk", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=True,
                   pactd_bin=rc19)
-    taker = Party("mxtk", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("mxtk", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=True)
     try:
         relay.start()

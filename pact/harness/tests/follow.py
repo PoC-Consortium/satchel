@@ -60,7 +60,7 @@ def follow_log_events(party):
 
 
 def mine_and_sync(h, ep, eb, n=1):
-    h.pocx.generate(n, "alice_pocx")
+    h.pocx.generate(n, "alice_btcx")
     h.btc.generate(n, "bob_btc")
     ep.wait_synced(h.pocx.rpc("getblockcount"))
     eb.wait_synced(h.btc.rpc("getblockcount"))
@@ -112,12 +112,12 @@ def drive_swap_over_relay(h, ep, eb, maker, taker, stop_when, rounds=60):
 def scenario_observe_after_completion(h, ep, eb):
     """Cell 1: the observer first sees the swap AFTER it settled → no ghost."""
     relay = NostrRelay(h.workdir)
-    bx, bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
-    tx_bx, tx_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
-    maker = Party("fmk1", h, h.workdir, "alice_pocx", "alice_btc",
+    bx, bt = multi_urls(h, ep, eb, "alice_btcx", "alice_btc")
+    tx_bx, tx_bt = multi_urls(h, ep, eb, "bob_btcx", "bob_btc")
+    maker = Party("fmk1", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                   pocx_url=bx, btc_url=bt)
-    taker = Party("ftk1", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("ftk1", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True,
                   pocx_url=tx_bx, btc_url=tx_bt)
     obs = None
@@ -150,7 +150,7 @@ def scenario_observe_after_completion(h, ep, eb):
 
         # A fresh same-seed machine boots long after the fact (new data dir →
         # new machine scope → the snapshot reads as another machine's swap).
-        obs = Party("fob1", h, h.workdir, "alice_pocx", "alice_btc",
+        obs = Party("fob1", h, h.workdir, "alice_btcx", "alice_btc",
                     nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                     pocx_url=bx, btc_url=bt)
         obs.start()
@@ -191,12 +191,12 @@ def scenario_dormant_observer_takeover(h, ep, eb):
     """Cell 2: observer activates mid-swap, sees the reconstructed state,
     takes over after the owner stops, and completes — without re-funding."""
     relay = NostrRelay(h.workdir)
-    bx, bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
-    tx_bx, tx_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
-    maker = Party("fmk2", h, h.workdir, "alice_pocx", "alice_btc",
+    bx, bt = multi_urls(h, ep, eb, "alice_btcx", "alice_btc")
+    tx_bx, tx_bt = multi_urls(h, ep, eb, "bob_btcx", "bob_btc")
+    maker = Party("fmk2", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                   pocx_url=bx, btc_url=bt)
-    taker = Party("ftk2", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("ftk2", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True,
                   pocx_url=tx_bx, btc_url=tx_bt)
     obs = None
@@ -225,7 +225,7 @@ def scenario_dormant_observer_takeover(h, ep, eb):
         maker.stop()
 
         # The dormant observer activates mid-swap.
-        obs = Party("fob2", h, h.workdir, "alice_pocx", "alice_btc",
+        obs = Party("fob2", h, h.workdir, "alice_btcx", "alice_btc",
                     nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                     pocx_url=bx, btc_url=bt)
         obs.start()
@@ -314,12 +314,12 @@ def scenario_wallet_assisted_core_only(h, ep, eb):
     electrs — the record purges promptly via `followed-purged`, NOT the
     24h age-out."""
     relay = NostrRelay(h.workdir)
-    mk_bx, mk_bt = multi_urls(h, ep, eb, "alice_pocx", "alice_btc")
-    tk_bx, tk_bt = multi_urls(h, ep, eb, "bob_pocx", "bob_btc")
-    maker = Party("fmk3", h, h.workdir, "alice_pocx", "alice_btc",
+    mk_bx, mk_bt = multi_urls(h, ep, eb, "alice_btcx", "alice_btc")
+    tk_bx, tk_bt = multi_urls(h, ep, eb, "bob_btcx", "bob_btc")
+    maker = Party("fmk3", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True,
                   pocx_url=mk_bx, btc_url=mk_bt)
-    taker = Party("ftk3", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("ftk3", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
                   pocx_url=tk_bx, btc_url=tk_bt)
     obs = None
@@ -337,9 +337,9 @@ def scenario_wallet_assisted_core_only(h, ep, eb):
                     and t is not None and t.get("htlc_b_txid"))
 
         sid = drive_swap_over_relay(h, ep, eb, maker, taker, both_funded)
-        obs = Party("fob3", h, h.workdir, "bob_pocx", "bob_btc",
+        obs = Party("fob3", h, h.workdir, "bob_btcx", "bob_btc",
                     nostr_relays=relay.ws_url, auto_fund=True, auto_init=False,
-                    pocx_url=h.pocx.rpc_url(wallet="bob_pocx"),  # Core-only!
+                    pocx_url=h.pocx.rpc_url(wallet="bob_btcx"),  # Core-only!
                     btc_url=tk_bt)
         obs.start()
         obs.setup_seed(mnemonic=FOLLOW_MNEMONIC_S3)
@@ -366,7 +366,7 @@ def scenario_wallet_assisted_core_only(h, ep, eb):
         mine_and_sync(h, ep, eb, n=2)  # bury the claims past needed depth
 
         # The observer must resolve the followed record from the SHARED
-        # WALLET (btcx leg: the taker's claim is a bob_pocx receive) + electrs
+        # WALLET (btcx leg: the taker's claim is a bob_btcx receive) + electrs
         # (btc leg) — a prompt followed-purged, never the age-out. The purge
         # is an ENGINE tick event (rides the tick RPC), unlike the async
         # import-scan events that go to the log.

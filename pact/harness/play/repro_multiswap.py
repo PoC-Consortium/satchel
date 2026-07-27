@@ -32,9 +32,9 @@ def main():
     with Harness(keep=False) as h:
         board = Corkboard(h.workdir)
         board.start()
-        maker = Party("mk", h, h.workdir, "alice_pocx", "alice_btc",
+        maker = Party("mk", h, h.workdir, "alice_btcx", "alice_btc",
                       board_url=board.url, auto_fund=True, tick_secs=TICK_SECS).start()
-        taker = Party("tk", h, h.workdir, "bob_pocx", "bob_btc",
+        taker = Party("tk", h, h.workdir, "bob_btcx", "bob_btc",
                       board_url=board.url, auto_fund=True, tick_secs=TICK_SECS).start()
 
         stop = threading.Event()
@@ -49,7 +49,7 @@ def main():
                 now = max(tip, base + int(time.time() - start_wall)) + 1
                 try:
                     h.pocx.set_mocktime(now); h.btc.set_mocktime(now)
-                    h.pocx.generate(1, "alice_pocx"); h.btc.generate(1, "bob_btc")
+                    h.pocx.generate(1, "alice_btcx"); h.btc.generate(1, "bob_btc")
                 except Exception as e:  # noqa: BLE001
                     print(f"[repro] miner: {e}")
                 stop.wait(BLOCK_EVERY)

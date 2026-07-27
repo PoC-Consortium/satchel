@@ -40,8 +40,8 @@ from framework.util import (  # noqa: E402
 def test_complete_swap(h):
     """Happy path, fully manual: the Phase 1 definition of done.
     Each party runs its own pactd; pact-cli drives it (bitcoin-cli style)."""
-    alice = Party("alice", h, h.workdir, "alice_pocx", "alice_btc").start()
-    bob = Party("bob", h, h.workdir, "bob_pocx", "bob_btc").start()
+    alice = Party("alice", h, h.workdir, "alice_btcx", "alice_btc").start()
+    bob = Party("bob", h, h.workdir, "bob_btcx", "bob_btc").start()
     try:
         before = balances(h)
 
@@ -51,17 +51,17 @@ def test_complete_swap(h):
         alice.cli("redeem", "--swap", sid)          # reveals s on the BTC chain
         h.btc.generate(1, "bob_btc")
         bob.cli("redeem", "--swap", sid)            # engine extracted s from chain B
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
 
         assert_htlc_spent(h.pocx, m_funded_a, "chain-A")
         assert_htlc_spent(h.btc, m_funded_b, "chain-B")
 
         after = balances(h)
-        assert after["bob_pocx"] >= float(GIVE_POCX) - FEE_SLACK, \
+        assert after["bob_btcx"] >= float(GIVE_POCX) - FEE_SLACK, \
             f"Bob did not receive POCX: {after}"
         assert after["alice_btc"] >= float(GET_BTC) - FEE_SLACK, \
             f"Alice did not receive BTC: {after}"
-        assert after["alice_pocx"] <= before["alice_pocx"] - float(GIVE_POCX) + 10 * 3, \
+        assert after["alice_btcx"] <= before["alice_btcx"] - float(GIVE_POCX) + 10 * 3, \
             f"Alice's POCX did not decrease plausibly: {after}"
         print("[e2e] complete-swap scenario OK")
     finally:
@@ -71,8 +71,8 @@ def test_complete_swap(h):
 
 def test_refund(h):
     """Manual refund path + negative safety checks."""
-    alice = Party("alice2", h, h.workdir, "alice_pocx", "alice_btc").start()
-    bob = Party("bob2", h, h.workdir, "bob_pocx", "bob_btc").start()
+    alice = Party("alice2", h, h.workdir, "alice_btcx", "alice_btc").start()
+    bob = Party("bob2", h, h.workdir, "bob_btcx", "bob_btc").start()
     try:
         before = balances(h)
 
@@ -94,15 +94,15 @@ def test_refund(h):
         bob.cli("refund", "--swap", sid)     # valid once MTP >= T2
         h.btc.generate(1, "bob_btc")
         alice.cli("refund", "--swap", sid)   # valid once MTP >= T1
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
 
         assert_htlc_spent(h.pocx, m_funded_a, "chain-A")
         assert_htlc_spent(h.btc, m_funded_b, "chain-B")
 
         after = balances(h)
-        # Mining rewards accrue to alice_pocx/bob_btc, so check the *other*
+        # Mining rewards accrue to alice_btcx/bob_btc, so check the *other*
         # side of each leg: nobody ended up with counterparty funds.
-        assert after["bob_pocx"] <= before["bob_pocx"] + FEE_SLACK, \
+        assert after["bob_btcx"] <= before["bob_btcx"] + FEE_SLACK, \
             f"Bob must not gain POCX in refund scenario: {after}"
         assert after["alice_btc"] <= before["alice_btc"] + FEE_SLACK, \
             f"Alice must not gain BTC in refund scenario: {after}"
@@ -117,9 +117,9 @@ def test_daemon_autopilot_swap(h):
     backends to exercise the spec §10 multi-backend path); redeems on both
     sides happen via the scheduler, with an RBF fee-bump while Alice's
     redeem sits unconfirmed."""
-    alice = Party("alice3", h, h.workdir, "alice_pocx", "alice_btc",
+    alice = Party("alice3", h, h.workdir, "alice_btcx", "alice_btc",
                   duplicate_backends=True).start()
-    bob = Party("bob3", h, h.workdir, "bob_pocx", "bob_btc").start()
+    bob = Party("bob3", h, h.workdir, "bob_btcx", "bob_btc").start()
     try:
         before = balances(h)
 
@@ -162,7 +162,7 @@ def test_daemon_autopilot_swap(h):
 
         r = alice.rpc("fund", sid)
         save_msg(m_funded_a, r["envelope"])
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
 
         bob.cli("recv", "--in", m_funded_a)
         bob.cli("fund", "--swap", sid, "--out", m_funded_b)
@@ -185,7 +185,7 @@ def test_daemon_autopilot_swap(h):
         # Bob's scheduler pass: detects s on chain B, redeems chain A.
         events = bob.tick()
         assert any(e["action"] == "auto-redeem" for e in events), f"no auto-redeem: {events}"
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
 
         # Alice's next pass books the swap as completed.
         events = alice.tick()
@@ -196,7 +196,7 @@ def test_daemon_autopilot_swap(h):
         assert_htlc_spent(h.pocx, m_funded_a, "chain-A")
         assert_htlc_spent(h.btc, m_funded_b, "chain-B")
         after = balances(h)
-        assert after["bob_pocx"] >= before["bob_pocx"] + float(GIVE_POCX) - FEE_SLACK
+        assert after["bob_btcx"] >= before["bob_btcx"] + float(GIVE_POCX) - FEE_SLACK
         assert after["alice_btc"] >= before["alice_btc"] + float(GET_BTC) - FEE_SLACK
         print("[e2e] daemon-autopilot swap scenario OK")
     finally:
@@ -211,8 +211,8 @@ def test_daemon_autopilot_refund(h):
     correctly COMPLETE the swap once it sees chain B funded (covered by the
     autopilot *swap* test). "Walking away" therefore means offline here: we do
     NOT tick through the completion window, only after the timelocks pass."""
-    alice = Party("alice4", h, h.workdir, "alice_pocx", "alice_btc").start()
-    bob = Party("bob4", h, h.workdir, "bob_pocx", "bob_btc").start()
+    alice = Party("alice4", h, h.workdir, "alice_btcx", "alice_btc").start()
+    bob = Party("bob4", h, h.workdir, "bob_btcx", "bob_btc").start()
     try:
         before = balances(h)
 
@@ -227,12 +227,12 @@ def test_daemon_autopilot_refund(h):
         events = alice.tick()
         assert any(e["action"] == "auto-refund" for e in events), f"alice: {events}"
         h.btc.generate(1, "bob_btc")
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
 
         assert_htlc_spent(h.pocx, m_funded_a, "chain-A")
         assert_htlc_spent(h.btc, m_funded_b, "chain-B")
         after = balances(h)
-        assert after["bob_pocx"] <= before["bob_pocx"] + FEE_SLACK
+        assert after["bob_btcx"] <= before["bob_btcx"] + FEE_SLACK
         assert after["alice_btc"] <= before["alice_btc"] + FEE_SLACK
         print("[e2e] daemon-autopilot refund scenario OK")
     finally:
@@ -245,8 +245,8 @@ def test_chain_watched_funding(h):
     swap completes — driven entirely by chain-watched funding detection in
     tick(): each leg is discovered on-chain by its derivable HTLC script. This
     is the robustness guarantee: no single post-init message is load-bearing."""
-    alice = Party("alicecw", h, h.workdir, "alice_pocx", "alice_btc").start()  # initiator
-    bob = Party("bobcw", h, h.workdir, "bob_pocx", "bob_btc").start()          # participant
+    alice = Party("alicecw", h, h.workdir, "alice_btcx", "alice_btc").start()  # initiator
+    bob = Party("bobcw", h, h.workdir, "bob_btcx", "bob_btc").start()          # participant
     try:
         before = balances(h)
         t2, t1 = regtest_timelocks(h)
@@ -265,7 +265,7 @@ def test_chain_watched_funding(h):
 
         # Alice funds chain A; her funded_a message is NEVER given to Bob.
         alice.cli("fund", "--swap", sid, "--out", m_dump_a)
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
 
         # Bob discovers chain A by its script (no message) → FundedA, then funds
         # chain B; his funded_b message is NEVER given to Alice.
@@ -280,13 +280,13 @@ def test_chain_watched_funding(h):
 
         # Bob extracts the preimage from chain B and redeems chain A.
         drive_until(bob, lambda evs: any(e["action"] == "auto-redeem" for e in evs))
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
 
         # Completed (not refunded): both HTLCs spent and Bob received POCX.
         assert_htlc_spent(h.pocx, m_dump_a, "chain-A")
         assert_htlc_spent(h.btc, m_dump_b, "chain-B")
         after = balances(h)
-        assert after["bob_pocx"] >= before["bob_pocx"] + float(GIVE_POCX) - FEE_SLACK, \
+        assert after["bob_btcx"] >= before["bob_btcx"] + float(GIVE_POCX) - FEE_SLACK, \
             f"bob did not receive POCX: {before} -> {after}"
         print("[e2e] chain-watched funding (no funded messages) scenario OK")
     finally:
@@ -311,8 +311,8 @@ def test_funding_fee_bump_v1(h):
     1 sat/vB fallback) and settxfee is gone in Core v31, so we inject the gap via
     the regtest-only `_settestfeerate` hook — fund at the 1 sat/vB fallback, then
     raise the market so the nurse sees broadcast(1) < market and RBF-bumps."""
-    alice = Party("alicefb", h, h.workdir, "alice_pocx", "alice_btc").start()  # initiator
-    bob = Party("bobfb", h, h.workdir, "bob_pocx", "bob_btc").start()          # participant
+    alice = Party("alicefb", h, h.workdir, "alice_btcx", "alice_btc").start()  # initiator
+    bob = Party("bobfb", h, h.workdir, "bob_btcx", "bob_btc").start()          # participant
     try:
         before = balances(h)
         t2, t1 = regtest_timelocks(h)
@@ -357,19 +357,19 @@ def test_funding_fee_bump_v1(h):
         # Confirm the bumped funding, then complete via chain-watched detection:
         # Bob never received funded_a — he finds the BUMPED lock by its script,
         # which is exactly why the RBF is safe for him.
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
         drive_until(bob, lambda evs: any(e["action"] == "funded-a" for e in evs))
         bob.cli("fund", "--swap", sid, "--out", m_dump_b)
         h.btc.generate(1, "bob_btc")
         drive_until(alice, lambda evs: any(e["action"] == "auto-redeem" for e in evs))
         h.btc.generate(1, "bob_btc")  # confirm Alice's reveal on chain B
         drive_until(bob, lambda evs: any(e["action"] == "auto-redeem" for e in evs))
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
 
         # Bob got POCX (and Alice got BTC): the bumped funding completed cleanly.
         assert_htlc_spent(h.btc, m_dump_b, "chain-B")
         after = balances(h)
-        assert after["bob_pocx"] >= before["bob_pocx"] + float(GIVE_POCX) - FEE_SLACK, \
+        assert after["bob_btcx"] >= before["bob_btcx"] + float(GIVE_POCX) - FEE_SLACK, \
             f"bob did not receive POCX after a bumped funding: {before} -> {after}"
         assert after["alice_btc"] >= before["alice_btc"] + float(GET_BTC) - FEE_SLACK, \
             f"alice did not receive BTC after a bumped funding: {before} -> {after}"
@@ -389,9 +389,9 @@ def test_balance_validation(h):
     fund. So this drives `board post`, the same gated path Satchel's "Post an
     offer" uses (boardpostoffer). The other scenarios already prove a fundable
     offer is accepted, so this only checks rejection."""
-    alice = Party("alicebal", h, h.workdir, "alice_pocx", "alice_btc").start()
+    alice = Party("alicebal", h, h.workdir, "alice_btcx", "alice_btc").start()
     try:
-        # alice_pocx holds ~100 POCX; advertising an offer to GIVE a million is
+        # alice_btcx holds ~100 POCX; advertising an offer to GIVE a million is
         # refused because the core wallet can't cover the leg we'd lock when taken.
         # The gate fires after the chains-live check but before any board is
         # contacted, so this needs no Corkboard. Default board-post timelocks
@@ -413,9 +413,9 @@ def test_create_import_then_swap(h):
     # A fixed BIP39 test mnemonic for the import path (deterministic identity).
     BOB_MNEMONIC = ("legal winner thank year wave sausage worth useful legal "
                     "winner thank yellow")
-    alice = Party("alice6", h, h.workdir, "alice_pocx", "alice_btc",
+    alice = Party("alice6", h, h.workdir, "alice_btcx", "alice_btc",
                   auto_init=False).start()
-    bob = Party("bob6", h, h.workdir, "bob_pocx", "bob_btc",
+    bob = Party("bob6", h, h.workdir, "bob_btcx", "bob_btc",
                 auto_init=False).start()
     try:
         before = balances(h)
@@ -446,12 +446,12 @@ def test_create_import_then_swap(h):
         alice.cli("redeem", "--swap", sid)
         h.btc.generate(1, "bob_btc")
         bob.cli("redeem", "--swap", sid)
-        h.pocx.generate(1, "alice_pocx")
+        h.pocx.generate(1, "alice_btcx")
 
         assert_htlc_spent(h.pocx, m_funded_a, "chain-A")
         assert_htlc_spent(h.btc, m_funded_b, "chain-B")
         after = balances(h)
-        assert after["bob_pocx"] >= before["bob_pocx"] + float(GIVE_POCX) - FEE_SLACK, \
+        assert after["bob_btcx"] >= before["bob_btcx"] + float(GIVE_POCX) - FEE_SLACK, \
             f"Bob did not receive POCX: {after}"
         assert after["alice_btc"] >= before["alice_btc"] + float(GET_BTC) - FEE_SLACK, \
             f"Alice did not receive BTC: {after}"
@@ -467,7 +467,7 @@ def test_coin_setup(h):
     availability from capabilities (not a curated list); validatecoin runs the
     genesis-hash check that gates saving a backend — accepting the right node
     and rejecting a cross-wired one."""
-    alice = Party("alice7", h, h.workdir, "alice_pocx", "alice_btc").start()
+    alice = Party("alice7", h, h.workdir, "alice_btcx", "alice_btc").start()
     try:
         # listcoins: both shipped coins, both configured (the harness launches
         # pactd with --coin btcx=.../--coin btc=...), both connected to the right chain.
@@ -525,7 +525,7 @@ def _drive_board_swap(h, maker, taker, want_completed):
     for _ in range(18):
         for party in (maker, taker):
             party.rpc("tick")
-            h.pocx.generate(1, "alice_pocx")
+            h.pocx.generate(1, "alice_btcx")
             h.btc.generate(1, "bob_btc")
         ca = sum(1 for s in maker.rpc("listswaps") if s["state"] == "completed")
         cb = sum(1 for s in taker.rpc("listswaps") if s["state"] == "completed")
@@ -543,9 +543,9 @@ def test_board_reset_recovery(h):
     (Without the fix the second swap's relay traffic is silently dropped.)"""
     board = Corkboard(h.workdir)
     board.start()
-    maker = Party("alicerst", h, h.workdir, "alice_pocx", "alice_btc",
+    maker = Party("alicerst", h, h.workdir, "alice_btcx", "alice_btc",
                   board_url=board.url, auto_fund=True).start()
-    taker = Party("bobrst", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("bobrst", h, h.workdir, "bob_btcx", "bob_btc",
                   board_url=board.url, auto_fund=True).start()
     try:
         _drive_board_swap(h, maker, taker, want_completed=1)   # advances relay cursors
@@ -566,9 +566,9 @@ def test_nostr_relay_swap(h):
     we poll for propagation and give the round-trips a beat between passes."""
     relay = NostrRelay(h.workdir)
     relay.start()
-    maker = Party("alicenos", h, h.workdir, "alice_pocx", "alice_btc",
+    maker = Party("alicenos", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True).start()
-    taker = Party("bobnos", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("bobnos", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True).start()
     try:
         offer_id = maker.rpc(
@@ -594,7 +594,7 @@ def test_nostr_relay_swap(h):
             for party in (maker, taker):
                 party.rpc("tick")
                 if handshake_done(maker, taker):
-                    h.pocx.generate(1, "alice_pocx")
+                    h.pocx.generate(1, "alice_btcx")
                     h.btc.generate(1, "bob_btc")
             ca = sum(1 for s in maker.rpc("listswaps") if s["state"] == "completed")
             cb = sum(1 for s in taker.rpc("listswaps") if s["state"] == "completed")
@@ -622,10 +622,10 @@ def test_concurrent_drain_no_double_send(h):
     this go red (2+ takes -> take-duplicate)."""
     relay = NostrRelay(h.workdir)
     relay.start()
-    maker = Party("alicedrain", h, h.workdir, "alice_pocx", "alice_btc",
+    maker = Party("alicedrain", h, h.workdir, "alice_btcx", "alice_btc",
                   nostr_relays=relay.ws_url, auto_fund=True).start()
     # Delay ONLY the taker's outbox drains — the side that sends the `take`.
-    taker = Party("bobdrain", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("bobdrain", h, h.workdir, "bob_btcx", "bob_btc",
                   nostr_relays=relay.ws_url, auto_fund=True,
                   extra_env={"PACT_TEST_OUTBOX_DRAIN_DELAY_MS": "800"}).start()
     counts = {}
@@ -654,7 +654,7 @@ def test_concurrent_drain_no_double_send(h):
         for _ in range(30):
             tally(maker.rpc("tick"))
             if handshake_done(maker, taker):
-                h.pocx.generate(1, "alice_pocx")
+                h.pocx.generate(1, "alice_btcx")
                 h.btc.generate(1, "bob_btc")
             taker.rpc("tick")
             ca = sum(1 for s in maker.rpc("listswaps") if s["state"] == "completed")
@@ -682,11 +682,11 @@ def test_corkboard_swap(h):
     exchanged, zero manual swap commands."""
     board = Corkboard(h.workdir)
     board.start()
-    maker = Party("alice5", h, h.workdir, "alice_pocx", "alice_btc",
+    maker = Party("alice5", h, h.workdir, "alice_btcx", "alice_btc",
                   board_url=board.url, auto_fund=True).start()
-    taker = Party("bob5", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("bob5", h, h.workdir, "bob_btcx", "bob_btc",
                   board_url=board.url, auto_fund=True).start()
-    carol = Party("carol5", h, h.workdir, "bob_pocx", "alice_btc",
+    carol = Party("carol5", h, h.workdir, "bob_btcx", "alice_btc",
                   board_url=board.url).start()
     try:
         # Per-scenario stacks start alice_btc (carol's btc wallet) EMPTY; under
@@ -751,7 +751,7 @@ def test_corkboard_swap(h):
                 events = party.rpc("tick")["events"]
                 for ev in events:
                     print(f"[e2e]   board[{party.name}]: {ev['action']} {ev['detail'][:60]}")
-                h.pocx.generate(1, "alice_pocx")
+                h.pocx.generate(1, "alice_btcx")
                 h.btc.generate(1, "bob_btc")
             swaps_a = maker.rpc("listswaps")
             swaps_b = taker.rpc("listswaps")
@@ -777,7 +777,7 @@ def test_corkboard_swap(h):
         print(f"[e2e] all {len(blobs)} relay blobs are sealed (E2E encrypted)")
 
         after = balances(h)
-        assert after["bob_pocx"] >= before["bob_pocx"] + float(GIVE_POCX) - FEE_SLACK
+        assert after["bob_btcx"] >= before["bob_btcx"] + float(GIVE_POCX) - FEE_SLACK
         assert after["alice_btc"] >= before["alice_btc"] + float(GET_BTC) - FEE_SLACK
         print("[e2e] corkboard swap scenario OK")
     finally:
@@ -801,7 +801,7 @@ def test_offer_revoke_on_open(h):
     # tick_secs=1: the retire pass runs on the background scheduler's first
     # tick after boot — which `--tick-secs 0` (tick-on-demand) daemons never
     # run, so this cell needs the real boot path.
-    maker = Party("roo1", h, h.workdir, "alice_pocx", "alice_btc",
+    maker = Party("roo1", h, h.workdir, "alice_btcx", "alice_btc",
                   board_url=board.url, tick_secs=1).start()
     try:
         offer_id = maker.rpc(
@@ -873,9 +873,9 @@ def test_private_offer_swap(h):
     # Unique party names — data dirs are keyed by name and shared across the
     # suite's single Harness; "alice6"/"bob6" are taken (bob6 is encrypted) by
     # the create-import scenario, so reusing them brings up a locked seed.
-    maker = Party("alicePO", h, h.workdir, "alice_pocx", "alice_btc",
+    maker = Party("alicePO", h, h.workdir, "alice_btcx", "alice_btc",
                   board_url=board.url, auto_fund=True).start()
-    taker = Party("bobPO", h, h.workdir, "bob_pocx", "bob_btc",
+    taker = Party("bobPO", h, h.workdir, "bob_btcx", "bob_btc",
                   board_url=board.url, auto_fund=True).start()
     try:
         before = balances(h)
@@ -906,7 +906,7 @@ def test_private_offer_swap(h):
                 events = party.rpc("tick")["events"]
                 for ev in events:
                     print(f"[e2e]   board[{party.name}]: {ev['action']} {ev['detail'][:60]}")
-                h.pocx.generate(1, "alice_pocx")
+                h.pocx.generate(1, "alice_btcx")
                 h.btc.generate(1, "bob_btc")
             swaps_a = maker.rpc("listswaps")
             swaps_b = taker.rpc("listswaps")
@@ -925,7 +925,7 @@ def test_private_offer_swap(h):
         assert all(o["swap_id"] != sid for o in offers), "private swap appeared on the board"
 
         after = balances(h)
-        assert after["bob_pocx"] >= before["bob_pocx"] + float(GIVE_POCX) - FEE_SLACK
+        assert after["bob_btcx"] >= before["bob_btcx"] + float(GIVE_POCX) - FEE_SLACK
         assert after["alice_btc"] >= before["alice_btc"] + float(GET_BTC) - FEE_SLACK
         print("[e2e] private-offer swap scenario OK")
     finally:
