@@ -147,6 +147,18 @@ pub fn apply(store: &Store, a: &Apply) -> Result<()> {
         if store.meta_get(&format!("nostr_revoked:{d_tag}"))?.is_some() {
             continue; // revoked offer still lingering on the relay — stay dropped
         }
+        // Hard compatibility gate: an offer posted by an incompatible release
+        // (unknown protocol name or a different wire epoch — e.g. an old
+        // Satchel still on the air) never enters the cache. The board only
+        // ever holds offers this build can actually take; `list_board_offers`
+        // repeats the check for the HTTP-board path and pre-upgrade rows.
+        match serde_json::from_str::<libswap::messages::Envelope>(envelope) {
+            Ok(env) if libswap::board::offer_compatible(&env) => {}
+            _ => {
+                tracing::debug!(offer = %d_tag, "nostr: dropped incompatible-release offer");
+                continue;
+            }
+        }
         store.nostr_offer_cache_upsert(event_id, d_tag, envelope, *created, *expires)?;
     }
     store.meta_set("nostr_since:offers", &a.offers_since.to_string())?;
@@ -633,6 +645,69 @@ mod tests {
         assert_eq!(offers.len(), 1);
         assert_eq!(offers[0].swap_id, offer.swap_id);
         assert_eq!(offers[0].from, maker.xonly);
+    }
+
+    #[test]
+    fn apply_drops_incompatible_release_offers() {
+        // The ingest gate: only offers this build can actually trade on enter
+        // the cache. An old release's posting (missing/old `wire`) and an
+        // unknown protocol name are dropped hard — never cached, never shown.
+        let p = party("compat-gate");
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let mk = |id: &str, body: serde_json::Value| {
+            let env = Envelope {
+                v: 1,
+                msg_type: "offer".into(),
+                swap_id: id.into(),
+                from: "aa".repeat(32),
+                body,
+                sig: "bb".repeat(64),
+            };
+            (
+                format!("ev-{id}"),
+                id.to_string(),
+                serde_json::to_string(&env).unwrap(),
+                now,
+                now + 3600,
+            )
+        };
+        let base = serde_json::json!({
+            "network": "regtest",
+            "give_asset": "pocx", "give_amount": 1000u64,
+            "get_asset": "btc", "get_amount": 10u64,
+            "t1_secs": 28800u32, "t2_secs": 14400u32,
+            "ttl_secs": 3600u64, "created": now,
+        });
+        let with = |proto: &str, wire: Option<u32>| {
+            let mut b = base.clone();
+            b["protocol"] = serde_json::json!(proto);
+            if let Some(w) = wire {
+                b["wire"] = serde_json::json!(w);
+            }
+            b
+        };
+        let a = Apply {
+            offers: vec![
+                mk("current-v1", with("pact-htlc-v1", Some(libswap::WIRE_V1))),
+                mk("current-v2", with("pact-htlc-v2", Some(libswap::WIRE_V2))),
+                mk("pre-rc10", with("pact-htlc-v1", None)), // parses as wire 1
+                mk("old-wire", with("pact-htlc-v2", Some(1))),
+                mk("alien", with("pact-htlc-v99", Some(libswap::WIRE_V1))),
+            ],
+            ..Apply::default()
+        };
+        apply(&p.store, &a).unwrap();
+        let mut cached: Vec<String> = NostrBoard::new(&p.store)
+            .offers()
+            .unwrap()
+            .into_iter()
+            .map(|o| o.swap_id)
+            .collect();
+        cached.sort();
+        assert_eq!(cached, vec!["current-v1", "current-v2"]);
     }
 
     #[test]

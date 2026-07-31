@@ -192,6 +192,21 @@ impl OfferBody {
     }
 }
 
+/// True when this build can actually trade on `offer`: a protocol name it
+/// speaks AND exactly the wire epoch it speaks for that protocol (equal
+/// epochs trade; anything else cannot complete a handshake). Board ingest
+/// and the board listing HARD-DROP everything that fails this — a posting
+/// from an incompatible release is dead weight on the corkboard, not
+/// something to badge (1.0 board hygiene). A malformed body fails too.
+pub fn offer_compatible(offer: &Envelope) -> bool {
+    let Ok(body) = serde_json::from_value::<OfferBody>(offer.body.clone()) else {
+        return false;
+    };
+    let known = body.protocol == crate::PROTOCOL_VERSION
+        || body.protocol == crate::adaptor_swap::PROTOCOL_V2;
+    known && body.wire == crate::wire_epoch(&body.protocol)
+}
+
 /// Validate a `take` envelope and extract the maker's own offer from it.
 /// The taker echoes the full signed offer, so the maker needs no local
 /// state and cannot be tricked into different terms: the offer signature
@@ -285,5 +300,53 @@ mod wire_tests {
         // (advisory n_a/n_b exchange). Bump these when the epochs move.
         assert_eq!(crate::WIRE_V1, 2);
         assert_eq!(crate::WIRE_V2, 3);
+    }
+
+    /// The board hard-drop: only offers speaking a protocol this build knows
+    /// AT the exact epoch this build speaks pass; old releases' postings and
+    /// unknown protocols are invisible, not badged.
+    #[test]
+    fn offer_compatible_gates_protocol_and_epoch() {
+        let env = |proto: &str, wire: Option<u32>| {
+            let mut body = serde_json::json!({
+                "protocol": proto,
+                "network": "regtest",
+                "give_asset": "btcx", "give_amount": 1u64,
+                "get_asset": "btc", "get_amount": 1u64,
+                "t1_secs": 1u32, "t2_secs": 1u32,
+                "ttl_secs": null, "created": 0u64,
+            });
+            if let Some(w) = wire {
+                body["wire"] = serde_json::json!(w);
+            }
+            Envelope {
+                v: 1,
+                msg_type: "offer".into(),
+                swap_id: "x".into(),
+                from: "aa".repeat(32),
+                body,
+                sig: String::new(),
+            }
+        };
+        assert!(offer_compatible(&env("pact-htlc-v1", Some(crate::WIRE_V1))));
+        assert!(offer_compatible(&env(
+            crate::adaptor_swap::PROTOCOL_V2,
+            Some(crate::WIRE_V2)
+        )));
+        // A pre-rc10 posting (no `wire` = epoch 1) and any other epoch drift.
+        assert!(!offer_compatible(&env("pact-htlc-v1", None)));
+        assert!(!offer_compatible(&env(
+            crate::adaptor_swap::PROTOCOL_V2,
+            Some(1)
+        )));
+        // Unknown protocol names never pass, whatever epoch they claim.
+        assert!(!offer_compatible(&env(
+            "pact-htlc-v99",
+            Some(crate::WIRE_V1)
+        )));
+        // A malformed body fails closed.
+        let mut broken = env("pact-htlc-v1", Some(crate::WIRE_V1));
+        broken.body = serde_json::json!({ "protocol": "pact-htlc-v1" });
+        assert!(!offer_compatible(&broken));
     }
 }

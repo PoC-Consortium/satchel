@@ -136,7 +136,11 @@ and that the deleting author matches the maker pubkey in the coordinate** — so
 maker can only revoke offers it signed, never someone else's. A verified deletion
 writes a persistent `nostr_revoked:<swap_id>` tombstone and evicts the offer from
 the cache; the tombstone is applied *before* upserts each round, so an offer a
-relay keeps serving (NIP-09 ignored) never reappears. The effect: a taken or
+relay keeps serving (NIP-09 ignored) never reappears. The upsert step also
+hard-drops any offer from an **incompatible release** (a protocol name this
+build does not speak, or a signed `wire` epoch differing from what it speaks —
+`board::offer_compatible`): such postings never enter the cache, so an old
+Satchel still on the air is simply invisible, not badged. The effect: a taken or
 withdrawn offer leaves **every** board immediately, instead of lingering on other
 viewers' boards until its NIP-40 expiration lapses.
 

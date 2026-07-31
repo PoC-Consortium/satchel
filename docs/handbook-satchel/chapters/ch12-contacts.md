@@ -87,5 +87,12 @@ Once you've saved a contact, their standing follows them around the app:
   the ladder so you don't keep seeing them.
 - **At take-confirm** — if you take an offer from someone you've blocked, the
   confirmation dialog shows a warning ("You blocked this counterparty") and asks
-  you to confirm a second time. It's a personal reminder, not a barrier: blocking
-  does not stop the trade, and the swap is atomic either way.
+  you to confirm a second time. In this direction it's a personal reminder, not
+  a barrier: nothing stops *you* from taking their offer, and the swap is atomic
+  either way.
+- **On your own offers** — blocking is enforced in the other direction: a
+  blocked counterparty who tries to take one of *your* offers is ignored
+  silently. They get no reply at all (to them you simply look unresponsive), the
+  offer stays live for everyone else, and the only trace is a `take-blocked`
+  entry in your own daemon log. The blocked set is mirrored into the engine, so
+  this holds even while the Satchel window is closed.

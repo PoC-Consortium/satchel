@@ -1,6 +1,6 @@
 # JSON-RPC API
 
-[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 67 methods, grouped below by area with a one-line purpose each. This is an index; the daemon itself serves the authoritative catalog via the `help` method (`pact-cli help`). For full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
+[pactd](Running-pactd) exposes the swap engine over **JSON-RPC 2.0** — 69 methods, grouped below by area with a one-line purpose each. This is an index; the daemon itself serves the authoritative catalog via the `help` method (`pact-cli help`). For full params, returns, and field shapes see the **Pact handbook API part**: <https://github.com/PoC-Consortium/satchel/tree/master/docs/handbook-pact>.
 
 ## Conventions
 
@@ -101,8 +101,10 @@ v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed). T
 
 | Method | Purpose |
 |---|---|
-| `boardlistoffers` | Browse one board's offers (`board` = URL or `"nostr"`). |
+| `boardlistoffers` | Browse one board's offers (`board` = URL or `"nostr"`). Hard-filtered for compatibility: postings from a release speaking an unknown protocol or a different wire epoch never appear (also dropped at Nostr ingest). |
 | `boardstatus` | Per-relay connectivity. |
+| `setblocklist` | Replace the counterparty blocklist (array of x-only hex ids). A blocked peer's takes on my offers are ignored **silently** — no reply, offer stays live; a `take-blocked` log entry is the only trace. |
+| `getblocklist` | The stored blocklist. |
 | `boardpostoffer` | Post an offer; fans out to all configured boards. Rejects an offer if either leg is below the **3,430-sat minimum** (330-sat segwit dust + one redeem's fee at the 20 sat/vB planning rate) — too small to redeem or refund above dust once fees are paid near the deadline. |
 | `boardtake` | Take a posted offer (same 3,430-sat minimum-leg check as `boardpostoffer`). |
 | `boardrevoke` | Revoke one of my offers — terminal, from any same-seed machine. |

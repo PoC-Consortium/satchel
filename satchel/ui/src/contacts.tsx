@@ -7,17 +7,19 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { getContacts, inTauri, setContacts } from "./api/tauri";
+import { useApp } from "./AppContext";
+import { getContacts, inTauri, rpc, setContacts } from "./api/tauri";
 import type { Contact, ContactBook, ContactStatus } from "./api/types";
 
 // The local-only contact book: a private, single-machine address book mapping a
 // counterparty's BIP340 hex pubkey to a user-chosen nick, freeform note, and a
 // trusted/blocked standing. It lives in satchel.json (same "Satchel owns
 // persisted state" principle as prefs/merchants) — NOT on a relay, never signed,
-// never published. It's purely how THIS user annotates who they've traded with;
-// the engine never sees it and it carries no protocol weight (a `blocked` flag
-// only changes local display + warnings, it cannot stop a trade — atomicity
-// does that).
+// never published. It's purely how THIS user annotates who they've traded with
+// and it carries no protocol weight — with ONE engine-side effect: the blocked
+// subset is mirrored into pactd (`setblocklist`), whose take arm silently drops
+// a blocked peer's takes on OUR offers. Blocking still cannot stop a trade in
+// the other direction (you taking theirs) — atomicity does that.
 //
 // The nick is an ALIAS shown alongside the spoof-proof identicon/fingerprint,
 // never a replacement (a chosen name must never be able to impersonate a key).
@@ -61,6 +63,30 @@ function normalize(raw: ContactBook | null | undefined): ContactBook {
 export function ContactsProvider({ children }: { children: ReactNode }) {
   const [book, setBook] = useState<ContactBook>({});
   const [loaded, setLoaded] = useState(false);
+  const { phase, identity } = useApp();
+
+  // Mirror the blocked subset into the engine (pactd `setblocklist`), which
+  // enforces it: a blocked peer's take on our offers is dropped silently.
+  // Re-pushed on every book change AND whenever the engine becomes ready or
+  // the identity switches (each merchant persists its own blocklist, so a
+  // fresh/switched merchant needs this book's current blocked set). A sorted
+  // join keys the memo so re-renders without a membership change don't
+  // re-push. Best-effort: a failed push (engine restarting) self-heals on the
+  // next phase/identity/book transition.
+  const blockedKey = useMemo(
+    () =>
+      Object.values(book)
+        .filter((c) => c.status === "blocked")
+        .map((c) => c.id)
+        .sort()
+        .join(","),
+    [book],
+  );
+  useEffect(() => {
+    if (!inTauri() || !loaded || phase !== "ready") return;
+    const ids = blockedKey ? blockedKey.split(",") : [];
+    void rpc("setblocklist", [ids]).catch(() => {});
+  }, [loaded, phase, identity, blockedKey]);
 
   useEffect(() => {
     let alive = true;

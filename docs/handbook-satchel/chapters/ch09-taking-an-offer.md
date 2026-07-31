@@ -44,9 +44,11 @@ small to claim or refund safely once network fees are paid.
 
 If the offer was posted by someone you've marked **Blocked** in your contacts, the
 dialog also shows a warning — **"You blocked this counterparty"** — and asks you to
-confirm a second time. This does **not** hard-block the trade: blocking is only a
-personal reminder, and an atomic swap protects you regardless of who you trade
-with. See the chapter *"Contacts"*.
+confirm a second time. In this direction blocking is a reminder, not a barrier:
+nothing stops *you* from taking their offer, and an atomic swap protects you
+regardless of who you trade with. (The reverse is enforced: a blocked
+counterparty who tries to take one of *your* offers is silently ignored.) See
+the chapter *"Contacts"*.
 
 Read it over and confirm. The swap is now under way.
 
