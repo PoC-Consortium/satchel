@@ -19,9 +19,11 @@ merchant* error) are covered in the chapter "JSON-RPC Conventions".
   `protocol` is the swap protocol version; `wire_epochs` maps each protocol
   family to the wire-compatibility epoch this build speaks (current, after the
   rc12-recut per-side-confirmations bump:
-  `{ "pact-htlc-v1": 2, "pact-htlc-v2": 3 }`; rc10 spoke `1`/`2`) — a UI
-  badges offers whose
-  signed `wire` differs as un-takeable. Note these epochs are flag-day
+  `{ "pact-htlc-v1": 2, "pact-htlc-v2": 3 }`; rc10 spoke `1`/`2`). Offers
+  whose signed `wire` differs are hard-dropped from the board (at Nostr
+  ingest and at `boardlistoffers`) — invisible, not badged; takes and
+  handshakes on a differing epoch still reject with a clear
+  "incompatible release" reason. Note these epochs are flag-day
   message-format counters, *not* the family numbers in the wire-id strings —
   the "v2"/"v3" Satchel shows next to "Standard (HTLC)"/"Private (Taproot)"
   are the epochs (see `spec/README.md` § Naming & versioning);

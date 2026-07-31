@@ -8837,6 +8837,14 @@ impl Engine {
             {
                 continue;
             }
+            // Hard compatibility gate: a posting from an incompatible release
+            // (unknown protocol name or a different wire epoch) never reaches
+            // the corkboard — dropped here at the serving point, which covers
+            // HTTP boards (served live, uncached) and any cache rows written
+            // before an upgrade changed what this build speaks.
+            if !crate::board::offer_compatible(&o) {
+                continue;
+            }
             kept.push(o);
         }
         Ok(kept)
@@ -10360,6 +10368,24 @@ impl Engine {
                         &offer.swap_id,
                         "take-ignored",
                         "take for an offer this machine does not own — ignored".into(),
+                    );
+                }
+                // Blocklist gate: the user blocked this counterparty in the
+                // app, so their take is dropped SILENTLY — no reject envelope
+                // (a blocked peer learns nothing, not even that we saw the
+                // take; to them the maker is simply unresponsive) and the
+                // offer stays live for everyone else. This local tick event
+                // is the only trace (the scheduler logs it). Sits BEFORE the
+                // duplicate/staleness/lifecycle guards: none of their replies
+                // may leak to a blocked sender either.
+                if self.store.blocklist_contains(&envelope.from)? {
+                    return event(
+                        &offer.swap_id,
+                        "take-blocked",
+                        format!(
+                            "take from blocked counterparty {} — ignored silently; offer stays live",
+                            envelope.from
+                        ),
                     );
                 }
                 // Idempotent re-take guard: a repeat `take` for an offer we have
@@ -12686,6 +12712,93 @@ mod tests {
             .meta_get(&format!("offer_served:{offer_id}"))
             .unwrap()
             .is_none());
+
+        std::fs::remove_dir_all(&md).ok();
+        std::fs::remove_dir_all(&td).ok();
+    }
+
+    #[test]
+    fn take_from_blocked_counterparty_is_silently_ignored() {
+        // A blocked peer's take must be dropped with NO reply of any kind —
+        // no serve, no reject, no revocation — leaving the offer live for
+        // everyone else. The local `take-blocked` tick event is the only
+        // trace.
+        let (mut maker, md) = engine_with("blocked-take-maker", None);
+        maker.nostr_relays = Some("wss://test.invalid".into());
+        let (taker, td) = engine_with("blocked-take-taker", None);
+        let offer_id = "offer-blocked-test";
+
+        let proto = crate::adaptor_swap::PROTOCOL_V2;
+        let offer_body = serde_json::json!({
+            "protocol": proto,
+            "wire": crate::wire_epoch(proto),
+            "network": "regtest",
+            "give_asset": "btcx", "give_amount": 50_000_000u64,
+            "get_asset": "btc", "get_amount": 100_000u64,
+            "t1_secs": 40_000u32, "t2_secs": 20_000u32,
+            "ttl_secs": serde_json::Value::Null,
+            "created": local_now(),
+        });
+        let offer = maker
+            .signed_envelope("offer", offer_id, offer_body)
+            .unwrap();
+        maker
+            .store
+            .my_offer_put(
+                offer_id,
+                &serde_json::to_string(&offer).unwrap(),
+                local_now(),
+                0,
+                local_now(),
+            )
+            .unwrap();
+
+        // Block the taker — deliberately UPPERCASED to prove the check is
+        // case-insensitive (envelopes carry lowercase hex).
+        let taker_id = taker.identity().unwrap();
+        maker
+            .store
+            .blocklist_set(&[taker_id.to_ascii_uppercase()])
+            .unwrap();
+
+        let outbox_before = maker.store.nostr_outbox_pending().unwrap().len();
+        let take = taker
+            .signed_envelope(
+                "take",
+                offer_id,
+                serde_json::json!({
+                    "offer": serde_json::to_value(&offer).unwrap(),
+                    "taken_at": local_now(),
+                    "wire": crate::wire_epoch(proto),
+                }),
+            )
+            .unwrap();
+        let ev = maker.handle_relay_envelope(&take).unwrap().unwrap();
+        assert_eq!(ev.action, "take-blocked", "{}", ev.detail);
+        // Never served, never answered: no record, no outbound message.
+        assert!(maker
+            .store
+            .meta_get(&format!("offer_served:{offer_id}"))
+            .unwrap()
+            .is_none());
+        assert_eq!(
+            maker.store.nostr_outbox_pending().unwrap().len(),
+            outbox_before,
+            "a blocked take must not queue ANY reply"
+        );
+        // The offer stays live for everyone else.
+        assert_eq!(
+            maker.store.my_offer_get(offer_id).unwrap().unwrap().state,
+            "live"
+        );
+
+        // Clearing the blocklist lets the same take pass the gate again: it
+        // proceeds into the serve path (which may then fail deeper on this
+        // test's unconfigured chains) instead of the silent drop.
+        maker.store.blocklist_set(&[]).unwrap();
+        if let Ok(Some(ev)) = maker.handle_relay_envelope(&take) {
+            assert_ne!(ev.action, "take-blocked", "{}", ev.detail);
+        }
 
         std::fs::remove_dir_all(&md).ok();
         std::fs::remove_dir_all(&td).ok();

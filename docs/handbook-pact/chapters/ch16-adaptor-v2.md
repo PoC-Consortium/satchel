@@ -120,8 +120,9 @@ Worst-case vsize: `KEYPATH_REDEEM_VSIZE = 111` (`taproot.rs:40`).
 > accept carries its protocol's wire-compatibility epoch (`wire`; absent = 1,
 > the pre-rc10 era), and a mismatch is refused with a clear
 > "incompatible release — please update Satchel" reason before any key
-> material is exchanged — offers from an incompatible release are already
-> badged un-takeable on the Corkboard. rc10 spoke v1 = 1, v2 = 2; the rc12
+> material is exchanged — and offers from an incompatible release never
+> reach the Corkboard at all (hard-dropped at board ingest/listing, not
+> badged). rc10 spoke v1 = 1, v2 = 2; the rc12
 > recut's per-side confirmations amendment (below) bumped the current epochs
 > to **v1 = 2, v2 = 3** — another flag-day, for both protocols this time. A
 > pre-rc10 peer that never sends `wire` still fails partial-signature

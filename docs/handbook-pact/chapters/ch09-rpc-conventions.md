@@ -136,7 +136,7 @@ pact-cli getinfo
 
 Any method is callable this way — `pact-cli <method> [params...]` — with each
 argument parsed as JSON if possible, otherwise treated as a string. `pact-cli
-help` lists the daemon's full catalog — all **67 public methods**, the same
+help` lists the daemon's full catalog — all **69 public methods**, the same
 list `listmethods` returns as a name array — and an unknown method is refused
 with JSON-RPC code `-32601` and a *did-you-mean* suggestion (all other errors
 are code `-1` today).

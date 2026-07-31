@@ -952,6 +952,18 @@ const METHODS: &[(&str, &str, &str, &str)] = &[
     ),
     (
         "board",
+        "setblocklist",
+        "<ids>",
+        "Replace the counterparty blocklist (JSON array of x-only hex ids); a blocked peer's takes on our offers are dropped silently.",
+    ),
+    (
+        "board",
+        "getblocklist",
+        "",
+        "The stored counterparty blocklist.",
+    ),
+    (
+        "board",
         "makeprivateoffer",
         "<give> <get> <t1_secs> <t2_secs> [protocol] [ttl_secs]",
         "Build + sign an off-market offer slip (never posted to a board).",
@@ -1737,6 +1749,21 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
                 })
                 .collect();
             Ok(json!({ "relays": relays }))
+        }
+        // Counterparty blocklist (engine-enforced, per-merchant). Full-list
+        // replace: Satchel owns the contact book and mirrors its blocked
+        // subset here on every change; the engine's take arm drops takes from
+        // these ids silently (see `take-blocked`). Persisted in the merchant
+        // store, so it holds across restarts and with the app closed.
+        "setblocklist" => {
+            let ids: Vec<String> = serde_json::from_value(p.get(0, "ids")?.clone())
+                .context("param 'ids' must be an array of x-only hex ids")?;
+            let n = blocking(app, move |e| e.store.blocklist_set(&ids)).await?;
+            Ok(json!({ "blocked": n }))
+        }
+        "getblocklist" => {
+            let ids = blocking(app, |e| e.store.blocklist()).await?;
+            Ok(json!({ "blocked": ids }))
         }
         // Seed-only rescue (#54): re-fetch our encrypted-to-self swap snapshots
         // from the relays and adopt any in-flight swap this machine is missing

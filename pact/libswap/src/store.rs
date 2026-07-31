@@ -600,6 +600,40 @@ impl Store {
         rows.map(|r| Ok(r?)).collect()
     }
 
+    /// Replace the local counterparty blocklist (BIP340 x-only hex ids — the
+    /// same identity strings envelopes carry in `from`). Full-list semantics:
+    /// the app owns the contact book and mirrors its blocked subset here on
+    /// every change, so a partial patch API would only invite drift. Entries
+    /// normalize to lowercase; anything that is not 64 hex chars is dropped
+    /// rather than erroring (one malformed row must not wedge the push).
+    /// Returns the stored count.
+    pub fn blocklist_set(&self, ids: &[String]) -> Result<usize> {
+        let mut clean: Vec<String> = ids
+            .iter()
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+            .collect();
+        clean.sort();
+        clean.dedup();
+        let n = clean.len();
+        self.meta_set("blocklist", &serde_json::to_string(&clean)?)?;
+        Ok(n)
+    }
+
+    /// The stored blocklist (empty when never set).
+    pub fn blocklist(&self) -> Result<Vec<String>> {
+        Ok(match self.meta_get("blocklist")? {
+            Some(json) => serde_json::from_str(&json).unwrap_or_default(),
+            None => Vec::new(),
+        })
+    }
+
+    /// True when `id` (any case) is on the blocklist.
+    pub fn blocklist_contains(&self, id: &str) -> Result<bool> {
+        let id = id.trim().to_ascii_lowercase();
+        Ok(self.blocklist()?.contains(&id))
+    }
+
     /// Relay messages with id <= this cursor have been processed.
     pub fn relay_cursor(&self) -> Result<i64> {
         Ok(self

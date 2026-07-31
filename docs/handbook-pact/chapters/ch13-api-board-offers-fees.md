@@ -15,6 +15,8 @@ chooses one transport rather than merging.
 |---|---|---|---|
 | `boardlistoffers` | `board?` | `{ offers }` | no |
 | `boardstatus` | — | `{ relays:[{ url, connected }] }` | no |
+| `setblocklist` | `ids` | `{ blocked }` | yes |
+| `getblocklist` | — | `{ blocked }` | no |
 | `boardpostoffer` | `give`, `get`, `t1_secs`, `t2_secs`, `protocol?`, `ttl_secs?` | `{ offer_id }` | yes |
 | `boardtake` | `offer_id` | `{ taken }` | yes |
 | `boardrevoke` | `offer_id` | `{ revoked }` | yes |
@@ -23,7 +25,21 @@ chooses one transport rather than merging.
 
 - `boardlistoffers` — lists offers from one board. The optional `board` is an
   HTTP Corkboard URL **or** the literal `"nostr"`; omitted, it defaults to the
-  first configured board.
+  first configured board. The listing is **hard-filtered for compatibility**:
+  an offer whose protocol name this build does not speak, or whose signed
+  `wire` epoch differs from what this build speaks for that protocol (an old
+  or newer release still on the air), is dropped here — and at Nostr ingest,
+  so it never even enters the local offer cache. Such postings are invisible,
+  not badged.
+- `setblocklist` — replaces the merchant's counterparty **blocklist** with
+  `ids`, a JSON array of x-only hex identity keys (full-list semantics; ids
+  normalize to lowercase, malformed entries are dropped). The engine's take
+  arm drops a take from a blocked id **silently** — no reject envelope, the
+  offer stays live, and the local `take-blocked` tick event (visible in the
+  daemon log) is the only trace. Persisted per merchant, so it holds across
+  restarts and with the app closed; Satchel mirrors its contact book's
+  blocked standing here on every change.
+- `getblocklist` — the stored blocklist, as `{ blocked: [ids] }`.
 - `boardstatus` — relay connectivity for the header indicator: one
   `{ url, connected }` entry per configured Nostr relay. Empty when the Nostr
   transport is not configured.
