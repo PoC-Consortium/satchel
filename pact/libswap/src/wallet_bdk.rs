@@ -245,6 +245,13 @@ impl ChainBackend for BdkWalletBackend {
         self.backend.wallet_tx_fee_vsize(txid)
     }
 
+    fn wallet_tx(&self, txid: &str) -> Result<Option<Transaction>> {
+        // bdk applied the tx to its local cache at broadcast — a race-free
+        // read for the bump bookkeeping. A miss (locked wallet, foreign
+        // txid) degrades to `None` per the trait's positive-only contract.
+        Ok(self.backend.wallet_tx(txid).ok())
+    }
+
     fn wallet_change_output(
         &self,
         funding_txid: &str,

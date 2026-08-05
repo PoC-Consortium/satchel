@@ -258,14 +258,24 @@ differently, and the asymmetry mirrors the redeem/refund split:
 | **Why** | the only outpoint-dependent downstream tx is the **single-key** refund — re-sign it locally against the new outpoint | the outpoint feeds the **2-of-2 MuSig2** adaptor sigs already exchanged; RBF would invalidate them, so spend the change output instead and keep the outpoint fixed |
 
 - **v1 (`maybe_bump_funding_v1`).** RBF via the wallet, then re-locate the HTLC
-  output, rebuild + re-sign the single-key CLTV refund against the new outpoint,
-  and persist atomically. Safe for the counterparty: they detect the lock by
+  output **on the wallet's own copy of the replacement** (`wallet_tx`, a purely
+  local read — the RBF keeps the lock byte-identical but its *index* can move,
+  and fetching the seconds-old tx back from a chain server raced the Electrum
+  index in the field: "missing transaction"), rebuild + re-sign the single-key
+  CLTV refund against the new outpoint, and persist pointer + refund in one
+  atomic put. Safe for the counterparty: they detect the lock by
   **scriptPubKey, not txid** (`find_funding` → `scantxoutset`), so an RBF that
   keeps the HTLC output identical is invisible to them — and the nurse runs only
   while the funding is unconfirmed, before they have waited out the
   confirmations. The funding is broadcast explicitly BIP125-replaceable so
-  `bumpfee` is accepted. A crash mid-bump self-heals: `find_funding` re-discovers
-  the live outpoint on restart.
+  `bumpfee` is accepted. A crash mid-bump — or bookkeeping that still failed —
+  self-heals on the next tick: the drive arms re-adopt a stale pointer from
+  chain truth (`maybe_resync_funding_v1` → `funding-pointer-resync`: the record
+  names a dead outpoint while the derivable HTLC script has a live one; the
+  refund is re-signed in the same put). Before this arm existed the heal was
+  T1-gated (the refund path), so a stranded pointer froze the progress dock —
+  and, on a participant's own leg B, the reveal watch — for the whole pre-T1
+  window.
 - **v2 (`maybe_bump_funding_v2`).** A CPFP child spends the funding's
   wallet-owned **change** output, leaving the funding outpoint — and therefore
   the exchanged adaptor sigs and the refund — untouched. The v2 funding is

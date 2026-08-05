@@ -63,6 +63,7 @@ cache under `pact/harness/cache/` — copied per scenario instead of re-mining
 | `test_daemon_autopilot_refund` | Both parties walk away after funding; the `tick` scheduler alone reclaims both legs after the timelocks — and does nothing before them. |
 | `test_chain_watched_funding` | `funded` messages are withheld; the swap still completes via on-chain funding discovery. |
 | `test_funding_fee_bump_v1` | The v1 RBF funding nurse: funding is pinned under the fee fallback, then ticks bump it — asserts a `funding-fee-bump` event and that the funding txid is replaced; completes via chain-watched detection (the RBF replacement is invisible to the counterparty). |
+| `test_funding_rbf_pointer_resync` | A funding RBF the engine's bookkeeping never recorded (the nurse's post-bump vout lookup raced the Electrum index in the field; simulated by a raw node-wallet `bumpfee` behind the engine's back): the drive arm heals the stale pointer from chain truth — asserts `funding-pointer-resync`, the re-adopted txid, a refund re-signed against the live outpoint, and normal completion. |
 | `test_balance_validation` | Make-offer / take balance checks reject under-funded actions. |
 | `test_create_import_then_swap` | Seedless start: Alice `createseed`, Bob `importseed` (encrypted) via the wizard's seed-lifecycle RPCs, then a normal swap. |
 | `test_coin_setup` | `listcoins` / `listpairs` / `validatecoin`: configured + connected + genesis state, capability-derived pair availability, and the genesis-hash gate (accepts the right node, rejects a cross-wired one). |
