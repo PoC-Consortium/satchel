@@ -679,6 +679,19 @@ pub(crate) fn funding_bump_rate_kvb(
     Some(target_kvb.max(old_feerate_kvb.saturating_add(incr_kvb)))
 }
 
+/// The output index of `tx` paying the HTLC `(spk, amount)` — where a funding
+/// replacement left the lock. An RBF keeps the HTLC output byte-identical
+/// (same script, same value) but its INDEX can move (the bump re-funds itself
+/// from change), so the bookkeeping must re-locate it on the replacement's
+/// own outputs. Script AND value must both match, mirroring
+/// `locate_funding`'s verification. Pure, so it is unit-testable.
+pub(crate) fn htlc_vout_in(tx: &bitcoin::Transaction, spk: &ScriptBuf, amount: u64) -> Option<u32> {
+    tx.output
+        .iter()
+        .position(|o| o.script_pubkey == *spk && o.value.to_sat() == amount)
+        .map(|i| i as u32)
+}
+
 /// Default confirmation requirement per chain — the fallback when the operator
 /// hasn't set a per-coin depth (see [`Engine::confirmations_for`]): regtest → 1;
 /// fast chains (<5-min blocks, e.g. BTCX's 2-min spacing) → 10; slower chains
@@ -8025,11 +8038,16 @@ impl Engine {
             // window has closed (or chain B never appeared) fall back to the T1
             // refund of chain A rather than chase a redeem we can't finish.
             (Role::Initiator, State::FundedA) => {
-                // Nurse our own (leg-A) funding while it is unconfirmed — RBF it up
-                // to the current market if it went out under-priced.
-                if let Some(ev) =
-                    self.maybe_bump_funding_v1(rec, "a", &self.backend(&rec.chain_a)?)?
-                {
+                let backend_a = self.backend(&rec.chain_a)?;
+                // Heal a stale leg-A pointer first (post-RBF bookkeeping miss /
+                // out-of-band wallet bump), so the nurse, the progress dock and
+                // the refund all see the live outpoint; then nurse the funding
+                // while it is unconfirmed — RBF it up to the current market if
+                // it went out under-priced.
+                if let Some(ev) = self.maybe_resync_funding_v1(rec, "a", &backend_a)? {
+                    return Ok(Some(ev));
+                }
+                if let Some(ev) = self.maybe_bump_funding_v1(rec, "a", &backend_a)? {
                     return Ok(Some(ev));
                 }
                 let backend_b = self.backend(&rec.chain_b)?;
@@ -8145,6 +8163,12 @@ impl Engine {
             // arm is safe: the reveal is public → claim leg A.
             (Role::Participant, State::FundedB | State::RedeemedB) => {
                 let backend_b = self.backend(&rec.chain_b)?;
+                // Heal a stale leg-B pointer first — funds-critical here: the
+                // reveal watch below pins `outpoint_b`, so a stale pointer
+                // would watch a dead outpoint and miss the maker's reveal.
+                if let Some(ev) = self.maybe_resync_funding_v1(rec, "b", &backend_b)? {
+                    return Ok(Some(ev));
+                }
                 // Nurse our own (leg-B) funding while it is unconfirmed.
                 if let Some(ev) = self.maybe_bump_funding_v1(rec, "b", &backend_b)? {
                     return Ok(Some(ev));
@@ -8370,8 +8394,11 @@ impl Engine {
         // Locate the funding by the stored pointer, FALLING BACK to a spk-based
         // chain scan if the pointer is dead (`locate_funding`'s fallback). This
         // self-heals a pointer left stale by a funding RBF whose local bookkeeping
-        // didn't land (see `maybe_bump_funding_v1`): without it a stale pointer
-        // reads as "already spent" and the auto-refund would silently never fire.
+        // didn't land — normally `maybe_resync_funding_v1` has already re-adopted
+        // it long before T1; this fallback keeps the refund correct even if that
+        // arm never ran (e.g. the swap spent the whole window under a downed
+        // daemon): without it a stale pointer reads as "already spent" and the
+        // auto-refund would silently never fire.
         // `None` = genuinely nothing to refund (a real spend / not funded yet).
         let Some((outpoint, _confs)) = self.locate_funding(rec, leg)? else {
             let recorded = match leg {
@@ -8696,47 +8723,29 @@ impl Engine {
                 }));
             }
         };
-        // Bookkeeping AFTER the on-chain bump succeeded: re-locate the HTLC output
-        // on the replacement (the bump funds itself from change; the HTLC value is
-        // unchanged but its vout can move), rebuild/re-sign the refund against the
-        // new outpoint (single-key, local), and persist the new pointer + refund in
-        // one atomic put. If any of this fails the bump has ALREADY happened, so we
-        // must NOT propagate a hard error: emit a warning carrying the new txid and
-        // let chain-watch (find_funding, spk-based) re-sync the pointer on a later
-        // tick — self-healing. The same self-heal covers a crash before the put.
+        // Bookkeeping AFTER the on-chain bump succeeded: re-locate the HTLC
+        // output on the replacement — from the WALLET'S OWN copy of the tx it
+        // just built (a purely local, race-free read; fetching it back from a
+        // chain server raced the server's index in the field: Electrum answered
+        // "missing transaction" for a seconds-old broadcast), falling back to
+        // the server fetch only on a backend with no local wallet copy — then
+        // rebuild/re-sign the refund and persist pointer + refund in one atomic
+        // put (`repoint_funding_v1`). If any of this fails the bump has ALREADY
+        // happened, so we must NOT propagate a hard error: emit a warning
+        // carrying the new txid and let [`Self::maybe_resync_funding_v1`]
+        // re-adopt the live outpoint by script on a later tick — self-healing.
+        // The same self-heal covers a crash before the put.
         let bookkeep = || -> Result<()> {
-            let new_vout = backend.find_vout(&new_txid, &hex::encode(htlc_spk.as_bytes()))?;
+            let new_vout = match backend.wallet_tx(&new_txid)? {
+                Some(tx) => htlc_vout_in(&tx, &htlc_spk, amount)
+                    .context("replacement dropped the HTLC output")?,
+                None => backend.find_vout(&new_txid, &hex::encode(htlc_spk.as_bytes()))?,
+            };
             let new_outpoint = OutPoint {
                 txid: bitcoin::Txid::from_str(&new_txid)?,
                 vout: new_vout,
             };
-            let seed = self.store.seed()?;
-            let key = v1_swap_key(&seed, rec, coin_of(chain)?)?;
-            let destination = backend
-                .params()
-                .parse_address(&backend.wallet_new_address()?)?;
-            let fee = spend_fee_sat(
-                self.fee_bump.target_feerate(
-                    backend.fee_rate_sat_per_vb()?,
-                    amount,
-                    REFUND_TX_VSIZE,
-                ),
-                REFUND_TX_VSIZE,
-            );
-            let refund_tx = build_refund_tx(&htlc, new_outpoint, amount, destination, fee, &key)?;
-            let mut updated = rec.clone();
-            updated.refund_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&refund_tx));
-            match leg {
-                "a" => {
-                    updated.htlc_a_txid = Some(new_txid.clone());
-                    updated.htlc_a_vout = Some(new_vout);
-                }
-                _ => {
-                    updated.htlc_b_txid = Some(new_txid.clone());
-                    updated.htlc_b_vout = Some(new_vout);
-                }
-            }
-            self.store.put(&updated)
+            self.repoint_funding_v1(rec, leg, backend, new_outpoint, None)
         };
         if let Err(e) = bookkeep() {
             return Ok(Some(TickEvent {
@@ -8744,7 +8753,7 @@ impl Engine {
                 action: "funding-bump-resync-pending".into(),
                 detail: format!(
                     "leg {leg}: bumped to {new_txid} but local refund update failed \
-                     ({e:#}); chain-watch will re-sync"
+                     ({e:#}); the pointer resync will re-adopt it"
                 ),
             }));
         }
@@ -8757,6 +8766,125 @@ impl Engine {
                 rate_kvb as f64 / 1000.0
             ),
         }))
+    }
+
+    /// Re-point leg `leg`'s funding record at `outpoint` and re-sign the
+    /// single-key CLTV refund against it, persisted in ONE atomic put — the
+    /// pointer and its refund must never diverge (a refund signed against a
+    /// dead outpoint is unspendable). Purely local: the v1 refund key is ours
+    /// alone, no counterparty round. `height` updates the leg's funding-height
+    /// anchor when the caller knows it (the resync path); `None` keeps the
+    /// recorded one (the nurse path — the replacement is unconfirmed).
+    fn repoint_funding_v1(
+        &self,
+        rec: &SwapRecord,
+        leg: &str,
+        backend: &MultiBackend,
+        outpoint: OutPoint,
+        height: Option<u64>,
+    ) -> Result<()> {
+        let params = self.swap_params(rec)?;
+        let (chain, amount, htlc) = match leg {
+            "a" => (&rec.chain_a, rec.amount_a, params.htlc_a()?),
+            _ => (&rec.chain_b, rec.amount_b, params.htlc_b()?),
+        };
+        let seed = self.store.seed()?;
+        let key = v1_swap_key(&seed, rec, coin_of(chain)?)?;
+        let destination = backend
+            .params()
+            .parse_address(&backend.wallet_new_address()?)?;
+        let fee = spend_fee_sat(
+            self.fee_bump
+                .target_feerate(backend.fee_rate_sat_per_vb()?, amount, REFUND_TX_VSIZE),
+            REFUND_TX_VSIZE,
+        );
+        let refund_tx = build_refund_tx(&htlc, outpoint, amount, destination, fee, &key)?;
+        let mut updated = rec.clone();
+        updated.refund_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&refund_tx));
+        match leg {
+            "a" => {
+                updated.htlc_a_txid = Some(outpoint.txid.to_string());
+                updated.htlc_a_vout = Some(outpoint.vout);
+                updated.htlc_a_height = height.or(updated.htlc_a_height);
+            }
+            _ => {
+                updated.htlc_b_txid = Some(outpoint.txid.to_string());
+                updated.htlc_b_vout = Some(outpoint.vout);
+                updated.htlc_b_height = height.or(updated.htlc_b_height);
+            }
+        }
+        self.store.put(&updated)
+    }
+
+    /// Heal a STALE own-leg funding pointer: the record names an outpoint that
+    /// no longer resolves while the derivable HTLC script has a live output
+    /// elsewhere — the aftermath of a funding RBF whose local bookkeeping
+    /// didn't land (`funding-bump-resync-pending`), or of a wallet-level bump
+    /// made outside the engine. Until this arm existed, that "will re-sync"
+    /// promise was kept only by the T1-gated refund path
+    /// ([`Self::try_refund_due`]), so a stale pointer sat for the whole pre-T1
+    /// window: the progress dock froze at "your lock confirming 0/n" against a
+    /// buried replacement (field case, 2026-08-05), the nurse went silent (a
+    /// dead outpoint reads as "nothing to bump"), and — worse, on the
+    /// participant's own leg B — the reveal watch
+    /// (`find_spend_witness(outpoint_b, ..)`) watched a dead outpoint, so the
+    /// maker's reveal could slip by unseen. Re-adopt the live outpoint and
+    /// re-sign the refund. A live pointer is untouched; a spent or invisible
+    /// funding is left to the arms that know how to judge spends (redeem
+    /// detection, [`Self::try_refund_due`]'s reconcile re-arm).
+    fn maybe_resync_funding_v1(
+        &self,
+        rec: &SwapRecord,
+        leg: &str,
+        backend: &MultiBackend,
+    ) -> Result<Option<TickEvent>> {
+        let params = self.swap_params(rec)?;
+        let (htlc, txid, vout) = match leg {
+            "a" => (
+                params.htlc_a()?,
+                rec.htlc_a_txid.as_deref(),
+                rec.htlc_a_vout,
+            ),
+            _ => (
+                params.htlc_b()?,
+                rec.htlc_b_txid.as_deref(),
+                rec.htlc_b_vout,
+            ),
+        };
+        let (Some(txid), Some(vout)) = (txid, vout) else {
+            return Ok(None); // our leg isn't funded yet — nothing to heal
+        };
+        let stored = OutPoint {
+            txid: bitcoin::Txid::from_str(txid)?,
+            vout,
+        };
+        if backend.get_txout(&stored, &htlc.script_pubkey())?.is_some() {
+            return Ok(None); // pointer resolves to a live output — not stale
+        }
+        let Some((live, confs)) = self.locate_funding(rec, leg)? else {
+            return Ok(None); // spent or invisible — not ours to judge here
+        };
+        if live == stored {
+            return Ok(None); // belt: the two reads disagree — change nothing
+        }
+        let height = backend.tip_height()?.saturating_sub(confs);
+        match self.repoint_funding_v1(rec, leg, backend, live, Some(height)) {
+            Ok(()) => Ok(Some(TickEvent {
+                swap_id: rec.swap_id.clone(),
+                action: "funding-pointer-resync".into(),
+                detail: format!(
+                    "leg {leg}: {stored} -> {live} (stale post-RBF pointer healed; \
+                     refund re-signed)"
+                ),
+            })),
+            // Recoverable (locked wallet, backend hiccup): warn and let the
+            // next tick retry — the live lock itself is safely on-chain.
+            Err(e) => Ok(Some(TickEvent {
+                swap_id: rec.swap_id.clone(),
+                action: "funding-resync-skipped".into(),
+                detail: format!("leg {leg}: live lock {live} found but re-point failed ({e:#})"),
+            })),
+        }
     }
 }
 
@@ -12493,6 +12621,50 @@ mod tests {
         // the funds-gate headroom is respected even when the incr floor kicks in.
         let just_above = funding_bump_rate_kvb(old_kvb, old_kvb + 1, incr_kvb, ceiling_kvb, mult);
         assert!(just_above.unwrap() <= mult * old_kvb);
+    }
+
+    #[test]
+    fn htlc_vout_relocated_on_a_replacement_by_script_and_value() {
+        // The bump bookkeeping re-locates the HTLC on the replacement's own
+        // outputs: an RBF keeps the lock byte-identical but can MOVE its
+        // index (the bump re-funds itself from change). Both script and
+        // value must match — a change output at the same value, or the same
+        // script at a different value, is never the lock.
+        use bitcoin::{Amount, TxOut};
+        let htlc = ScriptBuf::from_bytes(vec![0xAA; 34]);
+        let change = ScriptBuf::from_bytes(vec![0xBB; 22]);
+        let tx = bitcoin::Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: vec![],
+            output: vec![
+                // Same value as the lock but the CHANGE script — must not
+                // shadow the real HTLC at index 1.
+                TxOut {
+                    value: Amount::from_sat(30_000),
+                    script_pubkey: change.clone(),
+                },
+                TxOut {
+                    value: Amount::from_sat(30_000),
+                    script_pubkey: htlc.clone(),
+                },
+            ],
+        };
+        assert_eq!(
+            htlc_vout_in(&tx, &htlc, 30_000),
+            Some(1),
+            "moved to index 1"
+        );
+        assert_eq!(
+            htlc_vout_in(&tx, &htlc, 29_999),
+            None,
+            "value must match, not just the script"
+        );
+        assert_eq!(
+            htlc_vout_in(&tx, &ScriptBuf::from_bytes(vec![0xCC; 34]), 30_000),
+            None,
+            "script must match, not just the value"
+        );
     }
 
     #[test]

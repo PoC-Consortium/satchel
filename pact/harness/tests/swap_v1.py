@@ -379,6 +379,94 @@ def test_funding_fee_bump_v1(h):
         bob.stop()
 
 
+def test_funding_rbf_pointer_resync(h):
+    """A funding RBF the ENGINE'S BOOKKEEPING never recorded — the 2026-08-05
+    field case: the nurse bumped, then its post-broadcast vout lookup raced the
+    Electrum index ("missing transaction") and the swap pointer was stranded on
+    the dead pre-RBF txid. Progress froze at "your lock confirming 0/n" against
+    a 24-deep replacement, the nurse went silent (a dead outpoint reads as
+    "nothing to bump"), and nothing before the T1 refund path would ever heal
+    the record.
+
+    Simulated here by RBF-ing the funding in the NODE'S OWN WALLET, behind the
+    engine's back (the engine-level `bumpfee` RPC refuses live-swap fundings,
+    so a raw node-wallet bump is the only way to reproduce the miss — and it
+    doubles as coverage for a user hand-bumping in Core). The drive arm must
+    HEAL the pointer from chain truth (`funding-pointer-resync`): re-adopt the
+    live outpoint by script, re-sign the refund against it, and the swap must
+    then complete normally."""
+    alice = Party("alicers", h, h.workdir, "alice_btcx", "alice_btc").start()  # initiator
+    bob = Party("bobrs", h, h.workdir, "bob_btcx", "bob_btc").start()          # participant
+    try:
+        before = balances(h)
+        t2, t1 = regtest_timelocks(h)
+        m_init = msg(h.workdir, "rs_init.json")
+        m_accept = msg(h.workdir, "rs_accept.json")
+        # funded_a is written but NEVER delivered to Bob (chain-watched path).
+        m_dump_a = msg(h.workdir, "rs_funded_a.json")
+        m_dump_b = msg(h.workdir, "rs_funded_b.json")
+
+        # Handshake only.
+        alice.cli("offer", "--give", f"btcx:{GIVE_POCX}", "--get", f"btc:{GET_BTC}",
+                  "--t1", str(t1), "--t2", str(t2), "--out", m_init)
+        sid = swap_id_from(m_init)
+        bob.cli("accept", "--in", m_init, "--out", m_accept)
+        alice.cli("recv", "--in", m_accept)
+
+        # Alice funds chain A; do NOT mine — leave it replaceable.
+        alice.cli("fund", "--swap", sid, "--out", m_dump_a)
+        orig_txid, _ = outpoint_from(m_dump_a)
+
+        # The out-of-band RBF: bump in the node's own wallet, so the engine
+        # never hears about the replacement — its record still names the
+        # original txid (the exact post-"missing transaction" field state).
+        bumped = h.pocx.rpc("bumpfee", orig_txid, {"fee_rate": 10},
+                            wallet="alice_btcx")
+        new_txid = bumped["txid"]
+        assert new_txid != orig_txid, "node bumpfee did not replace the funding"
+        assert alice.rpc("getswap", sid)["htlc_a_txid"] == orig_txid, \
+            "precondition: the engine must still hold the STALE pre-RBF pointer"
+
+        # Confirm the replacement; the next drive pass must heal the pointer
+        # from chain truth (scantxoutset by the derivable HTLC script).
+        h.pocx.generate(1, "alice_btcx")
+        events = drive_until(
+            alice,
+            lambda evs: any(e["action"] == "funding-pointer-resync" for e in evs))
+        heal = next(e for e in events if e["action"] == "funding-pointer-resync")
+        print(f"[e2e] pointer healed: {heal['detail']}")
+
+        rec = alice.rpc("getswap", sid)
+        assert rec["htlc_a_txid"] == new_txid, \
+            f"pointer not re-adopted: {rec['htlc_a_txid']} != {new_txid}"
+        # The refund was re-signed against the LIVE outpoint (its input names
+        # the replacement txid — little-endian in the raw tx).
+        rev = bytes.fromhex(new_txid)[::-1].hex()
+        assert rev in rec["refund_tx_hex"], \
+            "refund still signed against the dead pre-RBF outpoint"
+
+        # And the swap still completes: Bob never received funded_a — he finds
+        # the bumped lock by its script, exactly why the RBF is safe for him.
+        drive_until(bob, lambda evs: any(e["action"] == "funded-a" for e in evs))
+        bob.cli("fund", "--swap", sid, "--out", m_dump_b)
+        h.btc.generate(1, "bob_btc")
+        drive_until(alice, lambda evs: any(e["action"] == "auto-redeem" for e in evs))
+        h.btc.generate(1, "bob_btc")  # confirm Alice's reveal on chain B
+        drive_until(bob, lambda evs: any(e["action"] == "auto-redeem" for e in evs))
+        h.pocx.generate(1, "alice_btcx")
+
+        assert_htlc_spent(h.btc, m_dump_b, "chain-B")
+        after = balances(h)
+        assert after["bob_btcx"] >= before["bob_btcx"] + float(GIVE_POCX) - FEE_SLACK, \
+            f"bob did not receive POCX after the healed funding: {before} -> {after}"
+        assert after["alice_btc"] >= before["alice_btc"] + float(GET_BTC) - FEE_SLACK, \
+            f"alice did not receive BTC after the healed funding: {before} -> {after}"
+        print("[e2e] funding-RBF pointer-resync scenario OK")
+    finally:
+        alice.stop()
+        bob.stop()
+
+
 def test_balance_validation(h):
     """An offer you can't fund is refused up front, at the point it would be
     advertised. `board post` runs the cumulative funds gate
@@ -964,6 +1052,11 @@ class FundingFeeBumpV1(PactTestFramework):
         test_funding_fee_bump_v1(self.h)
 
 
+class FundingRbfPointerResync(PactTestFramework):
+    def run_test(self):
+        test_funding_rbf_pointer_resync(self.h)
+
+
 class BalanceValidation(PactTestFramework):
     def run_test(self):
         test_balance_validation(self.h)
@@ -1016,6 +1109,7 @@ SCENARIOS = [
     DaemonAutopilotRefund,
     ChainWatchedFunding,
     FundingFeeBumpV1,
+    FundingRbfPointerResync,
     BalanceValidation,
     CreateImportThenSwap,
     CoinSetup,

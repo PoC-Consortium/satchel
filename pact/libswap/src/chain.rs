@@ -442,6 +442,18 @@ pub trait ChainBackend: Send + Sync {
         bail!("this backend has no wallet; cannot read a tx fee/vsize")
     }
 
+    /// The wallet's OWN copy of one of its txs — a purely local read where the
+    /// backend keeps one (nodeless bdk: applied to the cache at broadcast; Core
+    /// RPC: the node wallet's `gettransaction`). The bump bookkeeping reads the
+    /// replacement it just broadcast from here instead of racing a chain
+    /// server's index (field: Electrum "missing transaction" on the fetch-back
+    /// stranded a funding pointer on the dead pre-RBF txid). `Ok(None)` = no
+    /// local copy to consult — the caller falls back to a chain fetch.
+    /// POSITIVE-ONLY, like [`Self::wallet_txs_since`]: absence proves nothing.
+    fn wallet_tx(&self, _txid: &str) -> Result<Option<Transaction>> {
+        Ok(None)
+    }
+
     /// The wallet-OWNED change output of `funding_txid` — `(vout, value_sat, spk)`
     /// — for a CPFP child on a v2 funding. Identified positively by `ismine` (the
     /// HTLC output is a P2WSH/P2TR script the wallet does NOT own, so `ismine`
@@ -608,6 +620,9 @@ impl<T: ChainBackend + ?Sized> ChainBackend for std::sync::Arc<T> {
     }
     fn wallet_tx_fee_vsize(&self, txid: &str) -> Result<(u64, u64)> {
         (**self).wallet_tx_fee_vsize(txid)
+    }
+    fn wallet_tx(&self, txid: &str) -> Result<Option<Transaction>> {
+        (**self).wallet_tx(txid)
     }
     fn wallet_change_output(
         &self,
@@ -1346,6 +1361,22 @@ impl ChainBackend for CoreRpcBackend {
         Ok((fee_sat, vsize))
     }
 
+    fn wallet_tx(&self, txid: &str) -> Result<Option<Transaction>> {
+        // The node wallet knows its own txs the instant they broadcast —
+        // `gettransaction` is a wallet-local read, no index race. A miss
+        // (not a wallet tx) degrades to `None`, per the trait's
+        // positive-only contract.
+        let Ok(tx) = self.rpc.call("gettransaction", &[json!(txid)]) else {
+            return Ok(None);
+        };
+        let Some(hex) = tx["hex"].as_str() else {
+            return Ok(None);
+        };
+        Ok(Some(bitcoin::consensus::encode::deserialize(
+            &hex::decode(hex)?,
+        )?))
+    }
+
     fn wallet_change_output(
         &self,
         funding_txid: &str,
@@ -2054,6 +2085,11 @@ impl ChainBackend for MultiBackend {
 
     fn wallet_tx_fee_vsize(&self, txid: &str) -> Result<(u64, u64)> {
         self.primary().wallet_tx_fee_vsize(txid)
+    }
+
+    fn wallet_tx(&self, txid: &str) -> Result<Option<Transaction>> {
+        // Wallet-local read on the primary, like every wallet operation.
+        self.primary().wallet_tx(txid)
     }
 
     fn wallet_change_output(
