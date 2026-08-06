@@ -5940,7 +5940,14 @@ impl Engine {
     /// Confirmations of a leg's funding lock, read the robust way: scan the
     /// unspent output by outpoint+spk (works even when the tx isn't in our
     /// wallet or, on regtest, txindex is off), falling back to a wallet
-    /// `gettransaction` for our own spends. `None` if the backend is
+    /// `gettransaction` for our own spends. A DEAD pointer (the outpoint no
+    /// longer exists) falls back to a scan by the HTLC script alone: the
+    /// counterparty may have RBF-bumped their funding after telling us its
+    /// txid — the lock lives on, byte-identical, at a new outpoint — and
+    /// without the fallback the dock froze at "confirming 0/n" against a
+    /// buried replacement until the depth-adoption in the drive arm caught up
+    /// (the display twin of the 2026-08-05 own-leg pointer case; the script is
+    /// swap-unique, so a script match IS the lock). `None` if the backend is
     /// unreachable; `0` while the output is unconfirmed or unseen. Used both for
     /// the determinate `confs/needed` lines and to anchor the liveness counts.
     fn lock_confs(
@@ -5957,16 +5964,27 @@ impl Engine {
             // `tx_confirmations` blind to it. Scan the unspent output by
             // outpoint+spk instead, exactly as the tick does — while the lock is
             // unspent (the wait is live) this returns its depth.
-            (Some(vout), Some(spk)) => bitcoin::Txid::from_str(txid)
-                .ok()
-                .and_then(|txid| {
+            (Some(vout), Some(spk)) => {
+                let by_pointer = bitcoin::Txid::from_str(txid).ok().and_then(|txid| {
                     backend
                         .get_txout(&OutPoint { txid, vout }, spk)
                         .ok()
                         .flatten()
-                })
-                .map(|o| o.confirmations)
-                .unwrap_or(0),
+                });
+                match by_pointer {
+                    Some(o) => o.confirmations,
+                    // Pointer dead → re-find the lock by its script (post-RBF
+                    // replacement). Fires only while the pointer is stale, the
+                    // same per-tick cost class as the drive arms' own
+                    // `locate_funding` fallback in exactly those states.
+                    None => backend
+                        .find_funding(spk)
+                        .ok()
+                        .flatten()
+                        .map(|(_, o)| o.confirmations)
+                        .unwrap_or(0),
+                }
+            }
             // Our own settlement tx is a wallet tx, so `gettransaction` finds it.
             _ => backend.tx_confirmations(txid, spk.as_ref()).unwrap_or(0),
         }
