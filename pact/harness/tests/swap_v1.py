@@ -467,6 +467,79 @@ def test_funding_rbf_pointer_resync(h):
         bob.stop()
 
 
+def test_taker_display_follows_rbf(h):
+    """The DISPLAY twin of the pointer-resync case, on the TAKER's side: Bob
+    pins the maker's funding txid from the funded_a message, the maker then
+    RBF-bumps that funding, and the replacement confirms. Bob's DRIVE arm was
+    always immune (it re-locates by script every tick and only adopts at
+    depth) — but his progress dock read confirmations of the pinned outpoint
+    only, so it froze at "their lock confirming 0/n" against a buried
+    replacement until depth-adoption caught up. `lock_confs` now falls back to
+    a script-scan when the pointer is dead: the dock follows the replacement
+    immediately. Asserted BEFORE Bob's first tick (tick_secs=0), so the
+    depth-adoption cannot mask a broken fallback; the swap then completes."""
+    alice = Party("alicetd", h, h.workdir, "alice_btcx", "alice_btc").start()  # initiator
+    bob = Party("bobtd", h, h.workdir, "bob_btcx", "bob_btc").start()          # participant
+    try:
+        before = balances(h)
+        t2, t1 = regtest_timelocks(h)
+        m_init = msg(h.workdir, "td_init.json")
+        m_accept = msg(h.workdir, "td_accept.json")
+        m_funded_a = msg(h.workdir, "td_funded_a.json")
+        m_funded_b = msg(h.workdir, "td_funded_b.json")
+
+        # Handshake, then fund leg A and DELIVER funded_a to Bob so he pins
+        # the ORIGINAL txid (unlike the chain-watched scenarios).
+        alice.cli("offer", "--give", f"btcx:{GIVE_POCX}", "--get", f"btc:{GET_BTC}",
+                  "--t1", str(t1), "--t2", str(t2), "--out", m_init)
+        sid = swap_id_from(m_init)
+        bob.cli("accept", "--in", m_init, "--out", m_accept)
+        alice.cli("recv", "--in", m_accept)
+        alice.cli("fund", "--swap", sid, "--out", m_funded_a)
+        bob.cli("recv", "--in", m_funded_a)
+        orig_txid, _ = outpoint_from(m_funded_a)
+
+        # The maker RBFs the still-unconfirmed funding (out-of-band, so no
+        # corrective message reaches Bob), and the REPLACEMENT confirms.
+        bumped = h.pocx.rpc("bumpfee", orig_txid, {"fee_rate": 10},
+                            wallet="alice_btcx")
+        new_txid = bumped["txid"]
+        assert new_txid != orig_txid, "node bumpfee did not replace the funding"
+        h.pocx.generate(1, "alice_btcx")
+
+        # BEFORE any Bob tick: his dock must not show a frozen
+        # "their lock confirming 0/n" for a lock that is 1-deep under the
+        # replacement — the script-scan fallback reads the true depth (which
+        # here meets n_a=1, so the confirming line resolves entirely).
+        prog = bob.rpc("swapprogress")
+        stuck = [e for e in prog
+                 if e["swap_id"] == sid
+                 and e.get("watching") == "their_lock"
+                 and e.get("confs") == 0]
+        assert not stuck, f"dock stuck on the dead pre-RBF pointer: {stuck}"
+        print("[e2e] taker dock follows the RBF replacement (no frozen 0/n)")
+
+        # And the swap completes normally from here.
+        drive_until(bob, lambda evs: any(e["action"] == "funded-a" for e in evs))
+        bob.cli("fund", "--swap", sid, "--out", m_funded_b)
+        h.btc.generate(1, "bob_btc")
+        drive_until(alice, lambda evs: any(e["action"] == "auto-redeem" for e in evs))
+        h.btc.generate(1, "bob_btc")
+        drive_until(bob, lambda evs: any(e["action"] == "auto-redeem" for e in evs))
+        h.pocx.generate(1, "alice_btcx")
+
+        assert_htlc_spent(h.btc, m_funded_b, "chain-B")
+        after = balances(h)
+        assert after["bob_btcx"] >= before["bob_btcx"] + float(GIVE_POCX) - FEE_SLACK, \
+            f"bob did not receive POCX: {before} -> {after}"
+        assert after["alice_btc"] >= before["alice_btc"] + float(GET_BTC) - FEE_SLACK, \
+            f"alice did not receive BTC: {before} -> {after}"
+        print("[e2e] taker-display-follows-RBF scenario OK")
+    finally:
+        alice.stop()
+        bob.stop()
+
+
 def test_balance_validation(h):
     """An offer you can't fund is refused up front, at the point it would be
     advertised. `board post` runs the cumulative funds gate
@@ -1057,6 +1130,11 @@ class FundingRbfPointerResync(PactTestFramework):
         test_funding_rbf_pointer_resync(self.h)
 
 
+class TakerDisplayFollowsRbf(PactTestFramework):
+    def run_test(self):
+        test_taker_display_follows_rbf(self.h)
+
+
 class BalanceValidation(PactTestFramework):
     def run_test(self):
         test_balance_validation(self.h)
@@ -1110,6 +1188,7 @@ SCENARIOS = [
     ChainWatchedFunding,
     FundingFeeBumpV1,
     FundingRbfPointerResync,
+    TakerDisplayFollowsRbf,
     BalanceValidation,
     CreateImportThenSwap,
     CoinSetup,
