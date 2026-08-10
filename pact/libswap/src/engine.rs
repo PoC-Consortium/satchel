@@ -4374,11 +4374,31 @@ impl Engine {
                      that holds this swap, then retry."
                 );
                 let address = htlc.address(backend.params())?;
-                let txid = backend.wallet_send(
+                // Hard P2 (2026-08-09 post-mortem): fundings spend CONFIRMED
+                // coins only — never a bump-eligible unconfirmed parent whose
+                // RBF replacement would orphan this funding irrecoverably.
+                // When that leaves the confirmed balance short while the
+                // TOTAL spendable (own pending change included) covers the
+                // amount, the funding is QUEUED behind a confirmation — a
+                // typed, catchable non-failure the retry arms narrate.
+                let txid = match backend.wallet_send_confirmed(
                     &address,
                     amount,
                     SendFee::Target(backend.funding_conf_target()),
-                )?;
+                ) {
+                    Ok(txid) => txid,
+                    Err(e) if crate::chain::is_insufficient_funds(&e) => {
+                        let total = backend.wallet_balance().unwrap_or(0);
+                        if total >= amount {
+                            return Err(anyhow::Error::new(FundingQueued {
+                                needed_sat: amount,
+                                total_spendable_sat: total,
+                            }));
+                        }
+                        return Err(e);
+                    }
+                    Err(e) => return Err(e),
+                };
                 let vout =
                     backend.find_vout(&txid, &hex::encode(htlc.script_pubkey().as_bytes()))?;
                 (txid, vout)
@@ -4815,6 +4835,24 @@ impl Engine {
         };
         let now = deadline_clock(net, local_now(), mtp);
         !action_safe(now, fund_margin, rec.t2)
+    }
+
+    /// Initiator twin of [`Self::fund_deadline_passed`]: the §7.4 chain-A
+    /// fund window against T1, bounding how long a QUEUED leg-A funding
+    /// (hard P2 — waiting for own change to confirm) may keep waiting before
+    /// the C8 stale-abort reclaims the handshake. Same conservative clock
+    /// handling.
+    fn fund_deadline_passed_a(&self, rec: &SwapRecord) -> bool {
+        let net = rec.chain_a.network;
+        let (fund_margin, _, _) = action_margins(net);
+        let Ok(backend) = self.backend(&rec.chain_a) else {
+            return false;
+        };
+        let Ok(mtp) = backend.tip_median_time() else {
+            return false;
+        };
+        let now = deadline_clock(net, local_now(), mtp);
+        !action_safe(now, fund_margin, rec.t1)
     }
 
     pub fn tick(&self) -> Vec<TickEvent> {
@@ -8293,11 +8331,21 @@ impl Engine {
                         "too late to fund chain B; aborted (nothing locked on our side)".into(),
                     );
                 }
-                let (funded, env) = self.fund(&rec.swap_id)?;
-                if let Some(cp) = funded.counterparty_identity.clone() {
-                    let _ = self.relay_send_all(&cp, &env);
+                match self.fund(&rec.swap_id) {
+                    Ok((funded, env)) => {
+                        if let Some(cp) = funded.counterparty_identity.clone() {
+                            let _ = self.relay_send_all(&cp, &env);
+                        }
+                        event("auto-fund", "retried chain-B funding".into())
+                    }
+                    // Hard-P2 queue (2026-08-09): waiting for our own change
+                    // to confirm is a narrated wait, never a tick error; the
+                    // §7.4 gate above bounds it.
+                    Err(e) if e.downcast_ref::<FundingQueued>().is_some() => {
+                        event("funding-queued", format!("chain B: {e:#}"))
+                    }
+                    Err(e) => Err(e),
                 }
-                event("auto-fund", "retried chain-B funding".into())
             }
             // C8: a swap stalled in a PRE-FUNDING state (`created`/`accepted`)
             // past the timeout is auto-aborted. Nothing is locked on-chain
@@ -8372,6 +8420,31 @@ impl Engine {
                         ),
                     );
                 }
+                // Hard-P2 queue (2026-08-09): an initiator whose funding is
+                // waiting for its own change to confirm is NOT a stale
+                // handshake. This arm out-prioritizes the retry arm below
+                // once the timeout passes, so retry the fund RIGHT HERE and
+                // keep waiting while the §7.4 leg-A window is open; any
+                // other failure falls through to the clean abort as before.
+                if rec.role == Role::Initiator
+                    && rec.state == State::Accepted
+                    && self.auto_fund
+                    && self.swap_params(rec).is_ok()
+                    && !self.fund_deadline_passed_a(rec)
+                {
+                    match self.fund(&rec.swap_id) {
+                        Ok((funded, env)) => {
+                            if let Some(cp) = funded.counterparty_identity.clone() {
+                                let _ = self.relay_send_all(&cp, &env);
+                            }
+                            return event("auto-fund", "retried chain-A funding".into());
+                        }
+                        Err(e) if e.downcast_ref::<FundingQueued>().is_some() => {
+                            return event("funding-queued", format!("chain A: {e:#}"));
+                        }
+                        Err(_) => {} // genuinely stuck — abort below
+                    }
+                }
                 self.abort(&rec.swap_id, "pre-funding handshake timed out")?;
                 event(
                     "abort-timeout",
@@ -8387,11 +8460,20 @@ impl Engine {
                 if !self.auto_fund {
                     return Ok(None);
                 }
-                let (funded, env) = self.fund(&rec.swap_id)?;
-                if let Some(cp) = funded.counterparty_identity.clone() {
-                    let _ = self.relay_send_all(&cp, &env);
+                match self.fund(&rec.swap_id) {
+                    Ok((funded, env)) => {
+                        if let Some(cp) = funded.counterparty_identity.clone() {
+                            let _ = self.relay_send_all(&cp, &env);
+                        }
+                        event("auto-fund", "retried chain-A funding".into())
+                    }
+                    // Hard-P2 queue: narrate, never a tick error — bounded
+                    // by the C8 branch above once the timeout passes.
+                    Err(e) if e.downcast_ref::<FundingQueued>().is_some() => {
+                        event("funding-queued", format!("chain A: {e:#}"))
+                    }
+                    Err(e) => Err(e),
                 }
-                event("auto-fund", "retried chain-A funding".into())
             }
             _ => Ok(None),
         }
@@ -8838,10 +8920,23 @@ impl Engine {
         let new_txid = match backend.wallet_bumpfee(txid, rate_kvb) {
             Ok(t) => t,
             Err(e) => {
+                // Descendant refusal gets its own event (2026-08-09
+                // post-mortem): replacing a parent with own-wallet children
+                // would orphan them, so both wallet backends refuse with
+                // Core's "descendants in the wallet" phrasing. Under the
+                // confirmed-only funding rule no SWAP funding can be such a
+                // child anymore — this catches ordinary sends the user
+                // chained on the funding's change.
+                let msg = format!("{e:#}");
+                let action = if msg.contains("descendants in the wallet") {
+                    "funding-bump-skipped-descendants"
+                } else {
+                    "funding-bump-skipped"
+                };
                 return Ok(Some(TickEvent {
                     swap_id: rec.swap_id.clone(),
-                    action: "funding-bump-skipped".into(),
-                    detail: format!("leg {leg}: {e:#}"),
+                    action: action.into(),
+                    detail: format!("leg {leg}: {msg}"),
                 }));
             }
         };
@@ -11343,6 +11438,34 @@ impl Engine {
         Ok(())
     }
 }
+
+/// Typed marker error: a swap funding could not go out ONLY because the
+/// confirmed-only selection (hard P2, 2026-08-09 post-mortem) found the
+/// confirmed balance short while the wallet's TOTAL spendable — own
+/// unconfirmed change included — covers the amount. The funding is QUEUED
+/// behind a confirmation, not failed: the auto-fund arms catch this
+/// (downcast) and narrate `funding-queued`, and the C8 stale-abort keeps
+/// waiting while the §7.4 fund window is open. A manual `fund` RPC surfaces
+/// the Display text as-is.
+#[derive(Debug)]
+pub struct FundingQueued {
+    pub needed_sat: u64,
+    pub total_spendable_sat: u64,
+}
+
+impl std::fmt::Display for FundingQueued {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "funding queued: {} sat needed and confirmed coins are short, but total \
+             spendable {} sat covers it — waiting for our own change to confirm \
+             (fundings spend confirmed coins only)",
+            self.needed_sat, self.total_spendable_sat
+        )
+    }
+}
+
+impl std::error::Error for FundingQueued {}
 
 /// The scriptPubKey our final spend pays (output 0 of the stored tx) —
 /// the script hint Electrum backends need to locate the transaction.
@@ -14712,5 +14835,32 @@ mod tests {
         assert!(!crate::chain::is_inputs_spent(&rule4));
         let unrelated = anyhow::anyhow!("connection refused");
         assert!(!crate::chain::is_inputs_spent(&unrelated));
+    }
+
+    /// Hard-P2 queue plumbing (2026-08-09): the insufficient-funds
+    /// classification both wallets produce, and the typed FundingQueued
+    /// marker the arms downcast on.
+    #[test]
+    fn funding_queued_classification() {
+        // bdk phrasing and Core phrasing both classify.
+        let bdk = anyhow::anyhow!(
+            "building tx: Insufficient funds: 9000 sat available of 50000 sat needed"
+        );
+        assert!(crate::chain::is_insufficient_funds(&bdk));
+        let core = anyhow::anyhow!("RPC error -6: Insufficient funds");
+        assert!(crate::chain::is_insufficient_funds(&core));
+        let unrelated = anyhow::anyhow!("connection refused");
+        assert!(!crate::chain::is_insufficient_funds(&unrelated));
+
+        // The typed marker survives an anyhow round-trip (what the arms do).
+        let err = anyhow::Error::new(FundingQueued {
+            needed_sat: 50_000,
+            total_spendable_sat: 69_000,
+        });
+        let q = err
+            .downcast_ref::<FundingQueued>()
+            .expect("downcast must see the marker");
+        assert_eq!((q.needed_sat, q.total_spendable_sat), (50_000, 69_000));
+        assert!(format!("{err:#}").contains("funding queued"));
     }
 }

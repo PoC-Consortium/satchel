@@ -123,6 +123,21 @@ pub(crate) fn is_inputs_spent(err: &anyhow::Error) -> bool {
     msg.contains("missingorspent") || msg.contains("txn-mempool-conflict")
 }
 
+/// Is this send failure "insufficient funds"? Core answers -6; bdk's coin
+/// selection reports `InsufficientFunds` — matched by text so both wallet
+/// backends classify identically. The confirmed-only funding path uses this
+/// to tell "queued behind our own change confirming" from a real failure.
+pub(crate) fn is_insufficient_funds(err: &anyhow::Error) -> bool {
+    if let Some(rpc) = err.downcast_ref::<RpcError>() {
+        if rpc.code == -6 {
+            return true;
+        }
+    }
+    format!("{err:#}")
+        .to_ascii_lowercase()
+        .contains("insufficient funds")
+}
+
 pub trait ChainBackend: Send + Sync {
     fn params(&self) -> &ChainParams;
 
@@ -386,6 +401,23 @@ pub trait ChainBackend: Send + Sync {
     /// target); the user send passes the form's preset target or custom rate.
     fn wallet_send(&self, address: &str, amount_sat: u64, fee: SendFee) -> Result<String>;
 
+    /// [`Self::wallet_send`] restricted to CONFIRMED inputs — the swap-funding
+    /// send (2026-08-09 post-mortem hard rule): a funding chained on an
+    /// unconfirmed, bump-eligible parent is permanently orphaned when that
+    /// parent is RBF-replaced (gone from every mempool, nothing on chain to
+    /// re-adopt), so fundings never spend unconfirmed coins — own change
+    /// included. Ordinary sends keep `wallet_send`'s confirmation-blind
+    /// selection. The default only serves wallet-less backends (their
+    /// `wallet_send` already refuses); every real wallet backend overrides.
+    fn wallet_send_confirmed(
+        &self,
+        address: &str,
+        amount_sat: u64,
+        fee: SendFee,
+    ) -> Result<String> {
+        self.wallet_send(address, amount_sat, fee)
+    }
+
     /// Sweep the whole wallet to `address` ("send everything", phoenix
     /// parity): every spendable UTXO in one tx with the fee taken out of the
     /// swept amount — the recipient receives balance − fee and the wallet is
@@ -609,6 +641,14 @@ impl<T: ChainBackend + ?Sized> ChainBackend for std::sync::Arc<T> {
     }
     fn wallet_send(&self, address: &str, amount_sat: u64, fee: SendFee) -> Result<String> {
         (**self).wallet_send(address, amount_sat, fee)
+    }
+    fn wallet_send_confirmed(
+        &self,
+        address: &str,
+        amount_sat: u64,
+        fee: SendFee,
+    ) -> Result<String> {
+        (**self).wallet_send_confirmed(address, amount_sat, fee)
     }
     fn wallet_send_all(&self, address: &str, fee: SendFee) -> Result<String> {
         (**self).wallet_send_all(address, fee)
@@ -1118,6 +1158,41 @@ impl ChainBackend for CoreRpcBackend {
             .as_str()
             .context("sendtoaddress: non-string")?
             .to_string())
+    }
+
+    fn wallet_send_confirmed(
+        &self,
+        address: &str,
+        amount_sat: u64,
+        fee: SendFee,
+    ) -> Result<String> {
+        let amount = format!(
+            "{}.{:08}",
+            amount_sat / 100_000_000,
+            amount_sat % 100_000_000
+        );
+        let fee_rate = self.resolve_send_fee(fee)? as f64 / 1000.0;
+        // Core's `send` (0.21+) is the one send RPC with per-call INPUT
+        // control: options.minconf=1 restricts coin selection to confirmed
+        // coins (`sendtoaddress` has no such knob). Explicit fee_rate +
+        // BIP125-replaceable, mirroring wallet_send's policy exactly.
+        let mut outputs = serde_json::Map::new();
+        outputs.insert(address.to_string(), json!(amount));
+        let res = self.rpc.call(
+            "send",
+            &[
+                Value::Array(vec![Value::Object(outputs)]),
+                json!(null),
+                json!("unset"),
+                json!(fee_rate),
+                json!({ "add_inputs": true, "minconf": 1, "replaceable": true }),
+            ],
+        )?;
+        anyhow::ensure!(
+            res["complete"].as_bool().unwrap_or(false),
+            "send: transaction not complete"
+        );
+        Ok(res["txid"].as_str().context("send: no txid")?.to_string())
     }
 
     fn wallet_send_all(&self, address: &str, fee: SendFee) -> Result<String> {
@@ -2086,6 +2161,16 @@ impl ChainBackend for MultiBackend {
 
     fn wallet_send(&self, address: &str, amount_sat: u64, fee: SendFee) -> Result<String> {
         self.primary().wallet_send(address, amount_sat, fee)
+    }
+
+    fn wallet_send_confirmed(
+        &self,
+        address: &str,
+        amount_sat: u64,
+        fee: SendFee,
+    ) -> Result<String> {
+        self.primary()
+            .wallet_send_confirmed(address, amount_sat, fee)
     }
 
     fn wallet_send_all(&self, address: &str, fee: SendFee) -> Result<String> {

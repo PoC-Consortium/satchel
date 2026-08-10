@@ -211,6 +211,15 @@ impl ChainBackend for BdkWalletBackend {
         self.backend.wallet_send(address, amount_sat, fee)
     }
 
+    fn wallet_send_confirmed(
+        &self,
+        address: &str,
+        amount_sat: u64,
+        fee: SendFee,
+    ) -> Result<String> {
+        self.backend.wallet_send_confirmed(address, amount_sat, fee)
+    }
+
     fn wallet_send_all(&self, address: &str, fee: SendFee) -> Result<String> {
         self.backend.wallet_send_all(address, fee)
     }
