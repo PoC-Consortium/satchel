@@ -136,6 +136,28 @@ a redeem inside the final 90-min band), only when the target clears the BIP125
 Rule-4 floor, otherwise a silent evicted-only rebroadcast
 (`max_feerate_sat_vb = 500` by default).
 
+**RBF-race safety (`nurse_settlement`, post-mortem 2026-08-10).** Every
+replacement creates a race: the *pre-bump* version can win the block while the
+record tracks the replacement. The settlement arms therefore nurse through a
+wrapper with two protections, in order:
+
+1. **Adopt the winner** (`adopt_settlement_winner` → `settlement-pointer-heal`).
+   When the HTLC outpoint is spent by a *different* tx that is provably our own
+   settlement — it pays the recorded destination, or (redeems only) its witness
+   reveals the swap preimage — `final_*` is re-pointed at the mined winner and
+   the confirmation watch converges on the version the chain picked. The
+   settlement twin of `funding-pointer-resync`. A preimage-revealing spend of a
+   *refund* leg is never adopted: that is the counterparty's redeem winning a
+   §7.4 window race, which only reconciliation may judge.
+2. **A spent input is a question, never an error.** A rebroadcast or bump
+   rejected `-25 bad-txns-inputs-missingorspent` (or a mempool conflict) means
+   some other version settled the HTLC: the arm emits `settlement-conflict` and
+   re-arms the chain reconciliation (#201), whose terminal matrix decides who
+   settled. Before this rule the `-25` propagated as a tick **error** that
+   aborted the arm each tick — reconcile was never even requested, and the
+   field record wedged in `redeemed_b` for hours while the redeemed coins sat
+   confirmed in the wallet.
+
 ## v2 fee-bumping: a split design
 
 v2 is asymmetric, and the asymmetry is load-bearing (spec v2 §8):
@@ -287,6 +309,37 @@ differently, and the asymmetry mirrors the redeem/refund split:
 A recoverable `bumpfee`/sign failure (e.g. insufficient funds — the funds gate
 is a soft pre-flight, not a lock — or a not-replaceable tx) is a graceful
 skip event for that tick, never a crash: the funding stalls and refunds.
+
+**Fundings spend confirmed coins only (hard P2, post-mortem 2026-08-09).**
+Wallet coin selection is confirmation-blind by default, so a second swap's
+funding could chain on the first funding's *unconfirmed change* — and the
+nurse's RBF of that parent then orphaned the child funding permanently (gone
+from every mempool, nothing on chain to re-adopt, every engine exit closed).
+Three rules make that shape unrepresentable instead of curable:
+
+- **Confirmed-only selection.** Swap fundings go out via
+  `wallet_send_confirmed` — Core's `send` with `options.minconf = 1`, the
+  nodeless wallet with every unconfirmed UTXO marked unspendable. v2's
+  build-and-hold funding (`wallet_build_funding`) is confirmed-only too: its
+  txid is committed into the pre-signed MuSig2 redeems, so an orphaned v2
+  funding would invalidate the whole signed bundle. Ordinary sends and sweeps
+  deliberately keep the old selection — spending one's own unconfirmed change
+  is normal wallet behavior; only *fundings* must never sit on a replaceable
+  parent.
+- **Queued, not failed** (`funding-queued`). When confirmed coins are short
+  but the wallet's total spendable — own pending change included — covers the
+  amount, the funding is queued behind a confirmation (typed `FundingQueued`):
+  the auto-fund retry arms narrate it each tick, and the C8 pre-funding
+  stale-abort retries the fund and keeps waiting while the §7.4 fund window
+  (initiator: T1 − fund-margin; participant: T2 − fund-margin) is open. The
+  cost is about one block of latency against a fund window measured in hours;
+  past the window the handshake aborts cleanly, nothing locked.
+- **Descendant belt** (`funding-bump-skipped-descendants`). Both wallet
+  backends refuse to RBF-replace a tx whose outputs are spent by other wallet
+  txs (Core's own `bumpfee` rule; the nodeless wallet now enforces it too),
+  and the nurse reports that refusal distinctly. With confirmed-only funding
+  no *swap* funding can be such a child — this protects the one chained shape
+  still allowed: an ordinary send the user chained on a funding's change.
 
 > **Note** — The nurse is the **only** legitimate bumper of a live swap's
 > funding. The wallet-level `bumpfee` RPC (chapter "API: Node, Seed,
