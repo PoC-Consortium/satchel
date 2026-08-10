@@ -104,6 +104,25 @@ fn is_already_broadcast(err: &anyhow::Error) -> bool {
     msg.contains("already in") || msg.contains("already known")
 }
 
+/// Is this broadcast/bump error "the tx's inputs are already spent"? Core
+/// answers -25 `bad-txns-inputs-missingorspent` (and -26
+/// `txn-mempool-conflict` for a mempool-level double spend); Electrum servers
+/// relay the node's text. This is never transient: some OTHER transaction
+/// spent the outpoint — for a settlement rebroadcast that means "find out by
+/// whom" (reconcile), never "retry the same hex forever" (the 2026-08-10
+/// error-loop post-mortem).
+pub(crate) fn is_inputs_spent(err: &anyhow::Error) -> bool {
+    if let Some(rpc) = err.downcast_ref::<RpcError>() {
+        if rpc.code == -25 {
+            return true;
+        }
+    }
+    // -26 is shared by several policy rejections (Rule 4 among them), so the
+    // mempool-conflict case is matched by TEXT, not code.
+    let msg = format!("{err:#}").to_ascii_lowercase();
+    msg.contains("missingorspent") || msg.contains("txn-mempool-conflict")
+}
+
 pub trait ChainBackend: Send + Sync {
     fn params(&self) -> &ChainParams;
 
@@ -1479,6 +1498,36 @@ impl ChainBackend for ElectrumBackend {
         // The scripthash history contains both the funding tx and any spend
         // of it — no block scanning, so the height hint is not needed.
         ElectrumBackend::find_spend_witness(self, outpoint, watch_spk)
+    }
+
+    fn find_spend_tx(
+        &self,
+        outpoint: &OutPoint,
+        watch_spk: &ScriptBuf,
+        _from_height: u64,
+    ) -> Result<Option<(Transaction, u64)>> {
+        // The scripthash history names every tx touching the watched script —
+        // the funding AND its spend(s), confirmed + mempool — so the spend is
+        // found by fetching the non-funding entries and checking their inputs
+        // (self-verifying per the trait contract). No height hint needed.
+        let funding_txid = outpoint.txid.to_string();
+        let tip = ElectrumBackend::tip_height(self)?;
+        for (txid, height) in ElectrumBackend::history(self, watch_spk)? {
+            if txid == funding_txid {
+                continue;
+            }
+            let Ok(tx) = ElectrumBackend::get_raw_tx(self, &txid) else {
+                continue; // evicted since the history snapshot — not the spend
+            };
+            if tx.input.iter().any(|i| i.previous_output == *outpoint) {
+                // Electrum heights: >0 = block height, 0/-1 = mempool. The
+                // trait wants "block height (0 = mempool)"; clamp to the tip
+                // so a lying server can't fabricate a future height.
+                let h = u64::try_from(height).unwrap_or(0).min(tip);
+                return Ok(Some((tx, h)));
+            }
+        }
+        Ok(None)
     }
 
     fn spk_history(&self, spk: &ScriptBuf) -> Result<Option<Vec<(String, i64)>>> {

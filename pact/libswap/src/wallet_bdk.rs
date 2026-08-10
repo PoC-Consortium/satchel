@@ -115,6 +115,18 @@ impl ChainBackend for BdkWalletBackend {
         self.chain().find_spend_witness(outpoint, watch_spk)
     }
 
+    fn find_spend_tx(
+        &self,
+        outpoint: &OutPoint,
+        watch_spk: &ScriptBuf,
+        from_height: u64,
+    ) -> Result<Option<(Transaction, u64)>> {
+        // Same history-driven search as the chain connection's own impl —
+        // the settlement-race heal needs the full winning tx, not just its
+        // witness.
+        ChainBackend::find_spend_tx(self.chain(), outpoint, watch_spk, from_height)
+    }
+
     fn spk_history(&self, spk: &ScriptBuf) -> Result<Option<Vec<(String, i64)>>> {
         Ok(Some(self.chain().history(spk)?))
     }

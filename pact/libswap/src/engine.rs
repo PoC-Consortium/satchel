@@ -8143,7 +8143,7 @@ impl Engine {
                 if confs >= 1 {
                     return Ok(None);
                 }
-                self.maybe_bump(rec, &backend_b)
+                self.nurse_settlement(rec, &backend_b)
             }
             // Bob's chain-A redeem unconfirmed: bump until it lands (his
             // deadline is T1).
@@ -8153,7 +8153,7 @@ impl Engine {
                 if backend_a.tx_confirmations(txid, spend_spk(rec).as_ref())? >= 1 {
                     return Ok(None);
                 }
-                self.maybe_bump(rec, &backend_a)
+                self.nurse_settlement(rec, &backend_a)
             }
             // A refund that has not confirmed yet: keep it moving.
             (role, State::Refunded) => {
@@ -8166,7 +8166,7 @@ impl Engine {
                 if backend.tx_confirmations(txid, spend_spk(rec).as_ref())? >= 1 {
                     return Ok(None);
                 }
-                self.maybe_bump(rec, &backend)
+                self.nurse_settlement(rec, &backend)
             }
             // Bob with both legs funded: watch chain B for Alice's reveal;
             // redeem chain A when it appears, refund chain B after T2.
@@ -8645,6 +8645,110 @@ impl Engine {
             swap_id: rec.swap_id.clone(),
             action: "rebroadcast".into(),
             detail: txid.to_string(),
+        }))
+    }
+
+    /// Nurse an unconfirmed settlement (redeem/refund) with the two RBF-race
+    /// protections from the 2026-08-10 post-mortem, in order:
+    ///
+    /// 1. **Adopt the winner.** When the HTLC outpoint is already spent by a
+    ///    DIFFERENT tx that is provably our own settlement — a pre-bump
+    ///    version that won the mining race while `final_txid` tracked the
+    ///    replacement — re-point `final_*` at it instead of nursing dead hex.
+    ///    The settlement twin of [`Self::maybe_resync_funding_v1`].
+    /// 2. **Never error-loop on a spent input.** A rebroadcast/bump rejected
+    ///    with "inputs missing or spent" means some other version settled the
+    ///    HTLC: re-arm the chain reconciliation (#201) — its terminal matrix
+    ///    judges by whom — and report an event. Propagating the error (the old
+    ///    behavior) aborted the arm each tick BEFORE any reconcile could be
+    ///    requested, wedging the record forever while the funds sat safely in
+    ///    the wallet.
+    fn nurse_settlement(
+        &self,
+        rec: &SwapRecord,
+        backend: &MultiBackend,
+    ) -> Result<Option<TickEvent>> {
+        if let Some(ev) = self.adopt_settlement_winner(rec, backend)? {
+            return Ok(Some(ev));
+        }
+        match self.maybe_bump(rec, backend) {
+            Err(e) if crate::chain::is_inputs_spent(&e) => {
+                self.request_reconcile(&rec.swap_id);
+                Ok(Some(TickEvent {
+                    swap_id: rec.swap_id.clone(),
+                    action: "settlement-conflict".into(),
+                    detail: format!(
+                        "settlement inputs already spent — reconciling from chain ({e:#})"
+                    ),
+                }))
+            }
+            other => other,
+        }
+    }
+
+    /// Step 1 of [`Self::nurse_settlement`]: find the tx actually spending
+    /// the settled HTLC outpoint. If it is not the recorded settlement but IS
+    /// provably ours ([`settlement_spend_is_ours`]), adopt it as `final_*` so
+    /// the confirmation watch converges on the version the chain picked. A
+    /// foreign spend re-arms reconciliation instead — never adopted.
+    fn adopt_settlement_winner(
+        &self,
+        rec: &SwapRecord,
+        backend: &MultiBackend,
+    ) -> Result<Option<TickEvent>> {
+        let Some(tx_hex) = &rec.final_tx_hex else {
+            return Ok(None); // record predates fee-bumping support
+        };
+        let old_tx: bitcoin::Transaction =
+            bitcoin::consensus::encode::deserialize(&hex::decode(tx_hex)?)
+                .context("corrupt final_tx_hex")?;
+        let old_txid = old_tx.compute_txid();
+        let (Some(outpoint), Some(destination)) = (
+            old_tx.input.first().map(|i| i.previous_output),
+            old_tx.output.first().map(|o| o.script_pubkey.clone()),
+        ) else {
+            return Ok(None);
+        };
+        let params = self.swap_params(rec)?;
+        let (htlc, from_height, is_redeem) = match (rec.role, rec.state) {
+            (Role::Initiator, State::RedeemedB) => (params.htlc_b()?, rec.htlc_b_height, true),
+            (Role::Participant, State::Completed) => (params.htlc_a()?, rec.htlc_a_height, true),
+            (Role::Initiator, State::Refunded) => (params.htlc_a()?, rec.htlc_a_height, false),
+            (Role::Participant, State::Refunded) => (params.htlc_b()?, rec.htlc_b_height, false),
+            _ => return Ok(None),
+        };
+        let spend =
+            backend.find_spend_tx(&outpoint, &htlc.script_pubkey(), from_height.unwrap_or(0))?;
+        let Some((spend_tx, _height)) = spend else {
+            return Ok(None); // unspent or invisible — the nurse takes it from here
+        };
+        let spend_txid = spend_tx.compute_txid();
+        if spend_txid == old_txid {
+            return Ok(None); // the recorded settlement itself — pending, not a race
+        }
+        if !settlement_spend_is_ours(&spend_tx, outpoint, &destination, &params.hash_h, is_redeem) {
+            // Foreign spend (e.g. the counterparty's settlement won a §7.4
+            // window race): only a fresh classification can judge it (#201).
+            self.request_reconcile(&rec.swap_id);
+            return Ok(Some(TickEvent {
+                swap_id: rec.swap_id.clone(),
+                action: "settlement-conflict".into(),
+                detail: format!(
+                    "HTLC {outpoint} spent by foreign tx {spend_txid} — reconciling from chain"
+                ),
+            }));
+        }
+        let mut updated = rec.clone();
+        updated.final_txid = Some(spend_txid.to_string());
+        updated.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&spend_tx));
+        self.store.put(&updated)?;
+        Ok(Some(TickEvent {
+            swap_id: rec.swap_id.clone(),
+            action: "settlement-pointer-heal".into(),
+            detail: format!(
+                "{old_txid} -> {spend_txid} (our settlement won the RBF race under the \
+                 replaced txid; confirmation watch repointed)"
+            ),
         }))
     }
 
@@ -11244,6 +11348,40 @@ impl Engine {
 /// the script hint Electrum backends need to locate the transaction.
 fn spend_spk(rec: &SwapRecord) -> Option<bitcoin::ScriptBuf> {
     first_output_spk(rec.final_tx_hex.as_deref())
+}
+
+/// Is `spend` OUR settlement of `outpoint` under a different txid — an RBF
+/// version that won the mining race while `final_txid` tracked its sibling
+/// (2026-08-10 post-mortem)? Positive proof only: it pays the same
+/// destination the recorded settlement pays (every bump sibling keeps output
+/// 0), or — for a REDEEM — its witness reveals the swap preimage (a
+/// same-seed machine's redeem paying its own address; only preimage holders
+/// can build one, and the counterparty cannot sign our leg's redeem path). A
+/// refund must match by destination alone: a preimage-revealing spend of a
+/// leg we hold a refund for is the counterparty's redeem winning a §7.4
+/// window race — never ours. Pure/testable.
+fn settlement_spend_is_ours(
+    spend: &bitcoin::Transaction,
+    outpoint: OutPoint,
+    destination: &bitcoin::ScriptBuf,
+    hash_h: &[u8; 32],
+    is_redeem: bool,
+) -> bool {
+    let Some(input) = spend.input.iter().find(|i| i.previous_output == outpoint) else {
+        return false; // the backend's hint didn't verify — never adopt
+    };
+    if spend
+        .output
+        .first()
+        .is_some_and(|o| &o.script_pubkey == destination)
+    {
+        return true;
+    }
+    if !is_redeem {
+        return false;
+    }
+    let witness: Vec<Vec<u8>> = input.witness.iter().map(|w| w.to_vec()).collect();
+    extract_preimage(&witness, hash_h).is_some()
 }
 
 /// The first-output scriptPubKey of a serialized tx (our HTLC spends are 1-out),
@@ -14471,5 +14609,108 @@ mod tests {
 
         std::fs::remove_dir_all(&md).ok();
         std::fs::remove_dir_all(&td).ok();
+    }
+
+    /// 2026-08-10 post-mortem: the settlement-race winner proof. A tx is
+    /// adopted as our own settlement only on positive evidence — destination
+    /// match for any settlement, preimage reveal for redeems only.
+    #[test]
+    fn settlement_winner_proof() {
+        use bitcoin::hashes::{sha256, Hash};
+        let outpoint = OutPoint {
+            txid: "1111111111111111111111111111111111111111111111111111111111111111"
+                .parse()
+                .unwrap(),
+            vout: 0,
+        };
+        let dest = bitcoin::ScriptBuf::from_bytes(vec![0x00, 0x14]);
+        let other = bitcoin::ScriptBuf::from_bytes(vec![0x51]);
+        let preimage = [7u8; 32];
+        let hash_h = sha256::Hash::hash(&preimage).to_byte_array();
+        let spend = |spk: &bitcoin::ScriptBuf, witness_item: Option<[u8; 32]>| {
+            let mut witness = bitcoin::Witness::new();
+            if let Some(item) = witness_item {
+                witness.push(item);
+            }
+            bitcoin::Transaction {
+                version: bitcoin::transaction::Version::TWO,
+                lock_time: bitcoin::absolute::LockTime::ZERO,
+                input: vec![bitcoin::TxIn {
+                    previous_output: outpoint,
+                    script_sig: bitcoin::ScriptBuf::new(),
+                    sequence: bitcoin::Sequence::ENABLE_RBF_NO_LOCKTIME,
+                    witness,
+                }],
+                output: vec![bitcoin::TxOut {
+                    value: bitcoin::Amount::from_sat(1000),
+                    script_pubkey: spk.clone(),
+                }],
+            }
+        };
+
+        // Destination match proves ours, redeem or refund.
+        assert!(settlement_spend_is_ours(
+            &spend(&dest, None),
+            outpoint,
+            &dest,
+            &hash_h,
+            true
+        ));
+        assert!(settlement_spend_is_ours(
+            &spend(&dest, None),
+            outpoint,
+            &dest,
+            &hash_h,
+            false
+        ));
+        // Preimage reveal proves a REDEEM (same-seed machine, own address)…
+        assert!(settlement_spend_is_ours(
+            &spend(&other, Some(preimage)),
+            outpoint,
+            &dest,
+            &hash_h,
+            true
+        ));
+        // …but NEVER a refund: a preimage spend of our refund leg is the
+        // counterparty's redeem winning the §7.4 race.
+        assert!(!settlement_spend_is_ours(
+            &spend(&other, Some(preimage)),
+            outpoint,
+            &dest,
+            &hash_h,
+            false
+        ));
+        // No proof at all → foreign.
+        assert!(!settlement_spend_is_ours(
+            &spend(&other, Some([8u8; 32])),
+            outpoint,
+            &dest,
+            &hash_h,
+            true
+        ));
+        // A tx that doesn't even spend the outpoint never qualifies.
+        let mut not_spending = spend(&dest, None);
+        not_spending.input[0].previous_output.vout = 9;
+        assert!(!settlement_spend_is_ours(
+            &not_spending,
+            outpoint,
+            &dest,
+            &hash_h,
+            true
+        ));
+    }
+
+    /// The -25 family must be classified as "inputs spent → reconcile", and
+    /// benign rejections must not.
+    #[test]
+    fn inputs_spent_error_classification() {
+        let spent = anyhow::anyhow!("sendrawtransaction: bad-txns-inputs-missingorspent");
+        assert!(crate::chain::is_inputs_spent(&spent));
+        let conflict = anyhow::anyhow!("broadcast: txn-mempool-conflict");
+        assert!(crate::chain::is_inputs_spent(&conflict));
+        let rule4 = anyhow::anyhow!("insufficient fee, rejecting replacement");
+        assert!(!crate::chain::is_inputs_spent(&rule4));
+        let unrelated = anyhow::anyhow!("connection refused");
+        assert!(!crate::chain::is_inputs_spent(&unrelated));
     }
 }

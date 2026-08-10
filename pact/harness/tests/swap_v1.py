@@ -1095,6 +1095,134 @@ def test_private_offer_swap(h):
         board.stop()
 
 
+def test_settlement_rbf_race_redeem(h):
+    """2026-08-10 post-mortem: the redeem nurse RBF-bumps the unconfirmed
+    settlement and records the replacement as final_txid — but the PRE-bump
+    version wins the mining race (fast chain, replacement not at the miner).
+    The record must re-adopt the mined winner (settlement-pointer-heal) and
+    complete, instead of error-looping -25 forever in redeemed_b while the
+    redeemed coins sit confirmed in the wallet."""
+    alice = Party("alice_sr", h, h.workdir, "alice_btcx", "alice_btc").start()
+    bob = Party("bob_sr", h, h.workdir, "bob_btcx", "bob_btc").start()
+    try:
+        before = balances(h)
+        sid, m_funded_a, m_funded_b = handshake_and_fund(h, alice, bob, "71")
+        alice.cli("recv", "--in", m_funded_b)
+
+        # Scheduler reveals s on chain B; do NOT mine — the redeem must stay
+        # unconfirmed so the nurse can act.
+        events = alice.tick()
+        assert any(e["action"] == "auto-redeem" for e in events), \
+            f"no auto-redeem: {events}"
+        rec = alice.rpc("getswap", sid)
+        v1_txid, v1_hex = rec["final_txid"], rec["final_tx_hex"]
+
+        # Manufacture the market rise the nurse reacts to → RBF replacement.
+        alice.rpc("_settestfeerate", 10)
+        events = alice.tick()
+        assert any(e["action"] == "fee-bump" for e in events), \
+            f"no fee-bump: {events}"
+        v2_txid = alice.rpc("getswap", sid)["final_txid"]
+        assert v2_txid != v1_txid, "nurse did not replace the redeem"
+
+        # The chain picks the version the bookkeeping just abandoned: mine
+        # the pre-bump redeem behind the engine's back (generateblock takes
+        # raw txs — "the miner never saw the replacement").
+        addr = h.btc.rpc("getnewaddress", wallet="bob_btc")
+        h.btc.rpc("generateblock", addr, [v1_hex])
+        assert v2_txid not in h.btc.rpc("getrawmempool"), \
+            "replacement should have been evicted as conflicted"
+
+        # FIX under test: the arm adopts the mined winner instead of
+        # rebroadcasting dead hex (-25 tick-error loop, the field wedge).
+        drive_until(
+            alice,
+            lambda evs: any(e["action"] == "settlement-pointer-heal"
+                            for e in evs),
+            tries=3)
+        rec = alice.rpc("getswap", sid)
+        assert rec["final_txid"] == v1_txid, \
+            f"pointer not repointed to the winner: {rec['final_txid']}"
+
+        # With the winner adopted the confirmation watch converges.
+        drive_until(
+            alice,
+            lambda evs: any(e["action"] == "completed" for e in evs),
+            tries=3)
+        assert alice.rpc("getswap", sid)["state"] == "completed"
+
+        # Bob extracts s from the WINNING redeem's witness and claims leg A.
+        events = bob.tick()
+        assert any(e["action"] == "auto-redeem" for e in events), \
+            f"no auto-redeem: {events}"
+        h.pocx.generate(1, "alice_btcx")
+        assert_htlc_spent(h.pocx, m_funded_a, "chain-A")
+        assert_htlc_spent(h.btc, m_funded_b, "chain-B")
+        after = balances(h)
+        assert after["bob_btcx"] >= before["bob_btcx"] + float(GIVE_POCX) - FEE_SLACK
+        assert after["alice_btc"] >= before["alice_btc"] + float(GET_BTC) - FEE_SLACK
+        print("[e2e] settlement RBF race (redeem) scenario OK")
+    finally:
+        alice.stop()
+        bob.stop()
+
+
+def test_settlement_rbf_race_refund(h):
+    """Refund twin of the settlement RBF race: Bob's leg-B refund is
+    nurse-bumped, the pre-bump version is mined behind the engine's back,
+    and the pointer must heal onto the winner instead of wedging."""
+    alice = Party("alice_srr", h, h.workdir, "alice_btcx", "alice_btc").start()
+    bob = Party("bob_srr", h, h.workdir, "bob_btcx", "bob_btc").start()
+    try:
+        before = balances(h)
+        sid, m_funded_a, m_funded_b = handshake_and_fund(h, alice, bob, "72")
+
+        # Both offline through the completion window; timelocks pass.
+        h.advance_time(5 * 3600)
+
+        # Bob reclaims leg B; leave the refund unconfirmed.
+        events = bob.tick()
+        assert any(e["action"] == "auto-refund" for e in events), \
+            f"no auto-refund: {events}"
+        rec = bob.rpc("getswap", sid)
+        v1_txid, v1_hex = rec["final_txid"], rec["final_tx_hex"]
+
+        bob.rpc("_settestfeerate", 10)
+        events = bob.tick()
+        assert any(e["action"] == "fee-bump" for e in events), \
+            f"no fee-bump: {events}"
+        v2_txid = bob.rpc("getswap", sid)["final_txid"]
+        assert v2_txid != v1_txid, "nurse did not replace the refund"
+
+        addr = h.btc.rpc("getnewaddress", wallet="bob_btc")
+        h.btc.rpc("generateblock", addr, [v1_hex])
+        assert v2_txid not in h.btc.rpc("getrawmempool"), \
+            "replacement should have been evicted as conflicted"
+
+        drive_until(
+            bob,
+            lambda evs: any(e["action"] == "settlement-pointer-heal"
+                            for e in evs),
+            tries=3)
+        rec = bob.rpc("getswap", sid)
+        assert rec["final_txid"] == v1_txid, \
+            f"pointer not repointed to the winner: {rec['final_txid']}"
+        assert rec["state"] == "refunded", rec["state"]
+
+        # Alice reclaims leg A as usual; nobody ends up with counterparty funds.
+        events = alice.tick()
+        assert any(e["action"] == "auto-refund" for e in events), \
+            f"no auto-refund: {events}"
+        h.pocx.generate(1, "alice_btcx")
+        after = balances(h)
+        assert after["bob_btcx"] <= before["bob_btcx"] + FEE_SLACK
+        assert after["alice_btc"] <= before["alice_btc"] + FEE_SLACK
+        print("[e2e] settlement RBF race (refund) scenario OK")
+    finally:
+        alice.stop()
+        bob.stop()
+
+
 class CompleteSwap(PactTestFramework):
     def run_test(self):
         test_complete_swap(self.h)
@@ -1133,6 +1261,16 @@ class FundingRbfPointerResync(PactTestFramework):
 class TakerDisplayFollowsRbf(PactTestFramework):
     def run_test(self):
         test_taker_display_follows_rbf(self.h)
+
+
+class SettlementRbfRaceRedeem(PactTestFramework):
+    def run_test(self):
+        test_settlement_rbf_race_redeem(self.h)
+
+
+class SettlementRbfRaceRefund(PactTestFramework):
+    def run_test(self):
+        test_settlement_rbf_race_refund(self.h)
 
 
 class BalanceValidation(PactTestFramework):
@@ -1189,6 +1327,8 @@ SCENARIOS = [
     FundingFeeBumpV1,
     FundingRbfPointerResync,
     TakerDisplayFollowsRbf,
+    SettlementRbfRaceRedeem,
+    SettlementRbfRaceRefund,
     BalanceValidation,
     CreateImportThenSwap,
     CoinSetup,
