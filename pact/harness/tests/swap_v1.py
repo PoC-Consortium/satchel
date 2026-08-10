@@ -10,6 +10,7 @@ Run:  python tests/swap_v1.py [--filter SUBSTR] [--keep] [--no-build]
 import json
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")))
@@ -1223,6 +1224,163 @@ def test_settlement_rbf_race_refund(h):
         bob.stop()
 
 
+def test_sibling_funding_queue_v1(h):
+    """2026-08-09 post-mortem: two swaps funding from the same single-coin
+    wallet. On the unfixed engine the second funding chained on the first's
+    UNCONFIRMED change; the funding nurse then RBF-replaced the parent and
+    permanently orphaned the child (swap wedged, every exit closed). Fixed:
+    fundings spend confirmed coins only — the second funding QUEUES behind
+    the first's confirmation (surviving the C8 pre-funding timeout), the
+    nurse can bump the parent freely (no swap descendants can exist), and
+    both swaps complete."""
+    # A dedicated wallet holding 120 POCX in ONE coin: enough total for two
+    # 50-POCX legs, but only one confirmed coin at a time.
+    h.pocx.create_wallet("alice_solo_btcx")
+    solo_addr = h.pocx.rpc("getnewaddress", wallet="alice_solo_btcx")
+    h.pocx.rpc("sendtoaddress", solo_addr, 120.0, wallet="alice_btcx")
+    h.pocx.generate(1, "alice_btcx")
+
+    alice = Party("alice_sq", h, h.workdir, "alice_solo_btcx", "alice_btc",
+                  auto_fund=True,
+                  pocx_url=h.pocx.rpc_url(wallet="alice_solo_btcx"),
+                  extra_env={"PACT_TEST_PREFUNDING_TIMEOUT_SECS": "10"}).start()
+    bob = Party("bob_sq", h, h.workdir, "bob_btcx", "bob_btc",
+                auto_fund=True).start()
+    try:
+        t2, t1 = regtest_timelocks(h)
+        sids = []
+        for i in (1, 2):
+            m_init = msg(h.workdir, f"8{i}_init.json")
+            m_accept = msg(h.workdir, f"8{i}_accept.json")
+            alice.cli("offer", "--give", f"btcx:{GIVE_POCX}",
+                      "--get", f"btc:{GET_BTC}",
+                      "--t1", str(t1), "--t2", str(t2), "--out", m_init)
+            sids.append(swap_id_from(m_init))
+            bob.cli("accept", "--in", m_init, "--out", m_accept)
+            alice.cli("recv", "--in", m_accept)
+
+        # One tick funds ONE swap from the lone confirmed coin; the other
+        # must QUEUE (confirmed coins short, own pending change covers it).
+        # The unfixed engine instead chained the second funding on the
+        # first's unconfirmed change — the orphaning hazard.
+        events = alice.tick()
+        funded = [e["swap_id"] for e in events if e["action"] == "auto-fund"]
+        queued = [e["swap_id"] for e in events if e["action"] == "funding-queued"]
+        assert len(funded) == 1 and len(queued) == 1, f"expected 1 fund + 1 queue: {events}"
+        assert set(funded + queued) == set(sids), events
+        second = queued[0]
+        rec2 = alice.rpc("getswap", second)
+        assert rec2["htlc_a_txid"] is None, rec2
+        assert rec2["state"] == "accepted", rec2
+        # Chain probe: exactly one funding in the mempool, nothing chained.
+        pool = h.pocx.rpc("getrawmempool")
+        assert len(pool) == 1, f"second funding must not chain: {pool}"
+
+        # C8 survival: outlive the (shrunk) pre-funding timeout — a queued
+        # funding is a wait, not a stale handshake to abort.
+        time.sleep(12)
+        events = alice.tick()
+        assert any(e["action"] == "funding-queued" and e["swap_id"] == second
+                   for e in events), f"queued swap aborted?: {events}"
+        assert alice.rpc("getswap", second)["state"] == "accepted"
+
+        # The nurse can act freely on the parent — descendants can't exist.
+        alice.rpc("_settestfeerate", 10)
+        events = alice.tick()
+        assert any(e["action"] == "funding-fee-bump" for e in events), events
+        alice.rpc("_settestfeerate", 0)
+
+        # One confirmation frees the queue: the (bumped) funding confirms,
+        # its change is spendable, the second swap funds.
+        h.pocx.generate(1, "alice_btcx")
+        drive_until(
+            alice,
+            lambda evs: any(e["action"] == "auto-fund" and e["swap_id"] == second
+                            for e in evs),
+            tries=3)
+        assert alice.rpc("getswap", second)["htlc_a_txid"], "second funding missing"
+
+        # Autopilot both swaps to completion: bob chain-watches leg A (no
+        # relay is wired here), funds leg B, alice reveals, bob claims.
+        for _ in range(12):
+            alice.tick()
+            bob.tick()
+            h.pocx.generate(1, "alice_btcx")
+            h.btc.generate(1, "bob_btc")
+            states = [alice.rpc("getswap", s)["state"] for s in sids]
+            if states == ["completed", "completed"]:
+                break
+        states = [alice.rpc("getswap", s)["state"] for s in sids]
+        assert states == ["completed", "completed"], states
+        print("[e2e] sibling funding queue scenario OK")
+    finally:
+        alice.stop()
+        bob.stop()
+
+
+def test_funding_bump_descendant_belt(h):
+    """Belt for the 2026-08-09 shape that hard-P2 cannot forbid: an ORDINARY
+    wallet send the user chains on a swap funding's unconfirmed change. The
+    funding nurse must refuse the RBF (funding-bump-skipped-descendants)
+    instead of orphaning the user's payment."""
+    h.pocx.create_wallet("alice_desc_btcx")
+    solo_addr = h.pocx.rpc("getnewaddress", wallet="alice_desc_btcx")
+    h.pocx.rpc("sendtoaddress", solo_addr, 120.0, wallet="alice_btcx")
+    h.pocx.generate(1, "alice_btcx")
+
+    alice = Party("alice_db", h, h.workdir, "alice_desc_btcx", "alice_btc",
+                  auto_fund=True,
+                  pocx_url=h.pocx.rpc_url(wallet="alice_desc_btcx")).start()
+    bob = Party("bob_db", h, h.workdir, "bob_btcx", "bob_btc",
+                auto_fund=True).start()
+    try:
+        t2, t1 = regtest_timelocks(h)
+        m_init = msg(h.workdir, "85_init.json")
+        m_accept = msg(h.workdir, "85_accept.json")
+        alice.cli("offer", "--give", f"btcx:{GIVE_POCX}",
+                  "--get", f"btc:{GET_BTC}",
+                  "--t1", str(t1), "--t2", str(t2), "--out", m_init)
+        sid = swap_id_from(m_init)
+        bob.cli("accept", "--in", m_init, "--out", m_accept)
+        alice.cli("recv", "--in", m_accept)
+
+        events = alice.tick()
+        assert any(e["action"] == "auto-fund" for e in events), events
+        fund_txid = alice.rpc("getswap", sid)["htlc_a_txid"]
+
+        # The user chains an ordinary send on the funding's unconfirmed
+        # change (the only coin left in this wallet) — allowed on purpose.
+        self_addr = alice.rpc("getnewaddress", "btcx")["address"]
+        child_txid = alice.rpc("sendtoaddress", "btcx", self_addr, "5.0")["txid"]
+        entry = h.pocx.rpc("getmempoolentry", child_txid)
+        assert fund_txid in entry["depends"], \
+            f"child should ride on the funding: {entry}"
+
+        # Market rises: the nurse must SKIP the bump (it would orphan the
+        # child), with the dedicated event — and the child must survive.
+        alice.rpc("_settestfeerate", 10)
+        events = alice.tick()
+        assert any(e["action"] == "funding-bump-skipped-descendants"
+                   for e in events), events
+        assert alice.rpc("getswap", sid)["htlc_a_txid"] == fund_txid
+        assert child_txid in h.pocx.rpc("getrawmempool")
+        alice.rpc("_settestfeerate", 0)
+
+        # The swap still completes normally once the funding confirms.
+        for _ in range(12):
+            alice.tick()
+            bob.tick()
+            h.pocx.generate(1, "alice_btcx")
+            h.btc.generate(1, "bob_btc")
+            if alice.rpc("getswap", sid)["state"] == "completed":
+                break
+        assert alice.rpc("getswap", sid)["state"] == "completed"
+        print("[e2e] funding-bump descendant belt scenario OK")
+    finally:
+        alice.stop()
+        bob.stop()
+
+
 class CompleteSwap(PactTestFramework):
     def run_test(self):
         test_complete_swap(self.h)
@@ -1271,6 +1429,16 @@ class SettlementRbfRaceRedeem(PactTestFramework):
 class SettlementRbfRaceRefund(PactTestFramework):
     def run_test(self):
         test_settlement_rbf_race_refund(self.h)
+
+
+class SiblingFundingQueueV1(PactTestFramework):
+    def run_test(self):
+        test_sibling_funding_queue_v1(self.h)
+
+
+class FundingBumpDescendantBelt(PactTestFramework):
+    def run_test(self):
+        test_funding_bump_descendant_belt(self.h)
 
 
 class BalanceValidation(PactTestFramework):
@@ -1329,6 +1497,8 @@ SCENARIOS = [
     TakerDisplayFollowsRbf,
     SettlementRbfRaceRedeem,
     SettlementRbfRaceRefund,
+    SiblingFundingQueueV1,
+    FundingBumpDescendantBelt,
     BalanceValidation,
     CreateImportThenSwap,
     CoinSetup,
