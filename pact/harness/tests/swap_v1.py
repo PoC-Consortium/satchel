@@ -193,6 +193,22 @@ def test_daemon_autopilot_swap(h):
         assert any(e["action"] == "completed" for e in events), f"no completed: {events}"
         state = alice.rpc("getswap", sid)["state"]
         assert state == "completed", f"alice state {state}"
+        # Alice completed at n_b depth — that IS her settled latch.
+        assert alice.rpc("getswap", sid)["settled"] is True
+
+        # Settled latch (2026-08-28 scheduler-stall fix): Bob's chain-A redeem
+        # is watched (nurse + progress line) only until it is n_a-deep; then the
+        # tick reports `settled` ONCE, the flag persists, and the swap drops out
+        # of swapprogress — no chain round-trip for it ever again.
+        rec = bob.rpc("getswap", sid)
+        assert rec["settled"] is False, rec
+        h.pocx.generate(rec["n_a"], "alice_btcx")
+        drive_until(bob, lambda evs: any(e["action"] == "settled" for e in evs), tries=3)
+        assert bob.rpc("getswap", sid)["settled"] is True
+        events = bob.tick()
+        assert not any(e["swap_id"] == sid for e in events), f"settled swap still ticking: {events}"
+        assert all(p["swap_id"] != sid for p in bob.rpc("swapprogress")), \
+            "settled swap still has a progress line"
 
         assert_htlc_spent(h.pocx, m_funded_a, "chain-A")
         assert_htlc_spent(h.btc, m_funded_b, "chain-B")
@@ -229,6 +245,20 @@ def test_daemon_autopilot_refund(h):
         assert any(e["action"] == "auto-refund" for e in events), f"alice: {events}"
         h.btc.generate(1, "bob_btc")
         h.pocx.generate(1, "alice_btcx")
+
+        # Settled latch, refund twin: each side's refund is watched until it is
+        # its leg's depth deep (bob: leg B / n_b, alice: leg A / n_a), then the
+        # watch retires for good.
+        for party, node, wallet, depth in ((bob, h.btc, "bob_btc", "n_b"),
+                                           (alice, h.pocx, "alice_btcx", "n_a")):
+            rec = party.rpc("getswap", sid)
+            assert rec["state"] == "refunded", rec["state"]
+            node.generate(rec[depth], wallet)
+            drive_until(party, lambda evs: any(e["action"] == "settled" for e in evs),
+                        tries=3)
+            assert party.rpc("getswap", sid)["settled"] is True
+            assert all(p["swap_id"] != sid for p in party.rpc("swapprogress")), \
+                f"{party.name}: settled refund still has a progress line"
 
         assert_htlc_spent(h.pocx, m_funded_a, "chain-A")
         assert_htlc_spent(h.btc, m_funded_b, "chain-B")

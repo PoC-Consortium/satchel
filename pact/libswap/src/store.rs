@@ -125,6 +125,16 @@ pub struct SwapRecord {
     /// with no confirm). Never a derivation input.
     #[serde(default)]
     pub adopted: bool,
+    /// Settled latch: the settlement tx of this Completed/Refunded record is
+    /// buried to the leg's own depth policy (`n_a`/`n_b`), so the scheduler
+    /// has retired its chain watch — no nurse, no progress query, ever
+    /// again. Without it every terminal record cost two chain round-trips
+    /// per tick forever, and a merchant's growing history made the pass
+    /// (which holds the RPC lock) take 30+ s — the 2026-08-28 UI freeze.
+    /// Defaults false for records written before the field existed: they
+    /// latch on their first post-upgrade tick.
+    #[serde(default)]
+    pub settled: bool,
 }
 
 /// One party's durable view of one **v2** (adaptor) swap (spec v2 §9).
@@ -245,6 +255,16 @@ pub struct AdaptorSwapRecord {
     /// See [`SwapRecord::adopted`] — mutable, local-only, reset on import.
     #[serde(default)]
     pub adopted: bool,
+    /// Settled latch: the settlement tx of this Completed/Refunded record is
+    /// buried to the leg's own depth policy (`n_a`/`n_b`), so the scheduler
+    /// has retired its chain watch — no nurse, no progress query, ever
+    /// again. Without it every terminal record cost two chain round-trips
+    /// per tick forever, and a merchant's growing history made the pass
+    /// (which holds the RPC lock) take 30+ s — the 2026-08-28 UI freeze.
+    /// Defaults false for records written before the field existed: they
+    /// latch on their first post-upgrade tick.
+    #[serde(default)]
+    pub settled: bool,
 }
 
 pub struct Store {
@@ -1220,6 +1240,7 @@ mod tests {
             last_action_height: 0,
             derive_scope: 0,
             adopted: false,
+            settled: false,
         }
     }
 
@@ -1384,6 +1405,24 @@ mod tests {
         value.as_object_mut().unwrap().remove("refund_tx_hex");
         let parsed: SwapRecord = serde_json::from_value(value).unwrap();
         assert!(parsed.refund_tx_hex.is_none());
+    }
+
+    #[test]
+    fn old_records_without_settled_field_load_unsettled() {
+        // A record persisted before the settled latch existed must load with
+        // `settled == false` (it latches on its first post-upgrade tick), and
+        // the flag must round-trip once set.
+        let mut value = serde_json::to_value(record("st")).unwrap();
+        value.as_object_mut().unwrap().remove("settled");
+        let parsed: SwapRecord = serde_json::from_value(value).unwrap();
+        assert!(!parsed.settled);
+        let dir = temp_dir("settled");
+        let store = Store::init(&dir, None).unwrap();
+        let mut rec = record("st");
+        rec.settled = true;
+        store.put(&rec).unwrap();
+        assert!(store.get("st").unwrap().settled);
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
