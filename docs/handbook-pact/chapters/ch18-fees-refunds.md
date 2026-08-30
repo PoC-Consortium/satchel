@@ -158,6 +158,19 @@ wrapper with two protections, in order:
    field record wedged in `redeemed_b` for hours while the redeemed coins sat
    confirmed in the wallet.
 
+**The settled latch (field diagnosis 2026-08-28).** The settlement watch has an
+end. Once a Completed/Refunded record's settlement tx is buried to the leg's
+own depth policy (`n_a`/`n_b` — the depth the swap already trusted against
+reorgs for its locks), the tick persists `settled = true`, emits one `settled`
+event, and never queries the chain for that record again: no nurse arm, no
+`swapprogress` line (the initiator's `completed` at `n_b` is the same latch,
+v1 and v2 alike). Before it, every terminal record cost two chain round-trips
+per tick forever — a merchant with ~160 finished swaps and *zero* live ones
+was issuing ~120 Electrum calls per pass, and because the scheduler pass holds
+the engine lock, every RPC (the take-offer dialog's `getbalance` +
+`estimateswapfees` included) queued behind it for 30–45 s. Records written
+before the field existed load as unsettled and latch on their first tick.
+
 ## v2 fee-bumping: a split design
 
 v2 is asymmetric, and the asymmetry is load-bearing (spec v2 §8):

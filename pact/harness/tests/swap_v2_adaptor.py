@@ -16,7 +16,7 @@ from framework.daemon import Party  # noqa: E402
 from framework.services import Corkboard  # noqa: E402
 from framework.stack import COINS_TOML  # noqa: E402
 from framework.testbase import PactTestFramework, run_scenarios  # noqa: E402
-from framework.util import regtest_timelocks  # noqa: E402
+from framework.util import drive_until, regtest_timelocks  # noqa: E402
 
 
 GIVE_POCX = "btcx:50.0"
@@ -116,6 +116,30 @@ def test_adaptor_swap(h):
         assert bob_btcx_after > bob_btcx_before, \
             f"Bob's leg-A redeem missed his core wallet: {bob_btcx_before} -> {bob_btcx_after}"
         print("[e2e] redeems landed in spendable core wallets (fresh sweep addrs)")
+
+        # Settled latch (2026-08-28 scheduler-stall fix), v2 twin: a record's
+        # chain watch retires once its settlement is leg-depth deep: Bob's
+        # leg-A redeem (already Completed) settles at n_a. Then: no tick line,
+        # no progress line.
+        def v2rec(party):
+            return next(r for r in party.rpc("listadaptorswaps") if r["swap_id"] == sid)
+        h.btc.generate(v2rec(alice)["n_b"], "bob_btc")
+        h.pocx.generate(v2rec(bob)["n_a"], "alice_btcx")
+        # Alice's first tick after boot is the #201 chain reconcile, which may
+        # book Completed itself (no `adaptor-completed` event) — either way
+        # an initiator's Completed has no watch to retire.
+        drive_until(alice, lambda evs: any(e["action"] in ("adaptor-completed", "reconciled")
+                                           for e in evs), tries=3)
+        assert v2rec(alice)["state"] == "completed", v2rec(alice)
+        drive_until(bob, lambda evs: any(e["action"] == "settled" for e in evs), tries=3)
+        assert v2rec(bob)["settled"] is True
+        for party in (alice, bob):
+            events = party.tick()
+            assert not any(e["swap_id"] == sid for e in events), \
+                f"{party.name}: settled swap still ticking: {events}"
+            assert all(p["swap_id"] != sid for p in party.rpc("swapprogress")), \
+                f"{party.name}: settled swap still has a progress line"
+        print("[e2e] settled latch: the participant record retired its chain watch (v2)")
     finally:
         alice.stop()
         bob.stop()

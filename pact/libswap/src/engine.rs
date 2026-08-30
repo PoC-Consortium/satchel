@@ -1660,6 +1660,7 @@ impl Engine {
             // mark it locally driven (own scope ⇒ not adopted).
             derive_scope: scope.0,
             adopted: false,
+            settled: false,
         };
         // Structural check on our own offer before anything is persisted.
         ensure!(t2 < t1, "spec §7.1: T2 must be < T1");
@@ -1781,6 +1782,7 @@ impl Engine {
             // — but stamp OUR scope so the drive rule recognizes this as ours.
             derive_scope: self.machine_scope.0,
             adopted: false,
+            settled: false,
         };
         self.store.put(&record)?;
         let _ = self.snapshot_v1(&record); // rescue snapshot at accept (#54)
@@ -1931,6 +1933,7 @@ impl Engine {
             // Scope the keys were derived under (immutable); locally driven.
             derive_scope: scope.0,
             adopted: false,
+            settled: false,
         };
         self.store.put_adaptor(&rec)?;
         let envelope = self.signed_envelope("init", &id, serde_json::to_value(&body)?)?;
@@ -2108,6 +2111,7 @@ impl Engine {
             // so the drive rule treats this taken swap as ours to drive.
             derive_scope: self.machine_scope.0,
             adopted: false,
+            settled: false,
         };
         self.store.put_adaptor(&rec)?;
         let _ = self.snapshot_v2(&rec); // rescue snapshot at accept (#54)
@@ -3117,6 +3121,9 @@ impl Engine {
     ///   be RBF'd — is CPFP-bumped with a self-funded child (v2+; see
     ///   [`Self::adaptor_keep_moving`]).
     fn adaptor_tick_one(&self, rec: &AdaptorSwapRecord) -> Result<Option<TickEvent>> {
+        if rec.settled {
+            return Ok(None); // settlement buried — nothing left to watch
+        }
         use AdaptorState::*;
         let ev = |action: &str, detail: String| {
             Ok(Some(TickEvent {
@@ -3657,16 +3664,35 @@ impl Engine {
         let confs = backend.tx_confirmations_min(txid, Some(&spk))?;
         if confs >= u64::from(target_confs.max(1)) {
             // Confirmed deep enough — the spend is final.
-            if complete_on_depth && rec.state != AdaptorState::Completed {
-                let mut updated = rec.clone();
+            let mut updated = rec.clone();
+            let completing = complete_on_depth && rec.state != AdaptorState::Completed;
+            if completing {
                 updated.state = AdaptorState::Completed;
+            }
+            // Settled latch (v2 twin of `latch_settled_v1`): at the leg's own
+            // depth policy the record retires its chain watch for good.
+            let leg_depth = if chain.coin_id == rec.chain_a.coin_id {
+                rec.n_a
+            } else {
+                rec.n_b
+            };
+            let settling = !rec.settled && confs >= u64::from(leg_depth.max(1));
+            if settling {
+                updated.settled = true;
+            }
+            if completing || settling {
                 self.store.put_adaptor(&updated)?;
+            }
+            if completing {
                 let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
                 return Ok(Some(TickEvent {
                     swap_id: rec.swap_id.clone(),
                     action: "adaptor-completed".into(),
                     detail: txid.to_string(),
                 }));
+            }
+            if settling {
+                return Ok(Some(Self::settled_event(&rec.swap_id, txid, confs)));
             }
             return Ok(None);
         }
@@ -5511,6 +5537,9 @@ impl Engine {
         rec: &SwapRecord,
         prev: &HashMap<String, SwapProgress>,
     ) -> Option<SwapProgress> {
+        if rec.settled {
+            return None; // settlement buried: no line, and no chain query
+        }
         use Role::*;
         use State::*;
         let htlc_spk = |leg_a: bool| {
@@ -5726,6 +5755,9 @@ impl Engine {
         rec: &AdaptorSwapRecord,
         prev: &HashMap<String, SwapProgress>,
     ) -> Option<SwapProgress> {
+        if rec.settled {
+            return None; // settlement buried: no line, and no chain query
+        }
         use crate::adaptor_swap::AdaptorState::*;
         let leg_spk = |leg_a: bool| {
             let secp = bitcoin::secp256k1::Secp256k1::new();
@@ -8035,7 +8067,45 @@ impl Engine {
         )
     }
 
+    /// Settled-record latch. A Completed/Refunded record whose settlement tx
+    /// is buried to the leg's own depth policy (`n_a`/`n_b` — the depth this
+    /// swap already trusted against reorgs for its locks) is final: persist
+    /// `settled` so no later tick spends a chain round-trip on it. Before the
+    /// latch every such record cost the scheduler two chain queries per tick
+    /// FOREVER (nurse + progress line), and a merchant's growing history made
+    /// the pass — which holds the RPC lock — take 30+ s, freezing the UI
+    /// (2026-08-28 field diagnosis: 119 Electrum calls per tick with zero
+    /// live swaps). Returns the one-time `settled` event, `None` while shallow.
+    fn latch_settled_v1(
+        &self,
+        rec: &SwapRecord,
+        txid: &str,
+        confs: u64,
+        depth: u32,
+    ) -> Result<Option<TickEvent>> {
+        if rec.settled || confs < u64::from(depth.max(1)) {
+            return Ok(None);
+        }
+        let mut updated = rec.clone();
+        updated.settled = true;
+        self.store.put(&updated)?;
+        Ok(Some(Self::settled_event(&rec.swap_id, txid, confs)))
+    }
+
+    /// The one-time event a record emits when its settlement is buried and
+    /// its chain watch retires (v1 and v2).
+    fn settled_event(swap_id: &str, txid: &str, confs: u64) -> TickEvent {
+        TickEvent {
+            swap_id: swap_id.to_string(),
+            action: "settled".into(),
+            detail: format!("{txid} {confs} deep — chain watch retired"),
+        }
+    }
+
     fn tick_one(&self, rec: &SwapRecord) -> Result<Option<TickEvent>> {
+        if rec.settled {
+            return Ok(None); // settlement buried — nothing left to watch
+        }
         let event = |action: &str, detail: String| {
             Ok(Some(TickEvent {
                 swap_id: rec.swap_id.clone(),
@@ -8171,6 +8241,7 @@ impl Engine {
                 if confs >= u64::from(rec.n_b) {
                     let mut updated = rec.clone();
                     updated.state = State::Completed;
+                    updated.settled = true; // n_b-deep on leg B: watch retired
                     self.store.put(&updated)?;
                     let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
                     return event("completed", txid.to_string());
@@ -8188,21 +8259,25 @@ impl Engine {
             (Role::Participant, State::Completed) => {
                 let backend_a = self.backend(&rec.chain_a)?;
                 let txid = rec.final_txid.as_deref().context("no redeem txid")?;
-                if backend_a.tx_confirmations(txid, spend_spk(rec).as_ref())? >= 1 {
-                    return Ok(None);
+                let confs = backend_a.tx_confirmations(txid, spend_spk(rec).as_ref())?;
+                if confs >= 1 {
+                    // Mined: wait for n_a depth, then retire the watch.
+                    return self.latch_settled_v1(rec, txid, confs, rec.n_a);
                 }
                 self.nurse_settlement(rec, &backend_a)
             }
-            // A refund that has not confirmed yet: keep it moving.
+            // A refund that has not confirmed yet: keep it moving; once it is
+            // buried to the leg's depth, retire the watch (`latch_settled_v1`).
             (role, State::Refunded) => {
-                let chain = match role {
-                    Role::Initiator => &rec.chain_a,
-                    Role::Participant => &rec.chain_b,
+                let (chain, depth) = match role {
+                    Role::Initiator => (&rec.chain_a, rec.n_a),
+                    Role::Participant => (&rec.chain_b, rec.n_b),
                 };
                 let backend = self.backend(chain)?;
                 let txid = rec.final_txid.as_deref().context("no refund txid")?;
-                if backend.tx_confirmations(txid, spend_spk(rec).as_ref())? >= 1 {
-                    return Ok(None);
+                let confs = backend.tx_confirmations(txid, spend_spk(rec).as_ref())?;
+                if confs >= 1 {
+                    return self.latch_settled_v1(rec, txid, confs, depth);
                 }
                 self.nurse_settlement(rec, &backend)
             }
