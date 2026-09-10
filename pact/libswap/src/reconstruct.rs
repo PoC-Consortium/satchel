@@ -28,12 +28,14 @@
 //! lands in [`SpendKind::Unknown`], which never drives a terminal decision.
 
 use anyhow::{bail, Context, Result};
+use bitcoin::absolute::LockTime;
 use bitcoin::hashes::{sha256, Hash};
+use bitcoin::opcodes::all::OP_CLTV;
 use bitcoin::script::Instruction;
 use bitcoin::secp256k1::{Message, PublicKey, Secp256k1, XOnlyPublicKey};
 use bitcoin::sighash::{Prevouts, SighashCache};
 use bitcoin::taproot::{ControlBlock, TapLeafHash};
-use bitcoin::{Amount, OutPoint, Script, ScriptBuf, Transaction, TxOut};
+use bitcoin::{Amount, OutPoint, Script, ScriptBuf, Sequence, Transaction, TxOut};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -141,9 +143,12 @@ pub fn classify_v2_spend(witness: &[Vec<u8>], refund_script: &Script) -> SpendKi
 ///
 /// - **P2WSH (v1 HTLC):** the last witness item must hash to the output's
 ///   program (it IS our witness script), the witness must open with
-///   `[sig, pubkey, …]`, that pubkey must be one the script pushes (the
-///   only keys it ever CHECKSIGs), and the ECDSA signature must verify over
-///   the BIP143 sighash for this input.
+///   `[sig, pubkey, …]`, that pubkey must be THE key the taken branch
+///   CHECKSIGs (the OP_IF selector picks the branch; the script's hash160
+///   pushes are `[redeem, refund]` in order — each branch authorizes
+///   exactly one), the ECDSA signature must verify over the BIP143 sighash
+///   for this input, and a refund must satisfy the branch's CLTV
+///   (nLockTime ≥ T, non-final sequence).
 /// - **P2TR key path (v2 cooperative redeem):** the single Schnorr
 ///   signature must verify against the OUTPUT key over the BIP341 key-path
 ///   sighash. Only the MuSig2 aggregate can produce it.
@@ -182,11 +187,32 @@ pub fn witness_authentic(
         let Ok(pubkey) = PublicKey::from_slice(pk_bytes) else {
             return false;
         };
-        // The script names its CHECKSIG keys either raw or, as our HTLC
-        // does (`OP_DUP OP_HASH160 <hash160(key)> OP_EQUALVERIFY OP_CHECKSIG`),
-        // by hash160. A key it never names cannot satisfy it.
+        // Which branch does this witness take? The item before the script
+        // is the OP_IF selector: non-empty = hash branch (redeem), empty =
+        // CLTV branch (refund). Each branch CHECKSIGs exactly ONE key, named
+        // by hash160 in script order `[redeem, refund]` — the OTHER key's
+        // signature satisfies nothing (review 2026-09-10 B).
+        if witness.len() < 3 {
+            return false;
+        }
+        let selector = witness[witness.len() - 2];
+        let hashes: Vec<&[u8]> = script
+            .instructions()
+            .filter_map(|ins| match ins {
+                Ok(Instruction::PushBytes(push)) if push.len() == 20 => Some(push.as_bytes()),
+                _ => None,
+            })
+            .collect();
+        if hashes.len() != 2 {
+            return false; // not the v1 HTLC template
+        }
         let pk_hash = bitcoin::hashes::hash160::Hash::hash(pk_bytes);
-        if !script_pushes(script, pk_bytes) && !script_pushes(script, pk_hash.as_byte_array()) {
+        let is_refund = selector.is_empty();
+        let required = if is_refund { hashes[1] } else { hashes[0] };
+        if pk_hash.as_byte_array() != required {
+            return false;
+        }
+        if is_refund && !cltv_satisfied(script, tx, input.sequence) {
             return false;
         }
         let Ok(sig) = bitcoin::ecdsa::Signature::from_slice(sig_bytes) else {
@@ -260,6 +286,11 @@ pub fn witness_authentic(
                     return false;
                 };
                 let msg = Message::from_digest(sighash.to_byte_array());
+                // Our only leaf is the CLTV refund: the spend must satisfy
+                // its locktime as well as carry the leaf key's signature.
+                if !cltv_satisfied(script, tx, input.sequence) {
+                    return false;
+                }
                 // The leaf's CHECKSIG key is one of its 32-byte pushes.
                 script.instructions().any(|ins| match ins {
                     Ok(Instruction::PushBytes(push)) if push.len() == 32 => {
@@ -277,12 +308,48 @@ pub fn witness_authentic(
     }
 }
 
-/// Does `script` push exactly `bytes` anywhere? (Which keys a script can
-/// CHECKSIG is the set of keys it pushes.)
-fn script_pushes(script: &Script, bytes: &[u8]) -> bool {
-    script
-        .instructions()
-        .any(|ins| matches!(ins, Ok(Instruction::PushBytes(push)) if push.as_bytes() == bytes))
+/// The `<T>` a script feeds OP_CHECKLOCKTIMEVERIFY (the push right before
+/// the opcode), if it has one.
+fn script_locktime(script: &Script) -> Option<u32> {
+    let mut last: Option<i64> = None;
+    for ins in script.instructions() {
+        let ins = ins.ok()?;
+        if matches!(ins, Instruction::Op(op) if op == OP_CLTV) {
+            return last.and_then(|v| u32::try_from(v).ok());
+        }
+        last = ins.script_num();
+    }
+    None
+}
+
+/// Would OP_CHECKLOCKTIMEVERIFY in `script` pass for `tx`? nLockTime must be
+/// the same unit as `T` and at least it, and the spending input must not be
+/// final (BIP65). A "refund" that fails this could never have been mined.
+fn cltv_satisfied(script: &Script, tx: &Transaction, sequence: Sequence) -> bool {
+    let Some(t) = script_locktime(script) else {
+        return false;
+    };
+    let required = LockTime::from_consensus(t);
+    tx.lock_time.is_same_unit(required)
+        && tx.lock_time.to_consensus_u32() >= t
+        && sequence != Sequence::MAX
+}
+
+/// The depth a terminal decision may rely on for a discovered spend. A
+/// history entry's height is ONE view's claim, and a valid signature
+/// authenticates the transaction, not its inclusion (review 2026-09-10 A).
+/// So the height-derived depth is capped by the backend's own finality
+/// read — on a multi-view pool the MIN over its integrity quorum; an
+/// unreadable depth counts as 0 (shallow, retry later). Never deeper than
+/// the claim, never deeper than the quorum.
+fn final_depth(backend: &dyn ChainBackend, txid: &str, spk: &ScriptBuf, claimed: u64) -> u64 {
+    if claimed == 0 {
+        return 0;
+    }
+    backend
+        .tx_confirmations_final(txid, Some(spk))
+        .unwrap_or(0)
+        .min(claimed)
 }
 
 /// Defensive cap on how many history entries a leg classification will
@@ -405,7 +472,7 @@ pub fn classify_leg(
                 funding_height: *funding_height,
                 spend_txid: hit.txid.clone(),
                 spend_height: hit.height,
-                spend_confs: confs_of(hit.height),
+                spend_confs: final_depth(backend, hit.txid, spk, confs_of(hit.height)),
                 kind,
                 spend_tx_hex: bitcoin::consensus::encode::serialize_hex(hit.tx),
             })));
@@ -460,15 +527,17 @@ pub fn classify_spent_by_scan(
         SpendKind::Unknown
     };
     let tip = backend.tip_height()?;
-    let spend_confs = if spend_height > 0 && tip >= spend_height {
+    let claimed = if spend_height > 0 && tip >= spend_height {
         tip - spend_height + 1
     } else {
         0
     };
+    let spend_txid = tx.compute_txid().to_string();
+    let spend_confs = final_depth(backend, &spend_txid, watch_spk, claimed);
     Ok(Some(SpentLeg {
         outpoint: *outpoint,
         funding_height,
-        spend_txid: tx.compute_txid().to_string(),
+        spend_txid,
         spend_height,
         spend_confs,
         kind,
@@ -728,15 +797,22 @@ mod tests {
         assert!(witness_authentic(&spk, value, &redeem, 0));
         let w: Vec<Vec<u8>> = redeem.input[0].witness.iter().map(<[u8]>::to_vec).collect();
         assert_eq!(classify_v1_spend(&w, &fx.htlc.hash_h), SpendKind::Redeem);
-        // Real refund by the refund key.
-        let refund = sign_v1(&secp, &fx, &fx.refund, value, &[vec![]], spend_tx(&f, &[]));
+        // Real refund by the refund key (CLTV satisfied: nLockTime = T,
+        // non-final sequence).
+        let mut skeleton = spend_tx(&f, &[]);
+        skeleton.lock_time = LockTime::from_consensus(fx.htlc.locktime);
+        skeleton.input[0].sequence = Sequence::from_consensus(0xFFFF_FFFD);
+        let refund = sign_v1(&secp, &fx, &fx.refund, value, &[vec![]], skeleton);
         assert!(witness_authentic(&spk, value, &refund, 0));
         // Wrong amount → sighash differs → not authentic.
         assert!(!witness_authentic(&spk, value + 1, &refund, 0));
         // A stranger's key (not pushed by the script) signing the refund
         // shape — exactly the forgery a lying provider could produce.
         let stranger = Keypair::from_seckey_slice(&secp, &[0x33; 32]).unwrap();
-        let forged = sign_v1(&secp, &fx, &stranger, value, &[vec![]], spend_tx(&f, &[]));
+        let mut skeleton = spend_tx(&f, &[]);
+        skeleton.lock_time = LockTime::from_consensus(fx.htlc.locktime);
+        skeleton.input[0].sequence = Sequence::from_consensus(0xFFFF_FFFD);
+        let forged = sign_v1(&secp, &fx, &stranger, value, &[vec![]], skeleton);
         assert!(!witness_authentic(&spk, value, &forged, 0));
         // Garbage signature bytes with the right key and script.
         let mut garbage = refund.clone();
@@ -814,6 +890,112 @@ mod tests {
         assert!(!witness_authentic(&spk, value, &alien_leaf, 0));
     }
 
+    /// Review 2026-09-10 B: each v1 branch authorizes exactly one key. A
+    /// refund-shaped witness signed by the REDEEM key (or a redeem-shaped
+    /// one signed by the refund key) is not a spend; a refund must also
+    /// satisfy its CLTV.
+    #[test]
+    fn witness_authentic_v1_binds_the_key_to_the_taken_branch() {
+        let (fx, secp) = v1_fixture();
+        let spk = fx.htlc.script_pubkey();
+        let value = 100_000;
+        let f = funding_tx(&spk, value);
+        let refund_skeleton = || {
+            let mut tx = spend_tx(&f, &[]);
+            tx.lock_time = LockTime::from_consensus(fx.htlc.locktime);
+            tx.input[0].sequence = Sequence::from_consensus(0xFFFF_FFFD);
+            tx
+        };
+        // Refund branch, refund key, CLTV satisfied: authentic.
+        let refund = sign_v1(&secp, &fx, &fx.refund, value, &[vec![]], refund_skeleton());
+        assert!(witness_authentic(&spk, value, &refund, 0));
+        // Refund branch signed by the REDEEM key: the wrong key for that branch.
+        let wrong = sign_v1(&secp, &fx, &fx.redeem, value, &[vec![]], refund_skeleton());
+        assert!(!witness_authentic(&spk, value, &wrong, 0));
+        // Redeem branch signed by the REFUND key: same, other way round.
+        let wrong = sign_v1(
+            &secp,
+            &fx,
+            &fx.refund,
+            value,
+            &[fx.preimage.to_vec(), vec![1]],
+            spend_tx(&f, &[]),
+        );
+        assert!(!witness_authentic(&spk, value, &wrong, 0));
+        // Refund with the right key but nLockTime below T / a final sequence:
+        // CLTV could never have passed — not a spend.
+        let early = sign_v1(&secp, &fx, &fx.refund, value, &[vec![]], spend_tx(&f, &[]));
+        assert!(!witness_authentic(&spk, value, &early, 0));
+        let mut final_seq = refund_skeleton();
+        final_seq.input[0].sequence = Sequence::MAX;
+        let final_seq = sign_v1(&secp, &fx, &fx.refund, value, &[vec![]], final_seq);
+        assert!(!witness_authentic(&spk, value, &final_seq, 0));
+    }
+
+    /// Review 2026-09-10 A: a history entry's height is one view's claim.
+    /// The depth a terminal decision sees is capped by the backend's
+    /// finality read (the quorum min on a pool) — the same signed spend at
+    /// a claimed height of 95 reads 0 deep when the finality read says 0.
+    #[test]
+    fn leg_spend_depth_is_capped_by_the_finality_read() {
+        let (fx, secp) = v1_fixture();
+        let spk = fx.htlc.script_pubkey();
+        let f = funding_tx(&spk, 100_000);
+        let sp = sign_v1(
+            &secp,
+            &fx,
+            &fx.redeem,
+            100_000,
+            &[fx.preimage.to_vec(), vec![1]],
+            spend_tx(&f, &[]),
+        );
+        let classify = |w: &[Vec<u8>]| classify_v1_spend(w, &fx.htlc.hash_h);
+        let mk = |final_confs: Option<u64>| MockBackend {
+            history: Some(vec![
+                (f.compute_txid().to_string(), 90),
+                (sp.compute_txid().to_string(), 95),
+            ]),
+            txs: vec![f.clone(), sp.clone()],
+            tip: 100,
+            spend: None,
+            final_confs,
+        };
+        let depth =
+            |b: &MockBackend| match classify_leg(b, &spk, 100_000, &classify).unwrap().unwrap() {
+                LegClass::Spent(leg) => leg.spend_confs,
+                other => panic!("expected Spent, got {other:?}"),
+            };
+        assert_eq!(depth(&mk(None)), 6, "single view: the claim stands");
+        assert_eq!(
+            depth(&mk(Some(0))),
+            0,
+            "quorum says unconfirmed: the claim is capped"
+        );
+        assert_eq!(depth(&mk(Some(3))), 3, "quorum says shallower: min wins");
+        assert_eq!(
+            depth(&mk(Some(50))),
+            6,
+            "never deeper than the claim itself"
+        );
+        // Same cap on the tier-L block-scan path.
+        let scan = MockBackend {
+            history: None,
+            txs: vec![],
+            tip: 100,
+            spend: Some((sp.clone(), 95)),
+            final_confs: Some(0),
+        };
+        let op = bitcoin::OutPoint {
+            txid: f.compute_txid(),
+            vout: 0,
+        };
+        let leg = classify_spent_by_scan(&scan, &op, &spk, 100_000, 0, 80, &classify)
+            .unwrap()
+            .unwrap();
+        assert_eq!(leg.spend_confs, 0);
+        assert_eq!(leg.kind, SpendKind::Redeem);
+    }
+
     #[test]
     fn v1_witness_classification() {
         let s = [7u8; 32];
@@ -889,6 +1071,9 @@ mod tests {
         tip: u64,
         /// What `find_spend_tx` (the tier-L block scan) reports.
         spend: Option<(Transaction, u64)>,
+        /// What the backend's FINALITY read says (a quorum's min); `None` =
+        /// derive it from `history`/`spend` heights like a single view.
+        final_confs: Option<u64>,
     }
 
     impl ChainBackend for MockBackend {
@@ -946,8 +1131,26 @@ mod tests {
         fn tip_median_time(&self) -> Result<u64> {
             anyhow::bail!("mock")
         }
-        fn tx_confirmations(&self, _txid: &str, _spk: Option<&ScriptBuf>) -> Result<u64> {
-            anyhow::bail!("mock")
+        fn tx_confirmations(&self, txid: &str, _spk: Option<&ScriptBuf>) -> Result<u64> {
+            if let Some(c) = self.final_confs {
+                return Ok(c);
+            }
+            let height = self
+                .history
+                .iter()
+                .flatten()
+                .find(|(t, _)| t == txid)
+                .map(|(_, h)| u64::try_from(*h).unwrap_or(0))
+                .or_else(|| {
+                    self.spend
+                        .as_ref()
+                        .filter(|(t, _)| t.compute_txid().to_string() == txid)
+                        .map(|(_, h)| *h)
+                });
+            Ok(match height {
+                Some(h) if h > 0 && self.tip >= h => self.tip - h + 1,
+                _ => 0,
+            })
         }
         fn fee_rate_for(&self, _conf_target: u16, _conservative: bool) -> Result<u64> {
             anyhow::bail!("mock")
@@ -1028,6 +1231,7 @@ mod tests {
             txs: vec![],
             tip: 100,
             spend: None,
+            final_confs: None,
         };
         assert!(
             classify_leg(&none, &spk, 100_000, &kind_always(SpendKind::Unknown))
@@ -1040,6 +1244,7 @@ mod tests {
             txs: vec![],
             tip: 100,
             spend: None,
+            final_confs: None,
         };
         assert!(matches!(
             classify_leg(&empty, &spk, 100_000, &kind_always(SpendKind::Unknown))
@@ -1058,6 +1263,7 @@ mod tests {
             txs: vec![f.clone()],
             tip: 100,
             spend: None,
+            final_confs: None,
         };
         match classify_leg(&backend, &spk, 100_000, &kind_always(SpendKind::Unknown))
             .unwrap()
@@ -1085,6 +1291,7 @@ mod tests {
             txs: vec![f],
             tip: 100,
             spend: None,
+            final_confs: None,
         };
         assert!(matches!(
             classify_leg(&backend, &spk, 100_000, &kind_always(SpendKind::Unknown))
@@ -1118,6 +1325,7 @@ mod tests {
             txs: vec![f.clone(), sp.clone()],
             tip: 100,
             spend: None,
+            final_confs: None,
         };
         let classify = |w: &[Vec<u8>]| classify_v1_spend(w, &h);
         match classify_leg(&backend, &spk, 100_000, &classify)
@@ -1147,6 +1355,7 @@ mod tests {
             txs: vec![f.clone(), forged.clone()],
             tip: 100,
             spend: None,
+            final_confs: None,
         };
         match classify_leg(&backend, &spk, 100_000, &classify)
             .unwrap()
@@ -1170,6 +1379,7 @@ mod tests {
             txs: vec![f, sp],
             tip: 100,
             spend: None,
+            final_confs: None,
         };
         match classify_leg(&backend, &spk, 100_000, &kind_always(SpendKind::Redeem))
             .unwrap()
@@ -1192,6 +1402,7 @@ mod tests {
             txs: vec![], // the referenced tx is not retrievable
             tip: 100,
             spend: None,
+            final_confs: None,
         };
         assert!(classify_leg(&backend, &spk, 100_000, &kind_always(SpendKind::Unknown)).is_err());
     }
@@ -1212,6 +1423,7 @@ mod tests {
             txs: vec![],
             tip: 100,
             spend: Some((sp.clone(), 95)),
+            final_confs: None,
         };
         let leg = classify_spent_by_scan(
             &backend,
@@ -1251,6 +1463,7 @@ mod tests {
             txs: vec![],
             tip: 100,
             spend: Some((sp, 0)), // still in the mempool
+            final_confs: None,
         };
         let leg = classify_spent_by_scan(
             &backend,
@@ -1283,6 +1496,7 @@ mod tests {
             txs: vec![],
             tip: 100,
             spend: Some((sp, 95)),
+            final_confs: None,
         };
         assert!(classify_spent_by_scan(
             &backend,
@@ -1309,6 +1523,7 @@ mod tests {
             txs: vec![],
             tip: 100,
             spend: None,
+            final_confs: None,
         };
         assert!(classify_spent_by_scan(
             &backend,

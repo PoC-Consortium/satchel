@@ -868,7 +868,7 @@ async fn remove_coin(app: tauri::AppHandle, coin_id: String) -> Result<(), Strin
         {
             let conn = app.state::<RpcState>().0.lock().unwrap().clone();
             if !conn.auth.is_empty() {
-                let live = live_swaps_on_coin(&conn.url, &conn.auth, &coin_id);
+                let live = live_swaps_on_coin(&conn.url, &conn.auth, &coin_id)?;
                 if !live.is_empty() {
                     anyhow::bail!(
                         "{} swap(s) in flight on {} ({}) — finish or refund them before \
@@ -912,13 +912,18 @@ async fn remove_coin(app: tauri::AppHandle, coin_id: String) -> Result<(), Strin
 /// any non-terminal record of either protocol on that coin, or a terminal one
 /// whose settlement has not latched (`settled == false` — its claim/refund is
 /// still being nursed). Followed (foreign) swaps are another machine's.
-/// Best-effort: a daemon that cannot be asked reports nothing.
-fn live_swaps_on_coin(url: &str, auth: &str, coin_id: &str) -> Vec<String> {
+/// FAILS CLOSED: a daemon that cannot be asked is not evidence that nothing
+/// needs the backend (review 2026-09-10 C).
+fn live_swaps_on_coin(url: &str, auth: &str, coin_id: &str) -> anyhow::Result<Vec<String>> {
     let mut out = Vec::new();
     for method in ["listswaps", "listadaptorswaps"] {
-        let Ok(list) = pactd_call(url, auth, method, &json!([])) else {
-            continue;
-        };
+        let list = pactd_call(url, auth, method, &json!([])).map_err(|e| {
+            anyhow::anyhow!(
+                "cannot verify that no swap needs {} ({method}: {e:#}) — refusing to \
+                 disconnect the coin; retry once pactd answers",
+                coin_id.to_uppercase()
+            )
+        })?;
         for rec in list.as_array().into_iter().flatten() {
             if swap_needs_coin(rec, coin_id) {
                 if let Some(id) = rec["swap_id"].as_str() {
@@ -927,17 +932,25 @@ fn live_swaps_on_coin(url: &str, auth: &str, coin_id: &str) -> Vec<String> {
             }
         }
     }
-    out
+    Ok(out)
 }
 
-/// The predicate behind [`live_swaps_on_coin`], on one serialized record.
+/// The predicate behind [`live_swaps_on_coin`], on one serialized record as
+/// pactd emits it. A leg's `ChainRef` serializes its coin id under the v1
+/// WIRE key `asset` (`libswap::messages::ChainRef`); `coin_id` is accepted
+/// too for any future rename.
 fn swap_needs_coin(rec: &serde_json::Value, coin_id: &str) -> bool {
     if rec["source"].as_str() == Some("foreign") {
         return false;
     }
+    let leg_coin = |leg: &str| {
+        rec[leg]["asset"]
+            .as_str()
+            .or_else(|| rec[leg]["coin_id"].as_str())
+    };
     let on_coin = ["chain_a", "chain_b"]
         .iter()
-        .any(|leg| rec[leg]["coin_id"].as_str() == Some(coin_id));
+        .any(|leg| leg_coin(leg) == Some(coin_id));
     if !on_coin {
         return false;
     }
@@ -1921,12 +1934,16 @@ mod tests {
     /// a swap this machine drives still needs that coin's backend.
     #[test]
     fn coin_removal_guard_sees_unsettled_terminals_and_skips_foreign() {
+        // The leg shape is what pactd actually emits: `ChainRef` serializes
+        // its coin id under the v1 wire key `asset` (review 2026-09-10 C —
+        // the first version of this test invented a `coin_id` key and hid
+        // that the guard never matched a real record).
         let rec = |state: &str, settled: Option<bool>, source: &str, coin_b: &str| {
             let mut v = json!({
                 "swap_id": "s1",
                 "state": state,
-                "chain_a": { "coin_id": "btcx" },
-                "chain_b": { "coin_id": coin_b },
+                "chain_a": { "asset": "btcx", "network": "regtest" },
+                "chain_b": { "asset": coin_b, "network": "regtest" },
                 "source": source,
             });
             if let Some(s) = settled {
@@ -1968,6 +1985,12 @@ mod tests {
             &rec("accepted", None, "foreign", "btc"),
             "btc"
         ));
+        // A future `coin_id` spelling is honored as well.
+        let renamed = json!({
+            "swap_id": "s2", "state": "signed", "source": "local",
+            "chain_a": { "coin_id": "btcx" }, "chain_b": { "coin_id": "btc" },
+        });
+        assert!(swap_needs_coin(&renamed, "btc"));
     }
 
     #[test]

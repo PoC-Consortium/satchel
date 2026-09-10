@@ -322,6 +322,16 @@ pub trait ChainBackend: Send + Sync {
     /// required by Electrum backends, which can only search by script.
     fn tx_confirmations(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64>;
 
+    /// FINALITY depth of a transaction — the reading a terminal decision
+    /// (settle, retire a watch) may rely on. A single view answers like
+    /// [`tx_confirmations`](Self::tx_confirmations); the multi-view pool
+    /// overrides this with the MIN over its integrity quorum, never the
+    /// display max. `spk_hint` as above (a script the tx pays OR spends —
+    /// Electrum script histories list both).
+    fn tx_confirmations_final(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64> {
+        self.tx_confirmations(txid, spk_hint)
+    }
+
     /// Feerate in sat/vB from the node's estimator for a given confirmation
     /// target and estimate mode, with a conservative fallback when the estimator
     /// has no data (fresh chains, regtest). `conservative = false` preserves the
@@ -649,6 +659,9 @@ impl<T: ChainBackend + ?Sized> ChainBackend for std::sync::Arc<T> {
     }
     fn tx_confirmations(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64> {
         (**self).tx_confirmations(txid, spk_hint)
+    }
+    fn tx_confirmations_final(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64> {
+        (**self).tx_confirmations_final(txid, spk_hint)
     }
     fn fee_rate_for(&self, conf_target: u16, conservative: bool) -> Result<u64> {
         (**self).fee_rate_for(conf_target, conservative)
@@ -2221,6 +2234,12 @@ impl ChainBackend for MultiBackend {
             self.fan_out(|b| b.tx_confirmations(txid, spk_hint)),
         )?;
         Ok(hits.into_iter().max().expect("nonempty by quorum"))
+    }
+
+    fn tx_confirmations_final(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64> {
+        // Terminal decisions never take one view's word: min over the
+        // integrity quorum (#101; security review 2026-09-09 #7).
+        self.tx_confirmations_min(txid, spk_hint)
     }
 
     fn fee_rate_for(&self, conf_target: u16, conservative: bool) -> Result<u64> {

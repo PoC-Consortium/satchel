@@ -900,6 +900,8 @@ export const de: Bundle = {
     offersBodyMany:
       "{count} Angebote von dir stehen noch auf dem Corkboard. Angebote sperren nichts, aber wenn du sie stehen lässt, können Gegenparteien sie weiterhin annehmen, während Satchel geschlossen ist — die Engine bedient die Annahmen.",
     withdrawExit: "Alle zurückziehen & beenden",
+    handoffFailed:
+      "Die Engine konnte nicht im Hintergrund weiterlaufen: {err}. Satchel bleibt geöffnet und die Engine überwacht deine Swaps weiter — behebe das Problem und versuche es erneut.",
   },
   unlock: {
     title: "Merchant entsperren",

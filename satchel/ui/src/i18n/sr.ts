@@ -896,6 +896,8 @@ export const sr: Bundle = {
     offersBodyMany:
       "{count} ваших понуда је још на Corkboard-у. Понуде ништа не закључавају, али остављање значи да друге стране могу да их прихвате док је Satchel затворен — engine ће опслужити прихватања.",
     withdrawExit: "Повуци све и изађи",
+    handoffFailed:
+      "Motor nije mogao da nastavi rad u pozadini: {err}. Satchel ostaje otvoren i motor i dalje prati vaše zamene — otklonite problem i pokušajte ponovo.",
   },
   unlock: {
     title: "Откључај трговца",

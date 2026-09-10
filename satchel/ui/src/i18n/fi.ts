@@ -897,6 +897,8 @@ export const fi: Bundle = {
     offersBodyMany:
       "{count} tarjoustasi on yhä Corkboardilla. Tarjoukset eivät lukitse mitään, mutta niiden esillä jättäminen tarkoittaa, että vastapuolet voivat silti ottaa ne, kun Satchel on suljettu — moottori palvelee otot.",
     withdrawExit: "Vedä kaikki pois ja poistu",
+    handoffFailed:
+      "Moottoria ei voitu jättää käyntiin taustalle: {err}. Satchel pysyy auki ja moottori valvoo swappejasi edelleen — korjaa ongelma ja yritä uudelleen.",
   },
   unlock: {
     title: "Avaa kauppias",

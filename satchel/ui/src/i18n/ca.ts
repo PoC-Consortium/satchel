@@ -899,6 +899,8 @@ export const ca: Bundle = {
     offersBodyMany:
       "{count} ofertes teves encara són al Corkboard. Les ofertes no bloquegen res, però deixar-les publicades vol dir que les contraparts encara poden acceptar-les mentre Satchel està tancat — el motor atendrà les acceptacions.",
     withdrawExit: "Retira-ho tot i surt",
+    handoffFailed:
+      "No s'ha pogut deixar el motor en execució en segon pla: {err}. Satchel continua obert i el motor segueix vigilant els teus intercanvis — soluciona el problema i torna-ho a provar.",
   },
   unlock: {
     title: "Desbloqueja el comerciant",

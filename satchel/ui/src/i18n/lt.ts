@@ -896,6 +896,8 @@ export const lt: Bundle = {
     offersBodyMany:
       "{count} jūsų pasiūlymų vis dar yra Corkboard lentoje. Pasiūlymai nieko neužrakina, bet palikus juos kontrahentai vis tiek gali juos priimti, kol Satchel uždaryta — variklis aptarnaus priėmimus.",
     withdrawExit: "Pašalinti visus ir išeiti",
+    handoffFailed:
+      "Nepavyko perduoti variklio, kad jis toliau veiktų fone: {err}. Satchel lieka atidarytas, o variklis toliau stebi jūsų mainus — pašalinkite problemą ir bandykite dar kartą.",
   },
   unlock: {
     title: "Atrakinti prekiautoją",
