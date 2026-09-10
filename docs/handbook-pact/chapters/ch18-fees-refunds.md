@@ -342,7 +342,12 @@ Three rules make that shape unrepresentable instead of curable:
   orphaned v2 funding would invalidate the whole signed bundle. A v2 funding
   short on confirmed coins queues like v1 (`funding-queued`) and the
   scheduler's `adaptor_retry_funding` arm retries it each tick, relaying
-  `funding_ready` once it lands. Ordinary sends and sweeps
+  `funding_ready` once it lands. Core forks older than 25.0 (Litecoin Core
+  0.21) reject the `minconf` option outright (`-3 Unexpected key minconf`);
+  both paths then fall back to selecting confirmed inputs themselves
+  (`listunspent 1`, largest first, with a fee allowance) and hand them to
+  `send` / `fundrawtransaction` with `add_inputs: false` — same rule, same
+  queue on a shortfall. Ordinary sends and sweeps
   deliberately keep the old selection — spending one's own unconfirmed change
   is normal wallet behavior; only *fundings* must never sit on a replaceable
   parent.

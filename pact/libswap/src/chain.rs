@@ -138,6 +138,56 @@ pub(crate) fn is_insufficient_funds(err: &anyhow::Error) -> bool {
         .contains("insufficient funds")
 }
 
+/// Did a Core-family node reject the `minconf` option (`-3 Unexpected key
+/// minconf`)? Bitcoin Core grew per-call `minconf` on `send` /
+/// `fundrawtransaction` in 25.0; older forks still in service (Litecoin
+/// Core 0.21) do not have it, so the confirmed-only rule falls back to
+/// selecting the inputs ourselves ([`pick_confirmed_inputs`]).
+pub(crate) fn rejects_minconf(err: &anyhow::Error) -> bool {
+    format!("{err:#}").contains("Unexpected key minconf")
+}
+
+/// Confirmed-coin pre-selection from a `listunspent 1` result, for nodes
+/// without `minconf`: largest first, until the picked coins cover
+/// `amount_sat` plus a deliberately generous fee allowance at
+/// `fee_rate_sat_vb` (≈200 vB base + 120 vB per input — above any real
+/// P2WPKH/P2TR input, so the node's own fee computation never comes up
+/// short on the coins we hand it). The error text on a shortfall reads as
+/// "insufficient funds" on purpose: [`is_insufficient_funds`] turns it
+/// into the same [`FundingQueued`](crate::engine::FundingQueued) wait as
+/// the `minconf` path.
+pub(crate) fn pick_confirmed_inputs(
+    unspent: &Value,
+    amount_sat: u64,
+    fee_rate_sat_vb: f64,
+) -> Result<Vec<Value>> {
+    let mut coins: Vec<(u64, Value)> = unspent
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|u| u["spendable"].as_bool().unwrap_or(true))
+        .filter(|u| u["confirmations"].as_u64().unwrap_or(0) >= 1)
+        .map(|u| {
+            let sat = (u["amount"].as_f64().unwrap_or(0.0) * 1e8).round() as u64;
+            (sat, json!({ "txid": u["txid"], "vout": u["vout"] }))
+        })
+        .collect();
+    coins.sort_by_key(|coin| std::cmp::Reverse(coin.0));
+    let mut total = 0u64;
+    let mut picked = Vec::new();
+    for (value, input) in coins {
+        total += value;
+        picked.push(input);
+        let allowance = (fee_rate_sat_vb * (200.0 + 120.0 * picked.len() as f64)).ceil() as u64;
+        if total >= amount_sat.saturating_add(allowance) {
+            return Ok(picked);
+        }
+    }
+    anyhow::bail!(
+        "Insufficient funds: confirmed coins ({total} sat) do not cover {amount_sat} sat plus fees"
+    )
+}
+
 pub trait ChainBackend: Send + Sync {
     fn params(&self) -> &ChainParams;
 
@@ -1178,16 +1228,31 @@ impl ChainBackend for CoreRpcBackend {
         // BIP125-replaceable, mirroring wallet_send's policy exactly.
         let mut outputs = serde_json::Map::new();
         outputs.insert(address.to_string(), json!(amount));
-        let res = self.rpc.call(
-            "send",
-            &[
-                Value::Array(vec![Value::Object(outputs)]),
-                json!(null),
-                json!("unset"),
-                json!(fee_rate),
-                json!({ "add_inputs": true, "minconf": 1, "replaceable": true }),
-            ],
-        )?;
+        let send = |options: Value| -> Result<Value> {
+            self.rpc.call(
+                "send",
+                &[
+                    Value::Array(vec![Value::Object(outputs.clone())]),
+                    json!(null),
+                    json!("unset"),
+                    json!(fee_rate),
+                    options,
+                ],
+            )
+        };
+        let res = match send(json!({ "add_inputs": true, "minconf": 1, "replaceable": true })) {
+            Ok(res) => res,
+            // Pre-25 fork (Litecoin Core 0.21): no `minconf` — hand the
+            // node confirmed inputs we picked ourselves, same rule.
+            Err(e) if rejects_minconf(&e) => {
+                let unspent = self
+                    .rpc
+                    .call("listunspent", &[json!(1), json!(9_999_999)])?;
+                let inputs = pick_confirmed_inputs(&unspent, amount_sat, fee_rate)?;
+                send(json!({ "inputs": inputs, "add_inputs": false, "replaceable": true }))?
+            }
+            Err(e) => return Err(e),
+        };
         anyhow::ensure!(
             res["complete"].as_bool().unwrap_or(false),
             "send: transaction not complete"
@@ -1247,9 +1312,10 @@ impl ChainBackend for CoreRpcBackend {
         //    key is the funding address, so build the object with a dynamic key.
         let mut outputs = serde_json::Map::new();
         outputs.insert(address.to_string(), json!(amount));
-        let raw = self
-            .rpc
-            .call("createrawtransaction", &[json!([]), Value::Object(outputs)])?;
+        let raw = self.rpc.call(
+            "createrawtransaction",
+            &[json!([]), Value::Object(outputs.clone())],
+        )?;
         let raw_hex = raw.as_str().context("createrawtransaction: non-string")?;
         // 2. select inputs + change; lock the inputs so nothing else spends them
         //    before we broadcast; our explicit funding feerate. NON-replaceable
@@ -1262,7 +1328,7 @@ impl ChainBackend for CoreRpcBackend {
         //    25+), the same rule `wallet_send_confirmed` applies to v1 — an
         //    unconfirmed parent bumped by RBF would orphan this funding, and
         //    the pre-signed MuSig2 redeems commit to its txid.
-        let funded = self.rpc.call(
+        let funded = match self.rpc.call(
             "fundrawtransaction",
             &[
                 json!(raw_hex),
@@ -1273,7 +1339,36 @@ impl ChainBackend for CoreRpcBackend {
                     "minconf": 1
                 }),
             ],
-        )?;
+        ) {
+            Ok(funded) => funded,
+            // Pre-25 fork (Litecoin Core 0.21): no `minconf` — rebuild the
+            // raw tx over confirmed inputs we picked ourselves and let the
+            // node add only fee/change (`add_inputs: false`).
+            Err(e) if rejects_minconf(&e) => {
+                let unspent = self
+                    .rpc
+                    .call("listunspent", &[json!(1), json!(9_999_999)])?;
+                let inputs = pick_confirmed_inputs(&unspent, amount_sat, fee_rate)?;
+                let raw = self.rpc.call(
+                    "createrawtransaction",
+                    &[Value::Array(inputs), Value::Object(outputs)],
+                )?;
+                let raw_hex = raw.as_str().context("createrawtransaction: non-string")?;
+                self.rpc.call(
+                    "fundrawtransaction",
+                    &[
+                        json!(raw_hex),
+                        json!({
+                            "lockUnspents": true,
+                            "fee_rate": fee_rate,
+                            "replaceable": false,
+                            "add_inputs": false
+                        }),
+                    ],
+                )?
+            }
+            Err(e) => return Err(e),
+        };
         let funded_hex = funded["hex"]
             .as_str()
             .context("fundrawtransaction: no hex")?
@@ -2450,6 +2545,35 @@ mod multi_backend_tests {
         fn wallet_send(&self, _a: &str, _v: u64, _f: SendFee) -> Result<String> {
             bail!("no wallet")
         }
+    }
+
+    /// Confirmed-only fallback for nodes without `minconf` (Litecoin Core
+    /// 0.21): only confirmed, spendable coins are picked, largest first,
+    /// with a fee allowance; a shortfall reads as "insufficient funds" so
+    /// the engine queues it exactly like the `minconf` path.
+    #[test]
+    fn confirmed_input_preselection_skips_unconfirmed_and_queues_on_shortfall() {
+        let unspent = json!([
+            { "txid": "aa", "vout": 0, "amount": 0.5, "confirmations": 0, "spendable": true },
+            { "txid": "bb", "vout": 1, "amount": 0.3, "confirmations": 3, "spendable": true },
+            { "txid": "cc", "vout": 2, "amount": 0.2, "confirmations": 9, "spendable": false },
+            { "txid": "dd", "vout": 0, "amount": 0.1, "confirmations": 1, "spendable": true },
+        ]);
+        // 0.25 coins at 2 sat/vB: the 0.3 coin alone covers it.
+        let picked = pick_confirmed_inputs(&unspent, 25_000_000, 2.0).unwrap();
+        assert_eq!(picked.len(), 1);
+        assert_eq!(picked[0]["txid"], "bb");
+        // 0.35 coins: needs bb + dd (aa is unconfirmed, cc unspendable).
+        let picked = pick_confirmed_inputs(&unspent, 35_000_000, 2.0).unwrap();
+        assert_eq!(picked.len(), 2);
+        assert_eq!(picked[1]["txid"], "dd");
+        // 0.45 coins: only the unconfirmed change would cover it → queue.
+        let err = pick_confirmed_inputs(&unspent, 45_000_000, 2.0).unwrap_err();
+        assert!(is_insufficient_funds(&err), "{err:#}");
+        assert!(rejects_minconf(&anyhow::anyhow!(
+            "RPC error -3: Unexpected key minconf"
+        )));
+        assert!(!rejects_minconf(&anyhow::anyhow!("Insufficient funds")));
     }
 
     fn multi(views: Vec<TestView>) -> MultiBackend {
