@@ -2566,6 +2566,134 @@ impl Engine {
         Ok(rec)
     }
 
+    /// Hard-P2 failure classification shared by the v1 `fund` and both v2
+    /// legs: an "insufficient funds" from a confirmed-only send whose TOTAL
+    /// spendable (own pending change included) still covers the amount is
+    /// a [`FundingQueued`] wait behind a confirmation; anything else is the
+    /// real error.
+    fn classify_funding_failure(
+        backend: &MultiBackend,
+        amount: u64,
+        err: anyhow::Error,
+    ) -> anyhow::Error {
+        if crate::chain::is_insufficient_funds(&err) {
+            let total = backend.wallet_balance().unwrap_or(0);
+            if total >= amount {
+                return anyhow::Error::new(FundingQueued {
+                    needed_sat: amount,
+                    total_spendable_sat: total,
+                });
+            }
+        }
+        err
+    }
+
+    /// Scheduler-side v2 funding retry (closes the rc6 #2 liveness gap and
+    /// carries the hard-P2 queue): a driven, still-`Accepted` record whose
+    /// own leg is not yet funded/built — the initiator after `accept`, the
+    /// participant once the `funding_ready(A)` pointer is in — re-attempts
+    /// `adaptor_fund` each tick and relays the resulting `funding_ready`.
+    /// A queued funding (confirmed coins short, own change pending) is
+    /// narrated, never an error. `Ok(None)` = nothing to retry here.
+    /// Gated on the §7.4 fund window of the leg we would commit.
+    fn adaptor_retry_funding(&self, rec: &AdaptorSwapRecord) -> Result<Option<TickEvent>> {
+        use AdaptorState::*;
+        let (needs, chain, deadline) = match (rec.role, rec.state) {
+            (Role::Initiator, Accepted) => (rec.funding_a_txid.is_none(), &rec.chain_a, rec.t1),
+            (Role::Participant, Accepted) => (
+                rec.funding_a_txid.is_some()
+                    && rec.funding_b_txid.is_none()
+                    && rec.funding_b_tx_hex.is_none(),
+                &rec.chain_b,
+                rec.t2,
+            ),
+            _ => (false, &rec.chain_a, 0),
+        };
+        if !needs || !self.drives(rec.derive_scope, rec.adopted) {
+            return Ok(None);
+        }
+        let Some(counterparty) = rec.counterparty_identity.clone() else {
+            return Ok(None); // pre-accept: nobody to relay to yet
+        };
+        let net = chain.network;
+        let (fund_margin, _, _) = action_margins(net);
+        if let Ok(mtp) = self.backend(chain)?.tip_median_time() {
+            if !action_safe(deadline_clock(net, local_now(), mtp), fund_margin, deadline) {
+                return Ok(None); // §7.4: too late to commit this leg — let it age out
+            }
+        }
+        let ev = |action: &str, detail: String| {
+            Ok(Some(TickEvent {
+                swap_id: rec.swap_id.clone(),
+                action: action.into(),
+                detail,
+            }))
+        };
+        match self.adaptor_fund(&rec.swap_id) {
+            Ok(fr) => {
+                let _ = self.relay_send_all(&counterparty, &fr);
+                let leg = if rec.role == Role::Initiator {
+                    "A"
+                } else {
+                    "B"
+                };
+                ev(
+                    "adaptor-fund",
+                    format!("retried leg-{leg} funding + funding_ready"),
+                )
+            }
+            Err(e) if e.downcast_ref::<FundingQueued>().is_some() => {
+                ev("funding-queued", format!("{e:#}"))
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// The gate every reveal of `t` must pass, on the RPC path as much as
+    /// on the scheduler's (security review 2026-09-09 #4): leg B is on chain
+    /// as the P2TR we rebuilt locally, pays exactly `amount_b`, is buried
+    /// `n_b` deep, and its redeem pays a wallet this machine controls. A
+    /// shallow leg B can be double-spent out from under the reveal, after
+    /// which `t` is public and Bob takes leg A for free.
+    fn ensure_v2_leg_b_revealable(&self, rec: &AdaptorSwapRecord) -> Result<()> {
+        let secp = bitcoin::secp256k1::Secp256k1::new();
+        let p = self.adaptor_params(rec)?;
+        let spk_b = p.leg_b(&secp)?.script_pubkey(&secp)?;
+        let op = OutPoint {
+            txid: bitcoin::Txid::from_str(
+                rec.funding_b_txid
+                    .as_deref()
+                    .context("REFUSING to reveal t: leg B is not funded")?,
+            )?,
+            vout: rec
+                .funding_b_vout
+                .context("REFUSING to reveal t: leg B funding has no vout")?,
+        };
+        let txout = self
+            .backend(&rec.chain_b)?
+            .get_txout(&op, &spk_b)?
+            .with_context(|| {
+                format!("REFUSING to reveal t: leg B funding {op} is not visible on chain")
+            })?;
+        ensure!(
+            txout.script_pubkey_hex == hex::encode(spk_b.as_bytes())
+                && txout.value_sat == rec.amount_b,
+            "REFUSING to reveal t: leg B output {op} does not pay the negotiated script/amount"
+        );
+        let need = u64::from(rec.n_b.max(1));
+        ensure!(
+            txout.confirmations >= need,
+            "REFUSING to reveal t: leg B funding {op} has {} confirmations < {need}",
+            txout.confirmations
+        );
+        ensure!(
+            self.v2_owns_redeem_payout(rec)?,
+            "REFUSING to reveal t: the leg-B payout address is not owned by this machine's \
+             wallet — this swap must ride to its refund"
+        );
+        Ok(())
+    }
+
     /// Fund OUR leg's Taproot output via the core wallet, then emit
     /// `funding_ready` (spec v2 §7). Chain-touching: proven against live
     /// nodes (the in-process flow is covered by `adaptor_funding_ready`).
@@ -2643,11 +2771,21 @@ impl Engine {
         // Initiator: broadcast leg A now. Safe — leg A is only claimable after the
         // initiator reveals `t` (which only it can do) and its refund is intact.
         let address = leg.address(&secp, backend.params())?;
-        let txid = backend.wallet_send(
+        // Hard P2 (2026-08-09 post-mortem; security review 2026-09-09): the
+        // funding spends CONFIRMED coins only — never a bump-eligible
+        // unconfirmed parent whose RBF replacement would orphan it. For v2
+        // that orphaning is unrecoverable: the funding txid is committed
+        // into the pre-signed MuSig2 redeems. When confirmed coins are short
+        // but own pending change covers it, the funding QUEUES (typed
+        // `FundingQueued`) and the scheduler retries each tick.
+        let txid = match backend.wallet_send_confirmed(
             &address,
             rec.amount_a,
             SendFee::Target(backend.funding_conf_target()),
-        )?;
+        ) {
+            Ok(txid) => txid,
+            Err(e) => return Err(Self::classify_funding_failure(&backend, rec.amount_a, e)),
+        };
         let vout = backend.find_vout(&txid, &hex::encode(leg_spk.as_bytes()))?;
         self.adaptor_funding_ready(swap, &txid, vout)
     }
@@ -2698,7 +2836,13 @@ impl Engine {
             _ => {}
         }
         let address = leg.address(&secp, backend.params())?;
-        let (txid, vout, tx_hex) = backend.wallet_build_funding(&address, rec.amount_b)?;
+        // Confirmed-only on both wallet kinds (Core `minconf=1`, bdk
+        // confirmed-only selection); a short confirmed balance that own
+        // pending change covers is a QUEUED wait, not a failure.
+        let (txid, vout, tx_hex) = match backend.wallet_build_funding(&address, rec.amount_b) {
+            Ok(built) => built,
+            Err(e) => return Err(Self::classify_funding_failure(&backend, rec.amount_b, e)),
+        };
         let mut rec2 = self.store.get_adaptor(swap)?;
         rec2.funding_b_txid = Some(txid.clone());
         rec2.funding_b_vout = Some(vout);
@@ -2875,6 +3019,9 @@ impl Engine {
                         reveal_margin / 3600,
                         rec.t2
                     );
+                    // The scheduler verified leg B before calling here; the
+                    // direct RPC path enforces the same gate itself.
+                    self.ensure_v2_leg_b_revealable(&rec)?;
                 }
                 let t = crate::musig::seckey_to_scalar(
                     &seed.adaptor_secret(
@@ -2908,6 +3055,13 @@ impl Engine {
                 rec.state = AdaptorState::RedeemedB;
             }
             Role::Participant => {
+                // Custody gate on the RPC path too: a cooperative claim must
+                // pay a wallet THIS machine controls (else refund-only).
+                ensure!(
+                    self.v2_owns_redeem_payout(&rec)?,
+                    "refusing to redeem leg A: its payout address is not owned by this \
+                     machine's wallet — this swap must ride to its refund"
+                );
                 // §7.4: Bob MUST redeem leg A before `T1 − 1h` (margin 0 on
                 // regtest) — past that his redeem races Alice's T1 refund, and
                 // the v2 cooperative redeem is unbumpable, so racing is futile.
@@ -3148,6 +3302,13 @@ impl Engine {
             && rec.created_at > 0
             && local_now().saturating_sub(rec.created_at) >= window
         {
+            // Hard-P2 queue (v1 twin): an initiator whose leg-A funding is
+            // waiting for its own change to confirm is NOT a stale
+            // handshake — retry right here and keep waiting while the §7.4
+            // window is open; any other failure falls through to the abort.
+            if let Ok(Some(retried)) = self.adaptor_retry_funding(rec) {
+                return Ok(Some(retried));
+            }
             let mut dead = rec.clone();
             dead.state = Aborted;
             self.store.put_adaptor(&dead)?;
@@ -3160,15 +3321,16 @@ impl Engine {
         // Signed: drive redeem/refund. RedeemedB/Completed/Refunded: keep the
         // broadcast spend moving until it confirms. Anything else is inert.
         //
-        // rc6 #2 NOTE: v2 funding intentionally has NO tick retry (yet). Unlike
-        // v1, a failed v2 funding leaves an HONEST, recoverable `Accepted`
-        // (funding=None) — resumable by a relay re-drive or a manual `adaptor_fund`
-        // RPC — so it is a liveness gap, not a stranding bug. A correct tick retry
-        // needs the counterparty identity threaded into the tick (not on
-        // `AdaptorSwapRecord` today) to relay `funding_ready`, plus a locate-first
-        // idempotency guard on the Taproot funding (today's is pointer-based).
-        // Deferred to a focused follow-up.
+        // rc6 #2 (closed 2026-09-10): v2 funding IS retried by the scheduler
+        // (`adaptor_retry_funding`) — the record carries the counterparty
+        // identity, and `adaptor_fund` is locate-first idempotent.
         if !matches!(rec.state, Signed | RedeemedB | Completed | Refunded) {
+            // Our own leg not yet funded/built (a queued or failed funding
+            // left an honest `Accepted`): retry it here — the relay drive
+            // only fires once per message, the scheduler carries the wait.
+            if let Some(retried) = self.adaptor_retry_funding(rec)? {
+                return Ok(Some(retried));
+            }
             // Not yet Signed (e.g. funded, then the handshake stalled). We can't
             // drive the redeem, but we MUST still auto-refund our own funded leg
             // once its timelock matures — unattended-recovery invariant (§9.5).
@@ -3336,6 +3498,20 @@ impl Engine {
                     &rec.final_txid_a,
                     &rec.final_tx_a_hex,
                     rec.n_a,
+                    false,
+                    false,
+                );
+            }
+            // A completed initiator record that never latched (written
+            // before the settled latch existed, or booked by the chain
+            // reconcile): retire its watch once the leg-B redeem is deep.
+            (Role::Initiator, Completed) => {
+                return self.adaptor_keep_moving(
+                    rec,
+                    &rec.chain_b,
+                    &rec.final_txid_b,
+                    &rec.final_tx_b_hex,
+                    rec.n_b,
                     false,
                     false,
                 );
@@ -6413,6 +6589,7 @@ impl Engine {
                                             chain,
                                             &outpoint,
                                             spk,
+                                            amount,
                                             height,
                                             created_at,
                                             classify_spend,
@@ -6450,9 +6627,15 @@ impl Engine {
                     // buffer stays the fallback when nothing is recoverable.
                     if let Ok(txid) = bitcoin::Txid::from_str(txid) {
                         let op = OutPoint { txid, vout };
-                        if let Some(s) =
-                            self.scan_spent_leg(chain, &op, spk, 0, created_at, classify_spend)
-                        {
+                        if let Some(s) = self.scan_spent_leg(
+                            chain,
+                            &op,
+                            spk,
+                            amount,
+                            0,
+                            created_at,
+                            classify_spend,
+                        ) {
                             if s.spend_height > 0 {
                                 let cache = FollowSpendCache {
                                     txid: s.spend_txid.clone(),
@@ -6794,11 +6977,13 @@ impl Engine {
     /// A per-outpoint watermark keeps the reconcile retry cadence incremental:
     /// each empty scan advances it to the tip, and the next resumes just below
     /// it (6-block overlap so a mempool-then-mined spend is never missed).
+    #[allow(clippy::too_many_arguments)]
     fn scan_spent_leg(
         &self,
         chain: &ChainRef,
         outpoint: &OutPoint,
         spk: &ScriptBuf,
+        amount_sat: u64,
         funding_height: u64,
         created_at: u64,
         classify: &dyn Fn(&[Vec<u8>]) -> crate::reconstruct::SpendKind,
@@ -6823,6 +7008,7 @@ impl Engine {
             &backend,
             outpoint,
             spk,
+            amount_sat,
             funding_height,
             floor,
             classify,
@@ -6866,9 +7052,15 @@ impl Engine {
                     _ => record_ptr,
                 };
                 if let Some((op, funding_height)) = ptr {
-                    if let Some(spent) =
-                        self.scan_spent_leg(chain, &op, spk, funding_height, created_at, classify)
-                    {
+                    if let Some(spent) = self.scan_spent_leg(
+                        chain,
+                        &op,
+                        spk,
+                        amount,
+                        funding_height,
+                        created_at,
+                        classify,
+                    ) {
                         return Some(LegClass::Spent(spent));
                     }
                     // No spend visible. A RECORD pointer whose output is still
@@ -7622,6 +7814,9 @@ impl Engine {
             updated.final_tx_hex = Some(ours.spend_tx_hex.clone());
         }
         updated.state = state;
+        // The terminal matrix above is depth-gated (`follow_purge_ok` / the
+        // per-leg `deep`), so the settlement is already buried: latch it.
+        updated.settled = true;
         self.store.put(&updated)?;
         let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
         self.mark_reconciled(&rec.swap_id);
@@ -7729,6 +7924,7 @@ impl Engine {
         );
         Self::v2_adopt_final(&mut updated, ours_is_a, ours);
         updated.state = state;
+        updated.settled = true; // depth-gated terminal — nothing left to watch
         self.store.put_adaptor(&updated)?;
         let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
         self.mark_reconciled(&rec.swap_id);
@@ -8118,44 +8314,55 @@ impl Engine {
             // Alice with both legs funded: redeem chain B while safe, else
             // fall back to the T1 refund of chain A.
             (Role::Initiator, State::FundedB) => {
-                let backend_b = self.backend(&rec.chain_b)?;
-                let outpoint_b = OutPoint {
-                    txid: bitcoin::Txid::from_str(
-                        rec.htlc_b_txid.as_deref().context("no HTLC B")?,
-                    )?,
-                    vout: rec.htlc_b_vout.context("no HTLC B vout")?,
-                };
-                let htlc_b_spk = self.swap_params(rec)?.htlc_b()?.script_pubkey();
-                // Only auto-redeem (reveal s) while we are still inside the §7.4
-                // reveal deadline (T2 − 2h); past it, fall through to the refund.
-                let net = rec.chain_b.network;
-                let (_, reveal_margin, _) = action_margins(net);
-                let now = deadline_clock(net, local_now(), backend_b.tip_median_time()?);
-                if action_safe(now, reveal_margin, rec.t2) {
-                    match backend_b.get_txout(&outpoint_b, &htlc_b_spk)? {
-                        Some(txout) if txout.confirmations >= u64::from(rec.n_b) => {
-                            let updated = self.redeem(&rec.swap_id)?;
-                            return event("auto-redeem", updated.final_txid.unwrap_or_default());
-                        }
-                        Some(_) => return Ok(None), // waiting on confirmations
-                        None => {
-                            // A verified HTLC vanished without us spending
-                            // it: reorged out (or in a mempool gap) — or
-                            // already redeemed by a same-seed machine while
-                            // we were down. No automatic action here — never
-                            // reveal s for an output we can't see; T1
-                            // protects our leg — but re-arm the chain
-                            // reconciliation (#201): only a fresh
-                            // classification can tell the two apart.
-                            self.request_reconcile(&rec.swap_id);
-                            return event(
-                                "reorg-alert",
-                                format!("chain-B HTLC {outpoint_b} no longer visible"),
-                            );
+                // The redeem side needs chain B; the T1 refund of leg A needs
+                // only chain A. A chain-B outage (security review 2026-09-09
+                // #9) must never suppress a due refund: the redeem attempt
+                // is isolated, and its error is reported only when no refund
+                // fired (`refund_after`).
+                let redeem_side = (|| -> Result<Flow> {
+                    let backend_b = self.backend(&rec.chain_b)?;
+                    let outpoint_b = OutPoint {
+                        txid: bitcoin::Txid::from_str(
+                            rec.htlc_b_txid.as_deref().context("no HTLC B")?,
+                        )?,
+                        vout: rec.htlc_b_vout.context("no HTLC B vout")?,
+                    };
+                    let htlc_b_spk = self.swap_params(rec)?.htlc_b()?.script_pubkey();
+                    // Only auto-redeem (reveal s) while we are still inside the §7.4
+                    // reveal deadline (T2 − 2h); past it, fall through to the refund.
+                    let net = rec.chain_b.network;
+                    let (_, reveal_margin, _) = action_margins(net);
+                    let now = deadline_clock(net, local_now(), backend_b.tip_median_time()?);
+                    if action_safe(now, reveal_margin, rec.t2) {
+                        match backend_b.get_txout(&outpoint_b, &htlc_b_spk)? {
+                            Some(txout) if txout.confirmations >= u64::from(rec.n_b) => {
+                                let updated = self.redeem(&rec.swap_id)?;
+                                return Ok(Flow::Done(event(
+                                    "auto-redeem",
+                                    updated.final_txid.unwrap_or_default(),
+                                )?));
+                            }
+                            Some(_) => return Ok(Flow::Done(None)), // waiting on confirmations
+                            None => {
+                                // A verified HTLC vanished without us spending
+                                // it: reorged out (or in a mempool gap) — or
+                                // already redeemed by a same-seed machine while
+                                // we were down. No automatic action here — never
+                                // reveal s for an output we can't see; T1
+                                // protects our leg — but re-arm the chain
+                                // reconciliation (#201): only a fresh
+                                // classification can tell the two apart.
+                                self.request_reconcile(&rec.swap_id);
+                                return Ok(Flow::Done(event(
+                                    "reorg-alert",
+                                    format!("chain-B HTLC {outpoint_b} no longer visible"),
+                                )?));
+                            }
                         }
                     }
-                }
-                self.try_refund_due(rec, "a")
+                    Ok(Flow::Refund)
+                })();
+                self.refund_after(rec, "a", redeem_side)
             }
             // Alice funded chain A; while chain B can still be redeemed safely
             // (before T2) watch chain B for Bob's funding — the `funded` message
@@ -8176,57 +8383,63 @@ impl Engine {
                 if let Some(ev) = self.maybe_bump_funding_v1(rec, "a", &backend_a)? {
                     return Ok(Some(ev));
                 }
-                let backend_b = self.backend(&rec.chain_b)?;
-                // No point advancing to FundedB once we could no longer reveal s
-                // safely (§7.4 reveal deadline T2 − 2h): fall back to the T1
-                // refund of chain A rather than chase a redeem we can't finish.
-                let net = rec.chain_b.network;
-                let (_, reveal_margin, _) = action_margins(net);
-                let now = deadline_clock(net, local_now(), backend_b.tip_median_time()?);
-                if action_safe(now, reveal_margin, rec.t2) {
-                    if let Some((outpoint, confs)) = self.locate_funding(rec, "b")? {
-                        if confs >= u64::from(rec.n_b) {
-                            let mut updated = rec.clone();
-                            updated.htlc_b_txid = Some(outpoint.txid.to_string());
-                            updated.htlc_b_vout = Some(outpoint.vout);
-                            updated.htlc_b_height =
-                                Some(backend_b.tip_height()?.saturating_sub(confs));
-                            updated.state = State::FundedB;
-                            self.store.put(&updated)?;
-                            return event(
-                                "funded-b",
-                                "chain-B HTLC confirmed (chain-watched)".into(),
-                            );
+                // Chain-B work is isolated from the leg-A refund (see the
+                // FundedB arm): an unreachable chain B never blocks a due T1
+                // refund on chain A.
+                let redeem_side = (|| -> Result<Flow> {
+                    let backend_b = self.backend(&rec.chain_b)?;
+                    // No point advancing to FundedB once we could no longer reveal s
+                    // safely (§7.4 reveal deadline T2 − 2h): fall back to the T1
+                    // refund of chain A rather than chase a redeem we can't finish.
+                    let net = rec.chain_b.network;
+                    let (_, reveal_margin, _) = action_margins(net);
+                    let now = deadline_clock(net, local_now(), backend_b.tip_median_time()?);
+                    if action_safe(now, reveal_margin, rec.t2) {
+                        if let Some((outpoint, confs)) = self.locate_funding(rec, "b")? {
+                            if confs >= u64::from(rec.n_b) {
+                                let mut updated = rec.clone();
+                                updated.htlc_b_txid = Some(outpoint.txid.to_string());
+                                updated.htlc_b_vout = Some(outpoint.vout);
+                                updated.htlc_b_height =
+                                    Some(backend_b.tip_height()?.saturating_sub(confs));
+                                updated.state = State::FundedB;
+                                self.store.put(&updated)?;
+                                return Ok(Flow::Done(event(
+                                    "funded-b",
+                                    "chain-B HTLC confirmed (chain-watched)".into(),
+                                )?));
+                            }
+                            // #6: record the leg-B funding pointer on FIRST chain
+                            // detection (before n_b), so the maker's progress shows
+                            // `their_lock confs/n_b` — parity with the relay path, which
+                            // sets it from the `funded` message. State stays FundedA (the
+                            // redeem still gates on n_b above). Not redundant derived
+                            // state: htlc_b_txid is the core leg-B pointer the message
+                            // path persists too — we just discovered it from chain.
+                            if rec.htlc_b_txid.is_none() {
+                                let mut updated = rec.clone();
+                                updated.htlc_b_txid = Some(outpoint.txid.to_string());
+                                updated.htlc_b_vout = Some(outpoint.vout);
+                                updated.htlc_b_height =
+                                    Some(backend_b.tip_height()?.saturating_sub(confs));
+                                self.store.put(&updated)?;
+                                return Ok(Flow::Done(event(
+                                    "their-lock",
+                                    "chain-B HTLC seen; burying to n_b (chain-watched)".into(),
+                                )?));
+                            }
+                        } else if rec.htlc_b_txid.is_some() {
+                            // A leg-B pointer we once recorded no longer resolves
+                            // to a live output: spent (a same-seed machine settled
+                            // while we were down?) or reorged. Re-arm the chain
+                            // reconciliation (#201) before the T1 fallback below
+                            // arms a refund against an already-settled swap.
+                            self.request_reconcile(&rec.swap_id);
                         }
-                        // #6: record the leg-B funding pointer on FIRST chain
-                        // detection (before n_b), so the maker's progress shows
-                        // `their_lock confs/n_b` — parity with the relay path, which
-                        // sets it from the `funded` message. State stays FundedA (the
-                        // redeem still gates on n_b above). Not redundant derived
-                        // state: htlc_b_txid is the core leg-B pointer the message
-                        // path persists too — we just discovered it from chain.
-                        if rec.htlc_b_txid.is_none() {
-                            let mut updated = rec.clone();
-                            updated.htlc_b_txid = Some(outpoint.txid.to_string());
-                            updated.htlc_b_vout = Some(outpoint.vout);
-                            updated.htlc_b_height =
-                                Some(backend_b.tip_height()?.saturating_sub(confs));
-                            self.store.put(&updated)?;
-                            return event(
-                                "their-lock",
-                                "chain-B HTLC seen; burying to n_b (chain-watched)".into(),
-                            );
-                        }
-                    } else if rec.htlc_b_txid.is_some() {
-                        // A leg-B pointer we once recorded no longer resolves
-                        // to a live output: spent (a same-seed machine settled
-                        // while we were down?) or reorged. Re-arm the chain
-                        // reconciliation (#201) before the T1 fallback below
-                        // arms a refund against an already-settled swap.
-                        self.request_reconcile(&rec.swap_id);
                     }
-                }
-                self.try_refund_due(rec, "a")
+                    Ok(Flow::Refund)
+                })();
+                self.refund_after(rec, "a", redeem_side)
             }
             // Alice's redeem broadcast: mark completed once it confirms;
             // fee-bump while it does not (§7.4: the reveal must not linger
@@ -8234,7 +8447,10 @@ impl Engine {
             (Role::Initiator, State::RedeemedB) => {
                 let backend_b = self.backend(&rec.chain_b)?;
                 let txid = rec.final_txid.as_deref().context("no redeem txid")?;
-                let confs = backend_b.tx_confirmations(txid, spend_spk(rec).as_ref())?;
+                // Finality gate (#101, security review 2026-09-09 #6): MIN
+                // over the integrity quorum, never the display max — one
+                // lying view must not stop the nurse or fake a Completed.
+                let confs = backend_b.tx_confirmations_min(txid, spend_spk(rec).as_ref())?;
                 // Completion needs the chain's full confirmation policy,
                 // not 1 conf — a shallow redeem can still reorg away, and
                 // the T1 refund stays armed until this point (spec §9.5).
@@ -8259,12 +8475,22 @@ impl Engine {
             (Role::Participant, State::Completed) => {
                 let backend_a = self.backend(&rec.chain_a)?;
                 let txid = rec.final_txid.as_deref().context("no redeem txid")?;
-                let confs = backend_a.tx_confirmations(txid, spend_spk(rec).as_ref())?;
+                let confs = backend_a.tx_confirmations_min(txid, spend_spk(rec).as_ref())?;
                 if confs >= 1 {
                     // Mined: wait for n_a depth, then retire the watch.
                     return self.latch_settled_v1(rec, txid, confs, rec.n_a);
                 }
                 self.nurse_settlement(rec, &backend_a)
+            }
+            // Alice's completed swap that never latched: a record written
+            // before the settled latch existed, or a completion booked by the
+            // chain reconcile. Nothing to nurse (Completed is only written
+            // n_b-deep), only the watch to retire.
+            (Role::Initiator, State::Completed) => {
+                let backend_b = self.backend(&rec.chain_b)?;
+                let txid = rec.final_txid.as_deref().context("no redeem txid")?;
+                let confs = backend_b.tx_confirmations_min(txid, spend_spk(rec).as_ref())?;
+                self.latch_settled_v1(rec, txid, confs, rec.n_b)
             }
             // A refund that has not confirmed yet: keep it moving; once it is
             // buried to the leg's depth, retire the watch (`latch_settled_v1`).
@@ -8275,7 +8501,7 @@ impl Engine {
                 };
                 let backend = self.backend(chain)?;
                 let txid = rec.final_txid.as_deref().context("no refund txid")?;
-                let confs = backend.tx_confirmations(txid, spend_spk(rec).as_ref())?;
+                let confs = backend.tx_confirmations_min(txid, spend_spk(rec).as_ref())?;
                 if confs >= 1 {
                     return self.latch_settled_v1(rec, txid, confs, depth);
                 }
@@ -8551,6 +8777,31 @@ impl Engine {
                 }
             }
             _ => Ok(None),
+        }
+    }
+
+    /// Run the due-refund of `leg` after an isolated redeem-side attempt
+    /// (`Flow`): a finished redeem side returns its own outcome; a fallen-
+    /// through one refunds if due; a FAILED one (the other chain's backend
+    /// down) still refunds if due, and only reports the failure when no
+    /// refund fired — so an outage on the chain we don't need never blocks
+    /// recovery on the chain we do (security review 2026-09-09 #9).
+    fn refund_after(
+        &self,
+        rec: &SwapRecord,
+        leg: &str,
+        redeem_side: Result<Flow>,
+    ) -> Result<Option<TickEvent>> {
+        match redeem_side {
+            Ok(Flow::Done(outcome)) => Ok(outcome),
+            Ok(Flow::Refund) => self.try_refund_due(rec, leg),
+            Err(err) => match self.try_refund_due(rec, leg)? {
+                Some(refunded) => Ok(Some(refunded)),
+                None => Err(err.context(format!(
+                    "chain-{} unavailable (leg-{leg} refund checked independently: not due)",
+                    if leg == "a" { "B" } else { "A" }
+                ))),
+            },
         }
     }
 
@@ -10370,9 +10621,19 @@ impl Engine {
                 let identity = self.store.seed()?.identity_keypair()?;
                 let mail = board.relay_poll(&poll)?;
                 for (id, blob) in mail {
-                    let envelope = match crate::board::open_envelope(&identity, &blob) {
-                        Ok(envelope) => envelope,
-                        Err(_) => {
+                    // The blob is REMOTE input (anyone who can post to the
+                    // board). Opening it runs under the daemon's registry
+                    // lock, so a panic anywhere in the parse would poison
+                    // that lock and wedge every RPC and tick — and, because
+                    // the cursor only advances below, the same blob would
+                    // re-panic on every restart. Belt over the parser's own
+                    // length checks: an unwind is junk mail, nothing more.
+                    let opened = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        crate::board::open_envelope(&identity, &blob)
+                    }));
+                    let envelope = match opened {
+                        Ok(Ok(envelope)) => envelope,
+                        Ok(Err(_)) | Err(_) => {
                             // Undecryptable junk mail: skip, cursor advances.
                             self.store.meta_set(&cursor_key, &id.to_string())?;
                             continue;
@@ -10539,7 +10800,17 @@ impl Engine {
                 // adaptor_fund routes by role: initiator broadcasts leg A;
                 // participant BUILDS leg B unbroadcast (scheduler broadcasts it
                 // post-Signed once leg A is verified n_a-deep).
-                let fr = self.adaptor_fund(swap)?;
+                let fr = match self.adaptor_fund(swap) {
+                    Ok(fr) => fr,
+                    // Hard-P2 queue: our confirmed coins are short while own
+                    // pending change covers the leg. Consume the message (the
+                    // handshake state is correct) and let the scheduler's
+                    // funding-retry arm fund once the change confirms.
+                    Err(e) if e.downcast_ref::<FundingQueued>().is_some() => {
+                        return ev("funding-queued", format!("{e:#}"));
+                    }
+                    Err(e) => return Err(e),
+                };
                 self.relay_send_all(counterparty, &fr)?;
                 let detail = if rec.role == Role::Initiator {
                     "broadcast leg A + funding_ready"
@@ -11522,6 +11793,15 @@ impl Engine {
 /// (downcast) and narrate `funding-queued`, and the C8 stale-abort keeps
 /// waiting while the §7.4 fund window is open. A manual `fund` RPC surfaces
 /// the Display text as-is.
+/// Outcome of an isolated redeem-side attempt inside a v1 tick arm — see
+/// [`Engine::refund_after`].
+enum Flow {
+    /// The arm produced its result (an event, or nothing this tick).
+    Done(Option<TickEvent>),
+    /// Nothing to do on the redeem side; check whether our refund is due.
+    Refund,
+}
+
 #[derive(Debug)]
 pub struct FundingQueued {
     pub needed_sat: u64,

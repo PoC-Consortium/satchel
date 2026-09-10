@@ -468,9 +468,15 @@ fn resolve_pactd(configured: &str) -> PathBuf {
 }
 
 fn health_ok(listen: &str) -> bool {
-    let Ok(mut stream) = TcpStream::connect(listen) else {
+    // Bounded: a probe must never pin a thread on a black-holed socket.
+    let Some(addr) = resolve_addr(listen) else {
         return false;
     };
+    let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_secs(3)) else {
+        return false;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
     let req = format!("GET /health HTTP/1.1\r\nHost: {listen}\r\nConnection: close\r\n\r\n");
     if stream.write_all(req.as_bytes()).is_err() {
         return false;
@@ -478,6 +484,13 @@ fn health_ok(listen: &str) -> bool {
     let mut resp = String::new();
     let _ = stream.read_to_string(&mut resp);
     resp.contains("200")
+}
+
+/// `host:port` → the first resolved socket address (loopback in practice).
+fn resolve_addr(hostport: &str) -> Option<std::net::SocketAddr> {
+    std::net::ToSocketAddrs::to_socket_addrs(hostport)
+        .ok()?
+        .next()
 }
 
 /// Spawn the single managed pactd at its parent data dir (C10). Deliberately
@@ -847,6 +860,26 @@ fn get_coin_icon(state: tauri::State<AppState>, coin_id: String) -> Option<Strin
 #[tauri::command]
 async fn remove_coin(app: tauri::AppHandle, coin_id: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || -> anyhow::Result<()> {
+        // Fund-safety gate (security review 2026-09-09 #3): a swap in flight
+        // on this coin would lose its chain backend — the relaunched pactd
+        // could neither claim nor refund that leg until the coin is re-added,
+        // and its timelocks keep running meanwhile. Refuse while the daemon
+        // reports one; an unreachable daemon has nothing to strand.
+        {
+            let conn = app.state::<RpcState>().0.lock().unwrap().clone();
+            if !conn.auth.is_empty() {
+                let live = live_swaps_on_coin(&conn.url, &conn.auth, &coin_id);
+                if !live.is_empty() {
+                    anyhow::bail!(
+                        "{} swap(s) in flight on {} ({}) — finish or refund them before \
+                         disconnecting the coin, so their timelocks keep being watched",
+                        live.len(),
+                        coin_id.to_uppercase(),
+                        live.join(", ")
+                    );
+                }
+            }
+        }
         // #97: withdraw offers whose pair involves the coin being removed BEFORE
         // the relaunch — pactd still has the coin here, so it can sign/publish the
         // revocations. The relaunch itself then skips de-listing the SURVIVORS.
@@ -873,6 +906,46 @@ async fn remove_coin(app: tauri::AppHandle, coin_id: String) -> Result<(), Strin
     .await
     .map_err(|e| format!("join error: {e}"))?
     .map_err(|e| format!("{e:#}"))
+}
+
+/// Ids of the swaps THIS machine drives that still need `coin_id`'s backend:
+/// any non-terminal record of either protocol on that coin, or a terminal one
+/// whose settlement has not latched (`settled == false` — its claim/refund is
+/// still being nursed). Followed (foreign) swaps are another machine's.
+/// Best-effort: a daemon that cannot be asked reports nothing.
+fn live_swaps_on_coin(url: &str, auth: &str, coin_id: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for method in ["listswaps", "listadaptorswaps"] {
+        let Ok(list) = pactd_call(url, auth, method, &json!([])) else {
+            continue;
+        };
+        for rec in list.as_array().into_iter().flatten() {
+            if swap_needs_coin(rec, coin_id) {
+                if let Some(id) = rec["swap_id"].as_str() {
+                    out.push(id.to_string());
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The predicate behind [`live_swaps_on_coin`], on one serialized record.
+fn swap_needs_coin(rec: &serde_json::Value, coin_id: &str) -> bool {
+    if rec["source"].as_str() == Some("foreign") {
+        return false;
+    }
+    let on_coin = ["chain_a", "chain_b"]
+        .iter()
+        .any(|leg| rec[leg]["coin_id"].as_str() == Some(coin_id));
+    if !on_coin {
+        return false;
+    }
+    match rec["state"].as_str().unwrap_or("") {
+        "aborted" => false,
+        "completed" | "refunded" => rec["settled"].as_bool() != Some(true),
+        _ => true,
+    }
 }
 
 /// A compact, stable fingerprint of an Electrum server *set*. The set is
@@ -991,7 +1064,86 @@ fn base64(input: &[u8]) -> String {
     out
 }
 
+/// WHERE a `pactd_call` failed — the fact that decides whether the bridge
+/// may transparently retry it (see [`retry_allowed`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CallFailure {
+    /// The TCP connect failed: the request never left this process.
+    Connect,
+    /// The daemon answered 401: it rejected the request BEFORE dispatch.
+    Unauthorized,
+    /// The request was (at least partly) sent and no valid answer came back
+    /// — the daemon may have executed it. The outcome is UNKNOWN.
+    Transport,
+    /// The daemon dispatched the call and returned a JSON-RPC error.
+    Daemon,
+}
+
+#[derive(Debug)]
+struct CallError {
+    kind: CallFailure,
+    msg: String,
+}
+
+impl std::fmt::Display for CallError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.msg)
+    }
+}
+
+impl std::error::Error for CallError {}
+
+fn call_err(kind: CallFailure, msg: impl std::fmt::Display) -> anyhow::Error {
+    anyhow::Error::new(CallError {
+        kind,
+        msg: msg.to_string(),
+    })
+}
+
+/// pactd methods whose replay is harmless: pure reads. Only these may be
+/// retried after a failure whose outcome is unknown ([`CallFailure::
+/// Transport`]) — replaying a wallet send or a take after a lost response
+/// could execute it twice (security review 2026-09-09 #1).
+const READ_ONLY_METHODS: &[&str] = &[
+    "getinfo",
+    "listswaps",
+    "listadaptorswaps",
+    "listpendingtakes",
+    "swapprogress",
+    "getswap",
+    "dumpswap",
+    "getbalance",
+    "listcoins",
+    "listpairs",
+    "listmyoffers",
+    "listprivateoffers",
+    "listoffers",
+    "boardstatus",
+    "boardlistoffers",
+    "listmerchants",
+    "getmerchantinfo",
+    "listtransactions",
+    "serverstatus",
+    "getfeepolicy",
+    "estimatesendfee",
+    "estimateswapfees",
+    "validatecoin",
+];
+
+/// May the bridge re-issue `method` after a first attempt failed with
+/// `kind`? Pre-dispatch failures (connect refused, 401) are safe for every
+/// method — nothing ran. An unknown outcome is safe only for reads. A
+/// daemon-level error is deterministic: never retried.
+fn retry_allowed(kind: CallFailure, method: &str) -> bool {
+    match kind {
+        CallFailure::Connect | CallFailure::Unauthorized => true,
+        CallFailure::Transport => READ_ONLY_METHODS.contains(&method),
+        CallFailure::Daemon => false,
+    }
+}
+
 /// Blocking JSON-RPC call to pactd (std-only). `auth` is `user:pass`.
+/// Every failure carries a [`CallError`] saying WHERE it failed.
 fn pactd_call(
     url: &str,
     auth: &str,
@@ -1016,27 +1168,65 @@ fn pactd_call(
         base64(auth.as_bytes()),
         body.len()
     );
-    let mut stream = TcpStream::connect((host, port.parse::<u16>()?))?;
-    stream.write_all(request.as_bytes())?;
+    let port: u16 = port.parse()?;
+    // Bounded transport: connect, write and read all carry deadlines, so a
+    // stalled daemon surfaces as an error instead of a thread pinned forever.
+    let addr = resolve_addr(&format!("{host}:{port}")).ok_or_else(|| {
+        call_err(
+            CallFailure::Connect,
+            format!("cannot resolve {host}:{port}"),
+        )
+    })?;
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(5))
+        .map_err(|e| call_err(CallFailure::Connect, format!("connect {host}:{port}: {e}")))?;
+    // Engine RPCs serialize behind the daemon's registry lock; a long tick
+    // can legitimately hold a call for a while, so the read deadline is
+    // generous — but finite.
+    stream
+        .set_read_timeout(Some(Duration::from_secs(180)))
+        .map_err(|e| call_err(CallFailure::Connect, e))?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(30)))
+        .map_err(|e| call_err(CallFailure::Connect, e))?;
+    stream
+        .write_all(request.as_bytes())
+        .map_err(|e| call_err(CallFailure::Transport, format!("send {method}: {e}")))?;
     let mut raw = Vec::new();
-    stream.read_to_end(&mut raw)?;
+    stream
+        .read_to_end(&mut raw)
+        .map_err(|e| call_err(CallFailure::Transport, format!("read {method} reply: {e}")))?;
     let text = String::from_utf8_lossy(&raw);
     let (head, http_body) = text
         .split_once("\r\n\r\n")
-        .ok_or_else(|| anyhow::anyhow!("malformed response"))?;
+        .ok_or_else(|| call_err(CallFailure::Transport, "malformed response"))?;
+    if http_status(head) == Some(401) {
+        return Err(call_err(
+            CallFailure::Unauthorized,
+            "pactd rejected the cookie (401) — it may have restarted",
+        ));
+    }
     let http_body = if head
         .to_ascii_lowercase()
         .contains("transfer-encoding: chunked")
     {
-        dechunk(http_body)?
+        dechunk(http_body).map_err(|e| call_err(CallFailure::Transport, e))?
     } else {
         http_body.to_string()
     };
-    let parsed: serde_json::Value = serde_json::from_str(http_body.trim())?;
+    let parsed: serde_json::Value = serde_json::from_str(http_body.trim())
+        .map_err(|e| call_err(CallFailure::Transport, format!("bad JSON-RPC reply: {e}")))?;
     if let Some(err) = parsed.get("error").filter(|e| !e.is_null()) {
-        anyhow::bail!("{}", err["message"].as_str().unwrap_or("RPC error"));
+        return Err(call_err(
+            CallFailure::Daemon,
+            err["message"].as_str().unwrap_or("RPC error"),
+        ));
     }
     Ok(parsed["result"].clone())
+}
+
+/// The status code of an HTTP/1.x response head (`HTTP/1.1 401 ...`).
+fn http_status(head: &str) -> Option<u16> {
+    head.lines().next()?.split_whitespace().nth(1)?.parse().ok()
 }
 
 fn dechunk(body: &str) -> anyhow::Result<String> {
@@ -1089,11 +1279,31 @@ async fn pactd_rpc(
     // the datadir once; if a healthy same-network engine answers, refresh the
     // stored auth and retry the call exactly once. Nothing here spawns a daemon —
     // we only reconnect to one that is demonstrably back and authenticates.
+    //
+    // Retry policy (security review 2026-09-09 #1): only when the first
+    // attempt provably never reached dispatch (connect refused, 401), or
+    // when the method is a pure read. A money-moving call whose outcome is
+    // unknown (response lost after the request went out) is NEVER replayed
+    // — the daemon may have executed it.
+    let kind = err
+        .downcast_ref::<CallError>()
+        .map(|e| e.kind)
+        .unwrap_or(CallFailure::Transport);
+    if !retry_allowed(kind, &method2) {
+        return Err(format!("{err:#}"));
+    }
     let reprobe = app.state::<RpcState>().0.lock().unwrap().reprobe.clone();
     let Some((listen, data_dir)) = reprobe else {
         return Err(format!("{err:#}"));
     };
-    let Some(cookie) = probe_adoptable(&listen, &data_dir) else {
+    // The probe is blocking TCP work — keep it off the async runtime thread.
+    let probed = {
+        let (listen, data_dir) = (listen.clone(), data_dir.clone());
+        tauri::async_runtime::spawn_blocking(move || probe_adoptable(&listen, &data_dir))
+            .await
+            .map_err(|e| format!("join error: {e}"))?
+    };
+    let Some(cookie) = probed else {
         return Err(format!("{err:#}"));
     };
     {
@@ -1682,6 +1892,83 @@ mod tests {
     // doesn't add value here.
     #![allow(clippy::field_reassign_with_default)]
     use super::*;
+
+    /// Security review 2026-09-09 #1: the bridge replays a failed call only
+    /// when the first attempt provably never dispatched, or for pure reads.
+    #[test]
+    fn retry_policy_never_replays_money_moves_with_unknown_outcome() {
+        // Pre-dispatch failures: anything may be retried.
+        assert!(retry_allowed(CallFailure::Connect, "sendtoaddress"));
+        assert!(retry_allowed(CallFailure::Unauthorized, "boardtake"));
+        // Unknown outcome: reads only.
+        assert!(retry_allowed(CallFailure::Transport, "listswaps"));
+        assert!(retry_allowed(CallFailure::Transport, "getbalance"));
+        assert!(!retry_allowed(CallFailure::Transport, "sendtoaddress"));
+        assert!(!retry_allowed(CallFailure::Transport, "bumpfee"));
+        assert!(!retry_allowed(CallFailure::Transport, "boardtake"));
+        assert!(!retry_allowed(CallFailure::Transport, "takeover"));
+        assert!(!retry_allowed(CallFailure::Transport, "importseed"));
+        // The daemon answered: deterministic, never replayed.
+        assert!(!retry_allowed(CallFailure::Daemon, "listswaps"));
+        assert!(!retry_allowed(CallFailure::Daemon, "sendtoaddress"));
+        // HTTP status parsing feeds the 401 classification.
+        assert_eq!(http_status("HTTP/1.1 401 Unauthorized\r\nx: y"), Some(401));
+        assert_eq!(http_status("HTTP/1.1 200 OK"), Some(200));
+        assert_eq!(http_status("garbage"), None);
+    }
+
+    /// Security review 2026-09-09 #3: disconnecting a coin is refused while
+    /// a swap this machine drives still needs that coin's backend.
+    #[test]
+    fn coin_removal_guard_sees_unsettled_terminals_and_skips_foreign() {
+        let rec = |state: &str, settled: Option<bool>, source: &str, coin_b: &str| {
+            let mut v = json!({
+                "swap_id": "s1",
+                "state": state,
+                "chain_a": { "coin_id": "btcx" },
+                "chain_b": { "coin_id": coin_b },
+                "source": source,
+            });
+            if let Some(s) = settled {
+                v["settled"] = json!(s);
+            }
+            v
+        };
+        assert!(swap_needs_coin(
+            &rec("accepted", None, "local", "btc"),
+            "btc"
+        ));
+        assert!(swap_needs_coin(
+            &rec("signed", None, "local", "btc"),
+            "btcx"
+        ));
+        assert!(!swap_needs_coin(
+            &rec("signed", None, "local", "btc"),
+            "ltc"
+        ));
+        // Terminal but not yet settled → still needs the backend.
+        assert!(swap_needs_coin(
+            &rec("completed", Some(false), "local", "btc"),
+            "btc"
+        ));
+        assert!(swap_needs_coin(
+            &rec("refunded", None, "local", "btc"),
+            "btc"
+        ));
+        assert!(!swap_needs_coin(
+            &rec("completed", Some(true), "local", "btc"),
+            "btc"
+        ));
+        assert!(!swap_needs_coin(
+            &rec("aborted", None, "local", "btc"),
+            "btc"
+        ));
+        // Followed swaps are another machine's.
+        assert!(!swap_needs_coin(
+            &rec("accepted", None, "foreign", "btc"),
+            "btc"
+        ));
+    }
 
     #[test]
     fn electrum_fp_ignores_order_dups_and_whitespace() {

@@ -271,6 +271,30 @@ def test_daemon_autopilot_refund(h):
         bob.stop()
 
 
+def test_refund_survives_other_chain_outage(h):
+    """Security review 2026-09-09 #9: the initiator's T1 refund of leg A needs
+    ONLY chain A. With chain B's backend down, the tick used to error before
+    reaching the refund (the redeem-side queries came first); now the redeem
+    side is isolated and the due refund still fires."""
+    alice = Party("alice-oc", h, h.workdir, "alice_btcx", "alice_btc").start()
+    bob = Party("bob-oc", h, h.workdir, "bob_btcx", "bob_btc").start()
+    try:
+        sid, m_funded_a, _m_funded_b = handshake_and_fund(h, alice, bob, "oc")
+        # Both offline through the completion window; the timelocks pass.
+        h.advance_time(5 * 3600)
+        # Chain B goes dark for good. Alice's leg lives on chain A.
+        h.btc.stop()
+        events = alice.tick()
+        assert any(e["action"] == "auto-refund" for e in events), f"alice: {events}"
+        assert alice.rpc("getswap", sid)["state"] == "refunded"
+        h.pocx.generate(1, "alice_btcx")
+        assert_htlc_spent(h.pocx, m_funded_a, "chain-A")
+        print("[e2e] leg-A refund fired with chain B unreachable")
+    finally:
+        alice.stop()
+        bob.stop()
+
+
 def test_chain_watched_funding(h):
     """The `funded` relay messages never arrive after the handshake, yet the
     swap completes — driven entirely by chain-watched funding detection in
@@ -1466,6 +1490,11 @@ class SiblingFundingQueueV1(PactTestFramework):
         test_sibling_funding_queue_v1(self.h)
 
 
+class RefundSurvivesOtherChainOutage(PactTestFramework):
+    def run_test(self):
+        test_refund_survives_other_chain_outage(self.h)
+
+
 class FundingBumpDescendantBelt(PactTestFramework):
     def run_test(self):
         test_funding_bump_descendant_belt(self.h)
@@ -1528,6 +1557,7 @@ SCENARIOS = [
     SettlementRbfRaceRedeem,
     SettlementRbfRaceRefund,
     SiblingFundingQueueV1,
+    RefundSurvivesOtherChainOutage,
     FundingBumpDescendantBelt,
     BalanceValidation,
     CreateImportThenSwap,

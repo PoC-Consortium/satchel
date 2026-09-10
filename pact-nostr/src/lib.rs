@@ -190,13 +190,27 @@ pub fn deletions_filter() -> Filter {
     Filter::new().kind(Kind::EventDeletion)
 }
 
+/// A verified NIP-09 offer revocation: WHO revoked (the deletion's author,
+/// x-only hex) and WHICH offer id. Both travel together on purpose: an offer
+/// id alone is public (it is the offer's `d` tag) and short, so any relay
+/// user could otherwise sign a deletion of `31510:<their own key>:<victim
+/// id>` and have consumers drop the victim's listing. Consumers must apply
+/// the revocation only to offers whose maker IS `author`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RevokedOffer {
+    pub author: String,
+    pub swap_id: String,
+}
+
 /// If `event` is a NIP-09 deletion that revokes one of its OWN offers, return
-/// that offer's `swap_id`. Verifies the event signature and that the deletion's
-/// author matches the pubkey in the addressable coordinate
+/// the (author, swap_id) pair. Verifies the event signature and that the
+/// deletion's author matches the pubkey in the addressable coordinate
 /// (`{OFFER_KIND}:<author>:<swap_id>`, as built by [`revocation_event`]) — so a
 /// maker can only revoke offers it signed, never someone else's. `None` for
-/// foreign, unrelated, or malformed deletions.
-pub fn revoked_offer_from_event(event: &Event) -> Option<String> {
+/// foreign, unrelated, or malformed deletions. NOTE: the coordinate check
+/// alone cannot stop an attacker naming THEIR OWN key with a victim's id —
+/// that is why the author is returned, see [`RevokedOffer`].
+pub fn revoked_offer_from_event(event: &Event) -> Option<RevokedOffer> {
     if event.kind != Kind::EventDeletion {
         return None;
     }
@@ -212,7 +226,10 @@ pub fn revoked_offer_from_event(event: &Event) -> Option<String> {
         let pubkey = parts.next()?;
         let swap_id = parts.next().unwrap_or("");
         if kind.parse::<u16>().ok() == Some(OFFER_KIND) && pubkey == author && !swap_id.is_empty() {
-            return Some(swap_id.to_string());
+            return Some(RevokedOffer {
+                author,
+                swap_id: swap_id.to_string(),
+            });
         }
     }
     None
@@ -423,9 +440,33 @@ mod tests {
         let ev = revocation_event("deadbeefcafe0011", &keys).unwrap();
         assert_eq!(ev.kind, Kind::EventDeletion);
         assert_eq!(
-            revoked_offer_from_event(&ev).as_deref(),
-            Some("deadbeefcafe0011")
+            revoked_offer_from_event(&ev),
+            Some(RevokedOffer {
+                author: keys.public_key().to_hex(),
+                swap_id: "deadbeefcafe0011".into(),
+            })
         );
+    }
+
+    /// Security review 2026-09-09 #10: a deletion naming the ATTACKER's own
+    /// key with a VICTIM's offer id passes the coordinate check by design
+    /// (it is a valid self-revocation of a same-id offer the attacker never
+    /// posted). The author must therefore travel with the id so consumers
+    /// can scope the revocation to the attacker's own listings only.
+    #[test]
+    fn same_id_deletion_by_another_author_carries_that_author() {
+        let (_a_kp, a_keys, a_x) = identity(0x43);
+        let coordinate = format!("{OFFER_KIND}:{a_x}:victimoffer01");
+        let forged = EventBuilder::new(Kind::EventDeletion, "")
+            .tag(Tag::parse(["a", &coordinate]).unwrap())
+            .sign_with_keys(&a_keys)
+            .unwrap();
+        let got = revoked_offer_from_event(&forged).expect("valid self-coordinate");
+        assert_eq!(
+            got.author, a_x,
+            "the revoking author is the attacker, never the victim"
+        );
+        assert_eq!(got.swap_id, "victimoffer01");
     }
 
     #[test]

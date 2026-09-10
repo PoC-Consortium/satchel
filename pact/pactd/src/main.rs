@@ -204,7 +204,7 @@ where
 {
     let registry = app.registry.clone();
     tokio::task::spawn_blocking(move || -> Result<T> {
-        let reg = registry.lock().expect("registry mutex poisoned");
+        let reg = lock_registry(&registry);
         work(reg.active()?)
     })
     .await
@@ -223,7 +223,7 @@ where
 {
     let registry = app.registry.clone();
     tokio::task::spawn_blocking(move || -> Result<T> {
-        let mut reg = registry.lock().expect("registry mutex poisoned");
+        let mut reg = lock_registry(&registry);
         let out = work(reg.active_mut()?)?;
         // Best-effort manifest refresh — never fail the RPC on a metadata write.
         let _ = reg.refresh_active_identity();
@@ -231,6 +231,20 @@ where
     })
     .await
     .map_err(|e| anyhow!("task panicked: {e}"))?
+}
+
+/// Take the registry lock, RECOVERING from poison. A panic inside a holder
+/// (a bug reached by remote relay input, say) must not turn into a permanent
+/// wedge of every RPC and every scheduler tick: the registry's state is
+/// DB-backed and each engine operation is its own SQLite transaction, so the
+/// in-memory struct is still coherent after an unwind. Log loudly, carry on.
+fn lock_registry(
+    registry: &Mutex<MerchantRegistry>,
+) -> std::sync::MutexGuard<'_, MerchantRegistry> {
+    registry.lock().unwrap_or_else(|poisoned| {
+        tracing::error!("registry mutex was poisoned by a panic — recovering the guard");
+        poisoned.into_inner()
+    })
 }
 
 /// Run blocking work that needs the **registry itself** (the `*merchant` RPCs:
@@ -241,11 +255,9 @@ where
     F: FnOnce(&mut MerchantRegistry) -> Result<T> + Send + 'static,
 {
     let registry = app.registry.clone();
-    tokio::task::spawn_blocking(move || -> Result<T> {
-        work(&mut registry.lock().expect("registry mutex poisoned"))
-    })
-    .await
-    .map_err(|e| anyhow!("task panicked: {e}"))?
+    tokio::task::spawn_blocking(move || -> Result<T> { work(&mut lock_registry(&registry)) })
+        .await
+        .map_err(|e| anyhow!("task panicked: {e}"))?
 }
 
 /// Rotate the install's machine scope (§0/§1) when a seed (re)import took the
@@ -2354,7 +2366,7 @@ async fn main() -> Result<()> {
                 // no merchant is loaded — so an idle pactd never busy-loops.
                 // PHASE 2: iterate every loaded merchant's engine here.
                 let has_active = {
-                    let reg = scheduler.registry.lock().expect("registry mutex poisoned");
+                    let reg = lock_registry(&scheduler.registry);
                     reg.active_id().is_some()
                 };
                 if has_active {
@@ -2496,7 +2508,7 @@ async fn main() -> Result<()> {
     // listings within RELAY_TTL_SECS. In C6 detach mode pactd keeps running
     // (Satchel sends no stop), so this only fires on a real stop.
     let has_active = {
-        let reg = app.registry.lock().expect("registry mutex poisoned");
+        let reg = lock_registry(&app.registry);
         reg.active_id().is_some()
     };
     if has_active {

@@ -1257,41 +1257,68 @@ impl ChainBackend for CoreRpcBackend {
         //    pre-signed MuSig2 redeems, so it must never be RBF'd — the nurse
         //    CPFPs it instead, and the non-signal keeps external wallets from
         //    even offering a bump.
+        //    Hard P2 (2026-08-09 post-mortem; security review 2026-09-09):
+        //    `minconf: 1` restricts coin selection to CONFIRMED coins (Core
+        //    25+), the same rule `wallet_send_confirmed` applies to v1 — an
+        //    unconfirmed parent bumped by RBF would orphan this funding, and
+        //    the pre-signed MuSig2 redeems commit to its txid.
         let funded = self.rpc.call(
             "fundrawtransaction",
             &[
                 json!(raw_hex),
-                json!({ "lockUnspents": true, "fee_rate": fee_rate, "replaceable": false }),
+                json!({
+                    "lockUnspents": true,
+                    "fee_rate": fee_rate,
+                    "replaceable": false,
+                    "minconf": 1
+                }),
             ],
         )?;
         let funded_hex = funded["hex"]
             .as_str()
-            .context("fundrawtransaction: no hex")?;
-        // 3. sign with the wallet — the txid is final once fully signed.
-        let signed = self
-            .rpc
-            .call("signrawtransactionwithwallet", &[json!(funded_hex)])?;
-        anyhow::ensure!(
-            signed["complete"].as_bool() == Some(true),
-            "funding tx did not sign to completion"
-        );
-        let signed_hex = signed["hex"]
-            .as_str()
-            .context("signrawtransactionwithwallet: no hex")?
+            .context("fundrawtransaction: no hex")?
             .to_string();
-        // 4. decode locally to recover the txid and the vout paying `address` —
-        //    fundrawtransaction inserts change at a random position, so match the
-        //    output by scriptPubKey rather than assuming an index.
-        let tx: Transaction = bitcoin::consensus::encode::deserialize(&hex::decode(&signed_hex)?)
-            .context("decode built funding tx")?;
-        let want_spk = self.params.parse_address(address)?;
-        let vout = tx
-            .output
-            .iter()
-            .position(|o| o.script_pubkey == want_spk)
-            .context("built funding tx has no output paying the funding address")?
-            as u32;
-        Ok((tx.compute_txid().to_string(), vout, signed_hex))
+        // Steps 3-4 can fail AFTER `lockUnspents` reserved the selected
+        // inputs (an encrypted wallet that is locked → signing fails). No
+        // funding record exists yet for the cancel path to unlock, so
+        // release the reservation here on every error — otherwise each
+        // retry locks a fresh coin set until the whole wallet is stranded
+        // (security review 2026-09-09 #12).
+        let finish = || -> Result<(String, u32, String)> {
+            // 3. sign with the wallet — the txid is final once fully signed.
+            let signed = self
+                .rpc
+                .call("signrawtransactionwithwallet", &[json!(&funded_hex)])?;
+            anyhow::ensure!(
+                signed["complete"].as_bool() == Some(true),
+                "funding tx did not sign to completion"
+            );
+            let signed_hex = signed["hex"]
+                .as_str()
+                .context("signrawtransactionwithwallet: no hex")?
+                .to_string();
+            // 4. decode locally to recover the txid and the vout paying `address` —
+            //    fundrawtransaction inserts change at a random position, so match the
+            //    output by scriptPubKey rather than assuming an index.
+            let tx: Transaction =
+                bitcoin::consensus::encode::deserialize(&hex::decode(&signed_hex)?)
+                    .context("decode built funding tx")?;
+            let want_spk = self.params.parse_address(address)?;
+            let vout = tx
+                .output
+                .iter()
+                .position(|o| o.script_pubkey == want_spk)
+                .context("built funding tx has no output paying the funding address")?
+                as u32;
+            Ok((tx.compute_txid().to_string(), vout, signed_hex))
+        };
+        match finish() {
+            Ok(built) => Ok(built),
+            Err(err) => {
+                let _ = self.wallet_cancel_funding(&funded_hex);
+                Err(err)
+            }
+        }
     }
 
     fn wallet_cancel_funding(&self, tx_hex: &str) -> Result<()> {

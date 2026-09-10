@@ -103,9 +103,10 @@ impl Ingest {
                 };
                 for ev in &events {
                     deletions_since = advance_cursor(deletions_since, ev.created_at.as_secs(), now);
-                    if let Some(swap_id) = pn::revoked_offer_from_event(ev) {
-                        if book.revoke(&ev.pubkey.to_hex(), &swap_id, now) {
-                            tracing::info!("offer {swap_id} revoked by its maker");
+                    if let Some(rev) = pn::revoked_offer_from_event(ev) {
+                        // Scoped to the revoking author's own listing (#10).
+                        if book.revoke(&rev.author, &rev.swap_id, now) {
+                            tracing::info!("offer {} revoked by its maker", rev.swap_id);
                         }
                     }
                 }

@@ -823,6 +823,33 @@ impl Store {
         Ok(())
     }
 
+    /// Drop the cached offers under `d_tag` whose maker (`envelope.from`)
+    /// is `author` — and ONLY those. A NIP-09 deletion is scoped to its
+    /// author's own listings; a same-id deletion by someone else must not
+    /// evict a victim's offer (security review 2026-09-09 #10). Returns
+    /// how many rows were removed.
+    pub fn nostr_offer_cache_remove_by_author(&self, d_tag: &str, author: &str) -> Result<usize> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT event_id, envelope FROM nostr_offer_cache WHERE d_tag = ?1")?;
+        let rows: Vec<(String, String)> = stmt
+            .query_map(params![d_tag], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<std::result::Result<_, _>>()?;
+        let mut removed = 0;
+        for (event_id, envelope) in rows {
+            let from = serde_json::from_str::<serde_json::Value>(&envelope)
+                .ok()
+                .and_then(|v| v.get("from").and_then(|f| f.as_str()).map(str::to_string));
+            if from.as_deref() == Some(author) {
+                removed += self.conn.execute(
+                    "DELETE FROM nostr_offer_cache WHERE event_id = ?1",
+                    params![event_id],
+                )?;
+            }
+        }
+        Ok(removed)
+    }
+
     /// Active (non-expired) cached offer envelope JSONs. `now` in unix secs.
     pub fn nostr_offer_cache_active(&self, now: u64) -> Result<Vec<String>> {
         let mut stmt = self
