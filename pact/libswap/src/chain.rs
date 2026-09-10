@@ -2013,13 +2013,58 @@ impl MultiBackend {
     /// the nurse working a little longer.
     pub fn tx_confirmations_min(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64> {
         // Each view's own FINALITY read (a view that cannot see the tx at
-        // all abstains instead of voting 0), min over the quorum.
-        let hits = self.require_responders(
-            "tx finality",
-            self.integrity_quorum(),
-            self.fan_out(|b| b.tx_confirmations_final(txid, spk_hint)),
-        )?;
-        Ok(hits.into_iter().min().expect("nonempty by quorum"))
+        // all abstains instead of voting 0), min over the responders — and
+        // the quorum follows the RESPONDERS' trust, not the configured
+        // primary's type (review 2026-09-10 closure recheck): a responding
+        // trusted node (own Core, no health cell) justifies a single-source
+        // verdict, min'd with whatever else answered; when it abstains
+        // (txindex-less node, foreign tx), the untrusted views must meet
+        // the untrusted quorum ON THEIR OWN, else there is no verdict —
+        // one public server never decides finality alone on mainnet.
+        let (hits, errors, skipped) = self.fan_out(|b| {
+            Ok((
+                b.view_health().is_none(),
+                b.tx_confirmations_final(txid, spk_hint)?,
+            ))
+        });
+        let trusted_answered = hits.iter().any(|(trusted, _)| *trusted);
+        let untrusted_answered = hits.iter().filter(|(trusted, _)| !trusted).count();
+        if trusted_answered || untrusted_answered >= self.untrusted_quorum() {
+            return Ok(hits
+                .into_iter()
+                .map(|(_, confs)| confs)
+                .min()
+                .expect("nonempty: a responder exists"));
+        }
+        let detail = errors
+            .first()
+            .map(|e| format!("; first error: {e:#}"))
+            .unwrap_or_default();
+        bail!(
+            "tx finality: no trusted view answered and only {untrusted_answered} of {} untrusted              view(s) did, {} needed ({skipped} in failure backoff, {} errored{detail})",
+            self.backends.len(),
+            self.untrusted_quorum(),
+            errors.len()
+        )
+    }
+
+    /// How many UNTRUSTED (public-server) views must agree to carry a
+    /// finality verdict when no trusted node answered: two on mainnet —
+    /// with a Core primary that abstained this is strict (one public
+    /// server never decides alone; the record stays unsettled until the
+    /// node can see the tx or a second view is configured), and nodeless
+    /// keeps its single-server concession only when a second view is not
+    /// even configured. One on test networks.
+    fn untrusted_quorum(&self) -> usize {
+        if self.primary().params().network != Network::Mainnet {
+            return 1;
+        }
+        let trusted_primary = self.backends[0].view_health().is_none();
+        if trusted_primary || self.backends.len() >= 2 {
+            2
+        } else {
+            1
+        }
     }
 
     /// The *least*-advanced MTP across responding views — the conservative
@@ -2784,6 +2829,37 @@ mod multi_backend_tests {
             1,
             "finality min"
         );
+    }
+
+    /// Review 2026-09-10 closure recheck: the finality quorum follows the
+    /// responders' trust. A trusted Core that abstains (txindex-less, a
+    /// foreign tx) must not hand the verdict to ONE public server.
+    #[test]
+    fn finality_quorum_follows_the_responders_trust() {
+        // Trusted primary abstains, one untrusted view says 99: no verdict.
+        let mb = multi(vec![
+            TestView::absent(),
+            TestView::ok(99).untrusted("fin-q-a"),
+        ]);
+        assert!(mb.tx_confirmations_min("txid", None).is_err());
+        // Trusted primary abstains, two untrusted views: their min.
+        let mb = multi(vec![
+            TestView::absent(),
+            TestView::ok(99).untrusted("fin-q-b"),
+            TestView::ok(3).untrusted("fin-q-c"),
+        ]);
+        assert_eq!(mb.tx_confirmations_min("txid", None).unwrap(), 3);
+        // Trusted primary answers: its word suffices, min'd with the rest.
+        let mb = multi(vec![TestView::ok(5), TestView::ok(99).untrusted("fin-q-d")]);
+        assert_eq!(mb.tx_confirmations_min("txid", None).unwrap(), 5);
+        let mb = multi(vec![TestView::ok(7)]);
+        assert_eq!(mb.tx_confirmations_min("txid", None).unwrap(), 7);
+        // Nodeless mainnet with two public views: still two needed.
+        let mb = multi(vec![
+            TestView::ok(99).untrusted("fin-q-e"),
+            TestView::absent().untrusted("fin-q-f"),
+        ]);
+        assert!(mb.tx_confirmations_min("txid", None).is_err());
     }
 
     #[test]
