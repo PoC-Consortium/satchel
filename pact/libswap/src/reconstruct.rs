@@ -339,16 +339,25 @@ fn cltv_satisfied(script: &Script, tx: &Transaction, sequence: Sequence) -> bool
 /// history entry's height is ONE view's claim, and a valid signature
 /// authenticates the transaction, not its inclusion (review 2026-09-10 A).
 /// So the height-derived depth is capped by the backend's own finality
-/// read — on a multi-view pool the MIN over its integrity quorum; an
-/// unreadable depth counts as 0 (shallow, retry later). Never deeper than
-/// the claim, never deeper than the quorum.
-fn final_depth(backend: &dyn ChainBackend, txid: &str, spk: &ScriptBuf, claimed: u64) -> u64 {
+/// read — on a multi-view pool the MIN over its integrity quorum. Never
+/// deeper than the claim, never deeper than the quorum. When no view can
+/// answer at all, `on_outage` decides: history classification reads 0
+/// (shallow, retry later — the claim was one view's word), the tier-L
+/// block scan keeps the claim (its source is the node's own block scan,
+/// which a txindex-less node cannot re-confirm by txid).
+fn final_depth(
+    backend: &dyn ChainBackend,
+    txid: &str,
+    spk: &ScriptBuf,
+    claimed: u64,
+    on_outage: u64,
+) -> u64 {
     if claimed == 0 {
         return 0;
     }
     backend
         .tx_confirmations_final(txid, Some(spk))
-        .unwrap_or(0)
+        .unwrap_or(on_outage)
         .min(claimed)
 }
 
@@ -472,7 +481,7 @@ pub fn classify_leg(
                 funding_height: *funding_height,
                 spend_txid: hit.txid.clone(),
                 spend_height: hit.height,
-                spend_confs: final_depth(backend, hit.txid, spk, confs_of(hit.height)),
+                spend_confs: final_depth(backend, hit.txid, spk, confs_of(hit.height), 0),
                 kind,
                 spend_tx_hex: bitcoin::consensus::encode::serialize_hex(hit.tx),
             })));
@@ -533,7 +542,7 @@ pub fn classify_spent_by_scan(
         0
     };
     let spend_txid = tx.compute_txid().to_string();
-    let spend_confs = final_depth(backend, &spend_txid, watch_spk, claimed);
+    let spend_confs = final_depth(backend, &spend_txid, watch_spk, claimed, claimed);
     Ok(Some(SpentLeg {
         outpoint: *outpoint,
         funding_height,

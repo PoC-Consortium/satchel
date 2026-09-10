@@ -1113,6 +1113,24 @@ impl ChainBackend for CoreRpcBackend {
         }
     }
 
+    fn tx_confirmations_final(&self, txid: &str, _spk_hint: Option<&ScriptBuf>) -> Result<u64> {
+        // Finality read: a tx this node cannot see at all (not in its
+        // wallet, and `getrawtransaction` without -txindex cannot find a
+        // MINED foreign tx) is NOT "0 confirmations" — it is no answer.
+        // Reporting 0 would let a blind node veto the depth of a spend the
+        // script-indexed views can see (a follower's Core primary next to
+        // its Electrum views). Errors here make this view a non-responder
+        // in the pool's quorum min, which is the honest reading.
+        if let Ok(tx) = self.rpc.call("gettransaction", &[json!(txid)]) {
+            return Ok(tx["confirmations"].as_u64().unwrap_or(0));
+        }
+        let tx = self
+            .rpc
+            .call("getrawtransaction", &[json!(txid), json!(true)])
+            .with_context(|| format!("tx {txid} unknown to this node (no txindex?)"))?;
+        Ok(tx["confirmations"].as_u64().unwrap_or(0))
+    }
+
     fn fee_rate_for(&self, conf_target: u16, conservative: bool) -> Result<u64> {
         // No estimate (empty/low-traffic mempool, or the node can't estimate) →
         // the fee market is effectively empty, so the relay minimum suffices
@@ -1994,10 +2012,12 @@ impl MultiBackend {
     /// Min over a quorum is the safe direction: a laggy view only keeps
     /// the nurse working a little longer.
     pub fn tx_confirmations_min(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64> {
+        // Each view's own FINALITY read (a view that cannot see the tx at
+        // all abstains instead of voting 0), min over the quorum.
         let hits = self.require_responders(
             "tx finality",
             self.integrity_quorum(),
-            self.fan_out(|b| b.tx_confirmations(txid, spk_hint)),
+            self.fan_out(|b| b.tx_confirmations_final(txid, spk_hint)),
         )?;
         Ok(hits.into_iter().min().expect("nonempty by quorum"))
     }
