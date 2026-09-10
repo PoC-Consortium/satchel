@@ -365,36 +365,49 @@ pub fn classify_leg(
     // Spend lookup per candidate; prefer a SPENT candidate (a completed
     // swap must classify terminal even if a stray duplicate funding
     // lingers unspent).
-    let find_spend =
-        |op: &OutPoint| -> Option<(&String, u64, &bitcoin::Transaction, usize, Vec<Vec<u8>>)> {
-            for (txid, height, tx) in &txs {
-                for (index, input) in tx.input.iter().enumerate() {
-                    if input.previous_output == *op {
-                        let witness: Vec<Vec<u8>> =
-                            input.witness.iter().map(|item| item.to_vec()).collect();
-                        return Some((txid, *height, tx, index, witness));
-                    }
+    /// The history tx (and which of its inputs) that spends a candidate.
+    struct SpendHit<'a> {
+        txid: &'a String,
+        height: u64,
+        tx: &'a bitcoin::Transaction,
+        index: usize,
+        witness: Vec<Vec<u8>>,
+    }
+    let find_spend = |op: &OutPoint| -> Option<SpendHit<'_>> {
+        for (txid, height, tx) in &txs {
+            for (index, input) in tx.input.iter().enumerate() {
+                if input.previous_output == *op {
+                    let witness: Vec<Vec<u8>> =
+                        input.witness.iter().map(|item| item.to_vec()).collect();
+                    return Some(SpendHit {
+                        txid,
+                        height: *height,
+                        tx,
+                        index,
+                        witness,
+                    });
                 }
             }
-            None
-        };
+        }
+        None
+    };
     for (op, funding_height) in &candidates {
-        if let Some((spend_txid, spend_height, spend_tx, index, witness)) = find_spend(op) {
+        if let Some(hit) = find_spend(op) {
             // Trust boundary: a spend the swap keys did not sign is not
             // evidence of a spend at all (lying/fabricating provider).
-            let kind = if witness_authentic(spk, amount_sat, spend_tx, index) {
-                classify_spend(&witness)
+            let kind = if witness_authentic(spk, amount_sat, hit.tx, hit.index) {
+                classify_spend(&hit.witness)
             } else {
                 SpendKind::Unknown
             };
             return Ok(Some(LegClass::Spent(SpentLeg {
                 outpoint: *op,
                 funding_height: *funding_height,
-                spend_txid: spend_txid.clone(),
-                spend_height,
-                spend_confs: confs_of(spend_height),
+                spend_txid: hit.txid.clone(),
+                spend_height: hit.height,
+                spend_confs: confs_of(hit.height),
                 kind,
-                spend_tx_hex: bitcoin::consensus::encode::serialize_hex(spend_tx),
+                spend_tx_hex: bitcoin::consensus::encode::serialize_hex(hit.tx),
             })));
         }
     }
