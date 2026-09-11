@@ -332,10 +332,22 @@ Three rules make that shape unrepresentable instead of curable:
 
 - **Confirmed-only selection.** Swap fundings go out via
   `wallet_send_confirmed` — Core's `send` with `options.minconf = 1`, the
-  nodeless wallet with every unconfirmed UTXO marked unspendable. v2's
-  build-and-hold funding (`wallet_build_funding`) is confirmed-only too: its
-  txid is committed into the pre-signed MuSig2 redeems, so an orphaned v2
-  funding would invalidate the whole signed bundle. Ordinary sends and sweeps
+  nodeless wallet with every unconfirmed UTXO marked unspendable. v2 follows
+  the same rule on BOTH legs (since 2026-09-10; the security review of
+  2026-09-09 found leg A still on the confirmation-blind send and Core leg B
+  without `minconf`): leg A goes out via `wallet_send_confirmed`, the
+  build-and-hold leg B (`wallet_build_funding`) selects confirmed coins only
+  (Core `fundrawtransaction` with `minconf = 1`, bdk confirmed-only). The v2
+  funding txid is committed into the pre-signed MuSig2 redeems, so an
+  orphaned v2 funding would invalidate the whole signed bundle. A v2 funding
+  short on confirmed coins queues like v1 (`funding-queued`) and the
+  scheduler's `adaptor_retry_funding` arm retries it each tick, relaying
+  `funding_ready` once it lands. Core forks older than 25.0 (Litecoin Core
+  0.21) reject the `minconf` option outright (`-3 Unexpected key minconf`);
+  both paths then fall back to selecting confirmed inputs themselves
+  (`listunspent 1`, largest first, with a fee allowance) and hand them to
+  `send` / `fundrawtransaction` with `add_inputs: false` — same rule, same
+  queue on a shortfall. Ordinary sends and sweeps
   deliberately keep the old selection — spending one's own unconfirmed change
   is normal wallet behavior; only *fundings* must never sit on a replaceable
   parent.

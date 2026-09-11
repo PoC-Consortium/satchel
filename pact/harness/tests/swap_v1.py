@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.normpath(
 
 from framework.daemon import Party  # noqa: E402
 from framework.services import Corkboard, NostrRelay  # noqa: E402
+from framework.stack import COINS_TOML  # noqa: E402
 from framework.testbase import PactTestFramework, run_scenarios  # noqa: E402
 from framework.util import (  # noqa: E402
     FEE_SLACK,
@@ -266,6 +267,79 @@ def test_daemon_autopilot_refund(h):
         assert after["bob_btcx"] <= before["bob_btcx"] + FEE_SLACK
         assert after["alice_btc"] <= before["alice_btc"] + FEE_SLACK
         print("[e2e] daemon-autopilot refund scenario OK")
+    finally:
+        alice.stop()
+        bob.stop()
+
+
+def test_refund_survives_other_chain_outage(h):
+    """Security review 2026-09-09 #9: the initiator's T1 refund of leg A needs
+    ONLY chain A. With chain B's backend down, the tick used to error before
+    reaching the refund (the redeem-side queries came first); now the redeem
+    side is isolated and the due refund still fires."""
+    alice = Party("alice-oc", h, h.workdir, "alice_btcx", "alice_btc").start()
+    bob = Party("bob-oc", h, h.workdir, "bob_btcx", "bob_btc").start()
+    try:
+        sid, m_funded_a, _m_funded_b = handshake_and_fund(h, alice, bob, "oc")
+        # Both offline through the completion window; the timelocks pass.
+        h.advance_time(5 * 3600)
+        # Chain B goes dark for good. Alice's leg lives on chain A.
+        h.btc.stop()
+        events = alice.tick()
+        assert any(e["action"] == "auto-refund" for e in events), f"alice: {events}"
+        assert alice.rpc("getswap", sid)["state"] == "refunded"
+        h.pocx.generate(1, "alice_btcx")
+        assert_htlc_spent(h.pocx, m_funded_a, "chain-A")
+        print("[e2e] leg-A refund fired with chain B unreachable")
+    finally:
+        alice.stop()
+        bob.stop()
+
+
+def test_v1_swap_ltc_leg_b(h):
+    """v1 swap with LITECOIND as leg B. Litecoin Core (0.21, a pre-25 fork)
+    rejects the `minconf` option that hard-P2's confirmed-only `send` relies
+    on ("Unexpected key minconf") — Bob's leg-B funding must fall back to
+    picking confirmed inputs itself and the swap must complete. Before the
+    fallback (2026-09-10) every v1 funding on LTC failed at this step.
+    Requires Harness(with_ltc=True)."""
+    assert h.ltc is not None, "this test needs Harness(with_ltc=True)"
+    h.ltc.create_wallet("alice_ltc")
+    h.ltc.create_wallet("bob_ltc")
+    h.ltc.generate(110, "bob_ltc")  # >100 for coinbase maturity
+
+    alice = Party("v1ltc-alice", h, h.workdir, "alice_btcx", "alice_btc",
+                  coins_file=COINS_TOML,
+                  extra_coins=[("ltc", h.ltc.rpc_url(wallet="alice_ltc"))]).start()
+    bob = Party("v1ltc-bob", h, h.workdir, "bob_btcx", "bob_btc",
+                coins_file=COINS_TOML,
+                extra_coins=[("ltc", h.ltc.rpc_url(wallet="bob_ltc"))]).start()
+    try:
+        t2, t1 = regtest_timelocks(h)
+        m_init = msg(h.workdir, "ltc_init.json")
+        m_accept = msg(h.workdir, "ltc_accept.json")
+        m_funded_a = msg(h.workdir, "ltc_funded_a.json")
+        m_funded_b = msg(h.workdir, "ltc_funded_b.json")
+        alice.cli("offer", "--give", f"btcx:{GIVE_POCX}", "--get", "ltc:0.5",
+                  "--t1", str(t1), "--t2", str(t2), "--out", m_init)
+        sid = swap_id_from(m_init)
+        bob.cli("accept", "--in", m_init, "--out", m_accept)
+        alice.cli("recv", "--in", m_accept)
+        alice.cli("fund", "--swap", sid, "--out", m_funded_a)
+        h.pocx.generate(1, "alice_btcx")
+        bob.cli("recv", "--in", m_funded_a)
+        # litecoind: `send` rejects minconf → the confirmed-input fallback.
+        bob.cli("fund", "--swap", sid, "--out", m_funded_b)
+        h.ltc.generate(1, "bob_ltc")
+        alice.cli("recv", "--in", m_funded_b)
+
+        alice.cli("redeem", "--swap", sid)          # reveals s on LTC
+        h.ltc.generate(1, "bob_ltc")
+        bob.cli("redeem", "--swap", sid)            # extracts s, claims PoCX
+        h.pocx.generate(1, "alice_btcx")
+        assert_htlc_spent(h.pocx, m_funded_a, "chain-A")
+        assert_htlc_spent(h.ltc, m_funded_b, "chain-B (LTC)")
+        print("[e2e] v1 swap with LTC leg B OK (confirmed-input fallback on litecoind)")
     finally:
         alice.stop()
         bob.stop()
@@ -1466,6 +1540,17 @@ class SiblingFundingQueueV1(PactTestFramework):
         test_sibling_funding_queue_v1(self.h)
 
 
+class RefundSurvivesOtherChainOutage(PactTestFramework):
+    def run_test(self):
+        test_refund_survives_other_chain_outage(self.h)
+
+
+class V1SwapLtcLegB(PactTestFramework):
+    with_ltc = True
+    def run_test(self):
+        test_v1_swap_ltc_leg_b(self.h)
+
+
 class FundingBumpDescendantBelt(PactTestFramework):
     def run_test(self):
         test_funding_bump_descendant_belt(self.h)
@@ -1528,6 +1613,8 @@ SCENARIOS = [
     SettlementRbfRaceRedeem,
     SettlementRbfRaceRefund,
     SiblingFundingQueueV1,
+    RefundSurvivesOtherChainOutage,
+    V1SwapLtcLegB,
     FundingBumpDescendantBelt,
     BalanceValidation,
     CreateImportThenSwap,

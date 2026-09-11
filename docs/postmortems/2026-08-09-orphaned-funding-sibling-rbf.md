@@ -17,7 +17,14 @@ question 1) was rejected — it would need cross-swap wallet-level machinery in
 a strictly per-swap engine; queueing bounds the cost at ~one block of latency
 against a §7.4 window measured in hours. Open question 2 (v2 exposure) was
 audited REAL and is closed by the same confirmed-only rule in
-`wallet_build_funding`.
+`wallet_build_funding`. **Correction (2026-09-10, security review 2026-09-09):**
+that closure was only partial — it covered v2 leg B on the bdk wallet. v2 leg A
+still used the confirmation-blind `wallet_send` on both wallet kinds, and the
+Core `fundrawtransaction` behind v2 leg B carried no `minconf`. Both are now
+confirmed-only (`wallet_send_confirmed` for leg A, `minconf: 1` for Core leg
+B), queue behind own change exactly like v1 (`funding-queued`, retried by the
+scheduler's `adaptor_retry_funding` arm), and are covered by the
+`SiblingFundingQueueV2` scenario.
 **Severity:** no funds at risk, but a live trade is silently lost and the swap record
 wedges permanently (unabortable, unrefundable, unfixable through the RPC surface).
 

@@ -896,6 +896,8 @@ export const ro: Bundle = {
     offersBodyMany:
       "{count} oferte de-ale tale sunt încă pe Corkboard. Ofertele nu blochează nimic, dar lăsându-le active înseamnă că contrapartidele le pot încă accepta cât timp Satchel este închis — engine-ul va deservi acceptările.",
     withdrawExit: "Retrage tot și ieși",
+    handoffFailed:
+      "Motorul nu a putut fi predat pentru a rula în fundal: {err}. Satchel rămâne deschis, iar motorul continuă să supravegheze schimburile tale — remediază problema și încearcă din nou.",
   },
   unlock: {
     title: "Deblochează merchant-ul",

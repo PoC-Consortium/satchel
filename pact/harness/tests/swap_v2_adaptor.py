@@ -540,6 +540,121 @@ def test_adaptor_depth_gate(h):
         bob.stop()
 
 
+def test_adaptor_direct_redeem_gate(h):
+    """Security review 2026-09-09 #4: the DIRECT `adaptorredeem` RPC enforces
+    the same leg-B gate as the scheduler (funding visible, right script and
+    amount, n_b deep, payout owned) before revealing `t`. Previously only the
+    tick checked depth, so a hand-driven redeem against a 0-conf leg B exposed
+    `t` to a funding the taker could still double-spend."""
+    alice = Party("adr-alice", h, h.workdir, "alice_btcx", "alice_btc", auto_init=False).start()
+    bob = Party("adr-bob", h, h.workdir, "bob_btcx", "bob_btc", auto_init=False).start()
+    try:
+        alice.setup_seed()
+        bob.setup_seed()
+        t2, t1 = regtest_timelocks(h)
+
+        init = _env(alice.rpc("adaptorinit", GIVE_POCX, GET_BTC, t1, t2))
+        sid = init["swap_id"]
+        accept = _env(bob.rpc("adaptoraccept", init))
+        alice.rpc("adaptorrecv", accept)
+        fa = _env(alice.rpc("adaptorfund", sid))
+        h.pocx.generate(1, "alice_btcx")
+        bob.rpc("adaptorrecv", fa)
+        fb = _env(bob.rpc("adaptorfund", sid))   # BUILDS leg B (unbroadcast)
+        alice.rpc("adaptorrecv", fb)
+        b_txid, b_vout = fb["body"]["txid"], fb["body"]["vout"]
+        na = _env(alice.rpc("adaptornonces", sid)); nb = _env(bob.rpc("adaptornonces", sid))
+        bob.rpc("adaptorrecv", na); alice.rpc("adaptorrecv", nb)
+        pa = _env(alice.rpc("adaptorsign", sid)); pb = _env(bob.rpc("adaptorsign", sid))
+        bob.rpc("adaptorrecv", pa); alice.rpc("adaptorrecv", pb)
+        alice.rpc("adaptorassemble", sid); bob.rpc("adaptorassemble", sid)
+
+        # Leg B sits in the mempool only (0 confs < n_b): the direct RPC must
+        # refuse to reveal t, leave the state alone and leg B unspent.
+        _broadcast_leg_b(bob, h.btc, "bob_btc", confs=0)
+        try:
+            alice.rpc("adaptorredeem", sid)
+        except RuntimeError as e:
+            assert "REFUSING to reveal t" in str(e), e
+        else:
+            raise AssertionError("adaptorredeem revealed t against a 0-conf leg B")
+        assert alice.rpc("listadaptorswaps")[0]["state"] == "signed"
+        assert h.btc.rpc("gettxout", b_txid, b_vout) is not None, "leg B must be unspent"
+
+        # At n_b (=1 here) the very same call goes through.
+        h.btc.generate(1, "bob_btc")
+        rec = alice.rpc("adaptorredeem", sid)["record"]
+        assert rec["state"] == "redeemed_b", rec
+        print("[e2e] direct adaptorredeem gate OK: refused at 0 conf, accepted at n_b")
+    finally:
+        alice.stop()
+        bob.stop()
+
+
+def test_sibling_funding_queue_v2(h):
+    """v2 twin of `SiblingFundingQueueV1` (2026-08-09 post-mortem, security
+    review 2026-09-09 regression concern): v2 leg-A fundings spend CONFIRMED
+    coins only on a Core wallet too. Two v2 swaps from a single-coin wallet:
+    the first funds, the second is QUEUED (typed, narrated — never chained on
+    the first's unconfirmed change, which an RBF bump would orphan together
+    with the pre-signed MuSig2 redeems), the scheduler carries the wait, and
+    one confirmation frees it."""
+    h.pocx.create_wallet("alice_solo_v2")
+    solo_addr = h.pocx.rpc("getnewaddress", wallet="alice_solo_v2")
+    h.pocx.rpc("sendtoaddress", solo_addr, 120.0, wallet="alice_btcx")
+    h.pocx.generate(1, "alice_btcx")
+
+    alice = Party("sq2-alice", h, h.workdir, "alice_solo_v2", "alice_btc",
+                  auto_init=False,
+                  pocx_url=h.pocx.rpc_url(wallet="alice_solo_v2")).start()
+    bob = Party("sq2-bob", h, h.workdir, "bob_btcx", "bob_btc", auto_init=False).start()
+    try:
+        alice.setup_seed()
+        bob.setup_seed()
+        t2, t1 = regtest_timelocks(h)
+        sids = []
+        for _ in range(2):
+            init = _env(alice.rpc("adaptorinit", GIVE_POCX, GET_BTC, t1, t2))
+            sids.append(init["swap_id"])
+            accept = _env(bob.rpc("adaptoraccept", init))
+            alice.rpc("adaptorrecv", accept)
+        first, second = sids
+
+        def rec(sid):
+            return next(r for r in alice.rpc("listadaptorswaps") if r["swap_id"] == sid)
+
+        alice.rpc("adaptorfund", first)          # spends the lone confirmed coin
+        try:
+            alice.rpc("adaptorfund", second)
+        except RuntimeError as e:
+            assert "funding queued" in str(e), e
+        else:
+            raise AssertionError("second v2 funding chained on unconfirmed change")
+        assert len(h.pocx.rpc("getrawmempool")) == 1, "second funding must not chain"
+        r2 = rec(second)
+        assert r2["funding_a_txid"] is None and r2["state"] == "accepted", r2
+
+        # The scheduler narrates the wait (no error, no abort) and retries.
+        events = alice.tick()
+        assert any(e["action"] == "funding-queued" and e["swap_id"] == second
+                   for e in events), events
+        assert len(h.pocx.rpc("getrawmempool")) == 1
+        assert rec(second)["state"] == "accepted"
+
+        # One confirmation frees the queue: the retry arm funds leg A.
+        h.pocx.generate(1, "alice_btcx")
+        drive_until(
+            alice,
+            lambda evs: any(e["action"] == "adaptor-fund" and e["swap_id"] == second
+                            for e in evs),
+            tries=3)
+        assert rec(second)["funding_a_txid"] is not None
+        print("[e2e] v2 sibling funding queue OK: confirmed-only leg A, queued then funded")
+    finally:
+        alice.stop()
+        bob.stop()
+
+
 def test_adaptor_corkboard_swap(h):
     """Board-driven v2 (the M6 headline): maker posts a PoCX↔BTC offer pinned to
     pact-htlc-v2 (the suite defaults to v1 HTLC; v2 is opt-in via the protocol
@@ -629,6 +744,16 @@ class AdaptorRedeemCpfpLtc(PactTestFramework):
         test_adaptor_redeem_cpfp_ltc(self.h)
 
 
+class AdaptorDirectRedeemGate(PactTestFramework):
+    def run_test(self):
+        test_adaptor_direct_redeem_gate(self.h)
+
+
+class SiblingFundingQueueV2(PactTestFramework):
+    def run_test(self):
+        test_sibling_funding_queue_v2(self.h)
+
+
 SCENARIOS = [
     AdaptorSwap,
     AdaptorRefund,
@@ -636,6 +761,8 @@ SCENARIOS = [
     AdaptorRedeemCpfp,
     AdaptorFundingCpfp,
     AdaptorDepthGate,
+    AdaptorDirectRedeemGate,
+    SiblingFundingQueueV2,
     AdaptorCorkboardSwap,
     AdaptorRedeemCpfpLtc,
 ]

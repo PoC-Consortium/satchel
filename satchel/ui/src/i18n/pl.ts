@@ -896,6 +896,8 @@ export const pl: Bundle = {
     offersBodyMany:
       "{count} Twoich ofert jest nadal na Corkboardzie. Oferty nic nie blokują, ale pozostawienie ich oznacza, że kontrahenci mogą je przyjąć, gdy Satchel jest zamknięty — silnik obsłuży przyjęcia.",
     withdrawExit: "Wycofaj wszystkie i wyjdź",
+    handoffFailed:
+      "Nie udało się przekazać silnika do dalszej pracy w tle: {err}. Satchel pozostaje otwarty, a silnik nadal pilnuje Twoich swapów — usuń problem i spróbuj ponownie.",
   },
   unlock: {
     title: "Odblokuj sprzedawcę",

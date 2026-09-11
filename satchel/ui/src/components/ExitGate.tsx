@@ -12,7 +12,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { useApp } from "../AppContext";
 import { useT } from "../i18n";
-import { inTauri, rpc } from "../api/tauri";
+import { errMsg, inTauri, rpc } from "../api/tauri";
 import { isActive } from "../format";
 import type { Offer } from "../api/types";
 
@@ -47,6 +47,7 @@ export default function ExitGate() {
   const [pending, setPending] = useState<Pending>(null);
   const [confirmText, setConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [handoffError, setHandoffError] = useState("");
 
   // Keep the latest swaps/identity reachable from the (long-lived) close handler.
   const swapsRef = useRef(swaps);
@@ -151,11 +152,21 @@ export default function ExitGate() {
   /** Terminal hand-off to Rust: detach-or-stop the managed pactd, then exit. */
   async function quit(keepRunning: boolean, withdraw: boolean) {
     setBusy(true);
+    setHandoffError("");
     try {
       await invoke("quit_app", { keepRunning, withdraw });
-    } catch {
-      // If the command fails, fall back to closing the window so the user is
-      // never trapped (managed pactd may then be stopped by the Exit handler).
+    } catch (e) {
+      if (keepRunning) {
+        // The hand-off failed BEFORE pactd was detached (the hand-off file
+        // could not be written): pactd is still ours, and destroying the
+        // window would let the exit handler STOP it — the opposite of what
+        // the user chose. Stay open, say why, let them retry.
+        setBusy(false);
+        setHandoffError(errMsg(e));
+        return;
+      }
+      // A failed stop-and-exit: fall back to closing the window so the user
+      // is never trapped (the Exit handler then stops the managed pactd).
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       await getCurrentWindow().destroy();
     }
@@ -177,6 +188,11 @@ export default function ExitGate() {
             })}
           </Alert>
           <DialogContentText sx={{ mb: 2 }}>{t("exit.keepRunningExplain")}</DialogContentText>
+          {handoffError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {t("exit.handoffFailed", { err: handoffError })}
+            </Alert>
+          )}
           <DialogContentText sx={{ mb: 1 }}>
             <b>{t("exit.forceQuitWarn")}</b> {t("exit.typeToConfirm", { word: t("exit.confirmWord") })}
           </DialogContentText>
@@ -229,6 +245,11 @@ export default function ExitGate() {
             count: pending.offers.length,
           })}
         </DialogContentText>
+        {handoffError && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {t("exit.handoffFailed", { err: handoffError })}
+          </Alert>
+        )}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, flexWrap: "wrap", gap: 1 }}>
         <Button onClick={() => setPending(null)} sx={{ mr: "auto" }} disabled={busy}>

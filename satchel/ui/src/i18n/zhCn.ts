@@ -893,6 +893,8 @@ export const zhCn: Bundle = {
     offersBodyMany:
       "你的 {count} 条报价仍在 Corkboard 上。报价不锁定任何资金，但保留它们意味着在 Satchel 关闭期间对手方仍可接受 — 引擎会处理这些接受。",
     withdrawExit: "全部撤回并退出",
+    handoffFailed:
+      "无法将引擎交接为后台继续运行：{err}。Satchel 保持打开，引擎会继续看护你的兑换 — 请解决问题后重试。",
   },
   unlock: {
     title: "解锁商户",

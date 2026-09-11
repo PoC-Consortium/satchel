@@ -896,6 +896,8 @@ export const id: Bundle = {
     offersBodyMany:
       "{count} penawaran milik Anda masih ada di Corkboard. Penawaran tidak mengunci apa pun, tapi membiarkannya terpasang berarti lawan transaksi masih bisa mengambilnya saat Satchel ditutup — engine akan melayani pengambilan itu.",
     withdrawExit: "Tarik semua & keluar",
+    handoffFailed:
+      "Mesin tidak dapat diserahkan untuk terus berjalan di latar belakang: {err}. Satchel tetap terbuka dan mesin tetap mengawasi swap Anda — perbaiki masalahnya lalu coba lagi.",
   },
   unlock: {
     title: "Buka kunci merchant",

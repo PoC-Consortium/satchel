@@ -19,14 +19,23 @@
 //! All backend data is untrusted (spec §10): funding outputs are matched
 //! byte-for-byte against the locally derived scriptPubKey AND the agreed
 //! amount; spend classification rests on witness content that cannot be
-//! fabricated meaningfully (a v1 redeem must carry a preimage hashing to
-//! `H`; a v2 refund must reveal the exact tapleaf we can rebuild; a v2
-//! key-path spend can only exist co-signed by the MuSig2 aggregate). A
-//! garbage witness lands in [`SpendKind::Unknown`], which never drives a
-//! terminal decision.
+//! fabricated (a v1 redeem must carry a preimage hashing to `H`; a v2
+//! refund must reveal the exact tapleaf we can rebuild) — AND, before any
+//! protocol shape is judged, the spending input's signature is verified
+//! against the funding output it claims to spend ([`witness_authentic`]):
+//! a history provider can invent a transaction, but not a signature by the
+//! swap keys over it (security review 2026-09-09 #7). A garbage witness
+//! lands in [`SpendKind::Unknown`], which never drives a terminal decision.
 
 use anyhow::{bail, Context, Result};
-use bitcoin::{OutPoint, Script, ScriptBuf};
+use bitcoin::absolute::LockTime;
+use bitcoin::hashes::{sha256, Hash};
+use bitcoin::opcodes::all::OP_CLTV;
+use bitcoin::script::Instruction;
+use bitcoin::secp256k1::{Message, PublicKey, Secp256k1, XOnlyPublicKey};
+use bitcoin::sighash::{Prevouts, SighashCache};
+use bitcoin::taproot::{ControlBlock, TapLeafHash};
+use bitcoin::{Amount, OutPoint, Script, ScriptBuf, Sequence, Transaction, TxOut};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -125,6 +134,233 @@ pub fn classify_v2_spend(witness: &[Vec<u8>], refund_script: &Script) -> SpendKi
     }
 }
 
+/// Is input `index` of `tx` a signature-valid spend of a funding output
+/// `(prev_spk, prev_value_sat)`? This is the trust boundary between a
+/// history provider's claims and our terminal decisions: the provider can
+/// hand us any transaction bytes, but it cannot produce a signature by the
+/// swap keys over them, so a spend whose witness does not verify is not
+/// evidence of anything.
+///
+/// - **P2WSH (v1 HTLC):** the last witness item must hash to the output's
+///   program (it IS our witness script), the witness must open with
+///   `[sig, pubkey, …]`, that pubkey must be THE key the taken branch
+///   CHECKSIGs (the OP_IF selector picks the branch; the script's hash160
+///   pushes are `[redeem, refund]` in order — each branch authorizes
+///   exactly one), the ECDSA signature must verify over the BIP143 sighash
+///   for this input, and a refund must satisfy the branch's CLTV
+///   (nLockTime ≥ T, non-final sequence).
+/// - **P2TR key path (v2 cooperative redeem):** the single Schnorr
+///   signature must verify against the OUTPUT key over the BIP341 key-path
+///   sighash. Only the MuSig2 aggregate can produce it.
+/// - **P2TR script path (v2 refund):** the control block must commit the
+///   revealed leaf to the output key, and the signature must verify against
+///   a key the leaf pushes over the script-path sighash.
+///
+/// BIP341 sighashes commit to EVERY prevout of the spending tx; only this
+/// one is known here, so a Taproot spend with more than one input is
+/// unverifiable and reads as not authentic (our redeems/refunds are always
+/// single-input). Output types this crate never funds are passed through.
+pub fn witness_authentic(
+    prev_spk: &Script,
+    prev_value_sat: u64,
+    tx: &Transaction,
+    index: usize,
+) -> bool {
+    let Some(input) = tx.input.get(index) else {
+        return false;
+    };
+    let witness: Vec<&[u8]> = input.witness.iter().collect();
+    let secp = Secp256k1::verification_only();
+    if prev_spk.is_p2wsh() {
+        // Program = SHA256(witness script) — consensus requires the last
+        // item to BE that script.
+        let Some(script_bytes) = witness.last() else {
+            return false;
+        };
+        if sha256::Hash::hash(script_bytes).as_byte_array() != &prev_spk.as_bytes()[2..] {
+            return false;
+        }
+        let script = Script::from_bytes(script_bytes);
+        let (Some(sig_bytes), Some(pk_bytes)) = (witness.first(), witness.get(1)) else {
+            return false;
+        };
+        let Ok(pubkey) = PublicKey::from_slice(pk_bytes) else {
+            return false;
+        };
+        // Which branch does this witness take? The item before the script
+        // is the OP_IF selector: non-empty = hash branch (redeem), empty =
+        // CLTV branch (refund). Each branch CHECKSIGs exactly ONE key, named
+        // by hash160 in script order `[redeem, refund]` — the OTHER key's
+        // signature satisfies nothing (review 2026-09-10 B).
+        if witness.len() < 3 {
+            return false;
+        }
+        let selector = witness[witness.len() - 2];
+        let hashes: Vec<&[u8]> = script
+            .instructions()
+            .filter_map(|ins| match ins {
+                Ok(Instruction::PushBytes(push)) if push.len() == 20 => Some(push.as_bytes()),
+                _ => None,
+            })
+            .collect();
+        if hashes.len() != 2 {
+            return false; // not the v1 HTLC template
+        }
+        let pk_hash = bitcoin::hashes::hash160::Hash::hash(pk_bytes);
+        let is_refund = selector.is_empty();
+        let required = if is_refund { hashes[1] } else { hashes[0] };
+        if pk_hash.as_byte_array() != required {
+            return false;
+        }
+        if is_refund && !cltv_satisfied(script, tx, input.sequence) {
+            return false;
+        }
+        let Ok(sig) = bitcoin::ecdsa::Signature::from_slice(sig_bytes) else {
+            return false;
+        };
+        let Ok(sighash) = SighashCache::new(tx).p2wsh_signature_hash(
+            index,
+            script,
+            Amount::from_sat(prev_value_sat),
+            sig.sighash_type,
+        ) else {
+            return false;
+        };
+        return secp
+            .verify_ecdsa(
+                &Message::from_digest(sighash.to_byte_array()),
+                &sig.signature,
+                &pubkey,
+            )
+            .is_ok();
+    }
+    if prev_spk.is_p2tr() {
+        let Ok(output_key) = XOnlyPublicKey::from_slice(&prev_spk.as_bytes()[2..]) else {
+            return false;
+        };
+        if tx.input.len() != 1 || index != 0 {
+            return false; // sighash needs every prevout; we only know ours
+        }
+        let prevout = TxOut {
+            value: Amount::from_sat(prev_value_sat),
+            script_pubkey: prev_spk.to_owned(),
+        };
+        let prevouts = Prevouts::All(std::slice::from_ref(&prevout));
+        match witness.as_slice() {
+            [sig_bytes] => {
+                let Ok(sig) = bitcoin::taproot::Signature::from_slice(sig_bytes) else {
+                    return false;
+                };
+                let Ok(sighash) = SighashCache::new(tx).taproot_key_spend_signature_hash(
+                    0,
+                    &prevouts,
+                    sig.sighash_type,
+                ) else {
+                    return false;
+                };
+                secp.verify_schnorr(
+                    &sig.signature,
+                    &Message::from_digest(sighash.to_byte_array()),
+                    &output_key,
+                )
+                .is_ok()
+            }
+            [sig_bytes, script_bytes, control_bytes] => {
+                let Ok(control) = ControlBlock::decode(control_bytes) else {
+                    return false;
+                };
+                let script = Script::from_bytes(script_bytes);
+                if !control.verify_taproot_commitment(&secp, output_key, script) {
+                    return false;
+                }
+                let Ok(sig) = bitcoin::taproot::Signature::from_slice(sig_bytes) else {
+                    return false;
+                };
+                let leaf_hash = TapLeafHash::from_script(script, control.leaf_version);
+                let Ok(sighash) = SighashCache::new(tx).taproot_script_spend_signature_hash(
+                    0,
+                    &prevouts,
+                    leaf_hash,
+                    sig.sighash_type,
+                ) else {
+                    return false;
+                };
+                let msg = Message::from_digest(sighash.to_byte_array());
+                // Our only leaf is the CLTV refund: the spend must satisfy
+                // its locktime as well as carry the leaf key's signature.
+                if !cltv_satisfied(script, tx, input.sequence) {
+                    return false;
+                }
+                // The leaf's CHECKSIG key is one of its 32-byte pushes.
+                script.instructions().any(|ins| match ins {
+                    Ok(Instruction::PushBytes(push)) if push.len() == 32 => {
+                        XOnlyPublicKey::from_slice(push.as_bytes())
+                            .map(|key| secp.verify_schnorr(&sig.signature, &msg, &key).is_ok())
+                            .unwrap_or(false)
+                    }
+                    _ => false,
+                })
+            }
+            _ => false,
+        }
+    } else {
+        true // not a swap-leg output type this crate builds — no opinion
+    }
+}
+
+/// The `<T>` a script feeds OP_CHECKLOCKTIMEVERIFY (the push right before
+/// the opcode), if it has one.
+fn script_locktime(script: &Script) -> Option<u32> {
+    let mut last: Option<i64> = None;
+    for ins in script.instructions() {
+        let ins = ins.ok()?;
+        if matches!(ins, Instruction::Op(op) if op == OP_CLTV) {
+            return last.and_then(|v| u32::try_from(v).ok());
+        }
+        last = ins.script_num();
+    }
+    None
+}
+
+/// Would OP_CHECKLOCKTIMEVERIFY in `script` pass for `tx`? nLockTime must be
+/// the same unit as `T` and at least it, and the spending input must not be
+/// final (BIP65). A "refund" that fails this could never have been mined.
+fn cltv_satisfied(script: &Script, tx: &Transaction, sequence: Sequence) -> bool {
+    let Some(t) = script_locktime(script) else {
+        return false;
+    };
+    let required = LockTime::from_consensus(t);
+    tx.lock_time.is_same_unit(required)
+        && tx.lock_time.to_consensus_u32() >= t
+        && sequence != Sequence::MAX
+}
+
+/// The depth a terminal decision may rely on for a discovered spend. A
+/// history entry's height is ONE view's claim, and a valid signature
+/// authenticates the transaction, not its inclusion (review 2026-09-10 A).
+/// So the height-derived depth is capped by the backend's own finality
+/// read — on a multi-view pool the MIN over its integrity quorum. Never
+/// deeper than the claim, never deeper than the quorum. When no view can
+/// answer at all, `on_outage` decides: history classification reads 0
+/// (shallow, retry later — the claim was one view's word), the tier-L
+/// block scan keeps the claim (its source is the node's own block scan,
+/// which a txindex-less node cannot re-confirm by txid).
+fn final_depth(
+    backend: &dyn ChainBackend,
+    txid: &str,
+    spk: &ScriptBuf,
+    claimed: u64,
+    on_outage: u64,
+) -> u64 {
+    if claimed == 0 {
+        return 0;
+    }
+    backend
+        .tx_confirmations_final(txid, Some(spk))
+        .unwrap_or(on_outage)
+        .min(claimed)
+}
+
 /// Defensive cap on how many history entries a leg classification will
 /// fetch. A swap leg's script is unique to the swap, so its real history is
 /// a handful of transactions; anything larger is address spam and reads as
@@ -205,29 +441,49 @@ pub fn classify_leg(
     // Spend lookup per candidate; prefer a SPENT candidate (a completed
     // swap must classify terminal even if a stray duplicate funding
     // lingers unspent).
-    let find_spend =
-        |op: &OutPoint| -> Option<(&String, u64, &bitcoin::Transaction, Vec<Vec<u8>>)> {
-            for (txid, height, tx) in &txs {
-                for input in &tx.input {
-                    if input.previous_output == *op {
-                        let witness: Vec<Vec<u8>> =
-                            input.witness.iter().map(|item| item.to_vec()).collect();
-                        return Some((txid, *height, tx, witness));
-                    }
+    /// The history tx (and which of its inputs) that spends a candidate.
+    struct SpendHit<'a> {
+        txid: &'a String,
+        height: u64,
+        tx: &'a bitcoin::Transaction,
+        index: usize,
+        witness: Vec<Vec<u8>>,
+    }
+    let find_spend = |op: &OutPoint| -> Option<SpendHit<'_>> {
+        for (txid, height, tx) in &txs {
+            for (index, input) in tx.input.iter().enumerate() {
+                if input.previous_output == *op {
+                    let witness: Vec<Vec<u8>> =
+                        input.witness.iter().map(|item| item.to_vec()).collect();
+                    return Some(SpendHit {
+                        txid,
+                        height: *height,
+                        tx,
+                        index,
+                        witness,
+                    });
                 }
             }
-            None
-        };
+        }
+        None
+    };
     for (op, funding_height) in &candidates {
-        if let Some((spend_txid, spend_height, spend_tx, witness)) = find_spend(op) {
+        if let Some(hit) = find_spend(op) {
+            // Trust boundary: a spend the swap keys did not sign is not
+            // evidence of a spend at all (lying/fabricating provider).
+            let kind = if witness_authentic(spk, amount_sat, hit.tx, hit.index) {
+                classify_spend(&hit.witness)
+            } else {
+                SpendKind::Unknown
+            };
             return Ok(Some(LegClass::Spent(SpentLeg {
                 outpoint: *op,
                 funding_height: *funding_height,
-                spend_txid: spend_txid.clone(),
-                spend_height,
-                spend_confs: confs_of(spend_height),
-                kind: classify_spend(&witness),
-                spend_tx_hex: bitcoin::consensus::encode::serialize_hex(spend_tx),
+                spend_txid: hit.txid.clone(),
+                spend_height: hit.height,
+                spend_confs: final_depth(backend, hit.txid, spk, confs_of(hit.height), 0),
+                kind,
+                spend_tx_hex: bitcoin::consensus::encode::serialize_hex(hit.tx),
             })));
         }
     }
@@ -256,6 +512,7 @@ pub fn classify_spent_by_scan(
     backend: &dyn ChainBackend,
     outpoint: &OutPoint,
     watch_spk: &ScriptBuf,
+    funding_value_sat: u64,
     funding_height: u64,
     scan_floor: u64,
     classify_spend: &dyn Fn(&[Vec<u8>]) -> SpendKind,
@@ -263,23 +520,36 @@ pub fn classify_spent_by_scan(
     let Some((tx, spend_height)) = backend.find_spend_tx(outpoint, watch_spk, scan_floor)? else {
         return Ok(None);
     };
-    let Some(input) = tx.input.iter().find(|i| i.previous_output == *outpoint) else {
+    let Some(index) = tx.input.iter().position(|i| i.previous_output == *outpoint) else {
         return Ok(None); // a hit that doesn't spend our outpoint is not evidence
     };
-    let witness: Vec<Vec<u8>> = input.witness.iter().map(|item| item.to_vec()).collect();
+    let witness: Vec<Vec<u8>> = tx.input[index]
+        .witness
+        .iter()
+        .map(|item| item.to_vec())
+        .collect();
+    // Same trust boundary as `classify_leg`: an unsigned/mis-signed spend
+    // is not evidence (the scan result may come from an untrusted view).
+    let kind = if witness_authentic(watch_spk, funding_value_sat, &tx, index) {
+        classify_spend(&witness)
+    } else {
+        SpendKind::Unknown
+    };
     let tip = backend.tip_height()?;
-    let spend_confs = if spend_height > 0 && tip >= spend_height {
+    let claimed = if spend_height > 0 && tip >= spend_height {
         tip - spend_height + 1
     } else {
         0
     };
+    let spend_txid = tx.compute_txid().to_string();
+    let spend_confs = final_depth(backend, &spend_txid, watch_spk, claimed, claimed);
     Ok(Some(SpentLeg {
         outpoint: *outpoint,
         funding_height,
-        spend_txid: tx.compute_txid().to_string(),
+        spend_txid,
         spend_height,
         spend_confs,
-        kind: classify_spend(&witness),
+        kind,
         spend_tx_hex: bitcoin::consensus::encode::serialize_hex(&tx),
     }))
 }
@@ -414,6 +684,327 @@ mod tests {
         sha256::Hash::hash(preimage).to_byte_array()
     }
 
+    // ---- authentic (really signed) spend fixtures ----------------------
+    //
+    // `witness_authentic` verifies real signatures, so the classification
+    // tests below build real ones: a v1 HTLC redeemed/refunded with the
+    // keys the script names, and a v2 leg key-path-redeemed with the
+    // (tweaked) internal key / script-path-refunded with the refund key.
+
+    struct V1Fixture {
+        htlc: crate::htlc::Htlc,
+        redeem: Keypair,
+        refund: Keypair,
+        preimage: [u8; 32],
+    }
+
+    fn v1_fixture() -> (V1Fixture, Secp256k1<bitcoin::secp256k1::All>) {
+        let secp = Secp256k1::new();
+        let redeem = Keypair::from_seckey_slice(&secp, &[0x11; 32]).unwrap();
+        let refund = Keypair::from_seckey_slice(&secp, &[0x22; 32]).unwrap();
+        let preimage = [9u8; 32];
+        let htlc = crate::htlc::Htlc::new(
+            hash_of(&preimage),
+            bitcoin::secp256k1::PublicKey::from_keypair(&redeem),
+            bitcoin::secp256k1::PublicKey::from_keypair(&refund),
+            1_780_000_000,
+        )
+        .unwrap();
+        (
+            V1Fixture {
+                htlc,
+                redeem,
+                refund,
+                preimage,
+            },
+            secp,
+        )
+    }
+
+    /// Sign input 0 of `tx` (spending `funding`'s P2WSH output) with `key`
+    /// and lay down the v1 witness `[sig, pubkey, <branch items…>, script]`.
+    fn sign_v1(
+        secp: &Secp256k1<bitcoin::secp256k1::All>,
+        fx: &V1Fixture,
+        key: &Keypair,
+        value: u64,
+        branch: &[Vec<u8>],
+        mut tx: Transaction,
+    ) -> Transaction {
+        use bitcoin::sighash::EcdsaSighashType;
+        let script = fx.htlc.witness_script();
+        let sighash = SighashCache::new(&tx)
+            .p2wsh_signature_hash(0, &script, Amount::from_sat(value), EcdsaSighashType::All)
+            .unwrap();
+        let sig = secp.sign_ecdsa(
+            &Message::from_digest(sighash.to_byte_array()),
+            &key.secret_key(),
+        );
+        let mut sig_bytes = sig.serialize_der().to_vec();
+        sig_bytes.push(EcdsaSighashType::All as u8);
+        let mut items = vec![
+            sig_bytes,
+            bitcoin::secp256k1::PublicKey::from_keypair(key)
+                .serialize()
+                .to_vec(),
+        ];
+        items.extend_from_slice(branch);
+        items.push(script.to_bytes());
+        let mut w = Witness::new();
+        for item in items {
+            w.push(item);
+        }
+        tx.input[0].witness = w;
+        tx
+    }
+
+    /// Key-path (cooperative) spend of a v2 leg, signed by the tweaked
+    /// internal key — what only the MuSig2 aggregate can do for real.
+    fn keypath_spend(
+        secp: &Secp256k1<bitcoin::secp256k1::All>,
+        leg: &TaprootLeg,
+        internal: &Keypair,
+        funding: &Transaction,
+        value: u64,
+    ) -> Transaction {
+        use bitcoin::key::TapTweak;
+        use bitcoin::sighash::TapSighashType;
+        let mut tx = spend_tx(funding, &[]);
+        let spend_info = leg.spend_info(secp).unwrap();
+        let prevout = leg.funding_txout(secp, value).unwrap();
+        let sighash = SighashCache::new(&tx)
+            .taproot_key_spend_signature_hash(
+                0,
+                &Prevouts::All(&[prevout]),
+                TapSighashType::Default,
+            )
+            .unwrap();
+        let tweaked = internal.tap_tweak(secp, spend_info.merkle_root());
+        let sig = secp.sign_schnorr(
+            &Message::from_digest(sighash.to_byte_array()),
+            &tweaked.to_keypair(),
+        );
+        crate::taproot::attach_keypath_signature(&mut tx, sig);
+        tx
+    }
+
+    #[test]
+    fn witness_authentic_v1_accepts_real_signatures_and_rejects_forgeries() {
+        let (fx, secp) = v1_fixture();
+        let spk = fx.htlc.script_pubkey();
+        let value = 100_000;
+        let f = funding_tx(&spk, value);
+        // Real redeem by the redeem key: authentic, and classified Redeem.
+        let redeem = sign_v1(
+            &secp,
+            &fx,
+            &fx.redeem,
+            value,
+            &[fx.preimage.to_vec(), vec![1]],
+            spend_tx(&f, &[]),
+        );
+        assert!(witness_authentic(&spk, value, &redeem, 0));
+        let w: Vec<Vec<u8>> = redeem.input[0].witness.iter().map(<[u8]>::to_vec).collect();
+        assert_eq!(classify_v1_spend(&w, &fx.htlc.hash_h), SpendKind::Redeem);
+        // Real refund by the refund key (CLTV satisfied: nLockTime = T,
+        // non-final sequence).
+        let mut skeleton = spend_tx(&f, &[]);
+        skeleton.lock_time = LockTime::from_consensus(fx.htlc.locktime);
+        skeleton.input[0].sequence = Sequence::from_consensus(0xFFFF_FFFD);
+        let refund = sign_v1(&secp, &fx, &fx.refund, value, &[vec![]], skeleton);
+        assert!(witness_authentic(&spk, value, &refund, 0));
+        // Wrong amount → sighash differs → not authentic.
+        assert!(!witness_authentic(&spk, value + 1, &refund, 0));
+        // A stranger's key (not pushed by the script) signing the refund
+        // shape — exactly the forgery a lying provider could produce.
+        let stranger = Keypair::from_seckey_slice(&secp, &[0x33; 32]).unwrap();
+        let mut skeleton = spend_tx(&f, &[]);
+        skeleton.lock_time = LockTime::from_consensus(fx.htlc.locktime);
+        skeleton.input[0].sequence = Sequence::from_consensus(0xFFFF_FFFD);
+        let forged = sign_v1(&secp, &fx, &stranger, value, &[vec![]], skeleton);
+        assert!(!witness_authentic(&spk, value, &forged, 0));
+        // Garbage signature bytes with the right key and script.
+        let mut garbage = refund.clone();
+        let mut w = Witness::new();
+        w.push(vec![0x30u8; 71]);
+        for item in refund.input[0].witness.iter().skip(1) {
+            w.push(item);
+        }
+        garbage.input[0].witness = w;
+        assert!(!witness_authentic(&spk, value, &garbage, 0));
+        // Wrong witness script (does not hash to the program).
+        let mut wrong_script = refund.clone();
+        let mut w = Witness::new();
+        for item in refund.input[0].witness.iter().take(3) {
+            w.push(item);
+        }
+        w.push(vec![0xAA; 40]);
+        wrong_script.input[0].witness = w;
+        assert!(!witness_authentic(&spk, value, &wrong_script, 0));
+    }
+
+    #[test]
+    fn witness_authentic_v2_accepts_real_keypath_and_refund_and_rejects_forgeries() {
+        let (leg, secp) = sample_leg();
+        let internal = Keypair::from_seckey_slice(&secp, &[0x24; 32]).unwrap();
+        let refund_key = Keypair::from_seckey_slice(&secp, &[0x42; 32]).unwrap();
+        let spk = leg.script_pubkey(&secp).unwrap();
+        let value = 100_000;
+        let f = funding_tx(&spk, value);
+        // Real key-path spend by the tweaked internal key.
+        let redeem = keypath_spend(&secp, &leg, &internal, &f, value);
+        assert!(witness_authentic(&spk, value, &redeem, 0));
+        let w: Vec<Vec<u8>> = redeem.input[0].witness.iter().map(<[u8]>::to_vec).collect();
+        assert_eq!(
+            classify_v2_spend(&w, &leg.refund_script()),
+            SpendKind::Redeem
+        );
+        // The fabricated 64 zero bytes a lying server could invent.
+        let forged = spend_tx(&f, &[vec![0u8; 64]]);
+        assert!(!witness_authentic(&spk, value, &forged, 0));
+        // Key-path signed by the WRONG key (the refund key, untweaked).
+        let wrong = keypath_spend(&secp, &leg, &refund_key, &f, value);
+        assert!(!witness_authentic(&spk, value, &wrong, 0));
+        // Real script-path refund via the production builder.
+        let op = bitcoin::OutPoint {
+            txid: f.compute_txid(),
+            vout: 0,
+        };
+        let dest = ScriptBuf::new_p2wsh(&ScriptBuf::from(vec![0x51u8]).wscript_hash());
+        let refund =
+            crate::taproot::build_refund_tx(&secp, &leg, op, value, dest.clone(), 500, &refund_key)
+                .unwrap();
+        assert!(witness_authentic(&spk, value, &refund, 0));
+        let w: Vec<Vec<u8>> = refund.input[0].witness.iter().map(<[u8]>::to_vec).collect();
+        assert_eq!(
+            classify_v2_spend(&w, &leg.refund_script()),
+            SpendKind::Refund
+        );
+        // Same leaf + control block, garbage signature.
+        let mut forged_refund = refund.clone();
+        let mut w = Witness::new();
+        w.push(vec![0u8; 64]);
+        for item in refund.input[0].witness.iter().skip(1) {
+            w.push(item);
+        }
+        forged_refund.input[0].witness = w;
+        assert!(!witness_authentic(&spk, value, &forged_refund, 0));
+        // A leaf the control block does not commit to.
+        let mut alien_leaf = refund.clone();
+        let mut w = Witness::new();
+        w.push(refund.input[0].witness.iter().next().unwrap());
+        w.push(vec![0x51u8]);
+        w.push(refund.input[0].witness.iter().nth(2).unwrap());
+        alien_leaf.input[0].witness = w;
+        assert!(!witness_authentic(&spk, value, &alien_leaf, 0));
+    }
+
+    /// Review 2026-09-10 B: each v1 branch authorizes exactly one key. A
+    /// refund-shaped witness signed by the REDEEM key (or a redeem-shaped
+    /// one signed by the refund key) is not a spend; a refund must also
+    /// satisfy its CLTV.
+    #[test]
+    fn witness_authentic_v1_binds_the_key_to_the_taken_branch() {
+        let (fx, secp) = v1_fixture();
+        let spk = fx.htlc.script_pubkey();
+        let value = 100_000;
+        let f = funding_tx(&spk, value);
+        let refund_skeleton = || {
+            let mut tx = spend_tx(&f, &[]);
+            tx.lock_time = LockTime::from_consensus(fx.htlc.locktime);
+            tx.input[0].sequence = Sequence::from_consensus(0xFFFF_FFFD);
+            tx
+        };
+        // Refund branch, refund key, CLTV satisfied: authentic.
+        let refund = sign_v1(&secp, &fx, &fx.refund, value, &[vec![]], refund_skeleton());
+        assert!(witness_authentic(&spk, value, &refund, 0));
+        // Refund branch signed by the REDEEM key: the wrong key for that branch.
+        let wrong = sign_v1(&secp, &fx, &fx.redeem, value, &[vec![]], refund_skeleton());
+        assert!(!witness_authentic(&spk, value, &wrong, 0));
+        // Redeem branch signed by the REFUND key: same, other way round.
+        let wrong = sign_v1(
+            &secp,
+            &fx,
+            &fx.refund,
+            value,
+            &[fx.preimage.to_vec(), vec![1]],
+            spend_tx(&f, &[]),
+        );
+        assert!(!witness_authentic(&spk, value, &wrong, 0));
+        // Refund with the right key but nLockTime below T / a final sequence:
+        // CLTV could never have passed — not a spend.
+        let early = sign_v1(&secp, &fx, &fx.refund, value, &[vec![]], spend_tx(&f, &[]));
+        assert!(!witness_authentic(&spk, value, &early, 0));
+        let mut final_seq = refund_skeleton();
+        final_seq.input[0].sequence = Sequence::MAX;
+        let final_seq = sign_v1(&secp, &fx, &fx.refund, value, &[vec![]], final_seq);
+        assert!(!witness_authentic(&spk, value, &final_seq, 0));
+    }
+
+    /// Review 2026-09-10 A: a history entry's height is one view's claim.
+    /// The depth a terminal decision sees is capped by the backend's
+    /// finality read (the quorum min on a pool) — the same signed spend at
+    /// a claimed height of 95 reads 0 deep when the finality read says 0.
+    #[test]
+    fn leg_spend_depth_is_capped_by_the_finality_read() {
+        let (fx, secp) = v1_fixture();
+        let spk = fx.htlc.script_pubkey();
+        let f = funding_tx(&spk, 100_000);
+        let sp = sign_v1(
+            &secp,
+            &fx,
+            &fx.redeem,
+            100_000,
+            &[fx.preimage.to_vec(), vec![1]],
+            spend_tx(&f, &[]),
+        );
+        let classify = |w: &[Vec<u8>]| classify_v1_spend(w, &fx.htlc.hash_h);
+        let mk = |final_confs: Option<u64>| MockBackend {
+            history: Some(vec![
+                (f.compute_txid().to_string(), 90),
+                (sp.compute_txid().to_string(), 95),
+            ]),
+            txs: vec![f.clone(), sp.clone()],
+            tip: 100,
+            spend: None,
+            final_confs,
+        };
+        let depth =
+            |b: &MockBackend| match classify_leg(b, &spk, 100_000, &classify).unwrap().unwrap() {
+                LegClass::Spent(leg) => leg.spend_confs,
+                other => panic!("expected Spent, got {other:?}"),
+            };
+        assert_eq!(depth(&mk(None)), 6, "single view: the claim stands");
+        assert_eq!(
+            depth(&mk(Some(0))),
+            0,
+            "quorum says unconfirmed: the claim is capped"
+        );
+        assert_eq!(depth(&mk(Some(3))), 3, "quorum says shallower: min wins");
+        assert_eq!(
+            depth(&mk(Some(50))),
+            6,
+            "never deeper than the claim itself"
+        );
+        // Same cap on the tier-L block-scan path.
+        let scan = MockBackend {
+            history: None,
+            txs: vec![],
+            tip: 100,
+            spend: Some((sp.clone(), 95)),
+            final_confs: Some(0),
+        };
+        let op = bitcoin::OutPoint {
+            txid: f.compute_txid(),
+            vout: 0,
+        };
+        let leg = classify_spent_by_scan(&scan, &op, &spk, 100_000, 0, 80, &classify)
+            .unwrap()
+            .unwrap();
+        assert_eq!(leg.spend_confs, 0);
+        assert_eq!(leg.kind, SpendKind::Redeem);
+    }
+
     #[test]
     fn v1_witness_classification() {
         let s = [7u8; 32];
@@ -489,6 +1080,9 @@ mod tests {
         tip: u64,
         /// What `find_spend_tx` (the tier-L block scan) reports.
         spend: Option<(Transaction, u64)>,
+        /// What the backend's FINALITY read says (a quorum's min); `None` =
+        /// derive it from `history`/`spend` heights like a single view.
+        final_confs: Option<u64>,
     }
 
     impl ChainBackend for MockBackend {
@@ -546,8 +1140,26 @@ mod tests {
         fn tip_median_time(&self) -> Result<u64> {
             anyhow::bail!("mock")
         }
-        fn tx_confirmations(&self, _txid: &str, _spk: Option<&ScriptBuf>) -> Result<u64> {
-            anyhow::bail!("mock")
+        fn tx_confirmations(&self, txid: &str, _spk: Option<&ScriptBuf>) -> Result<u64> {
+            if let Some(c) = self.final_confs {
+                return Ok(c);
+            }
+            let height = self
+                .history
+                .iter()
+                .flatten()
+                .find(|(t, _)| t == txid)
+                .map(|(_, h)| u64::try_from(*h).unwrap_or(0))
+                .or_else(|| {
+                    self.spend
+                        .as_ref()
+                        .filter(|(t, _)| t.compute_txid().to_string() == txid)
+                        .map(|(_, h)| *h)
+                });
+            Ok(match height {
+                Some(h) if h > 0 && self.tip >= h => self.tip - h + 1,
+                _ => 0,
+            })
         }
         fn fee_rate_for(&self, _conf_target: u16, _conservative: bool) -> Result<u64> {
             anyhow::bail!("mock")
@@ -628,6 +1240,7 @@ mod tests {
             txs: vec![],
             tip: 100,
             spend: None,
+            final_confs: None,
         };
         assert!(
             classify_leg(&none, &spk, 100_000, &kind_always(SpendKind::Unknown))
@@ -640,6 +1253,7 @@ mod tests {
             txs: vec![],
             tip: 100,
             spend: None,
+            final_confs: None,
         };
         assert!(matches!(
             classify_leg(&empty, &spk, 100_000, &kind_always(SpendKind::Unknown))
@@ -658,6 +1272,7 @@ mod tests {
             txs: vec![f.clone()],
             tip: 100,
             spend: None,
+            final_confs: None,
         };
         match classify_leg(&backend, &spk, 100_000, &kind_always(SpendKind::Unknown))
             .unwrap()
@@ -685,6 +1300,7 @@ mod tests {
             txs: vec![f],
             tip: 100,
             spend: None,
+            final_confs: None,
         };
         assert!(matches!(
             classify_leg(&backend, &spk, 100_000, &kind_always(SpendKind::Unknown))
@@ -698,18 +1314,18 @@ mod tests {
     fn leg_spent_classifies_front_to_back() {
         // The field bug's shape: funding AND spend are both history — a
         // live-UTXO read sees nothing, the classifier sees the whole story.
-        let s = [9u8; 32];
-        let h = hash_of(&s);
-        let spk = spk();
+        let (fx, secp) = v1_fixture();
+        let h = fx.htlc.hash_h;
+        let spk = fx.htlc.script_pubkey();
         let f = funding_tx(&spk, 100_000);
-        let redeem_witness = vec![
-            vec![0x30; 71],
-            vec![0x02; 33],
-            s.to_vec(),
-            vec![1],
-            vec![0xAA; 40],
-        ];
-        let sp = spend_tx(&f, &redeem_witness);
+        let sp = sign_v1(
+            &secp,
+            &fx,
+            &fx.redeem,
+            100_000,
+            &[fx.preimage.to_vec(), vec![1]],
+            spend_tx(&f, &[]),
+        );
         let backend = MockBackend {
             history: Some(vec![
                 (f.compute_txid().to_string(), 90),
@@ -718,6 +1334,7 @@ mod tests {
             txs: vec![f.clone(), sp.clone()],
             tip: 100,
             spend: None,
+            final_confs: None,
         };
         let classify = |w: &[Vec<u8>]| classify_v1_spend(w, &h);
         match classify_leg(&backend, &spk, 100_000, &classify)
@@ -734,6 +1351,28 @@ mod tests {
             }
             other => panic!("expected Spent, got {other:?}"),
         }
+        // The same history with a FORGED spend (a refund-shaped witness
+        // signed by a key the script never names) is a spend of Unknown
+        // kind — never a terminal signal (security review 2026-09-09 #7).
+        let stranger = Keypair::from_seckey_slice(&secp, &[0x33; 32]).unwrap();
+        let forged = sign_v1(&secp, &fx, &stranger, 100_000, &[vec![]], spend_tx(&f, &[]));
+        let backend = MockBackend {
+            history: Some(vec![
+                (f.compute_txid().to_string(), 90),
+                (forged.compute_txid().to_string(), 95),
+            ]),
+            txs: vec![f.clone(), forged.clone()],
+            tip: 100,
+            spend: None,
+            final_confs: None,
+        };
+        match classify_leg(&backend, &spk, 100_000, &classify)
+            .unwrap()
+            .unwrap()
+        {
+            LegClass::Spent(leg) => assert_eq!(leg.kind, SpendKind::Unknown),
+            other => panic!("expected Spent(Unknown), got {other:?}"),
+        }
     }
 
     #[test]
@@ -749,6 +1388,7 @@ mod tests {
             txs: vec![f, sp],
             tip: 100,
             spend: None,
+            final_confs: None,
         };
         match classify_leg(&backend, &spk, 100_000, &kind_always(SpendKind::Redeem))
             .unwrap()
@@ -771,6 +1411,7 @@ mod tests {
             txs: vec![], // the referenced tx is not retrievable
             tip: 100,
             spend: None,
+            final_confs: None,
         };
         assert!(classify_leg(&backend, &spk, 100_000, &kind_always(SpendKind::Unknown)).is_err());
     }
@@ -791,15 +1432,26 @@ mod tests {
             txs: vec![],
             tip: 100,
             spend: Some((sp.clone(), 95)),
+            final_confs: None,
         };
-        let leg =
-            classify_spent_by_scan(&backend, &op, &spk, 0, 80, &kind_always(SpendKind::Redeem))
-                .unwrap()
-                .expect("spend recovered from the block scan");
+        let leg = classify_spent_by_scan(
+            &backend,
+            &op,
+            &spk,
+            100_000,
+            0,
+            80,
+            &kind_always(SpendKind::Redeem),
+        )
+        .unwrap()
+        .expect("spend recovered from the block scan");
         assert_eq!(leg.spend_txid, sp.compute_txid().to_string());
         assert_eq!(leg.spend_height, 95);
         assert_eq!(leg.spend_confs, 6);
-        assert_eq!(leg.kind, SpendKind::Redeem);
+        // The pointer facts are recovered, but a witness the swap keys did
+        // not sign never classifies (the protocol classifier is not even
+        // consulted): the scan's view may be lying.
+        assert_eq!(leg.kind, SpendKind::Unknown);
         assert_eq!(
             leg.spend_tx_hex,
             bitcoin::consensus::encode::serialize_hex(&sp)
@@ -820,11 +1472,19 @@ mod tests {
             txs: vec![],
             tip: 100,
             spend: Some((sp, 0)), // still in the mempool
+            final_confs: None,
         };
-        let leg =
-            classify_spent_by_scan(&backend, &op, &spk, 0, 80, &kind_always(SpendKind::Redeem))
-                .unwrap()
-                .unwrap();
+        let leg = classify_spent_by_scan(
+            &backend,
+            &op,
+            &spk,
+            100_000,
+            0,
+            80,
+            &kind_always(SpendKind::Redeem),
+        )
+        .unwrap()
+        .unwrap();
         assert_eq!(leg.spend_confs, 0, "unconfirmed spend must never read deep");
     }
 
@@ -845,11 +1505,13 @@ mod tests {
             txs: vec![],
             tip: 100,
             spend: Some((sp, 95)),
+            final_confs: None,
         };
         assert!(classify_spent_by_scan(
             &backend,
             &op,
             &spk,
+            100_000,
             0,
             80,
             &kind_always(SpendKind::Redeem)
@@ -870,12 +1532,19 @@ mod tests {
             txs: vec![],
             tip: 100,
             spend: None,
+            final_confs: None,
         };
-        assert!(
-            classify_spent_by_scan(&backend, &op, &spk, 0, 0, &kind_always(SpendKind::Redeem))
-                .unwrap()
-                .is_none()
-        );
+        assert!(classify_spent_by_scan(
+            &backend,
+            &op,
+            &spk,
+            100_000,
+            0,
+            0,
+            &kind_always(SpendKind::Redeem)
+        )
+        .unwrap()
+        .is_none());
     }
 
     #[test]

@@ -336,10 +336,17 @@ pub fn http_json(url: &str, body: Option<&Value>) -> Result<Value> {
         payload.len()
     );
 
-    let mut stream =
-        TcpStream::connect((host, port)).with_context(|| format!("connecting to {host}:{port}"))?;
-    stream.set_read_timeout(Some(Duration::from_secs(60)))?;
-    stream.set_write_timeout(Some(Duration::from_secs(60)))?;
+    // Bounded everywhere: this runs under the daemon's registry lock (board
+    // sync in the scheduler pass), so a black-holed host must not pin every
+    // RPC behind a connect that never completes.
+    let addr = std::net::ToSocketAddrs::to_socket_addrs(&(host, port))
+        .with_context(|| format!("resolving {host}:{port}"))?
+        .next()
+        .with_context(|| format!("{host}:{port} resolved to no address"))?;
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(10))
+        .with_context(|| format!("connecting to {host}:{port}"))?;
+    stream.set_read_timeout(Some(Duration::from_secs(30)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(30)))?;
     stream.write_all(request.as_bytes())?;
     let mut response = Vec::new();
     stream.read_to_end(&mut response)?;

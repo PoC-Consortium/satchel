@@ -42,8 +42,12 @@ pub struct Apply {
     sent_outbox: Vec<i64>,
     inbox: Vec<(String, String, u64)>,
     offers: Vec<(String, String, String, u64, u64)>,
-    /// `swap_id`s revoked via an incoming NIP-09 deletion (offers to drop).
-    revoked: Vec<String>,
+    /// `(author, swap_id)` pairs revoked via an incoming NIP-09 deletion —
+    /// each scoped to the AUTHOR's own listing of that id (#10).
+    revoked: Vec<(String, String)>,
+    /// Our own identity (x-only hex), so a revocation can tell "one of OUR
+    /// offers was withdrawn" from a stranger revoking a same-id listing.
+    me: String,
     offers_since: u64,
     mailbox_since: u64,
     deletions_since: u64,
@@ -61,6 +65,13 @@ const CURSOR_FUTURE_SKEW_SECS: u64 = 15 * 60;
 /// the cursor (#146). Never moves the cursor backward.
 fn advance_cursor(cursor: u64, created: u64, now: u64) -> u64 {
     cursor.max(created.min(now + CURSOR_FUTURE_SKEW_SECS))
+}
+
+/// Meta key of the author-scoped revocation tombstone for `swap_id` (#10).
+/// The legacy id-only key `nostr_revoked:<id>` written by older builds is
+/// still honored on read.
+fn revoked_key(swap_id: &str, author: &str) -> String {
+    format!("nostr_revoked:{swap_id}:{author}")
 }
 
 /// Read a persisted `since` cursor. Also used by the snapshot follow scan
@@ -125,18 +136,23 @@ pub fn apply(store: &Store, a: &Apply) -> Result<()> {
     // may ignore NIP-09, so a revoked offer can keep showing up in the offer
     // fetch (this round or later) — the tombstone makes the upsert below skip it
     // every time, so it never reappears on the board.
-    for swap_id in &a.revoked {
-        store.meta_set(&format!("nostr_revoked:{swap_id}"), "1")?;
-        store.nostr_offer_cache_remove(swap_id)?;
-        // Reconcile our OWN ledger. A deletion for one of our still-live offers
-        // is a (same-key) withdrawal — honor it everywhere by marking the offer
-        // revoked, so the refresh loop stops republishing it. Without this,
-        // `my_offers` keeps it "live" and republishes a fresh event ON TOP of
-        // the deletion every cycle — resurrecting it for other sessions while our
-        // own tombstone hides it from us: a split-brain "posting…" limbo. No-op
-        // for foreign offers (not in `my_offers`) or already-terminal ones
-        // (`my_offer_mark_revoked` only touches rows still in state `live`).
-        if store.my_offer_mark_revoked(swap_id)? > 0 {
+    for (author, swap_id) in &a.revoked {
+        // Tombstone keyed by (id, author): a deletion only ever hides the
+        // AUTHOR's own listing of that id. Anyone can sign a deletion naming
+        // their own key with a victim's public offer id; scoping it here is
+        // what keeps that from suppressing the victim (#10).
+        store.meta_set(&revoked_key(swap_id, author), "1")?;
+        store.nostr_offer_cache_remove_by_author(swap_id, author)?;
+        // Reconcile our OWN ledger — only for a deletion WE signed (same
+        // key): that is a withdrawal of our still-live offer, honored
+        // everywhere by marking it revoked so the refresh loop stops
+        // republishing it. Without this, `my_offers` keeps it "live" and
+        // republishes a fresh event ON TOP of the deletion every cycle —
+        // resurrecting it for other sessions while our own tombstone hides
+        // it from us: a split-brain "posting…" limbo. A stranger's same-id
+        // deletion must NOT flip our offer (`my_offer_mark_revoked` also
+        // only touches rows still in state `live`).
+        if author == &a.me && store.my_offer_mark_revoked(swap_id)? > 0 {
             // #96: an incoming NIP-09 deletion just withdrew one of OUR live
             // offers — log it (previously silent, which made the coin-reconfigure
             // self-revoke, #97, un-diagnosable in the field).
@@ -144,20 +160,24 @@ pub fn apply(store: &Store, a: &Apply) -> Result<()> {
         }
     }
     for (event_id, d_tag, envelope, created, expires) in &a.offers {
-        if store.meta_get(&format!("nostr_revoked:{d_tag}"))?.is_some() {
-            continue; // revoked offer still lingering on the relay — stay dropped
-        }
         // Hard compatibility gate: an offer posted by an incompatible release
         // (unknown protocol name or a different wire epoch — e.g. an old
         // Satchel still on the air) never enters the cache. The board only
         // ever holds offers this build can actually take; `list_board_offers`
         // repeats the check for the HTTP-board path and pre-upgrade rows.
-        match serde_json::from_str::<libswap::messages::Envelope>(envelope) {
-            Ok(env) if libswap::board::offer_compatible(&env) => {}
+        let env = match serde_json::from_str::<libswap::messages::Envelope>(envelope) {
+            Ok(env) if libswap::board::offer_compatible(&env) => env,
             _ => {
                 tracing::debug!(offer = %d_tag, "nostr: dropped incompatible-release offer");
                 continue;
             }
+        };
+        // Revoked by ITS maker (or by a pre-#10 build's id-only tombstone):
+        // still lingering on the relay — stay dropped.
+        if store.meta_get(&revoked_key(d_tag, &env.from))?.is_some()
+            || store.meta_get(&format!("nostr_revoked:{d_tag}"))?.is_some()
+        {
+            continue;
         }
         store.nostr_offer_cache_upsert(event_id, d_tag, envelope, *created, *expires)?;
     }
@@ -194,6 +214,7 @@ impl NostrService {
             offers_since: prep.offers_since,
             mailbox_since: prep.mailbox_since,
             deletions_since: prep.deletions_since,
+            me: prep.me.clone(),
             ..Apply::default()
         };
         let keys = match pn::keys_from_secret_hex(&prep.secret_hex) {
@@ -299,8 +320,8 @@ impl NostrService {
         {
             for ev in events {
                 let created = ev.created_at.as_secs();
-                if let Some(swap_id) = pn::revoked_offer_from_event(&ev) {
-                    out.revoked.push(swap_id);
+                if let Some(rev) = pn::revoked_offer_from_event(&ev) {
+                    out.revoked.push((rev.author, rev.swap_id));
                 }
                 out.deletions_since = advance_cursor(out.deletions_since, created, now);
             }
@@ -555,7 +576,7 @@ mod tests {
             swap_id: "00aa11bb22cc33dd".into(),
             from: String::new(),
             body: serde_json::json!({
-                "protocol": "pact-htlc-v1", "network": "regtest",
+                "protocol": "pact-htlc-v1", "wire": libswap::WIRE_V1, "network": "regtest",
                 "give_asset": "pocx", "give_amount": 1000u64,
                 "get_asset": "btc", "get_amount": 10u64,
                 "t1_secs": 28800u32, "t2_secs": 14400u32,
@@ -580,7 +601,11 @@ mod tests {
         assert_eq!(p.store.my_offers_live().unwrap().len(), 1);
 
         let a = Apply {
-            revoked: vec!["mineLive".into(), "notMine".into()],
+            revoked: vec![
+                (p.xonly.clone(), "mineLive".into()),
+                ("ff".repeat(32), "notMine".into()),
+            ],
+            me: p.xonly.clone(),
             ..Apply::default()
         };
         apply(&p.store, &a).unwrap();
@@ -596,19 +621,123 @@ mod tests {
             .unwrap();
         assert_eq!(mine.state, "revoked");
 
-        // Both ids are tombstoned; the foreign one never created a my_offers row.
+        // Both are tombstoned under their AUTHOR; the foreign one never
+        // created a my_offers row.
         assert!(p
             .store
-            .meta_get("nostr_revoked:mineLive")
+            .meta_get(&revoked_key("mineLive", &p.xonly))
             .unwrap()
             .is_some());
-        assert!(p.store.meta_get("nostr_revoked:notMine").unwrap().is_some());
+        assert!(p
+            .store
+            .meta_get(&revoked_key("notMine", &"ff".repeat(32)))
+            .unwrap()
+            .is_some());
         assert!(p
             .store
             .my_offers_all()
             .unwrap()
             .iter()
             .all(|o| o.offer_id != "notMine"));
+    }
+
+    /// Security review 2026-09-09 #10: a stranger's deletion naming OUR live
+    /// offer's id (under the stranger's own coordinate) must neither evict
+    /// the cached listing of the real maker nor flip the maker's own ledger
+    /// row to `revoked`; the real maker's deletion still does both.
+    #[test]
+    fn same_id_deletion_by_a_stranger_does_not_suppress_the_makers_offer() {
+        let maker = party("del-scope-maker");
+        let viewer = party("del-scope-viewer");
+        let offer = signed_offer(&maker);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let cached = || {
+            NostrBoard::new(&viewer.store)
+                .offers()
+                .unwrap()
+                .iter()
+                .any(|o| o.swap_id == offer.swap_id)
+        };
+        viewer
+            .store
+            .nostr_offer_cache_upsert(
+                "ev-1",
+                &offer.swap_id,
+                &serde_json::to_string(&offer).unwrap(),
+                now,
+                now + 3600,
+            )
+            .unwrap();
+        maker
+            .store
+            .my_offer_put(&offer.swap_id, "{}", now, 1800, now)
+            .unwrap();
+        assert!(cached());
+
+        // Attacker: valid self-coordinate deletion of the maker's id.
+        let attacker = "ab".repeat(32);
+        let forged = Apply {
+            revoked: vec![(attacker.clone(), offer.swap_id.clone())],
+            me: viewer.xonly.clone(),
+            ..Apply::default()
+        };
+        apply(&viewer.store, &forged).unwrap();
+        assert!(
+            cached(),
+            "a stranger's same-id deletion must not evict the maker's offer"
+        );
+        // A re-fetch of the maker's offer still enters the cache (the
+        // tombstone is the attacker's, not the maker's).
+        viewer
+            .store
+            .nostr_offer_cache_remove(&offer.swap_id)
+            .unwrap();
+        let refetch = Apply {
+            offers: vec![(
+                "ev-2".into(),
+                offer.swap_id.clone(),
+                serde_json::to_string(&offer).unwrap(),
+                now,
+                now + 3600,
+            )],
+            me: viewer.xonly.clone(),
+            ..Apply::default()
+        };
+        apply(&viewer.store, &refetch).unwrap();
+        assert!(
+            cached(),
+            "the maker's re-published offer must not stay tombstoned"
+        );
+        // On the maker's own daemon the stranger's deletion must not flip
+        // the live offer row.
+        let forged_at_maker = Apply {
+            revoked: vec![(attacker, offer.swap_id.clone())],
+            me: maker.xonly.clone(),
+            ..Apply::default()
+        };
+        apply(&maker.store, &forged_at_maker).unwrap();
+        assert_eq!(maker.store.my_offers_live().unwrap().len(), 1);
+
+        // The REAL maker's deletion evicts everywhere and withdraws the row.
+        let real = Apply {
+            revoked: vec![(maker.xonly.clone(), offer.swap_id.clone())],
+            me: viewer.xonly.clone(),
+            ..Apply::default()
+        };
+        apply(&viewer.store, &real).unwrap();
+        assert!(!cached(), "the maker's own deletion evicts the listing");
+        apply(&viewer.store, &refetch).unwrap();
+        assert!(!cached(), "…and keeps a lingering relay copy out");
+        let real_at_maker = Apply {
+            revoked: vec![(maker.xonly.clone(), offer.swap_id.clone())],
+            me: maker.xonly.clone(),
+            ..Apply::default()
+        };
+        apply(&maker.store, &real_at_maker).unwrap();
+        assert!(maker.store.my_offers_live().unwrap().is_empty());
     }
 
     #[test]

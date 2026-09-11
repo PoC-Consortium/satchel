@@ -897,6 +897,8 @@ export const cs: Bundle = {
     offersBodyMany:
       "{count} vašich nabídek je stále na Corkboardu. Nabídky nic neuzamykají, ale jejich ponecháním je protistrany mohou stále přijmout, i když je Satchel zavřený — engine přijetí obslouží.",
     withdrawExit: "Stáhnout vše a ukončit",
+    handoffFailed:
+      "Engine se nepodařilo předat do běhu na pozadí: {err}. Satchel zůstává otevřený a engine dál hlídá vaše swapy — opravte problém a zkuste to znovu.",
   },
   unlock: {
     title: "Odemknout merchanta",

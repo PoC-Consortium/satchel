@@ -71,6 +71,16 @@ pub fn open_envelope(identity: &Keypair, blob: &str) -> Result<Envelope> {
     let key = tagged_hash("pact/relay/ecdh/v1", &shared.secret_bytes());
     let cipher = ChaCha20Poly1305::new((&key).into());
     let nonce_bytes = hex::decode(nonce)?;
+    // Fixed-size field: the `&[u8] -> &Nonce` conversion below is a
+    // `GenericArray::from_slice`, which PANICS on a length mismatch. A relay
+    // (or anyone who can post to it) controls this string, so a malformed
+    // length must be a recoverable parse error, never an unwind.
+    if nonce_bytes.len() != 12 {
+        bail!(
+            "malformed sealed blob: nonce is {} bytes, expected 12",
+            nonce_bytes.len()
+        );
+    }
     let plaintext = cipher
         .decrypt(
             nonce_bytes.as_slice().into(),
@@ -122,5 +132,41 @@ mod tests {
         // Plaintext blobs are refused outright (no downgrade path).
         let plain = serde_json::to_string(&envelope).unwrap();
         assert!(open_envelope(&bob, &plain).is_err());
+    }
+
+    /// Security review 2026-09-09 #5: a nonce of any length other than 12
+    /// bytes used to reach `GenericArray::from_slice` and panic — under the
+    /// daemon's registry lock, poisoning it. Every malformed length must now
+    /// be an ordinary `Err`.
+    #[test]
+    fn malformed_nonce_length_is_an_error_not_a_panic() {
+        let bob = identity(8);
+        let envelope = Envelope {
+            v: 1,
+            msg_type: "abort".into(),
+            swap_id: "0011223344556677".into(),
+            from: xonly_hex(&bob),
+            body: serde_json::json!({}),
+            sig: String::new(),
+        };
+        let blob = seal_envelope(&xonly_hex(&bob), &envelope).unwrap();
+        let mut parts: Vec<&str> = blob.split(':').collect();
+        assert_eq!(parts.len(), 4);
+        for bad in [
+            "",
+            "00",
+            "0011223344556677889900",
+            "00112233445566778899aabb",
+            "001122334455667788990011aa",
+        ] {
+            parts[2] = bad;
+            let tampered = parts.join(":");
+            let res = std::panic::catch_unwind(|| open_envelope(&bob, &tampered));
+            let res = res.expect("open_envelope must not panic on a malformed nonce");
+            assert!(res.is_err(), "nonce {bad:?} must be rejected");
+        }
+        // Odd-length hex is a decode error, also non-panicking.
+        parts[2] = "abc";
+        assert!(open_envelope(&bob, &parts.join(":")).is_err());
     }
 }

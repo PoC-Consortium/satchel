@@ -895,6 +895,8 @@ export const gl: Bundle = {
     offersBodyMany:
       "{count} ofertas túas seguen no Corkboard. As ofertas non bloquean nada, pero deixalas activas significa que as contrapartes aínda poden tomalas mentres Satchel está pechado — o motor xestionará as tomas.",
     withdrawExit: "Retirar todas e saír",
+    handoffFailed:
+      "Non se puido deixar o motor en execución en segundo plano: {err}. Satchel segue aberto e o motor segue vixiando os teus intercambios — corrixe o problema e téntao de novo.",
   },
   unlock: {
     title: "Desbloquear comerciante",

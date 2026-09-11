@@ -897,6 +897,8 @@ export const nl: Bundle = {
     offersBodyMany:
       "{count} aanbiedingen van jou staan nog op de Corkboard. Aanbiedingen vergrendelen niets, maar ze laten staan betekent dat tegenpartijen ze nog kunnen aannemen terwijl Satchel gesloten is — de engine bedient de aannames.",
     withdrawExit: "Trek alles terug & sluit af",
+    handoffFailed:
+      "De engine kon niet op de achtergrond blijven draaien: {err}. Satchel blijft open en de engine blijft je swaps bewaken — los het probleem op en probeer het opnieuw.",
   },
   unlock: {
     title: "Merchant ontgrendelen",

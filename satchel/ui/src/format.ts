@@ -41,10 +41,13 @@ export const fmtAmt = (n: number, asset: string): string =>
 // ---- locale-aware amount entry --------------------------------------------
 // Amount fields accept ONLY digits and the SYSTEM locale's decimal separator
 // ("," in de-DE, "." in en-US) — that separator is the single legal non-digit.
-// The other character is NOT treated as a grouping separator; it's simply
-// illegal (dropped on input, rejected on parse), so on a comma-locale a "."
-// does nothing rather than silently doing something. On submit we normalize the
-// locale separator to "." for the engine wire (`coin:amount`, sendtoaddress).
+// The other character is NOT treated as a grouping separator and is NOT
+// silently dropped either: dropping it would turn a pasted "0.001" into "0001"
+// (= 1 whole coin) on a comma-locale — a 1000× magnitude change the user never
+// typed (security review 2026-09-09 #11). It stays in the field, visibly, and
+// is rejected on parse, so the amount reads as invalid until the user fixes
+// the separator. On submit we normalize the locale separator to "." for the
+// engine wire (`coin:amount`, sendtoaddress).
 
 let _decimalSep: string | undefined;
 /** The current locale's decimal separator (cached) — the only non-digit
@@ -57,20 +60,19 @@ export function decimalSeparator(): string {
   return _decimalSep;
 }
 
-/** Keep an amount field to digits + a SINGLE locale decimal separator as the
- *  user types/pastes. Every other character — including a "." on a comma-locale
- *  and any second separator — is dropped, so the locale separator is the only
- *  legit non-digit and there is at most one. */
+/** The two characters the world uses as a decimal separator. */
+const SEPARATORS = [".", ","];
+
+/** Keep an amount field to digits + decimal separators as the user
+ *  types/pastes. Letters, spaces and symbols are dropped (they can never
+ *  change a magnitude); a decimal separator is KEPT whether or not it is the
+ *  locale's own, and a second one is kept too — `parseAmount` rejects both,
+ *  so a foreign/duplicate separator shows up as an invalid amount instead of
+ *  silently vanishing and multiplying the value. */
 export function sanitizeAmountInput(s: string): string {
-  const dec = decimalSeparator();
   let out = "";
-  let hasSep = false;
   for (const ch of s) {
-    if (ch >= "0" && ch <= "9") out += ch;
-    else if (ch === dec && !hasSep) {
-      out += ch;
-      hasSep = true;
-    }
+    if ((ch >= "0" && ch <= "9") || SEPARATORS.includes(ch)) out += ch;
   }
   return out;
 }
@@ -436,10 +438,18 @@ export const TERMINAL_STATES: SwapState[] = ["completed", "refunded", "aborted"]
  *  purpose. */
 export const isFinalizing = (s: Swap): boolean =>
   s.state === "completed" && s.progress?.watching === "settlement";
-/** Terminal = finished AND final (history). Finalizing is excluded — it is still
- *  in flight until the claim buries. */
-export const isTerminal = (s: Swap): boolean =>
-  TERMINAL_STATES.includes(s.state) && !isFinalizing(s);
+/** Terminal = finished AND final (history). Keys on the daemon's durable
+ *  `settled` latch (security review 2026-09-09 #3): a completed OR refunded
+ *  record whose settlement has not latched is still being nursed (fee bumps
+ *  toward the deadline), so it is NOT done — the app must stay open. The
+ *  progress-based `isFinalizing` is only the fallback for records that carry
+ *  no latch: followed (foreign-machine) swaps, pending takes, older daemons. */
+export const isTerminal = (s: Swap): boolean => {
+  if (!TERMINAL_STATES.includes(s.state)) return false;
+  if (s.state === "aborted") return true; // nothing ever hit the chain
+  if (s.source === "foreign" || s.settled === undefined) return !isFinalizing(s);
+  return s.settled;
+};
 /** Active = in flight: the scheduler still has work / funds may be exposed.
  *  (Drives the active dock, the in-flight count, and the exit-gate warning.) */
 export const isActive = (s: Swap): boolean => !isTerminal(s);
@@ -503,6 +513,7 @@ export function adaptorToSwap(r: AdaptorSwapRecord): Swap {
     swap_id: r.swap_id,
     role: r.role,
     state: r.state,
+    settled: r.settled,
     chain_a: r.chain_a,
     chain_b: r.chain_b,
     amount_a: r.amount_a,

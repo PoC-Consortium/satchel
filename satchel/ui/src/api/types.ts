@@ -259,6 +259,12 @@ export interface Swap {
   /** Short one-way label of the machine that owns this swap (e.g. "M-7f3a"),
    *  used to GROUP foreign swaps per machine in the dock. From pactd. */
   machine_label?: string;
+  /** Settlement latch (pactd ≥ 1.0.1): `true` once our claim/refund is buried
+   *  to the leg's depth and the scheduler retired the chain watch. A terminal
+   *  state WITHOUT this is still in flight (the fee-bump nurse is working the
+   *  claim) — the durable truth `isTerminal` keys on. Absent on older daemons
+   *  and on pending takes. */
+  settled?: boolean;
 }
 
 /** Live per-swap progress from pactd `swapprogress` (rebuilt each scheduler
@@ -314,6 +320,7 @@ export interface AdaptorSwapRecord {
   role: "initiator" | "participant";
   state: SwapState;
   created_at: number;
+  settled?: boolean;
   chain_a?: ChainRef;
   chain_b?: ChainRef;
   amount_a: number;

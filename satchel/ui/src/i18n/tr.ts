@@ -896,6 +896,8 @@ export const tr: Bundle = {
     offersBodyMany:
       "Size ait {count} teklif hâlâ Corkboard'da. Teklifler hiçbir şey kilitlemez, ancak bırakmak, Satchel kapalıyken karşı tarafların onları yine de alabileceği anlamına gelir — motor almaları işleyecek.",
     withdrawExit: "Tümünü geri çek ve çık",
+    handoffFailed:
+      "Motor arka planda çalışmaya devam etmesi için devredilemedi: {err}. Satchel açık kalır ve motor takaslarınızı izlemeye devam eder — sorunu giderip yeniden deneyin.",
   },
   unlock: {
     title: "Satıcının kilidini aç",

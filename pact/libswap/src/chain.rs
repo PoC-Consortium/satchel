@@ -138,6 +138,56 @@ pub(crate) fn is_insufficient_funds(err: &anyhow::Error) -> bool {
         .contains("insufficient funds")
 }
 
+/// Did a Core-family node reject the `minconf` option (`-3 Unexpected key
+/// minconf`)? Bitcoin Core grew per-call `minconf` on `send` /
+/// `fundrawtransaction` in 25.0; older forks still in service (Litecoin
+/// Core 0.21) do not have it, so the confirmed-only rule falls back to
+/// selecting the inputs ourselves ([`pick_confirmed_inputs`]).
+pub(crate) fn rejects_minconf(err: &anyhow::Error) -> bool {
+    format!("{err:#}").contains("Unexpected key minconf")
+}
+
+/// Confirmed-coin pre-selection from a `listunspent 1` result, for nodes
+/// without `minconf`: largest first, until the picked coins cover
+/// `amount_sat` plus a deliberately generous fee allowance at
+/// `fee_rate_sat_vb` (≈200 vB base + 120 vB per input — above any real
+/// P2WPKH/P2TR input, so the node's own fee computation never comes up
+/// short on the coins we hand it). The error text on a shortfall reads as
+/// "insufficient funds" on purpose: [`is_insufficient_funds`] turns it
+/// into the same [`FundingQueued`](crate::engine::FundingQueued) wait as
+/// the `minconf` path.
+pub(crate) fn pick_confirmed_inputs(
+    unspent: &Value,
+    amount_sat: u64,
+    fee_rate_sat_vb: f64,
+) -> Result<Vec<Value>> {
+    let mut coins: Vec<(u64, Value)> = unspent
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|u| u["spendable"].as_bool().unwrap_or(true))
+        .filter(|u| u["confirmations"].as_u64().unwrap_or(0) >= 1)
+        .map(|u| {
+            let sat = (u["amount"].as_f64().unwrap_or(0.0) * 1e8).round() as u64;
+            (sat, json!({ "txid": u["txid"], "vout": u["vout"] }))
+        })
+        .collect();
+    coins.sort_by_key(|coin| std::cmp::Reverse(coin.0));
+    let mut total = 0u64;
+    let mut picked = Vec::new();
+    for (value, input) in coins {
+        total += value;
+        picked.push(input);
+        let allowance = (fee_rate_sat_vb * (200.0 + 120.0 * picked.len() as f64)).ceil() as u64;
+        if total >= amount_sat.saturating_add(allowance) {
+            return Ok(picked);
+        }
+    }
+    anyhow::bail!(
+        "Insufficient funds: confirmed coins ({total} sat) do not cover {amount_sat} sat plus fees"
+    )
+}
+
 pub trait ChainBackend: Send + Sync {
     fn params(&self) -> &ChainParams;
 
@@ -271,6 +321,16 @@ pub trait ChainBackend: Send + Sync {
     /// `spk_hint` is a script the transaction pays (our sweep output) —
     /// required by Electrum backends, which can only search by script.
     fn tx_confirmations(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64>;
+
+    /// FINALITY depth of a transaction — the reading a terminal decision
+    /// (settle, retire a watch) may rely on. A single view answers like
+    /// [`tx_confirmations`](Self::tx_confirmations); the multi-view pool
+    /// overrides this with the MIN over its integrity quorum, never the
+    /// display max. `spk_hint` as above (a script the tx pays OR spends —
+    /// Electrum script histories list both).
+    fn tx_confirmations_final(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64> {
+        self.tx_confirmations(txid, spk_hint)
+    }
 
     /// Feerate in sat/vB from the node's estimator for a given confirmation
     /// target and estimate mode, with a conservative fallback when the estimator
@@ -599,6 +659,9 @@ impl<T: ChainBackend + ?Sized> ChainBackend for std::sync::Arc<T> {
     }
     fn tx_confirmations(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64> {
         (**self).tx_confirmations(txid, spk_hint)
+    }
+    fn tx_confirmations_final(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64> {
+        (**self).tx_confirmations_final(txid, spk_hint)
     }
     fn fee_rate_for(&self, conf_target: u16, conservative: bool) -> Result<u64> {
         (**self).fee_rate_for(conf_target, conservative)
@@ -1050,6 +1113,24 @@ impl ChainBackend for CoreRpcBackend {
         }
     }
 
+    fn tx_confirmations_final(&self, txid: &str, _spk_hint: Option<&ScriptBuf>) -> Result<u64> {
+        // Finality read: a tx this node cannot see at all (not in its
+        // wallet, and `getrawtransaction` without -txindex cannot find a
+        // MINED foreign tx) is NOT "0 confirmations" — it is no answer.
+        // Reporting 0 would let a blind node veto the depth of a spend the
+        // script-indexed views can see (a follower's Core primary next to
+        // its Electrum views). Errors here make this view a non-responder
+        // in the pool's quorum min, which is the honest reading.
+        if let Ok(tx) = self.rpc.call("gettransaction", &[json!(txid)]) {
+            return Ok(tx["confirmations"].as_u64().unwrap_or(0));
+        }
+        let tx = self
+            .rpc
+            .call("getrawtransaction", &[json!(txid), json!(true)])
+            .with_context(|| format!("tx {txid} unknown to this node (no txindex?)"))?;
+        Ok(tx["confirmations"].as_u64().unwrap_or(0))
+    }
+
     fn fee_rate_for(&self, conf_target: u16, conservative: bool) -> Result<u64> {
         // No estimate (empty/low-traffic mempool, or the node can't estimate) →
         // the fee market is effectively empty, so the relay minimum suffices
@@ -1178,16 +1259,31 @@ impl ChainBackend for CoreRpcBackend {
         // BIP125-replaceable, mirroring wallet_send's policy exactly.
         let mut outputs = serde_json::Map::new();
         outputs.insert(address.to_string(), json!(amount));
-        let res = self.rpc.call(
-            "send",
-            &[
-                Value::Array(vec![Value::Object(outputs)]),
-                json!(null),
-                json!("unset"),
-                json!(fee_rate),
-                json!({ "add_inputs": true, "minconf": 1, "replaceable": true }),
-            ],
-        )?;
+        let send = |options: Value| -> Result<Value> {
+            self.rpc.call(
+                "send",
+                &[
+                    Value::Array(vec![Value::Object(outputs.clone())]),
+                    json!(null),
+                    json!("unset"),
+                    json!(fee_rate),
+                    options,
+                ],
+            )
+        };
+        let res = match send(json!({ "add_inputs": true, "minconf": 1, "replaceable": true })) {
+            Ok(res) => res,
+            // Pre-25 fork (Litecoin Core 0.21): no `minconf` — hand the
+            // node confirmed inputs we picked ourselves, same rule.
+            Err(e) if rejects_minconf(&e) => {
+                let unspent = self
+                    .rpc
+                    .call("listunspent", &[json!(1), json!(9_999_999)])?;
+                let inputs = pick_confirmed_inputs(&unspent, amount_sat, fee_rate)?;
+                send(json!({ "inputs": inputs, "add_inputs": false, "replaceable": true }))?
+            }
+            Err(e) => return Err(e),
+        };
         anyhow::ensure!(
             res["complete"].as_bool().unwrap_or(false),
             "send: transaction not complete"
@@ -1247,9 +1343,10 @@ impl ChainBackend for CoreRpcBackend {
         //    key is the funding address, so build the object with a dynamic key.
         let mut outputs = serde_json::Map::new();
         outputs.insert(address.to_string(), json!(amount));
-        let raw = self
-            .rpc
-            .call("createrawtransaction", &[json!([]), Value::Object(outputs)])?;
+        let raw = self.rpc.call(
+            "createrawtransaction",
+            &[json!([]), Value::Object(outputs.clone())],
+        )?;
         let raw_hex = raw.as_str().context("createrawtransaction: non-string")?;
         // 2. select inputs + change; lock the inputs so nothing else spends them
         //    before we broadcast; our explicit funding feerate. NON-replaceable
@@ -1257,41 +1354,97 @@ impl ChainBackend for CoreRpcBackend {
         //    pre-signed MuSig2 redeems, so it must never be RBF'd — the nurse
         //    CPFPs it instead, and the non-signal keeps external wallets from
         //    even offering a bump.
-        let funded = self.rpc.call(
+        //    Hard P2 (2026-08-09 post-mortem; security review 2026-09-09):
+        //    `minconf: 1` restricts coin selection to CONFIRMED coins (Core
+        //    25+), the same rule `wallet_send_confirmed` applies to v1 — an
+        //    unconfirmed parent bumped by RBF would orphan this funding, and
+        //    the pre-signed MuSig2 redeems commit to its txid.
+        let funded = match self.rpc.call(
             "fundrawtransaction",
             &[
                 json!(raw_hex),
-                json!({ "lockUnspents": true, "fee_rate": fee_rate, "replaceable": false }),
+                json!({
+                    "lockUnspents": true,
+                    "fee_rate": fee_rate,
+                    "replaceable": false,
+                    "minconf": 1
+                }),
             ],
-        )?;
+        ) {
+            Ok(funded) => funded,
+            // Pre-25 fork (Litecoin Core 0.21): no `minconf` — rebuild the
+            // raw tx over confirmed inputs we picked ourselves and let the
+            // node add only fee/change (`add_inputs: false`).
+            Err(e) if rejects_minconf(&e) => {
+                let unspent = self
+                    .rpc
+                    .call("listunspent", &[json!(1), json!(9_999_999)])?;
+                let inputs = pick_confirmed_inputs(&unspent, amount_sat, fee_rate)?;
+                let raw = self.rpc.call(
+                    "createrawtransaction",
+                    &[Value::Array(inputs), Value::Object(outputs)],
+                )?;
+                let raw_hex = raw.as_str().context("createrawtransaction: non-string")?;
+                self.rpc.call(
+                    "fundrawtransaction",
+                    &[
+                        json!(raw_hex),
+                        json!({
+                            "lockUnspents": true,
+                            "fee_rate": fee_rate,
+                            "replaceable": false,
+                            "add_inputs": false
+                        }),
+                    ],
+                )?
+            }
+            Err(e) => return Err(e),
+        };
         let funded_hex = funded["hex"]
             .as_str()
-            .context("fundrawtransaction: no hex")?;
-        // 3. sign with the wallet — the txid is final once fully signed.
-        let signed = self
-            .rpc
-            .call("signrawtransactionwithwallet", &[json!(funded_hex)])?;
-        anyhow::ensure!(
-            signed["complete"].as_bool() == Some(true),
-            "funding tx did not sign to completion"
-        );
-        let signed_hex = signed["hex"]
-            .as_str()
-            .context("signrawtransactionwithwallet: no hex")?
+            .context("fundrawtransaction: no hex")?
             .to_string();
-        // 4. decode locally to recover the txid and the vout paying `address` —
-        //    fundrawtransaction inserts change at a random position, so match the
-        //    output by scriptPubKey rather than assuming an index.
-        let tx: Transaction = bitcoin::consensus::encode::deserialize(&hex::decode(&signed_hex)?)
-            .context("decode built funding tx")?;
-        let want_spk = self.params.parse_address(address)?;
-        let vout = tx
-            .output
-            .iter()
-            .position(|o| o.script_pubkey == want_spk)
-            .context("built funding tx has no output paying the funding address")?
-            as u32;
-        Ok((tx.compute_txid().to_string(), vout, signed_hex))
+        // Steps 3-4 can fail AFTER `lockUnspents` reserved the selected
+        // inputs (an encrypted wallet that is locked → signing fails). No
+        // funding record exists yet for the cancel path to unlock, so
+        // release the reservation here on every error — otherwise each
+        // retry locks a fresh coin set until the whole wallet is stranded
+        // (security review 2026-09-09 #12).
+        let finish = || -> Result<(String, u32, String)> {
+            // 3. sign with the wallet — the txid is final once fully signed.
+            let signed = self
+                .rpc
+                .call("signrawtransactionwithwallet", &[json!(&funded_hex)])?;
+            anyhow::ensure!(
+                signed["complete"].as_bool() == Some(true),
+                "funding tx did not sign to completion"
+            );
+            let signed_hex = signed["hex"]
+                .as_str()
+                .context("signrawtransactionwithwallet: no hex")?
+                .to_string();
+            // 4. decode locally to recover the txid and the vout paying `address` —
+            //    fundrawtransaction inserts change at a random position, so match the
+            //    output by scriptPubKey rather than assuming an index.
+            let tx: Transaction =
+                bitcoin::consensus::encode::deserialize(&hex::decode(&signed_hex)?)
+                    .context("decode built funding tx")?;
+            let want_spk = self.params.parse_address(address)?;
+            let vout = tx
+                .output
+                .iter()
+                .position(|o| o.script_pubkey == want_spk)
+                .context("built funding tx has no output paying the funding address")?
+                as u32;
+            Ok((tx.compute_txid().to_string(), vout, signed_hex))
+        };
+        match finish() {
+            Ok(built) => Ok(built),
+            Err(err) => {
+                let _ = self.wallet_cancel_funding(&funded_hex);
+                Err(err)
+            }
+        }
     }
 
     fn wallet_cancel_funding(&self, tx_hex: &str) -> Result<()> {
@@ -1859,12 +2012,59 @@ impl MultiBackend {
     /// Min over a quorum is the safe direction: a laggy view only keeps
     /// the nurse working a little longer.
     pub fn tx_confirmations_min(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64> {
-        let hits = self.require_responders(
-            "tx finality",
-            self.integrity_quorum(),
-            self.fan_out(|b| b.tx_confirmations(txid, spk_hint)),
-        )?;
-        Ok(hits.into_iter().min().expect("nonempty by quorum"))
+        // Each view's own FINALITY read (a view that cannot see the tx at
+        // all abstains instead of voting 0), min over the responders — and
+        // the quorum follows the RESPONDERS' trust, not the configured
+        // primary's type (review 2026-09-10 closure recheck): a responding
+        // trusted node (own Core, no health cell) justifies a single-source
+        // verdict, min'd with whatever else answered; when it abstains
+        // (txindex-less node, foreign tx), the untrusted views must meet
+        // the untrusted quorum ON THEIR OWN, else there is no verdict —
+        // one public server never decides finality alone on mainnet.
+        let (hits, errors, skipped) = self.fan_out(|b| {
+            Ok((
+                b.view_health().is_none(),
+                b.tx_confirmations_final(txid, spk_hint)?,
+            ))
+        });
+        let trusted_answered = hits.iter().any(|(trusted, _)| *trusted);
+        let untrusted_answered = hits.iter().filter(|(trusted, _)| !trusted).count();
+        if trusted_answered || untrusted_answered >= self.untrusted_quorum() {
+            return Ok(hits
+                .into_iter()
+                .map(|(_, confs)| confs)
+                .min()
+                .expect("nonempty: a responder exists"));
+        }
+        let detail = errors
+            .first()
+            .map(|e| format!("; first error: {e:#}"))
+            .unwrap_or_default();
+        bail!(
+            "tx finality: no trusted view answered and only {untrusted_answered} of {} untrusted              view(s) did, {} needed ({skipped} in failure backoff, {} errored{detail})",
+            self.backends.len(),
+            self.untrusted_quorum(),
+            errors.len()
+        )
+    }
+
+    /// How many UNTRUSTED (public-server) views must agree to carry a
+    /// finality verdict when no trusted node answered: two on mainnet —
+    /// with a Core primary that abstained this is strict (one public
+    /// server never decides alone; the record stays unsettled until the
+    /// node can see the tx or a second view is configured), and nodeless
+    /// keeps its single-server concession only when a second view is not
+    /// even configured. One on test networks.
+    fn untrusted_quorum(&self) -> usize {
+        if self.primary().params().network != Network::Mainnet {
+            return 1;
+        }
+        let trusted_primary = self.backends[0].view_health().is_none();
+        if trusted_primary || self.backends.len() >= 2 {
+            2
+        } else {
+            1
+        }
     }
 
     /// The *least*-advanced MTP across responding views — the conservative
@@ -2099,6 +2299,12 @@ impl ChainBackend for MultiBackend {
             self.fan_out(|b| b.tx_confirmations(txid, spk_hint)),
         )?;
         Ok(hits.into_iter().max().expect("nonempty by quorum"))
+    }
+
+    fn tx_confirmations_final(&self, txid: &str, spk_hint: Option<&ScriptBuf>) -> Result<u64> {
+        // Terminal decisions never take one view's word: min over the
+        // integrity quorum (#101; security review 2026-09-09 #7).
+        self.tx_confirmations_min(txid, spk_hint)
     }
 
     fn fee_rate_for(&self, conf_target: u16, conservative: bool) -> Result<u64> {
@@ -2425,6 +2631,35 @@ mod multi_backend_tests {
         }
     }
 
+    /// Confirmed-only fallback for nodes without `minconf` (Litecoin Core
+    /// 0.21): only confirmed, spendable coins are picked, largest first,
+    /// with a fee allowance; a shortfall reads as "insufficient funds" so
+    /// the engine queues it exactly like the `minconf` path.
+    #[test]
+    fn confirmed_input_preselection_skips_unconfirmed_and_queues_on_shortfall() {
+        let unspent = json!([
+            { "txid": "aa", "vout": 0, "amount": 0.5, "confirmations": 0, "spendable": true },
+            { "txid": "bb", "vout": 1, "amount": 0.3, "confirmations": 3, "spendable": true },
+            { "txid": "cc", "vout": 2, "amount": 0.2, "confirmations": 9, "spendable": false },
+            { "txid": "dd", "vout": 0, "amount": 0.1, "confirmations": 1, "spendable": true },
+        ]);
+        // 0.25 coins at 2 sat/vB: the 0.3 coin alone covers it.
+        let picked = pick_confirmed_inputs(&unspent, 25_000_000, 2.0).unwrap();
+        assert_eq!(picked.len(), 1);
+        assert_eq!(picked[0]["txid"], "bb");
+        // 0.35 coins: needs bb + dd (aa is unconfirmed, cc unspendable).
+        let picked = pick_confirmed_inputs(&unspent, 35_000_000, 2.0).unwrap();
+        assert_eq!(picked.len(), 2);
+        assert_eq!(picked[1]["txid"], "dd");
+        // 0.45 coins: only the unconfirmed change would cover it → queue.
+        let err = pick_confirmed_inputs(&unspent, 45_000_000, 2.0).unwrap_err();
+        assert!(is_insufficient_funds(&err), "{err:#}");
+        assert!(rejects_minconf(&anyhow::anyhow!(
+            "RPC error -3: Unexpected key minconf"
+        )));
+        assert!(!rejects_minconf(&anyhow::anyhow!("Insufficient funds")));
+    }
+
     fn multi(views: Vec<TestView>) -> MultiBackend {
         MultiBackend::from_backends(
             views
@@ -2594,6 +2829,37 @@ mod multi_backend_tests {
             1,
             "finality min"
         );
+    }
+
+    /// Review 2026-09-10 closure recheck: the finality quorum follows the
+    /// responders' trust. A trusted Core that abstains (txindex-less, a
+    /// foreign tx) must not hand the verdict to ONE public server.
+    #[test]
+    fn finality_quorum_follows_the_responders_trust() {
+        // Trusted primary abstains, one untrusted view says 99: no verdict.
+        let mb = multi(vec![
+            TestView::absent(),
+            TestView::ok(99).untrusted("fin-q-a"),
+        ]);
+        assert!(mb.tx_confirmations_min("txid", None).is_err());
+        // Trusted primary abstains, two untrusted views: their min.
+        let mb = multi(vec![
+            TestView::absent(),
+            TestView::ok(99).untrusted("fin-q-b"),
+            TestView::ok(3).untrusted("fin-q-c"),
+        ]);
+        assert_eq!(mb.tx_confirmations_min("txid", None).unwrap(), 3);
+        // Trusted primary answers: its word suffices, min'd with the rest.
+        let mb = multi(vec![TestView::ok(5), TestView::ok(99).untrusted("fin-q-d")]);
+        assert_eq!(mb.tx_confirmations_min("txid", None).unwrap(), 5);
+        let mb = multi(vec![TestView::ok(7)]);
+        assert_eq!(mb.tx_confirmations_min("txid", None).unwrap(), 7);
+        // Nodeless mainnet with two public views: still two needed.
+        let mb = multi(vec![
+            TestView::ok(99).untrusted("fin-q-e"),
+            TestView::absent().untrusted("fin-q-f"),
+        ]);
+        assert!(mb.tx_confirmations_min("txid", None).is_err());
     }
 
     #[test]

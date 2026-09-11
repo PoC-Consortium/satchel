@@ -935,6 +935,10 @@ export const en = {
     offersBodyMany:
       "{count} offers of yours are still on the Corkboard. Offers lock nothing, but leaving them up means counterparties can still take them while Satchel is closed — the engine will service the takes.",
     withdrawExit: "Withdraw all & exit",
+    // Keep-running hand-off failed before the engine was detached: Satchel
+    // stays open on purpose (closing now would STOP the engine).
+    handoffFailed:
+      "Could not hand the engine off to keep running: {err}. Satchel stays open and the engine keeps watching your swaps — fix the problem and try again.",
   },
   unlock: {
     title: "Unlock merchant",

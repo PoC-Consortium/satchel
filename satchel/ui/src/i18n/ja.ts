@@ -894,6 +894,8 @@ export const ja: Bundle = {
     offersBodyMany:
       "あなたのオファー {count} 件がまだ Corkboard にあります。オファーは何もロックしませんが、残しておくと Satchel を閉じている間も取引相手が取れます — エンジンがそれらの取得を処理します。",
     withdrawExit: "すべて取り下げて終了",
+    handoffFailed:
+      "エンジンをバックグラウンドで動かし続けるための引き継ぎに失敗しました: {err}。Satchel は開いたままで、エンジンはスワップの監視を続けます。問題を解決してからもう一度お試しください。",
   },
   unlock: {
     title: "マーチャントを解除",

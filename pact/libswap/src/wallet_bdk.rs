@@ -131,15 +131,16 @@ impl ChainBackend for BdkWalletBackend {
         Ok(Some(self.chain().history(spk)?))
     }
 
-    fn wallet_owns_address(&self, _address: &str) -> Result<Option<bool>> {
-        // The nodeless wallet is SEED-DERIVED, so any address it issued (a v2
-        // swap sweep among them) is re-derivable on every machine running the
-        // same seed. Takeover requires the same seed (same merchant), so a
-        // sweep on a nodeless leg is always ours — no cross-wallet payout hole
-        // exists here (that's a Core-node-wallet-only concern). wallet-btcx
-        // doesn't expose the bdk `is_mine` on the backend, and the same-seed
-        // invariant makes a precise check unnecessary for this gate.
-        Ok(Some(true))
+    fn wallet_owns_address(&self, address: &str) -> Result<Option<bool>> {
+        // Precise descriptor ownership (bdk `is_mine`; security review
+        // 2026-09-09 #8). "Seed-derived, therefore ours" only holds for
+        // addresses THIS wallet issued: the sweep recorded by a v2 swap that
+        // started in Core-node mode came from the NODE wallet, and restoring
+        // that merchant nodeless from its seed does not make it spendable
+        // here. `None` while the seed is locked — unknown is never read as
+        // ours, so the takeover/redeem gate rides such a swap to its refund
+        // (which pays a fresh address we always own).
+        self.backend.wallet_is_mine(address)
     }
 
     fn fetch_tx(&self, txid: &str) -> Result<Option<Transaction>> {

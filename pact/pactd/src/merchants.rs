@@ -313,6 +313,10 @@ impl MerchantRegistry {
             "this pactd runs a single flat merchant (harness/CLI mode); \
              createmerchant needs a managed parent data dir"
         );
+        // Creating a merchant SWITCHES AWAY from the current one exactly like
+        // `loadmerchant` does — the fresh dir has nothing to gate on, the one
+        // we leave may (security review 2026-09-09 #2).
+        self.ensure_safe_to_switch_away()?;
         let id = self.alloc_id();
         let label = label.trim();
         let label = if label.is_empty() {
@@ -403,19 +407,13 @@ impl MerchantRegistry {
     /// stays loaded, so switching the *foreground* one never stops a watcher.
     fn ensure_safe_to_switch_away(&self) -> Result<()> {
         if let Some(engine) = self.engine.as_ref() {
-            // A locked engine can't list reliably; treat a list error as "no
-            // information" rather than blocking a switch the user asked for.
-            if let Ok(swaps) = engine.store.list() {
-                if let Some(s) = swaps.iter().find(|s| !is_terminal(s.state)) {
-                    let active = self.active_id().unwrap_or("?");
-                    bail!(
-                        "merchant {active} has a live swap ({} in state {:?}) — \
-                         finish or refund it before switching, so its timelocks \
-                         keep being watched",
-                        s.swap_id,
-                        s.state
-                    );
-                }
+            let active = self.active_id().unwrap_or("?");
+            if let Some((swap_id, state)) = live_swap(engine)? {
+                bail!(
+                    "merchant {active} has a live swap ({swap_id} in state {state}) — \
+                     finish or refund it before switching, so its timelocks \
+                     keep being watched"
+                );
             }
         }
         Ok(())
@@ -524,11 +522,57 @@ impl MerchantRegistry {
     }
 }
 
-/// Terminal swap states never need timelock watching, so switching away from a
-/// merchant whose swaps are all terminal is safe.
-fn is_terminal(state: libswap::swap::State) -> bool {
+/// The first swap of `engine` that still needs its engine loaded, if any:
+/// any non-terminal record of EITHER protocol, or a terminal one whose
+/// settlement is not yet buried (`settled == false` — the fee-bump nurse is
+/// still working the claim/refund). Followed (foreign-machine) records
+/// don't count: they are another machine's to drive. A store that cannot
+/// be listed FAILS CLOSED — an unknown exposure is not a safe switch.
+fn live_swap(engine: &Engine) -> Result<Option<(String, String)>> {
+    let v1 = engine
+        .store
+        .list()
+        .context("cannot list this merchant's swaps — refusing to switch away")?;
+    if let Some(s) = v1
+        .iter()
+        .filter(|s| engine.drives(s.derive_scope, s.adopted))
+        .find(|s| !watch_retired_v1(s))
+    {
+        return Ok(Some((s.swap_id.clone(), format!("{:?}", s.state))));
+    }
+    let v2 = engine
+        .store
+        .list_adaptor()
+        .context("cannot list this merchant's v2 swaps — refusing to switch away")?;
+    if let Some(s) = v2
+        .iter()
+        .filter(|s| engine.drives(s.derive_scope, s.adopted))
+        .find(|s| !watch_retired_v2(s))
+    {
+        return Ok(Some((s.swap_id.clone(), format!("{:?}", s.state))));
+    }
+    Ok(None)
+}
+
+/// A v1 record whose chain watch is retired: aborted (nothing on chain),
+/// or completed/refunded with the settlement latched at depth.
+fn watch_retired_v1(s: &libswap::store::SwapRecord) -> bool {
     use libswap::swap::State::*;
-    matches!(state, Completed | Refunded | Aborted)
+    match s.state {
+        Aborted => true,
+        Completed | Refunded => s.settled,
+        _ => false,
+    }
+}
+
+/// v2 twin of [`watch_retired_v1`].
+fn watch_retired_v2(s: &libswap::store::AdaptorSwapRecord) -> bool {
+    use libswap::adaptor_swap::AdaptorState::*;
+    match s.state {
+        Aborted => true,
+        Completed | Refunded => s.settled,
+        _ => false,
+    }
 }
 
 /// Discover `merchants/<id>/` dirs that carry a seed but are missing from the
@@ -658,6 +702,195 @@ mod tests {
         let list = reg.list();
         assert_eq!(list["merchants"].as_array().unwrap().len(), 2);
         assert_eq!(list["active"], "m1");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    fn v1_record(
+        engine: &Engine,
+        id: &str,
+        state: libswap::swap::State,
+    ) -> libswap::store::SwapRecord {
+        use libswap::messages::ChainRef;
+        use libswap::store::SwapRecord;
+        use libswap::swap::Role;
+        let chain = |coin: &str| ChainRef {
+            coin_id: coin.into(),
+            network: libswap::params::Network::Regtest,
+        };
+        SwapRecord {
+            swap_id: id.into(),
+            role: Role::Initiator,
+            state,
+            created_at: 1_700_000_123,
+            swap_index: Some(0),
+            chain_a: chain("btcx"),
+            chain_b: chain("btc"),
+            amount_a: 1,
+            amount_b: 1,
+            hash_h: "00".repeat(32),
+            t1: 1_700_000_001,
+            t2: 1_700_000_000,
+            n_a: 1,
+            n_b: 1,
+            their_n_a: None,
+            their_n_b: None,
+            alice_refund_pubkey_a: String::new(),
+            alice_redeem_pubkey_b: String::new(),
+            bob_redeem_pubkey_a: None,
+            bob_refund_pubkey_b: None,
+            counterparty_identity: None,
+            htlc_a_txid: None,
+            htlc_a_vout: None,
+            htlc_b_txid: None,
+            htlc_b_vout: None,
+            htlc_a_height: None,
+            htlc_b_height: None,
+            preimage: None,
+            refund_tx_hex: None,
+            final_txid: None,
+            final_tx_hex: None,
+            last_action_height: 0,
+            derive_scope: engine.machine_scope.0,
+            adopted: false,
+            settled: false,
+        }
+    }
+
+    fn v2_record(
+        engine: &Engine,
+        id: &str,
+        state: libswap::adaptor_swap::AdaptorState,
+    ) -> libswap::store::AdaptorSwapRecord {
+        use libswap::messages::ChainRef;
+        use libswap::store::AdaptorSwapRecord;
+        use libswap::swap::Role;
+        let chain = |coin: &str| ChainRef {
+            coin_id: coin.into(),
+            network: libswap::params::Network::Regtest,
+        };
+        AdaptorSwapRecord {
+            swap_id: id.into(),
+            role: Role::Initiator,
+            state,
+            created_at: 1_700_000_123,
+            swap_index: Some(0),
+            chain_a: chain("btcx"),
+            chain_b: chain("btc"),
+            amount_a: 1,
+            amount_b: 1,
+            t1: 1_700_000_001,
+            t2: 1_700_000_000,
+            n_a: 1,
+            n_b: 1,
+            their_n_a: None,
+            their_n_b: None,
+            adaptor_point: String::new(),
+            alice_swap_a: String::new(),
+            alice_swap_b: String::new(),
+            alice_refund_a: String::new(),
+            bob_swap_a: None,
+            bob_swap_b: None,
+            bob_refund_b: None,
+            sweep_a: None,
+            sweep_b: None,
+            redeem_feerate_a: 0,
+            redeem_feerate_b: 0,
+            counterparty_identity: None,
+            funding_a_txid: Some("aa".repeat(32)),
+            funding_a_vout: Some(0),
+            funding_b_txid: None,
+            funding_b_vout: None,
+            funding_a_height: None,
+            funding_b_height: None,
+            their_pubnonce_a: None,
+            their_pubnonce_b: None,
+            their_partial_a: None,
+            their_partial_b: None,
+            adaptor_sig_a: None,
+            adaptor_sig_b: None,
+            final_txid_a: None,
+            final_txid_b: None,
+            final_tx_a_hex: None,
+            final_tx_b_hex: None,
+            last_action_height: 0,
+            funding_b_tx_hex: None,
+            funding_b_broadcast: false,
+            derive_scope: engine.machine_scope.0,
+            adopted: false,
+            settled: false,
+        }
+    }
+
+    /// Security review 2026-09-09 #2: EVERY engine replacement (create, load,
+    /// unload) is gated on the merchant being left, the gate sees BOTH
+    /// protocols, and a terminal-but-unsettled record still counts as live
+    /// (its claim/refund is still being nursed).
+    #[test]
+    fn switching_away_is_gated_on_both_protocols_and_settlement() {
+        use libswap::adaptor_swap::AdaptorState;
+        use libswap::swap::State;
+        let dir = temp_dir("switch-gate");
+        let mut reg = MerchantRegistry::open(&dir, cfg(), false, true).unwrap();
+        reg.create("One").unwrap();
+        reg.create("Two").unwrap(); // no swaps yet → allowed
+        assert_eq!(reg.active_id(), Some("m2"));
+
+        // A live v1 record blocks create, load AND unload.
+        let live = v1_record(reg.active().unwrap(), "v1live", State::Accepted);
+        reg.active().unwrap().store.put(&live).unwrap();
+        let err = format!("{:#}", reg.create("Three").unwrap_err());
+        assert!(err.contains("live swap") && err.contains("v1live"), "{err}");
+        assert!(reg.load("m1").is_err(), "load must refuse too");
+        assert!(reg.unload().is_err(), "unload must refuse too");
+        assert_eq!(reg.active_id(), Some("m2"), "still on m2");
+        assert_eq!(
+            reg.list()["merchants"].as_array().unwrap().len(),
+            2,
+            "nothing created"
+        );
+
+        // Completed but NOT settled: the redeem is still being nursed → live.
+        let mut done = live.clone();
+        done.state = State::Completed;
+        reg.active().unwrap().store.put(&done).unwrap();
+        assert!(
+            reg.create("Three").is_err(),
+            "unsettled Completed is still live"
+        );
+        done.settled = true;
+        reg.active().unwrap().store.put(&done).unwrap();
+
+        // A funded v2 record in `Signed` (the state v2 executes in) blocks.
+        let v2 = v2_record(reg.active().unwrap(), "v2signed", AdaptorState::Signed);
+        reg.active().unwrap().store.put_adaptor(&v2).unwrap();
+        let err = format!("{:#}", reg.load("m1").unwrap_err());
+        assert!(err.contains("v2signed"), "{err}");
+        let mut v2done = v2.clone();
+        v2done.state = AdaptorState::Refunded;
+        reg.active().unwrap().store.put_adaptor(&v2done).unwrap();
+        assert!(
+            reg.create("Three").is_err(),
+            "unsettled v2 Refunded is still live"
+        );
+        v2done.settled = true;
+        reg.active().unwrap().store.put_adaptor(&v2done).unwrap();
+
+        // Everything settled → switching is allowed again, in every form.
+        reg.load("m1").unwrap();
+        reg.load("m2").unwrap();
+        let m3 = reg.create("Three").unwrap();
+        assert_eq!(m3.id, "m3");
+        reg.load("m2").unwrap();
+        reg.unload().unwrap();
+        assert!(reg.active_id().is_none());
+
+        // A FOLLOWED (foreign-machine) live record never blocks — it is not
+        // ours to drive, so leaving it unwatched changes nothing.
+        reg.load("m2").unwrap();
+        let mut foreign = v1_record(reg.active().unwrap(), "foreign", State::FundedA);
+        foreign.derive_scope = reg.active().unwrap().machine_scope.0.wrapping_add(1);
+        reg.active().unwrap().store.put(&foreign).unwrap();
+        reg.load("m1").unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 
