@@ -972,6 +972,9 @@ export const en = {
   },
   // Electrum default-server reconcile (the "new default servers" prompt + the
   // coin-setup "reset to defaults" action). Translated across all bundles.
+  settlement: {
+    loss: "The counterparty claimed your locked funds and refunded the other leg. You received neither the swap payment nor a refund. Review the on-chain history.",
+  },
   serverSync: {
     resetDefaults: "Reset to defaults",
     resetConfirm:
@@ -984,4 +987,5 @@ export const en = {
 // ships in en.ts, translate all 26 bundles in the same change (the rc10/rc11 sync
 // pattern). A new group may ship optional for one release (runtime falls back to
 // English) and then be folded back here once every bundle carries it.
-export type Bundle = typeof en;
+// Settlement loss copy falls back to English until the next locale sync.
+export type Bundle = Omit<typeof en, "settlement"> & { settlement?: typeof en.settlement };

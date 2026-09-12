@@ -753,6 +753,7 @@ mod tests {
             derive_scope: engine.machine_scope.0,
             adopted: false,
             settled: false,
+            settlement_loss: false,
         }
     }
 
@@ -818,6 +819,7 @@ mod tests {
             derive_scope: engine.machine_scope.0,
             adopted: false,
             settled: false,
+            settlement_loss: false,
         }
     }
 

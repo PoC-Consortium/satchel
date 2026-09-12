@@ -86,21 +86,21 @@ jobs:
             label: macOS-Intel
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           targets: ${{ matrix.triple }}
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: |
             pact
             satchel
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
@@ -122,7 +122,7 @@ jobs:
       # The two binaries Satchel ships as sidecars (declared in tauri.conf
       # externalBin). Built from the pact workspace for the target triple.
       - name: Build pactd + pact-cli (release)
-        run: cargo build --release --manifest-path pact/Cargo.toml -p pactd -p pact-cli --target ${{ matrix.triple }}
+        run: cargo build --locked --release --manifest-path pact/Cargo.toml -p pactd -p pact-cli --target ${{ matrix.triple }}
 
       # Tauri expects externalBin staged as binaries/<name>-<target-triple>(.exe).
       - name: Stage Tauri sidecars
@@ -140,7 +140,7 @@ jobs:
       # release for this tag on this repo.
       - name: Build + publish Satchel
         id: build
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

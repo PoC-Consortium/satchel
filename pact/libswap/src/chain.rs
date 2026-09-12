@@ -123,6 +123,17 @@ pub(crate) fn is_inputs_spent(err: &anyhow::Error) -> bool {
     msg.contains("missingorspent") || msg.contains("txn-mempool-conflict")
 }
 
+/// Definite argument/authentication failures happen before Core's wallet send.
+/// Do not classify generic wallet/internal/transport errors as safe to resend.
+pub(crate) fn is_pre_send_rejection(err: &anyhow::Error) -> bool {
+    err.downcast_ref::<RpcError>().is_some_and(|rpc| {
+        matches!(
+            rpc.code,
+            -3 | -5 | -8 | -13 | -14 | -17 | -22 | -32601 | -32602
+        )
+    })
+}
+
 /// Is this send failure "insufficient funds"? Core answers -6; bdk's coin
 /// selection reports `InsufficientFunds` — matched by text so both wallet
 /// backends classify identically. The confirmed-only funding path uses this
@@ -418,6 +429,11 @@ pub trait ChainBackend: Send + Sync {
     /// The node's `incrementalrelayfee` (sat/vB, rounded up, min 1) — the
     /// minimum a BIP125 replacement must beat the replaced tx by (Rule 4).
     /// Defaults to 1 sat/vB when the node can't report it.
+    /// Current local mempool admission floor, in sat/kvB.
+    fn mempool_min_feerate_kvb(&self) -> Result<u64> {
+        Ok(self.params().min_feerate_sat_kvb)
+    }
+
     fn incremental_relay_feerate(&self) -> Result<u64> {
         Ok(1)
     }
@@ -498,6 +514,7 @@ pub trait ChainBackend: Send + Sync {
         &self,
         _address: &str,
         _amount_sat: u64,
+        _fee: SendFee,
     ) -> Result<(String, u32, String)> {
         bail!("this backend cannot build funding transactions without broadcasting")
     }
@@ -527,6 +544,15 @@ pub trait ChainBackend: Send + Sync {
     /// balances but cannot SIGN, so a funding `wallet_send` would fail with RPC
     /// -13 ("walletpassphrase first"). `Ok(false)` for unencrypted wallets or
     /// backends with no wallet concept (only the Core primary overrides this).
+    /// Wallet-local recovery includes unconfirmed funding. A miss never
+    /// authorizes retry of an already recorded ambiguous attempt.
+    fn wallet_find_funding(&self, spk: &ScriptBuf, amount: u64) -> Result<Option<OutPoint>> {
+        Ok(self
+            .find_funding(spk)?
+            .filter(|(_, info)| info.value_sat == amount)
+            .map(|(op, _)| op))
+    }
+
     fn wallet_locked(&self) -> Result<bool> {
         Ok(false)
     }
@@ -544,6 +570,18 @@ pub trait ChainBackend: Send + Sync {
         _prevout_spk: &ScriptBuf,
     ) -> Result<Txid> {
         bail!("this backend has no wallet; cannot sign a CPFP child")
+    }
+
+    /// Submit a parent and its wallet-signed child together where supported.
+    fn wallet_sign_package(
+        &self,
+        parent: &Transaction,
+        child: &Transaction,
+        value: u64,
+        spk: &ScriptBuf,
+    ) -> Result<Txid> {
+        self.broadcast(parent)?;
+        self.wallet_sign_send(child, value, spk)
     }
 
     /// A wallet tx's fee (sat) + vsize (vB), for recomputing a funding's broadcast
@@ -687,6 +725,9 @@ impl<T: ChainBackend + ?Sized> ChainBackend for std::sync::Arc<T> {
     fn is_in_mempool(&self, txid: &str) -> Result<bool> {
         (**self).is_in_mempool(txid)
     }
+    fn mempool_min_feerate_kvb(&self) -> Result<u64> {
+        (**self).mempool_min_feerate_kvb()
+    }
     fn incremental_relay_feerate(&self) -> Result<u64> {
         (**self).incremental_relay_feerate()
     }
@@ -720,8 +761,9 @@ impl<T: ChainBackend + ?Sized> ChainBackend for std::sync::Arc<T> {
         &self,
         address: &str,
         amount_sat: u64,
+        fee: SendFee,
     ) -> Result<(String, u32, String)> {
-        (**self).wallet_build_funding(address, amount_sat)
+        (**self).wallet_build_funding(address, amount_sat, fee)
     }
     fn wallet_cancel_funding(&self, tx_hex: &str) -> Result<()> {
         (**self).wallet_cancel_funding(tx_hex)
@@ -834,6 +876,46 @@ impl CoreRpcBackend {
             params,
             rpc: RpcClient::from_url_or_cookie(url, default_cookie_candidates(params))?,
         })
+    }
+
+    fn sign_child(
+        &self,
+        tx: &Transaction,
+        prevout_value_sat: u64,
+        prevout_spk: &ScriptBuf,
+    ) -> Result<Transaction> {
+        let unsigned = bitcoin::consensus::encode::serialize_hex(tx);
+        // The prevout is unconfirmed (the parent redeem in the mempool), so the
+        // wallet needs its amount + spk explicitly to produce a segwit/taproot
+        // signature. The wallet holds the key (the sweep address it issued).
+        let prevout = &tx
+            .input
+            .first()
+            .context("CPFP child has no input")?
+            .previous_output;
+        let amount = format!(
+            "{}.{:08}",
+            prevout_value_sat / 100_000_000,
+            prevout_value_sat % 100_000_000
+        );
+        let prevtxs = json!([{
+            "txid": prevout.txid.to_string(),
+            "vout": prevout.vout,
+            "scriptPubKey": hex::encode(prevout_spk.as_bytes()),
+            "amount": amount,
+        }]);
+        let signed = self
+            .rpc
+            .call("signrawtransactionwithwallet", &[json!(unsigned), prevtxs])?;
+        anyhow::ensure!(
+            signed["complete"].as_bool() == Some(true),
+            "wallet could not fully sign the CPFP child (is the redeem swept to a \
+             wallet-owned address?): {signed}"
+        );
+        let signed_hex = signed["hex"]
+            .as_str()
+            .context("signrawtransactionwithwallet: no hex")?;
+        Ok(bitcoin::consensus::deserialize(&hex::decode(signed_hex)?)?)
     }
 
     /// Raw `estimatesmartfee` answer in sat/vB, or `None` when the node has no
@@ -952,18 +1034,51 @@ impl ChainBackend for CoreRpcBackend {
         // `scantxoutset` reads the UTXO set (no -txindex, no wallet); a
         // `raw(<spk>)` descriptor matches the exact HTLC script. It returns
         // confirmed outputs only — fine, since we gate on confirmations anyway.
+        // Cache successful answers, not a throttle error. A new tip invalidates
+        // a negative answer immediately; positive answers are revalidated so a
+        // spent output is never returned from the cache. Wait for concurrent scans.
+        type ScanEntry = (String, std::time::Instant, Option<(OutPoint, TxOutInfo)>);
+        static SCANS: std::sync::OnceLock<
+            std::sync::Mutex<std::collections::HashMap<(String, ScriptBuf), ScanEntry>>,
+        > = std::sync::OnceLock::new();
+        let mut scans = SCANS
+            .get_or_init(Default::default)
+            .lock()
+            .map_err(|_| anyhow::anyhow!("UTXO scan cache poisoned"))?;
+        let key = (self.rpc.endpoint_key(), spk.clone());
+        let tip_hash = self
+            .rpc
+            .call("getbestblockhash", &[])?
+            .as_str()
+            .context("getbestblockhash: no hash")?
+            .to_string();
+        if let Some((hash, when, answer)) = scans.get(&key) {
+            if let Some((outpoint, _)) = answer {
+                if let Some(info) = self.get_txout(outpoint, spk)? {
+                    return Ok(Some((*outpoint, info)));
+                }
+            } else if *hash == tip_hash && when.elapsed() < std::time::Duration::from_secs(120) {
+                return Ok(None);
+            }
+        }
+        if scans.len() >= 2048 {
+            scans.clear();
+        }
         let desc = format!("raw({})", hex::encode(spk.as_bytes()));
         let result = self
             .rpc
             .call("scantxoutset", &[json!("start"), json!([desc])])?;
         let tip = result["height"].as_u64().unwrap_or(0);
+        anyhow::ensure!(
+            result["success"].as_bool().unwrap_or(false),
+            "UTXO scan did not complete"
+        );
         let Some(u) = result["unspents"]
             .as_array()
-            .cloned()
-            .unwrap_or_default()
-            .into_iter()
-            .next()
+            .context("scantxoutset: no unspents")?
+            .first()
         else {
+            scans.insert(key, (tip_hash, std::time::Instant::now(), None));
             return Ok(None);
         };
         let txid = Txid::from_str(u["txid"].as_str().context("scantxoutset: no txid")?)?;
@@ -975,14 +1090,16 @@ impl ChainBackend for CoreRpcBackend {
         } else {
             0
         };
-        Ok(Some((
+        let answer = Some((
             OutPoint { txid, vout },
             TxOutInfo {
                 value_sat: (btc_value * 1e8).round() as u64,
                 script_pubkey_hex: hex::encode(spk.as_bytes()),
                 confirmations,
             },
-        )))
+        ));
+        scans.insert(key, (tip_hash, std::time::Instant::now(), answer.clone()));
+        Ok(answer)
     }
 
     fn find_vout(&self, txid: &str, script_pubkey_hex: &str) -> Result<u32> {
@@ -1052,25 +1169,76 @@ impl ChainBackend for CoreRpcBackend {
         // fetch it, and `getrawtransaction` then returns -5 ("No such mempool
         // transaction") with no -txindex; skip that tx instead of aborting the
         // whole scan (which would never reach the block fallback below).
-        let mempool = self.rpc.call("getrawmempool", &[])?;
-        for txid in mempool.as_array().cloned().unwrap_or_default() {
-            let Ok(tx) = self
-                .rpc
-                .call("getrawtransaction", &[txid.clone(), json!(true)])
-            else {
-                continue; // evicted/mined since the snapshot — not the spend we seek
-            };
-            for vin in tx["vin"].as_array().cloned().unwrap_or_default() {
-                if Self::vin_matches(&vin, outpoint) {
-                    return Ok(Some((decode(&tx)?, 0)));
+        match self.rpc.call(
+            "gettxspendingprevout",
+            &[json!([{
+                "txid": outpoint.txid.to_string(), "vout": outpoint.vout
+            }])],
+        ) {
+            Ok(result) => {
+                if let Some(id) = result[0]["spendingtxid"].as_str() {
+                    let tx = self
+                        .rpc
+                        .call("getrawtransaction", &[json!(id), json!(true)])?;
+                    let tx = decode(&tx)?;
+                    anyhow::ensure!(
+                        tx.input.iter().any(|i| i.previous_output == *outpoint),
+                        "incorrect spending transaction"
+                    );
+                    return Ok(Some((tx, 0)));
                 }
             }
+            Err(e) if format!("{e:#}").contains("-32601") => {
+                // Older Core forks: bounded compatibility scan. Never spend
+                // minutes issuing one RPC for every entry in a large mempool.
+                let mempool = self.rpc.call("getrawmempool", &[])?;
+                let ids = mempool.as_array().context("invalid mempool list")?;
+                // An incomplete mempool scan must not suppress mined-spend discovery.
+                let budget = std::time::Instant::now() + std::time::Duration::from_secs(2);
+                for id in ids
+                    .iter()
+                    .take(if ids.len() <= 128 { ids.len() } else { 0 })
+                {
+                    if std::time::Instant::now() >= budget {
+                        break;
+                    }
+                    let Ok(tx) = self
+                        .rpc
+                        .call("getrawtransaction", &[id.clone(), json!(true)])
+                    else {
+                        continue; // evicted/mined between the snapshot and this read
+                    };
+                    if tx["vin"]
+                        .as_array()
+                        .is_some_and(|vin| vin.iter().any(|v| Self::vin_matches(v, outpoint)))
+                    {
+                        return Ok(Some((decode(&tx)?, 0)));
+                    }
+                }
+            }
+            Err(e) => return Err(e),
         }
         // Fallback: the spend is already mined (we were down/slow during the
         // unconfirmed window). Scan blocks from the HTLC's funding height to the
         // tip — full blocks include witnesses, so this needs no -txindex either.
         let tip = self.tip_height()?;
-        for height in from_height..=tip {
+        type ScanKey = (String, OutPoint);
+        static CURSORS: std::sync::OnceLock<
+            std::sync::Mutex<std::collections::HashMap<ScanKey, u64>>,
+        > = std::sync::OnceLock::new();
+        let cursors = CURSORS.get_or_init(Default::default);
+        let key = (self.rpc.endpoint_key(), *outpoint);
+        let start = cursors
+            .lock()
+            .map_err(|_| anyhow::anyhow!("scan cursor poisoned"))?
+            .get(&key)
+            .copied()
+            .unwrap_or(from_height)
+            .max(from_height)
+            .min(tip);
+        let end = start.saturating_add(15).min(tip);
+        let budget = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        for height in start..=end {
             let hash = self.rpc.call("getblockhash", &[json!(height)])?;
             let block = self.rpc.call("getblock", &[hash, json!(2)])?;
             for tx in block["tx"].as_array().cloned().unwrap_or_default() {
@@ -1080,7 +1248,25 @@ impl ChainBackend for CoreRpcBackend {
                     }
                 }
             }
+            let mut cache = cursors
+                .lock()
+                .map_err(|_| anyhow::anyhow!("scan cursor poisoned"))?;
+            if cache.len() >= 2048 {
+                cache.clear();
+            }
+            cache.insert(
+                key.clone(),
+                if height == tip {
+                    tip.saturating_sub(6).max(from_height)
+                } else {
+                    height + 1
+                },
+            );
+            if std::time::Instant::now() >= budget && height < tip {
+                bail!("spend block scan pending; continuing next pass");
+            }
         }
+        anyhow::ensure!(end == tip, "spend block scan pending; continuing next pass");
         Ok(None)
     }
 
@@ -1165,6 +1351,15 @@ impl ChainBackend for CoreRpcBackend {
     fn is_in_mempool(&self, txid: &str) -> Result<bool> {
         // getmempoolentry succeeds iff the tx is in the mempool right now.
         Ok(self.rpc.call("getmempoolentry", &[json!(txid)]).is_ok())
+    }
+
+    fn mempool_min_feerate_kvb(&self) -> Result<u64> {
+        let info = self.rpc.call("getmempoolinfo", &[])?;
+        Ok(info["mempoolminfee"]
+            .as_f64()
+            .map(|fee| (fee * 1e8).ceil() as u64)
+            .unwrap_or(self.params.min_feerate_sat_kvb)
+            .max(self.params.min_feerate_sat_kvb))
     }
 
     fn incremental_relay_feerate(&self) -> Result<u64> {
@@ -1325,10 +1520,51 @@ impl ChainBackend for CoreRpcBackend {
             .to_string())
     }
 
+    fn wallet_find_funding(&self, spk: &ScriptBuf, amount: u64) -> Result<Option<OutPoint>> {
+        let entries = self.rpc.call(
+            "listtransactions",
+            &[json!("*"), json!(1000), json!(0), json!(true)],
+        )?;
+        let mut seen = std::collections::HashSet::new();
+        for entry in entries
+            .as_array()
+            .context("listtransactions: expected array")?
+            .iter()
+            .rev()
+        {
+            let Some(id) = entry["txid"].as_str() else {
+                continue;
+            };
+            if entry["confirmations"].as_i64().unwrap_or(0) < 0 {
+                continue;
+            }
+            if let Some(addr) = entry["address"].as_str() {
+                if self.params().parse_address(addr).ok().as_ref() != Some(spk) {
+                    continue;
+                }
+            }
+            if !seen.insert(id) {
+                continue;
+            }
+            if let Some(tx) = self.wallet_tx(id)? {
+                for (vout, output) in tx.output.iter().enumerate() {
+                    if output.script_pubkey == *spk && output.value.to_sat() == amount {
+                        return Ok(Some(OutPoint {
+                            txid: tx.compute_txid(),
+                            vout: vout as u32,
+                        }));
+                    }
+                }
+            }
+        }
+        Ok(None)
+    }
+
     fn wallet_build_funding(
         &self,
         address: &str,
         amount_sat: u64,
+        fee: SendFee,
     ) -> Result<(String, u32, String)> {
         let amount = format!(
             "{}.{:08}",
@@ -1338,7 +1574,7 @@ impl ChainBackend for CoreRpcBackend {
         // Funding prices at the per-coin ~30-min target (see funding_conf_target),
         // not a blind 6-block target — at full sat/kvB resolution, passed to the
         // node as decimal sat/vB (the fraction is real queue priority).
-        let fee_rate = self.fee_rate_for_kvb(self.funding_conf_target(), false)? as f64 / 1000.0;
+        let fee_rate = self.resolve_send_fee(fee)?.min(500_000) as f64 / 1000.0;
         // 1. raw tx carrying only the funding output (no inputs yet). The output
         //    key is the funding address, so build the object with a dynamic key.
         let mut outputs = serde_json::Map::new();
@@ -1549,45 +1785,47 @@ impl ChainBackend for CoreRpcBackend {
         Ok(Some(out))
     }
 
-    fn wallet_sign_send(
-        &self,
-        tx: &Transaction,
-        prevout_value_sat: u64,
-        prevout_spk: &ScriptBuf,
-    ) -> Result<Txid> {
-        let unsigned = bitcoin::consensus::encode::serialize_hex(tx);
-        // The prevout is unconfirmed (the parent redeem in the mempool), so the
-        // wallet needs its amount + spk explicitly to produce a segwit/taproot
-        // signature. The wallet holds the key (the sweep address it issued).
-        let prevout = &tx.input[0].previous_output;
-        let amount = format!(
-            "{}.{:08}",
-            prevout_value_sat / 100_000_000,
-            prevout_value_sat % 100_000_000
-        );
-        let prevtxs = json!([{
-            "txid": prevout.txid.to_string(),
-            "vout": prevout.vout,
-            "scriptPubKey": hex::encode(prevout_spk.as_bytes()),
-            "amount": amount,
-        }]);
-        let signed = self
-            .rpc
-            .call("signrawtransactionwithwallet", &[json!(unsigned), prevtxs])?;
-        anyhow::ensure!(
-            signed["complete"].as_bool() == Some(true),
-            "wallet could not fully sign the CPFP child (is the redeem swept to a \
-             wallet-owned address?): {signed}"
-        );
-        let signed_hex = signed["hex"]
-            .as_str()
-            .context("signrawtransactionwithwallet: no hex")?;
+    fn wallet_sign_send(&self, tx: &Transaction, value: u64, spk: &ScriptBuf) -> Result<Txid> {
+        let tx = self.sign_child(tx, value, spk)?;
+        let signed_hex = bitcoin::consensus::serialize(&tx);
+        let signed_hex = hex::encode(signed_hex);
         match self.rpc.call("sendrawtransaction", &[json!(signed_hex)]) {
             Ok(txid) => Ok(Txid::from_str(
                 txid.as_str().context("sendrawtransaction: non-string")?,
             )?),
             // An unchanged child re-sent each tick is already in the mempool.
             Err(e) if is_already_broadcast(&e) => Ok(tx.compute_txid()),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn wallet_sign_package(
+        &self,
+        parent: &Transaction,
+        child: &Transaction,
+        value: u64,
+        spk: &ScriptBuf,
+    ) -> Result<Txid> {
+        let signed = self.sign_child(child, value, spk)?;
+        let result = self.rpc.call(
+            "submitpackage",
+            &[json!([
+                bitcoin::consensus::encode::serialize_hex(parent),
+                bitcoin::consensus::encode::serialize_hex(&signed)
+            ])],
+        );
+        match result {
+            Ok(reply) => {
+                anyhow::ensure!(
+                    reply["package_msg"].as_str() == Some("success"),
+                    "parent/child package rejected: {reply}"
+                );
+                Ok(signed.compute_txid())
+            }
+            Err(e) if format!("{e:#}").contains("-32601") => {
+                self.broadcast(parent)?;
+                self.broadcast(&signed)
+            }
             Err(e) => Err(e),
         }
     }
@@ -2079,11 +2317,7 @@ impl MultiBackend {
     ///
     /// [`tip_median_time`]: ChainBackend::tip_median_time
     pub fn tip_median_time_min(&self) -> Result<u64> {
-        let hits = self.require_responders(
-            "tip mtp",
-            self.integrity_quorum(),
-            self.fan_out(|b| b.tip_median_time()),
-        )?;
+        let hits = self.require_responders("tip mtp", 1, self.fan_out(|b| b.tip_median_time()))?;
         Ok(hits.into_iter().min().expect("nonempty by quorum"))
     }
 }
@@ -2351,6 +2585,10 @@ impl ChainBackend for MultiBackend {
         self.primary().is_in_mempool(txid)
     }
 
+    fn mempool_min_feerate_kvb(&self) -> Result<u64> {
+        self.primary().mempool_min_feerate_kvb()
+    }
+
     fn incremental_relay_feerate(&self) -> Result<u64> {
         // The replacement is broadcast to all backends, but the primary is the
         // node enforcing RBF acceptance for our wallet; its floor governs.
@@ -2383,13 +2621,19 @@ impl ChainBackend for MultiBackend {
         self.primary().wallet_send_all(address, fee)
     }
 
+    fn wallet_find_funding(&self, spk: &ScriptBuf, amount: u64) -> Result<Option<OutPoint>> {
+        self.primary().wallet_find_funding(spk, amount)
+    }
+
     fn wallet_build_funding(
         &self,
         address: &str,
         amount_sat: u64,
+        fee: SendFee,
     ) -> Result<(String, u32, String)> {
         // Wallet op: the primary (Core) backend owns the funding UTXOs.
-        self.primary().wallet_build_funding(address, amount_sat)
+        self.primary()
+            .wallet_build_funding(address, amount_sat, fee)
     }
 
     fn wallet_cancel_funding(&self, tx_hex: &str) -> Result<()> {
@@ -2421,6 +2665,17 @@ impl ChainBackend for MultiBackend {
         // Wallet op: the primary (Core) backend owns the sweep key.
         self.primary()
             .wallet_sign_send(tx, prevout_value_sat, prevout_spk)
+    }
+
+    fn wallet_sign_package(
+        &self,
+        parent: &Transaction,
+        child: &Transaction,
+        value: u64,
+        spk: &ScriptBuf,
+    ) -> Result<Txid> {
+        self.primary()
+            .wallet_sign_package(parent, child, value, spk)
     }
 
     fn wallet_tx_fee_vsize(&self, txid: &str) -> Result<(u64, u64)> {
@@ -2458,6 +2713,24 @@ mod multi_backend_tests {
             .expect("built-in btc")
             .params(Network::Mainnet)
             .expect("btc mainnet params")
+    }
+
+    #[test]
+    fn only_definite_pre_send_errors_allow_a_new_funding_attempt() {
+        let error = |code| {
+            anyhow::Error::new(RpcError {
+                code,
+                message: "test".into(),
+            })
+        };
+        assert!(is_pre_send_rejection(&error(-13))); // wallet locked before send
+        assert!(is_pre_send_rejection(&error(-8))); // invalid argument
+        for code in [-4, -25, -26, -32603] {
+            assert!(!is_pre_send_rejection(&error(code)));
+        }
+        assert!(!is_pre_send_rejection(&anyhow::anyhow!(
+            "response timed out"
+        )));
     }
 
     #[test]
@@ -2873,7 +3146,11 @@ mod multi_backend_tests {
         ]);
         assert_eq!(mb.tip_height().unwrap(), 10, "display read: quorum 1");
         assert!(mb.tip_median_time().is_err(), "clock read: quorum 2");
-        assert!(mb.tip_median_time_min().is_err(), "refund clock: quorum 2");
+        assert_eq!(
+            mb.tip_median_time_min().unwrap(),
+            1000,
+            "one live view can attempt a consensus-gated refund"
+        );
         // Both views live: clocks work again.
         let mb = multi(vec![
             TestView::ok(10).untrusted("test-clock-q"),

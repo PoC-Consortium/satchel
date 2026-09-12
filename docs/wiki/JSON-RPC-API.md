@@ -142,3 +142,7 @@ v2 adaptor swaps are enabled on **all networks including mainnet** (reviewed). T
 ## See also
 
 - [pact-cli](pact-cli) · [Running pactd](Running-pactd) · [Transports](Transports)
+
+### Electrum TLS trust
+
+`tlspin` accepts `["ssl://host:port", "inspect"]` or `["ssl://host:port", "forget"]` through the authenticated daemon RPC. Public CA certificates are validated by hostname and validity and can renew normally. Self-signed servers use trust on first use; first-contact interception is not excluded. Inspect and verify a changed self-signed certificate out of band before forgetting its pin, then restart pactd. A single-server fault assumption does not cover an attacker controlling all configured views.

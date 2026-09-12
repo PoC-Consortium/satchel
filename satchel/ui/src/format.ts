@@ -514,6 +514,7 @@ export function adaptorToSwap(r: AdaptorSwapRecord): Swap {
     role: r.role,
     state: r.state,
     settled: r.settled,
+    settlement_loss: r.settlement_loss,
     chain_a: r.chain_a,
     chain_b: r.chain_b,
     amount_a: r.amount_a,

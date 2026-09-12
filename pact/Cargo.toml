@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["libswap", "pactd", "pact-cli"]
+members = ["libswap", "pactd", "pact-cli", "../vendor/electrum-btcx"]
 
 [workspace.package]
 version = "0.1.0"
@@ -28,7 +28,7 @@ miniscript = "12"
 # so the bundled libsqlite3-sys stays a single native link.
 bdk_wallet = { version = "2", features = ["rusqlite"] }
 electrum-client = "0.21"
-# libswap dials Electrum ssl:// itself (accept-any-cert verifier, chain.rs);
+# Electrum ssl:// uses the vendored CA-validation/self-signed TOFU verifier;
 # pactd separately installs the process CryptoProvider. Same 0.23 as the tree.
 rustls = "0.23"
 bech32 = "0.11"
@@ -62,3 +62,7 @@ tracing-appender = "0.2"
 
 [profile.release]
 lto = true
+overflow-checks = true
+
+[patch."https://github.com/PoC-Consortium/btcx"]
+electrum-btcx = { path = "../vendor/electrum-btcx" }

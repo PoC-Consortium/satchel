@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -157,7 +157,11 @@ export default function CorkboardScreen() {
   // take tracking (a deliberate non-goal, see BACKEND_CONTRACTS C5).
   const mySwapIds = useMemo(() => new Set(swaps.map((s) => s.swap_id)), [swaps]);
 
+  const offersPending = useRef(false);
   const loadOffers = useCallback(async () => {
+    if (offersPending.current) return;
+    offersPending.current = true;
+    try {
     const avail = new Set<string>();
     try {
       const r = await rpc<{ pairs: Pair[] }>("listpairs");
@@ -220,6 +224,7 @@ export default function CorkboardScreen() {
       available: [...avail],
       boards: boardsStr,
     };
+    } finally { offersPending.current = false; }
   }, [boardSel, identity]);
 
   // Re-sync on mount, when the active merchant changes (login / switch — the

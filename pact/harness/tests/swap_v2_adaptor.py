@@ -41,7 +41,7 @@ def _broadcast_leg_b(bob, chain, wallet, confs=1):
         chain.generate(confs, wallet)
 
 
-def test_adaptor_swap(h):
+def test_adaptor_swap(h, late_refund=False):
     # auto_init=False: start seedless so setup_seed()'s createseed can run (the
     # default auto_init would create a seed on boot → createseed then conflicts).
     alice = Party("ad-alice", h, h.workdir, "alice_btcx", "alice_btc", auto_init=False).start()
@@ -98,6 +98,31 @@ def test_adaptor_swap(h):
         # Alice redeems leg B (reveals t on chain); Bob extracts t, redeems A.
         alice.rpc("adaptorredeem", sid)
         h.btc.generate(1, "bob_btc")
+        if late_refund:
+            import sqlite3
+            h.advance_time(8 * 3600)
+            alice.rpc("adaptorrefund", sid)
+            h.pocx.generate(1, "alice_btcx")
+            try:
+                bob.rpc("adaptorredeem", sid)
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError("claimed an already-refunded leg A")
+            assert bob.rpc("listadaptorswaps")[0]["state"] != "completed"
+            with sqlite3.connect(os.path.join(alice.data_dir, "pact.sqlite")) as db:
+                db.execute("INSERT OR REPLACE INTO meta(key,value) VALUES (?, 'refund')", (f"claim_pending:{sid}",))
+            alice.tick()
+            with sqlite3.connect(os.path.join(alice.data_dir, "pact.sqlite")) as db:
+                assert db.execute("SELECT value FROM meta WHERE key=?", (f"claim_pending:{sid}",)).fetchone() is None
+            for _ in range(2):
+                assert not any(e["action"] == "claim-rebroadcast" for e in bob.tick())
+            lost = bob.rpc("listadaptorswaps")[0]
+            assert lost["state"] == "refunded", lost
+            assert lost["settled"] and lost["settlement_loss"], lost
+            assert all(lost.get(key) is None for key in ['final_txid_a', 'final_txid_b', 'final_tx_a_hex', 'final_tx_b_hex']), lost
+            print("[e2e] v2 late losing claim stayed out of Completed; refund retry used chain A")
+            return
         bob.rpc("adaptorredeem", sid)
         h.pocx.generate(1, "alice_btcx")
 
@@ -754,7 +779,60 @@ class SiblingFundingQueueV2(PactTestFramework):
         test_sibling_funding_queue_v2(self.h)
 
 
+class ConflictedLegAIntent(PactTestFramework):
+    """A retained built transaction can be cancelled only after a confirmed conflict."""
+    def run_test(self):
+        import json
+        import sqlite3
+        h = self.h
+        alice = Party("intent-alice", h, h.workdir, "alice_btcx", "alice_btc").start()
+        bob = Party("intent-bob", h, h.workdir, "bob_btcx", "bob_btc").start()
+        try:
+            t2, t1 = regtest_timelocks(h)
+            init = _env(alice.rpc("adaptorinit", GIVE_POCX, GET_BTC, t1, t2))
+            sid = init["swap_id"]
+            alice.rpc("adaptorrecv", _env(bob.rpc("adaptoraccept", init)))
+            coin = h.pocx.rpc("listunspent", 1, wallet="alice_btcx")[0]
+            inputs = [{"txid": coin["txid"], "vout": coin["vout"]}]
+            destination = h.pocx.rpc("getnewaddress", wallet="alice_btcx")
+            def signed(fee):
+                raw = h.pocx.rpc("createrawtransaction", inputs, {destination: round(float(coin["amount"]) - fee, 8)})
+                return h.pocx.rpc("signrawtransactionwithwallet", raw, wallet="alice_btcx")["hex"]
+            candidate = signed(0.001)
+            txid = h.pocx.rpc("decoderawtransaction", candidate)["txid"]
+            start = h.pocx.rpc("getblockcount")
+            h.pocx.rpc("lockunspent", False, inputs, wallet="alice_btcx")
+            alice.stop()
+            with sqlite3.connect(os.path.join(alice.data_dir, "pact.sqlite")) as db:
+                db.execute("INSERT OR REPLACE INTO meta(key,value) VALUES (?,?)", (f"funding_tx:{sid}:a", json.dumps([txid, 0, candidate])))
+                db.execute("INSERT OR REPLACE INTO meta(key,value) VALUES (?,?)", (f"funding_tx_height:{sid}:a", str(start)))
+            alice.start()
+            try:
+                alice.rpc("abort", sid, "cancel")
+            except RuntimeError as error:
+                assert "funding outcome pending" in str(error), error
+            else:
+                raise AssertionError("cancelled a still-broadcastable funding intent")
+            h.pocx.rpc("sendrawtransaction", signed(0.002))
+            h.pocx.generate(1, "alice_btcx")
+            alice.rpc("abort", sid, "confirmed conflicting input")
+            assert alice.rpc("listadaptorswaps")[0]["state"] == "aborted"
+            with sqlite3.connect(os.path.join(alice.data_dir, "pact.sqlite")) as db:
+                assert db.execute("SELECT value FROM meta WHERE key=?", (f"funding_tx:{sid}:a",)).fetchone() is None
+            print("[e2e] live intent protected; confirmed-conflict intent cancelled and unlocked")
+        finally:
+            alice.stop()
+            bob.stop()
+
+
+class LateClaimAfterRefundV2(PactTestFramework):
+    def run_test(self):
+        test_adaptor_swap(self.h, late_refund=True)
+
+
 SCENARIOS = [
+    ConflictedLegAIntent,
+    LateClaimAfterRefundV2,
     AdaptorSwap,
     AdaptorRefund,
     AdaptorRefundFeebump,

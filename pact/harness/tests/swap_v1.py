@@ -39,7 +39,7 @@ from framework.util import (  # noqa: E402
 )
 
 
-def test_complete_swap(h):
+def test_complete_swap(h, late_refund=False):
     """Happy path, fully manual: the Phase 1 definition of done.
     Each party runs its own pactd; pact-cli drives it (bitcoin-cli style)."""
     alice = Party("alice", h, h.workdir, "alice_btcx", "alice_btc").start()
@@ -52,6 +52,27 @@ def test_complete_swap(h):
 
         alice.cli("redeem", "--swap", sid)          # reveals s on the BTC chain
         h.btc.generate(1, "bob_btc")
+        if late_refund:
+            import sqlite3
+            h.advance_time(8 * 3600)
+            alice.cli("refund", "--swap", sid)
+            h.pocx.generate(1, "alice_btcx")
+            expect_fail(bob, "already refunded leg A", "redeem", "--swap", sid)
+            assert bob.rpc("listswaps")[0]["state"] != "completed"
+            # Simulate the crash window after refund relay but before clearing its marker.
+            with sqlite3.connect(os.path.join(alice.data_dir, "pact.sqlite")) as db:
+                db.execute("INSERT OR REPLACE INTO meta(key,value) VALUES (?, 'refund')", (f"claim_pending:{sid}",))
+            alice.tick()
+            with sqlite3.connect(os.path.join(alice.data_dir, "pact.sqlite")) as db:
+                assert db.execute("SELECT value FROM meta WHERE key=?", (f"claim_pending:{sid}",)).fetchone() is None
+            for _ in range(2):
+                assert not any(e["action"] == "claim-rebroadcast" for e in bob.tick())
+            lost = bob.rpc("listswaps")[0]
+            assert lost["state"] == "refunded", lost
+            assert lost["settled"] and lost["settlement_loss"], lost
+            assert all(lost.get(key) is None for key in ['final_txid', 'final_tx_hex']), lost
+            print("[e2e] late losing claim stayed out of Completed; refund retry used chain A")
+            return
         bob.cli("redeem", "--swap", sid)            # engine extracted s from chain B
         h.pocx.generate(1, "alice_btcx")
 
@@ -904,20 +925,21 @@ def test_concurrent_drain_no_double_send(h):
         offer_id = maker.rpc(
             "boardpostoffer", f"btcx:{GIVE_POCX}", f"btc:{GET_BTC}", 4 * 3600, 2 * 3600,
             "pact-htlc-v1")["offer_id"]
-        seen = False
-        for _ in range(20):
+        # tick starts Nostr work asynchronously. A fixed number of fast RPCs
+        # can finish before the deliberately delayed (800 ms) fetch completes.
+        def offer_seen():
             maker.rpc("tick")
             taker.rpc("tick")
-            if any(o["swap_id"] == offer_id for o in taker.rpc("boardlistoffers")["offers"]):
-                seen = True
-                break
-        assert seen, "offer never propagated over the nostr relay to the taker"
+            return any(o["swap_id"] == offer_id
+                       for o in taker.rpc("boardlistoffers")["offers"])
+
+        wait_until(offer_seen, timeout=30, poll=0.25,
+                   what="offer propagation over the Nostr relay")
         # boardtake fires flush_nostr (pass A, still inside its 800ms delay); an
         # immediate tick is pass B — both would drain the same unsent `take`.
         taker.rpc("boardtake", offer_id)
         taker.rpc("tick")
-        ca = cb = 0
-        for _ in range(30):
+        def completed():
             tally(maker.rpc("tick"))
             if handshake_done(maker, taker):
                 h.pocx.generate(1, "alice_btcx")
@@ -925,10 +947,10 @@ def test_concurrent_drain_no_double_send(h):
             taker.rpc("tick")
             ca = sum(1 for s in maker.rpc("listswaps") if s["state"] == "completed")
             cb = sum(1 for s in taker.rpc("listswaps") if s["state"] == "completed")
-            if ca and cb:
-                break
-        else:
-            raise AssertionError(f"drain swap did not complete: maker={ca} taker={cb}")
+            return ca and cb
+
+        wait_until(completed, timeout=60, poll=0.25,
+                   what="concurrent-drain swap completion")
         dup = counts.get("take-duplicate", 0)
         rej = counts.get("take-rejected", 0)
         assert dup == 0 and rej == 0, \
@@ -1485,6 +1507,60 @@ def test_funding_bump_descendant_belt(h):
         bob.stop()
 
 
+class BroadcastRecoveryV1(PactTestFramework):
+    """Recover a lost funding response and a pre-upgrade lost claim write."""
+    def run_test(self):
+        import sqlite3
+        h = self.h
+        alice = Party("wal-alice", h, h.workdir, "alice_btcx", "alice_btc").start()
+        bob = Party("wal-bob", h, h.workdir, "bob_btcx", "bob_btc").start()
+        def rewrite(sid, changes, pending=False):
+            alice.stop()
+            with sqlite3.connect(os.path.join(alice.data_dir, "pact.sqlite")) as db:
+                row = json.loads(db.execute("SELECT record FROM swaps WHERE swap_id=?", (sid,)).fetchone()[0])
+                row.update(changes)
+                db.execute("UPDATE swaps SET record=? WHERE swap_id=?", (json.dumps(row), sid))
+                db.execute("DELETE FROM meta WHERE key=?", (f"claim_pending:{sid}",))
+                if pending:
+                    db.execute("UPDATE meta SET value='pending' WHERE key=?", (f"funding_attempt:{sid}:a",))
+            alice.start()
+        try:
+            t2, t1 = regtest_timelocks(h)
+            init, accept, fa, fb = [msg(h.workdir, f"wal-{n}.json") for n in ["init", "accept", "fa", "fb"]]
+            alice.cli("offer", "--give", f"btcx:{GIVE_POCX}", "--get", f"btc:{GET_BTC}",
+                      "--t1", str(t1), "--t2", str(t2), "--out", init)
+            sid = swap_id_from(init)
+            bob.cli("accept", "--in", init, "--out", accept)
+            alice.cli("recv", "--in", accept)
+            alice.cli("fund", "--swap", sid, "--out", fa)
+            original = load_msg(fa)["body"]["txid"]
+            before = set(h.pocx.rpc("getrawmempool"))
+            rewrite(sid, dict(state="accepted", htlc_a_txid=None, htlc_a_vout=None,
+                             htlc_a_height=None, refund_tx_hex=None), pending=True)
+            alice.cli("fund", "--swap", sid, "--out", fa)
+            assert load_msg(fa)["body"]["txid"] == original
+            assert set(h.pocx.rpc("getrawmempool")) == before, "ambiguous funding sent twice"
+            h.pocx.generate(1, "alice_btcx")
+            bob.cli("recv", "--in", fa)
+            bob.cli("fund", "--swap", sid, "--out", fb)
+            h.btc.generate(1, "bob_btc")
+            alice.cli("recv", "--in", fb)
+            alice.cli("redeem", "--swap", sid)
+            rewrite(sid, dict(state="funded_b", final_txid=None, final_tx_hex=None, preimage=None, settled=False))
+            events = alice.tick()
+            assert any(e["action"] == "claim-recovered" for e in events), events
+            rec = alice.rpc("listswaps")[0]
+            assert rec["state"] == "redeemed_b" and rec["final_tx_hex"]
+            h.advance_time(8 * 3600)
+            bob.cli("redeem", "--swap", sid)
+            h.pocx.generate(1, "alice_btcx")
+            assert_htlc_spent(h.pocx, fa, "late-public-secret claim")
+            print("[e2e] recovered ambiguous funding, lost claim write and late claim")
+        finally:
+            alice.stop()
+            bob.stop()
+
+
 class CompleteSwap(PactTestFramework):
     def run_test(self):
         test_complete_swap(self.h)
@@ -1601,7 +1677,14 @@ class PrivateOfferSwap(PactTestFramework):
         test_private_offer_swap(self.h)
 
 
+class LateClaimAfterRefundV1(PactTestFramework):
+    def run_test(self):
+        test_complete_swap(self.h, late_refund=True)
+
+
 SCENARIOS = [
+    LateClaimAfterRefundV1,
+    BroadcastRecoveryV1,
     CompleteSwap,
     Refund,
     DaemonAutopilotSwap,

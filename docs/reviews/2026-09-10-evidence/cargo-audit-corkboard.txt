@@ -1,0 +1,73 @@
+    Fetching advisory database from `https://github.com/RustSec/advisory-db.git`
+      Loaded 1243 security advisories (from C:\Users\Johnny\.cargo\advisory-db)
+    Updating crates.io index
+warning: directory C:\Users\Johnny\.cargo\advisory-db is locked, waiting for up to 300 seconds for it to become available
+    Scanning Cargo.lock for vulnerabilities (130 crate dependencies)
+Crate:     anyhow
+Version:   1.0.102
+Warning:   unsound
+Title:     Unsoundness in `Error::downcast_mut()`
+Date:      2026-06-25
+ID:        RUSTSEC-2026-0190
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0190
+Dependency tree:
+anyhow 1.0.102
+├── pact-proto 0.1.0
+│   └── corkboard 0.1.0
+└── corkboard 0.1.0
+
+Crate:     base58ck
+Version:   0.1.100
+Warning:   yanked
+Dependency tree:
+base58ck 0.1.100
+└── bitcoin 0.32.100
+    └── pact-proto 0.1.0
+        └── corkboard 0.1.0
+
+Crate:     bitcoin
+Version:   0.32.100
+Warning:   yanked
+Dependency tree:
+bitcoin 0.32.100
+└── pact-proto 0.1.0
+    └── corkboard 0.1.0
+
+Crate:     bitcoin-io
+Version:   0.1.100
+Warning:   yanked
+Dependency tree:
+bitcoin-io 0.1.100
+├── bitcoin_hashes 0.14.100
+│   ├── secp256k1 0.29.1
+│   │   └── bitcoin 0.32.100
+│   │       └── pact-proto 0.1.0
+│   │           └── corkboard 0.1.0
+│   ├── bitcoin 0.32.100
+│   └── base58ck 0.1.100
+│       └── bitcoin 0.32.100
+└── bitcoin 0.32.100
+
+Crate:     bitcoin-units
+Version:   0.1.100
+Warning:   yanked
+Dependency tree:
+bitcoin-units 0.1.100
+└── bitcoin 0.32.100
+    └── pact-proto 0.1.0
+        └── corkboard 0.1.0
+
+Crate:     bitcoin_hashes
+Version:   0.14.100
+Warning:   yanked
+Dependency tree:
+bitcoin_hashes 0.14.100
+├── secp256k1 0.29.1
+│   └── bitcoin 0.32.100
+│       └── pact-proto 0.1.0
+│           └── corkboard 0.1.0
+├── bitcoin 0.32.100
+└── base58ck 0.1.100
+    └── bitcoin 0.32.100
+
+warning: 6 allowed warnings found

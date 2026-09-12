@@ -265,6 +265,7 @@ export interface Swap {
    *  claim) — the durable truth `isTerminal` keys on. Absent on older daemons
    *  and on pending takes. */
   settled?: boolean;
+  settlement_loss?: boolean;
 }
 
 /** Live per-swap progress from pactd `swapprogress` (rebuilt each scheduler
@@ -321,6 +322,7 @@ export interface AdaptorSwapRecord {
   state: SwapState;
   created_at: number;
   settled?: boolean;
+  settlement_loss?: boolean;
   chain_a?: ChainRef;
   chain_b?: ChainRef;
   amount_a: number;

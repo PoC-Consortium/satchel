@@ -209,7 +209,11 @@ impl ChainBackend for BdkWalletBackend {
     }
 
     fn wallet_send(&self, address: &str, amount_sat: u64, fee: SendFee) -> Result<String> {
-        self.backend.wallet_send(address, amount_sat, fee)
+        self.backend.wallet_send(
+            address,
+            amount_sat,
+            SendFee::RatePerKvb(self.resolve_send_fee(fee)?.min(500_000)),
+        )
     }
 
     fn wallet_send_confirmed(
@@ -218,17 +222,25 @@ impl ChainBackend for BdkWalletBackend {
         amount_sat: u64,
         fee: SendFee,
     ) -> Result<String> {
-        self.backend.wallet_send_confirmed(address, amount_sat, fee)
+        self.backend.wallet_send_confirmed(
+            address,
+            amount_sat,
+            SendFee::RatePerKvb(self.resolve_send_fee(fee)?.min(500_000)),
+        )
     }
 
     fn wallet_send_all(&self, address: &str, fee: SendFee) -> Result<String> {
-        self.backend.wallet_send_all(address, fee)
+        self.backend.wallet_send_all(
+            address,
+            SendFee::RatePerKvb(self.resolve_send_fee(fee)?.min(500_000)),
+        )
     }
 
     fn wallet_build_funding(
         &self,
         address: &str,
         amount_sat: u64,
+        fee: SendFee,
     ) -> Result<(String, u32, String)> {
         // Funding prices at the per-coin ~30-min target (see
         // funding_conf_target), mirroring the Core-RPC backend; the
@@ -237,7 +249,7 @@ impl ChainBackend for BdkWalletBackend {
         self.backend.wallet_build_funding(
             address,
             amount_sat,
-            SendFee::Target(self.funding_conf_target()),
+            SendFee::RatePerKvb(self.resolve_send_fee(fee)?.min(500_000)),
         )
     }
 

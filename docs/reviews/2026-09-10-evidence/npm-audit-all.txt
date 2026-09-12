@@ -1,0 +1,19 @@
+# npm audit report
+
+baseline-browser-mapping  >=2.0.0 <2.11.0
+Severity: moderate
+baseline-browser-mapping process termination on invalid input causes denial of service - https://github.com/advisories/GHSA-w5vr-8v7q-w6rv
+fix available via `npm audit fix`
+node_modules/baseline-browser-mapping
+
+browserslist  <=4.28.6
+Severity: high
+Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM - https://github.com/advisories/GHSA-c83g-rgw3-j3cx
+Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats) - https://github.com/advisories/GHSA-73wf-gq98-2v4g
+fix available via `npm audit fix`
+node_modules/browserslist
+
+2 vulnerabilities (1 moderate, 1 high)
+
+To address all issues, run:
+  npm audit fix

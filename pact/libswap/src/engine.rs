@@ -483,7 +483,7 @@ fn validate_profile(
 /// - `reveal`: Alice must broadcast her chain-B redeem (revealing `s`) no
 ///   later than `T2 − 2h`; a redeem lingering past `T2` reveals `s` while Bob
 ///   can already refund chain B, letting him take *both* legs.
-/// - `redeem_a`: Bob must broadcast his chain-A redeem before `T1 − 1h`.
+/// - `redeem_a`: once the secret is public, Bob claims any still-unspent leg A.
 ///
 /// These are the normative flat numbers from the spec (calibrated for the
 /// mainnet/testnet profile, accounting for BIP113 MTP lag + ~2h adversarial
@@ -925,6 +925,83 @@ impl Engine {
         backend.broadcast(tx)
     }
 
+    fn reject_v1_claim(&self, rec: &SwapRecord, error: &anyhow::Error) -> Result<bool> {
+        if rec.role != Role::Participant
+            || rec.state != State::Completed
+            || !crate::chain::is_inputs_spent(error)
+        {
+            return Ok(false);
+        }
+        self.abandon_v1_claim(rec)?;
+        Ok(true)
+    }
+
+    fn abandon_v1_claim(&self, rec: &SwapRecord) -> Result<()> {
+        let mut updated = rec.clone();
+        updated.state = State::FundedB;
+        updated.final_txid = None;
+        updated.final_tx_hex = None;
+        updated.settled = false;
+        self.store.put(&updated)?;
+        self.store
+            .meta_del(&format!("claim_pending:{}", rec.swap_id))?;
+        self.request_reconcile(&rec.swap_id);
+        Ok(())
+    }
+
+    fn reject_v2_claim(&self, rec: &AdaptorSwapRecord, error: &anyhow::Error) -> Result<bool> {
+        if rec.role != Role::Participant
+            || rec.state != AdaptorState::Completed
+            || !crate::chain::is_inputs_spent(error)
+        {
+            return Ok(false);
+        }
+        self.abandon_v2_claim(rec)?;
+        Ok(true)
+    }
+
+    fn abandon_v2_claim(&self, rec: &AdaptorSwapRecord) -> Result<()> {
+        let mut updated = rec.clone();
+        updated.state = AdaptorState::Signed;
+        updated.final_txid_a = None;
+        updated.final_tx_a_hex = None;
+        updated.settled = false;
+        self.store.put_adaptor(&updated)?;
+        self.store
+            .meta_del(&format!("claim_pending:{}", rec.swap_id))?;
+        self.request_reconcile(&rec.swap_id);
+        Ok(())
+    }
+
+    fn broadcast_adaptor_claim(
+        &self,
+        rec: &AdaptorSwapRecord,
+        backend: &MultiBackend,
+        tx: &bitcoin::Transaction,
+    ) -> Result<bitcoin::Txid> {
+        ensure!(
+            self.drives(rec.derive_scope, rec.adopted),
+            "cannot broadcast a followed swap"
+        );
+        match self.broadcast_swap_tx(rec.derive_scope, rec.adopted, &rec.swap_id, backend, tx) {
+            Ok(id) => Ok(id),
+            Err(parent_error) => {
+                if crate::chain::is_inputs_spent(&parent_error) {
+                    return Err(parent_error);
+                }
+                let amount = if rec.role == Role::Initiator {
+                    rec.amount_b
+                } else {
+                    rec.amount_a
+                };
+                match self.adaptor_cpfp_bump(backend, tx, amount, 1, true, true) {
+                    Ok(Some(_)) => Ok(tx.compute_txid()),
+                    _ => Err(parent_error.context("claim relay failed, including package rescue")),
+                }
+            }
+        }
+    }
+
     /// Update the live fee-bump policy and persist it for this merchant (pactd
     /// `setfeepolicy`). Validated before it takes effect; the persisted value is
     /// reloaded on the next [`Engine::open`].
@@ -1247,6 +1324,48 @@ impl Engine {
         Ok(default_confirmations(params))
     }
 
+    fn funding_fee(&self, backend: &MultiBackend, amount: u64) -> Result<SendFee> {
+        let market = backend.fee_rate_for_kvb(backend.funding_conf_target(), false)?;
+        let ceiling = self.fee_bump.max_feerate_sat_vb.saturating_mul(1000);
+        let rate = market.min(ceiling);
+        ensure!(
+            rate >= backend.params().min_feerate_sat_kvb,
+            "local funding fee ceiling below relay floor"
+        );
+        // Economics are checked before offering/taking. After commitment a
+        // market jump lowers our chosen rate to the agreed value budget instead
+        // of introducing a new refusal that strands the counterparty's funding.
+        let rate = rate
+            .min((amount.saturating_mul(1000) / 2000).max(backend.params().min_feerate_sat_kvb));
+        Ok(SendFee::RatePerKvb(rate))
+    }
+
+    fn check_funding_economics(amount: u64, market_kvb: u64) -> Result<()> {
+        let reserve_rate = market_kvb
+            .div_ceil(1000)
+            .saturating_mul(3)
+            .max(crate::swap::OFFER_PLANNING_FEERATE);
+        let minimum = 330u64.saturating_add(reserve_rate.saturating_mul(REDEEM_TX_VSIZE));
+        ensure!(
+            amount >= minimum,
+            "leg too small for current settlement fee reserve (need {minimum} sat)"
+        );
+        ensure!(market_kvb <= amount.saturating_mul(1000) / 2000,
+            "funding fee exceeds amount-relative budget; choose a larger leg or wait for lower fees");
+        Ok(())
+    }
+
+    fn preflight_funding_economics(&self, chain: &ChainRef, amount: u64) -> Result<()> {
+        if chain.network == Network::Regtest {
+            return Ok(());
+        }
+        let backend = self.backend(chain)?;
+        let rate = backend
+            .fee_rate_for_kvb(backend.funding_conf_target(), false)?
+            .min(self.fee_bump.max_feerate_sat_vb.saturating_mul(1000));
+        Self::check_funding_economics(amount, rate)
+    }
+
     /// The cooperative-redeem feerate (sat/vB) the initiator fixes at init for
     /// `chain` (M2): the **live market** rate at the funding-class (~30-min)
     /// target — the committed fee can't be re-signed, and hours may pass between
@@ -1428,6 +1547,7 @@ impl Engine {
             coin_id: coin_id.to_string(),
             network,
         };
+        self.preflight_funding_economics(&chain, amount)?;
         let balance = self.wallet_balance_for(&chain)?;
         let fee_headroom = self.funding_fee_headroom(&chain);
         let needed = amount.saturating_add(fee_headroom);
@@ -1535,6 +1655,7 @@ impl Engine {
             coin_id: coin_id.to_string(),
             network,
         };
+        self.preflight_funding_economics(&chain, amount)?;
         let balance = self.wallet_balance_for(&chain)?;
         let fee_headroom = self.funding_fee_headroom(&chain);
         let (committed, n_live) = self.committed_give_for_coin(network, coin_id)?;
@@ -1661,10 +1782,12 @@ impl Engine {
             derive_scope: scope.0,
             adopted: false,
             settled: false,
+            settlement_loss: false,
         };
         // Structural check on our own offer before anything is persisted.
         ensure!(t2 < t1, "spec §7.1: T2 must be < T1");
-        self.store.put(&record)?;
+        self.store
+            .create_swap(&record.swap_id, &serde_json::to_string(&record)?, false)?;
         let envelope = self.signed_envelope("init", &id, serde_json::to_value(&body)?)?;
         Ok((record, envelope))
     }
@@ -1783,8 +1906,10 @@ impl Engine {
             derive_scope: self.machine_scope.0,
             adopted: false,
             settled: false,
+            settlement_loss: false,
         };
-        self.store.put(&record)?;
+        self.store
+            .create_swap(&record.swap_id, &serde_json::to_string(&record)?, false)?;
         let _ = self.snapshot_v1(&record); // rescue snapshot at accept (#54)
         let body = AcceptBody {
             wire: crate::WIRE_V1,
@@ -1934,8 +2059,10 @@ impl Engine {
             derive_scope: scope.0,
             adopted: false,
             settled: false,
+            settlement_loss: false,
         };
-        self.store.put_adaptor(&rec)?;
+        self.store
+            .create_swap(&rec.swap_id, &serde_json::to_string(&rec)?, true)?;
         let envelope = self.signed_envelope("init", &id, serde_json::to_value(&body)?)?;
         Ok((rec, envelope))
     }
@@ -2012,6 +2139,14 @@ impl Engine {
             .context("alice refund A")
             .map_err(permanent_err)?;
 
+        let estimate = self.adaptor_redeem_feerate(&body.chain_a);
+        let minimum = estimate
+            .saturating_sub(1)
+            .max(estimate.saturating_mul(3) / 4);
+        ensure_permanent!(
+            body.redeem_feerate_a >= minimum,
+            "initiator redeem fee is below our local claim policy"
+        );
         // Carry Alice's leg-B sweep address through, and mint our own (Bob's)
         // fresh sweep address for the leg we redeem (A). Best-effort: empty →
         // the deterministic swap-key fallback.
@@ -2112,8 +2247,10 @@ impl Engine {
             derive_scope: self.machine_scope.0,
             adopted: false,
             settled: false,
+            settlement_loss: false,
         };
-        self.store.put_adaptor(&rec)?;
+        self.store
+            .create_swap(&rec.swap_id, &serde_json::to_string(&rec)?, true)?;
         let _ = self.snapshot_v2(&rec); // rescue snapshot at accept (#54)
         let envelope =
             self.signed_envelope("accept", &init.swap_id, serde_json::to_value(&body_out)?)?;
@@ -2261,6 +2398,22 @@ impl Engine {
     /// chain-free recorder so it is unit-testable.
     pub fn adaptor_funding_ready(&self, swap: &str, txid: &str, vout: u32) -> Result<Envelope> {
         let mut rec = self.store.get_adaptor(swap)?;
+        bitcoin::Txid::from_str(txid).context("invalid funding txid")?;
+        let (old_txid, old_vout) = if rec.role == Role::Initiator {
+            (&rec.funding_a_txid, rec.funding_a_vout)
+        } else {
+            (&rec.funding_b_txid, rec.funding_b_vout)
+        };
+        let identical = old_txid.as_deref() == Some(txid) && old_vout == Some(vout);
+        ensure!(
+            identical
+                || (rec.state == AdaptorState::Accepted
+                    && old_txid.is_none()
+                    && old_vout.is_none()
+                    && self.store.nonce_session(swap, "redeem_a")?.is_none()
+                    && self.store.nonce_session(swap, "redeem_b")?.is_none()),
+            "funding commitment is immutable"
+        );
         // Spend-scan start for followers/takeovers, who cannot recover the
         // funding height from the funding wallet (best-effort: a missing tip
         // read just leaves the pre-existing scan-bound behavior).
@@ -2283,6 +2436,12 @@ impl Engine {
             }
         }
         self.store.put_adaptor(&rec)?;
+        if rec.role == Role::Initiator {
+            self.store
+                .meta_del(&format!("funding_tx:{}:a", rec.swap_id))?;
+            self.store
+                .meta_del(&format!("funding_tx_height:{}:a", rec.swap_id))?;
+        }
         let leg = if rec.role == Role::Initiator {
             "a"
         } else {
@@ -2459,7 +2618,7 @@ impl Engine {
         let mut rec = self.store.get_adaptor(&envelope.swap_id)?;
         match &rec.counterparty_identity {
             None => rec.counterparty_identity = Some(envelope.from.clone()),
-            Some(pinned) => ensure!(
+            Some(pinned) => ensure_permanent!(
                 *pinned == envelope.from,
                 "message signed by {} but counterparty pinned as {pinned}",
                 envelope.from
@@ -2467,7 +2626,7 @@ impl Engine {
         }
         match envelope.msg_type.as_str() {
             "accept" => {
-                ensure!(
+                ensure_permanent!(
                     rec.role == Role::Initiator,
                     "only the initiator receives accept"
                 );
@@ -2483,7 +2642,7 @@ impl Engine {
                 let b: crate::messages::AcceptV2Body =
                     serde_json::from_value(envelope.body.clone())
                         .context("malformed accept-v2 body")?;
-                ensure!(
+                ensure_permanent!(
                     b.wire == crate::WIRE_V2,
                     "peer speaks pact-htlc-v2 wire v{}, this build speaks v{} — both sides must run compatible releases",
                     b.wire,
@@ -2511,39 +2670,109 @@ impl Engine {
                 let b: crate::messages::FundingReadyV2Body =
                     serde_json::from_value(envelope.body.clone())
                         .context("malformed funding_ready body")?;
-                match b.chain.as_str() {
-                    "a" => {
-                        rec.funding_a_txid = Some(b.txid);
-                        rec.funding_a_vout = Some(b.vout);
-                        rec.funding_a_height = self
-                            .backend(&rec.chain_a)
-                            .and_then(|be| be.tip_height())
-                            .ok()
-                            .or(rec.funding_a_height);
-                    }
-                    "b" => {
-                        rec.funding_b_txid = Some(b.txid);
-                        rec.funding_b_vout = Some(b.vout);
-                        rec.funding_b_height = self
-                            .backend(&rec.chain_b)
-                            .and_then(|be| be.tip_height())
-                            .ok()
-                            .or(rec.funding_b_height);
-                    }
-                    other => bail!("funding_ready for unknown chain {other:?}"),
+                let expected = if rec.role == Role::Initiator {
+                    "b"
+                } else {
+                    "a"
+                };
+                ensure_permanent!(
+                    b.chain == expected,
+                    "funding_ready must describe the sender's leg"
+                );
+                bitcoin::Txid::from_str(&b.txid).context("invalid funding txid")?;
+                let (txid, vout) = if expected == "a" {
+                    (&rec.funding_a_txid, rec.funding_a_vout)
+                } else {
+                    (&rec.funding_b_txid, rec.funding_b_vout)
+                };
+                if txid.as_deref() == Some(&b.txid) && vout == Some(b.vout) {
+                    return Ok(rec);
+                }
+                ensure!(
+                    rec.state != AdaptorState::Created,
+                    "funding_ready arrived before accept; retry after accept"
+                );
+                ensure_permanent!(rec.state == AdaptorState::Accepted, "late funding_ready");
+                ensure_permanent!(
+                    txid.is_none() && vout.is_none(),
+                    "conflicting funding_ready"
+                );
+                ensure_permanent!(
+                    self.store
+                        .nonce_session(&rec.swap_id, "redeem_a")?
+                        .is_none()
+                        && self
+                            .store
+                            .nonce_session(&rec.swap_id, "redeem_b")?
+                            .is_none(),
+                    "funding is immutable once a nonce session exists"
+                );
+                let chain = if expected == "a" {
+                    &rec.chain_a
+                } else {
+                    &rec.chain_b
+                };
+                let height = self.backend(chain).and_then(|b| b.tip_height()).ok();
+                if expected == "a" {
+                    rec.funding_a_height = height.or(rec.funding_a_height);
+                    rec.funding_a_txid = Some(b.txid);
+                    rec.funding_a_vout = Some(b.vout);
+                } else {
+                    rec.funding_b_height = height.or(rec.funding_b_height);
+                    rec.funding_b_txid = Some(b.txid);
+                    rec.funding_b_vout = Some(b.vout);
                 }
             }
             "nonces" => {
                 let b: crate::messages::NoncesV2Body =
-                    serde_json::from_value(envelope.body.clone())
-                        .context("malformed nonces body")?;
+                    serde_json::from_value(envelope.body.clone())?;
+                if rec.their_pubnonce_a.as_ref() == Some(&b.redeem_a_pubnonce)
+                    && rec.their_pubnonce_b.as_ref() == Some(&b.redeem_b_pubnonce)
+                {
+                    return Ok(rec);
+                }
+                ensure!(
+                    rec.state != AdaptorState::Created,
+                    "nonces arrived before accept; retry after accept"
+                );
+                ensure_permanent!(rec.state == AdaptorState::Accepted, "late nonces");
+                ensure!(
+                    rec.funding_a_txid.is_some() && rec.funding_b_txid.is_some(),
+                    "nonces before funding"
+                );
+                ensure_permanent!(
+                    rec.their_pubnonce_a.is_none() && rec.their_pubnonce_b.is_none(),
+                    "conflicting nonces"
+                );
+                crate::adaptor_engine::pubnonce_from_hex(&b.redeem_a_pubnonce)?;
+                crate::adaptor_engine::pubnonce_from_hex(&b.redeem_b_pubnonce)?;
                 rec.their_pubnonce_a = Some(b.redeem_a_pubnonce);
                 rec.their_pubnonce_b = Some(b.redeem_b_pubnonce);
             }
             "partial_sigs" => {
                 let b: crate::messages::PartialSigsV2Body =
-                    serde_json::from_value(envelope.body.clone())
-                        .context("malformed partial_sigs body")?;
+                    serde_json::from_value(envelope.body.clone())?;
+                if rec.their_partial_a.as_ref() == Some(&b.redeem_a_partial)
+                    && rec.their_partial_b.as_ref() == Some(&b.redeem_b_partial)
+                {
+                    return Ok(rec);
+                }
+                ensure!(
+                    rec.state != AdaptorState::Created,
+                    "partial signatures arrived before accept; retry after accept"
+                );
+                ensure_permanent!(
+                    rec.state == AdaptorState::Accepted,
+                    "late partial signatures"
+                );
+                ensure!(
+                    rec.their_pubnonce_a.is_some() && rec.their_pubnonce_b.is_some(),
+                    "partial signatures before nonces"
+                );
+                ensure_permanent!(
+                    rec.their_partial_a.is_none() && rec.their_partial_b.is_none(),
+                    "conflicting partial signatures"
+                );
                 rec.their_partial_a = Some(b.redeem_a_partial);
                 rec.their_partial_b = Some(b.redeem_b_partial);
             }
@@ -2706,6 +2935,14 @@ impl Engine {
             "refusing to fund swap {swap}: it belongs to another machine \
              (followed, not driven) — take it over first if that machine is stopped"
         );
+        ensure!(
+            rec.sweep_a.is_some() && rec.sweep_b.is_some(),
+            "both parties must provide wallet sweep addresses before funding"
+        );
+        ensure!(
+            self.v2_owns_redeem_payout(&rec)?,
+            "claim payout wallet unavailable; refusing funding"
+        );
         // CRITICAL: the participant NEVER broadcasts leg B here — not even on the
         // manual RPC path. It builds + pre-signs leg B; the scheduler broadcasts it
         // only once the swap is `Signed` (σ_A held) AND leg A is verified on-chain
@@ -2778,15 +3015,43 @@ impl Engine {
         // into the pre-signed MuSig2 redeems. When confirmed coins are short
         // but own pending change covers it, the funding QUEUES (typed
         // `FundingQueued`) and the scheduler retries each tick.
-        let txid = match backend.wallet_send_confirmed(
-            &address,
-            rec.amount_a,
-            SendFee::Target(backend.funding_conf_target()),
-        ) {
-            Ok(txid) => txid,
-            Err(e) => return Err(Self::classify_funding_failure(&backend, rec.amount_a, e)),
+        let intent_key = format!("funding_tx:{}:a", rec.swap_id);
+        let (txid, vout, tx_hex): (String, u32, String) = match self.store.meta_get(&intent_key)? {
+            Some(json) => serde_json::from_str(&json)?,
+            None => {
+                let built = match backend.wallet_build_funding(
+                    &address,
+                    rec.amount_a,
+                    self.funding_fee(&backend, rec.amount_a)?,
+                ) {
+                    Ok(built) => built,
+                    Err(e) if crate::chain::is_insufficient_funds(&e) => {
+                        if backend.wallet_balance().unwrap_or(0) >= rec.amount_a {
+                            return Err(anyhow::Error::new(FundingQueued {
+                                needed_sat: rec.amount_a,
+                                total_spendable_sat: backend.wallet_balance().unwrap_or(0),
+                            }));
+                        }
+                        return Err(e);
+                    }
+                    Err(e) => return Err(e),
+                };
+                self.store.meta_set(
+                    &format!("funding_tx_height:{}:a", rec.swap_id),
+                    &backend.tip_height()?.to_string(),
+                )?;
+                self.store
+                    .meta_set(&intent_key, &serde_json::to_string(&built)?)?;
+                built
+            }
         };
-        let vout = backend.find_vout(&txid, &hex::encode(leg_spk.as_bytes()))?;
+        let tx = bitcoin::consensus::deserialize(&hex::decode(&tx_hex)?)?;
+        if let Err(e) = self.broadcast_swap_tx(rec.derive_scope, rec.adopted, swap, &backend, &tx) {
+            if crate::chain::is_inputs_spent(&e) {
+                let _ = self.cancel_conflicted_leg_a(&rec);
+            }
+            return Err(e);
+        }
         self.adaptor_funding_ready(swap, &txid, vout)
     }
 
@@ -2839,7 +3104,11 @@ impl Engine {
         // Confirmed-only on both wallet kinds (Core `minconf=1`, bdk
         // confirmed-only selection); a short confirmed balance that own
         // pending change covers is a QUEUED wait, not a failure.
-        let (txid, vout, tx_hex) = match backend.wallet_build_funding(&address, rec.amount_b) {
+        let (txid, vout, tx_hex) = match backend.wallet_build_funding(
+            &address,
+            rec.amount_b,
+            self.funding_fee(&backend, rec.amount_b)?,
+        ) {
             Ok(built) => built,
             Err(e) => return Err(Self::classify_funding_failure(&backend, rec.amount_b, e)),
         };
@@ -2933,6 +3202,70 @@ impl Engine {
     /// uncommitted via [`Self::adaptor_leg_b_uncommitted`]. Returns whether
     /// the release succeeded, for tick-event detail; failure is non-fatal
     /// (Core locks clear on node restart, and a retry costs nothing).
+    /// Release an impossible unbroadcast leg-A intent only after a confirmed
+    /// competing spend proves one of its inputs cannot fund this transaction.
+    fn cancel_conflicted_leg_a(&self, rec: &AdaptorSwapRecord) -> Result<bool> {
+        if rec.role != Role::Initiator || rec.funding_a_txid.is_some() {
+            return Ok(false);
+        }
+        let key = format!("funding_tx:{}:a", rec.swap_id);
+        let Some(json) = self.store.meta_get(&key)? else {
+            return Ok(false);
+        };
+        let (txid, _, tx_hex): (String, u32, String) = serde_json::from_str(&json)?;
+        let tx: bitcoin::Transaction = bitcoin::consensus::deserialize(&hex::decode(&tx_hex)?)?;
+        let backend = self.backend(&rec.chain_a)?;
+        if backend.is_in_mempool(&txid)? || backend.tx_confirmations(&txid, None)? > 0 {
+            return Ok(false);
+        }
+        let start = self
+            .store
+            .meta_get(&format!("funding_tx_height:{}:a", rec.swap_id))?
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(0);
+        for input in &tx.input {
+            let previous_id = input.previous_output.txid.to_string();
+            let prev = match backend.wallet_tx(&previous_id)? {
+                Some(tx) => tx,
+                None => backend
+                    .fetch_tx(&previous_id)?
+                    .context("funding input transaction unavailable")?,
+            };
+            let output = prev
+                .output
+                .get(input.previous_output.vout as usize)
+                .context("funding input vout missing")?;
+            if backend
+                .get_txout(&input.previous_output, &output.script_pubkey)?
+                .is_some()
+            {
+                continue;
+            }
+            if let Some((spend, height)) =
+                backend.find_spend_tx(&input.previous_output, &output.script_pubkey, start)?
+            {
+                if height > 0
+                    && spend.compute_txid() != tx.compute_txid()
+                    && backend.tx_confirmations_final(
+                        &spend.compute_txid().to_string(),
+                        Some(&output.script_pubkey),
+                    )? > 0
+                {
+                    let mut updated = rec.clone();
+                    updated.state = AdaptorState::Aborted;
+                    self.store.put_adaptor(&updated)?;
+                    backend.wallet_cancel_funding(&tx_hex)?;
+                    self.store.meta_del(&key)?;
+                    self.store
+                        .meta_del(&format!("funding_tx_height:{}:a", rec.swap_id))?;
+                    let _ = self.tombstone_swap(&rec.swap_id);
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+
     fn adaptor_cancel_built_leg_b(&self, rec: &AdaptorSwapRecord) -> bool {
         let Some(hex) = rec.funding_b_tx_hex.as_deref() else {
             return true; // nothing was built — nothing reserved
@@ -2993,6 +3326,10 @@ impl Engine {
     pub fn adaptor_redeem(&self, swap: &str) -> Result<AdaptorSwapRecord> {
         let mut rec = self.store.get_adaptor(swap)?;
         ensure!(
+            self.drives(rec.derive_scope, rec.adopted),
+            "cannot redeem a followed swap"
+        );
+        ensure!(
             rec.state == AdaptorState::Signed || rec.state == AdaptorState::RedeemedB,
             "redeem in state {:?} (assemble first)",
             rec.state
@@ -3043,16 +3380,14 @@ impl Engine {
                     &mut tx,
                     crate::adaptor_swap::lifted_to_bitcoin(&final_b)?,
                 );
-                let txid = self.broadcast_swap_tx(
-                    rec.derive_scope,
-                    rec.adopted,
-                    &rec.swap_id,
-                    &self.backend(&rec.chain_b)?,
-                    &tx,
-                )?;
+                let txid = tx.compute_txid();
                 rec.final_txid_b = Some(txid.to_string());
                 rec.final_tx_b_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
                 rec.state = AdaptorState::RedeemedB;
+                self.store
+                    .meta_set(&format!("claim_pending:{}", rec.swap_id), "v2")?;
+                self.store.put_adaptor(&rec)?; // persist before revealing t
+                self.broadcast_adaptor_claim(&rec, &self.backend(&rec.chain_b)?, &tx)?;
             }
             Role::Participant => {
                 // Custody gate on the RPC path too: a cooperative claim must
@@ -3062,20 +3397,7 @@ impl Engine {
                     "refusing to redeem leg A: its payout address is not owned by this \
                      machine's wallet — this swap must ride to its refund"
                 );
-                // §7.4: Bob MUST redeem leg A before `T1 − 1h` (margin 0 on
-                // regtest) — past that his redeem races Alice's T1 refund, and
-                // the v2 cooperative redeem is unbumpable, so racing is futile.
-                // Mirrors the v1 participant guard in `redeem`.
-                let net = rec.chain_a.network;
-                let (_, _, redeem_a_margin) = action_margins(net);
-                let mtp_a = self.backend(&rec.chain_a)?.tip_median_time()?;
-                let now = deadline_clock(net, local_now(), mtp_a);
-                ensure!(
-                    action_safe(now, redeem_a_margin, rec.t1),
-                    "now {now} is within {}h of T1 {} — redeem would race Alice's refund (spec §7.4)",
-                    redeem_a_margin / 3600,
-                    rec.t1
-                );
+                // Public-secret claims remain eligible after T1; chain settlement decides the race.
                 let p = self.adaptor_params(&rec)?;
                 let leg_b = p.leg_b(&secp)?;
                 let outpoint_b = OutPoint {
@@ -3118,19 +3440,32 @@ impl Engine {
                     &mut tx,
                     crate::adaptor_swap::lifted_to_bitcoin(&final_a)?,
                 );
-                let txid = self.broadcast_swap_tx(
-                    rec.derive_scope,
-                    rec.adopted,
-                    &rec.swap_id,
-                    &self.backend(&rec.chain_a)?,
-                    &tx,
-                )?;
+                let backend_a = self.backend(&rec.chain_a)?;
+                let claim_input = tx
+                    .input
+                    .first()
+                    .context("claim has no input")?
+                    .previous_output;
+                let spk_a = p.leg_a(&secp)?.script_pubkey(&secp)?;
+                if backend_a.get_txout(&claim_input, &spk_a)?.is_none() {
+                    self.request_reconcile(&rec.swap_id);
+                    bail!("leg A is no longer unspent; reconciling settlement");
+                }
+                let txid = tx.compute_txid();
                 rec.final_txid_a = Some(txid.to_string());
                 rec.final_tx_a_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
                 rec.state = AdaptorState::Completed;
+                self.store
+                    .meta_set(&format!("claim_pending:{}", rec.swap_id), "v2")?;
+                self.store.put_adaptor(&rec)?; // persist before revealing t
+                if let Err(e) = self.broadcast_adaptor_claim(&rec, &backend_a, &tx) {
+                    self.reject_v2_claim(&rec, &e)?;
+                    return Err(e);
+                }
             }
         }
-        self.store.put_adaptor(&rec)?;
+        self.store
+            .meta_del(&format!("claim_pending:{}", rec.swap_id))?;
         let _ = self.tombstone_swap(&rec.swap_id); // terminal: drop rescue snapshot (#54)
         Ok(rec)
     }
@@ -3160,11 +3495,22 @@ impl Engine {
                 rec.funding_b_vout,
             ),
         };
-        let outpoint = OutPoint {
+        let mut outpoint = OutPoint {
             txid: bitcoin::Txid::from_str(txid_o.as_deref().context("our leg is not funded")?)?,
             vout: vout_o.context("no funding vout")?,
         };
         let backend = self.backend(&chain)?;
+        let spk = leg.script_pubkey(&secp)?;
+        if backend.get_txout(&outpoint, &spk)?.is_none() {
+            let (replacement, info) = backend
+                .find_funding(&spk)?
+                .context("no live funding to refund")?;
+            ensure!(
+                info.value_sat == amount,
+                "replacement funding value mismatch"
+            );
+            outpoint = replacement; // refund-only; old adaptor signatures remain bound to old outpoint
+        }
         // Least-advanced backend MTP for refund readiness (M6) — see refund().
         let mtp = backend.tip_median_time_min()?;
         ensure!(
@@ -3188,8 +3534,11 @@ impl Engine {
         );
         let tx =
             crate::taproot::build_refund_tx(&secp, &leg, outpoint, amount, dest, fee, &refund_kp)?;
-        let txid =
-            self.broadcast_swap_tx(rec.derive_scope, rec.adopted, &rec.swap_id, &backend, &tx)?;
+        ensure!(
+            self.drives(rec.derive_scope, rec.adopted),
+            "cannot refund a followed swap"
+        );
+        let txid = tx.compute_txid();
         let hex = bitcoin::consensus::encode::serialize_hex(&tx);
         match rec.role {
             // The refund spends our own funded leg: Alice's is leg A, Bob's leg B.
@@ -3203,7 +3552,12 @@ impl Engine {
             }
         }
         rec.state = AdaptorState::Refunded;
+        self.store
+            .meta_set(&format!("claim_pending:{}", rec.swap_id), "refund")?;
         self.store.put_adaptor(&rec)?;
+        self.broadcast_swap_tx(rec.derive_scope, rec.adopted, &rec.swap_id, &backend, &tx)?;
+        self.store
+            .meta_del(&format!("claim_pending:{}", rec.swap_id))?;
         let _ = self.tombstone_swap(&rec.swap_id); // terminal: drop rescue snapshot (#54)
         Ok(rec)
     }
@@ -3276,6 +3630,66 @@ impl Engine {
     ///   [`Self::adaptor_keep_moving`]).
     fn adaptor_tick_one(&self, rec: &AdaptorSwapRecord) -> Result<Option<TickEvent>> {
         if rec.settled {
+            self.store
+                .meta_del(&format!("claim_pending:{}", rec.swap_id))?;
+            return Ok(None);
+        }
+        let pending_key = format!("claim_pending:{}", rec.swap_id);
+        if self.store.meta_get(&pending_key)?.is_some() {
+            let chain = if (rec.role == Role::Initiator) != (rec.state == AdaptorState::Refunded) {
+                &rec.chain_b
+            } else {
+                &rec.chain_a
+            };
+            let pending_hex =
+                if (rec.role == Role::Initiator) != (rec.state == AdaptorState::Refunded) {
+                    &rec.final_tx_b_hex
+                } else {
+                    &rec.final_tx_a_hex
+                };
+            if let Some(tx_hex) = pending_hex {
+                let tx: bitcoin::Transaction =
+                    bitcoin::consensus::deserialize(&hex::decode(tx_hex)?)?;
+                let backend = self.backend(chain)?;
+                if backend
+                    .tx_confirmations(&tx.compute_txid().to_string(), None)
+                    .unwrap_or(0)
+                    == 0
+                {
+                    let result = if rec.state == AdaptorState::Refunded {
+                        self.broadcast_swap_tx(
+                            rec.derive_scope,
+                            rec.adopted,
+                            &rec.swap_id,
+                            &backend,
+                            &tx,
+                        )
+                    } else {
+                        self.broadcast_adaptor_claim(rec, &backend, &tx)
+                    };
+                    if let Err(ref e) = result {
+                        if self.reject_v2_claim(rec, e)? {
+                            return Ok(None);
+                        }
+                    }
+                    if result.is_ok() {
+                        self.store.meta_del(&pending_key)?;
+                        return Ok(Some(TickEvent {
+                            swap_id: rec.swap_id.clone(),
+                            action: "claim-rebroadcast".into(),
+                            detail: "resubmitted saved claim".into(),
+                        }));
+                    }
+                    // Package rescue was already attempted; do not submit twice
+                    // in this tick. Chain reconciliation still runs next pass.
+                    self.request_reconcile(&rec.swap_id);
+                    return Err(result.unwrap_err());
+                } else {
+                    self.store.meta_del(&pending_key)?;
+                }
+            }
+        }
+        if rec.settled {
             return Ok(None); // settlement buried — nothing left to watch
         }
         use AdaptorState::*;
@@ -3299,6 +3713,10 @@ impl Engine {
         if matches!(rec.state, Created | Accepted)
             && rec.funding_a_txid.is_none()
             && rec.funding_b_txid.is_none()
+            && self
+                .store
+                .meta_get(&format!("funding_tx:{}:a", rec.swap_id))?
+                .is_none()
             && rec.created_at > 0
             && local_now().saturating_sub(rec.created_at) >= window
         {
@@ -3452,27 +3870,15 @@ impl Engine {
                 // state is inherited from a follower's chain-derived ratchet
                 // via takeover (#211). Exit it exactly like the Signed claim
                 // arm would: the counterparty's leg-B claim revealed `t`, so
-                // claim leg A while it is still claimable — no depth gate (a
-                // published `t` stays valid across reorgs), but only inside
-                // the §7.4 redeem deadline (past it the unbumpable redeem
-                // races Alice's refund and cannot win) and only to a payout
-                // wallet this machine controls (multi-machine custody gate).
-                // Anything else — leg A already gone, deadline passed, foreign
-                // payout — is the chain-truth reconcile's to settle, never a
-                // silent idle.
+                // claim leg A while it remains unspent, without a depth or clock gate,
+                // and only to a payout wallet this machine controls.
                 if rec.final_txid_a.is_none()
                     && rec.funding_a_txid.is_some()
                     && rec.funding_b_txid.is_some()
                     && self.v2_owns_redeem_payout(rec)?
                 {
-                    let net = rec.chain_a.network;
-                    let (_, _, redeem_a_margin) = action_margins(net);
-                    let now = deadline_clock(
-                        net,
-                        local_now(),
-                        self.backend(&rec.chain_a)?.tip_median_time()?,
-                    );
-                    if action_safe(now, redeem_a_margin, rec.t1) {
+                    {
+                        // Public-secret claims have no clock cutoff.
                         let op_a = outpoint(&rec.funding_a_txid, rec.funding_a_vout)?;
                         let spk_a = p.leg_a(&secp)?.script_pubkey(&secp)?;
                         if self
@@ -3613,7 +4019,12 @@ impl Engine {
                     if mtp_a >= u64::from(rec.t1) {
                         let op = outpoint(&rec.funding_a_txid, rec.funding_a_vout)?;
                         let spk = p.leg_a(&secp)?.script_pubkey(&secp)?;
-                        if self.backend(&rec.chain_a)?.get_txout(&op, &spk)?.is_some() {
+                        if self.backend(&rec.chain_a)?.get_txout(&op, &spk)?.is_some()
+                            || self
+                                .backend(&rec.chain_a)?
+                                .find_funding(&spk)?
+                                .is_some_and(|(_, info)| info.value_sat == rec.amount_a)
+                        {
                             let r = self.adaptor_refund(&rec.swap_id)?;
                             return ev("adaptor-refund-a", format!("state {:?}", r.state));
                         }
@@ -3706,6 +4117,12 @@ impl Engine {
                         if !self.adaptor_leg_a_confirmed(rec)? {
                             return Ok(None); // wait for leg A before committing leg B
                         }
+                        ensure!(
+                            rec.sweep_a.is_some()
+                                && rec.sweep_b.is_some()
+                                && self.v2_owns_redeem_payout(rec)?,
+                            "claim payout wallet unavailable; refusing leg B"
+                        );
                         let tx: bitcoin::Transaction =
                             bitcoin::consensus::encode::deserialize(&hex::decode(hex)?)
                                 .context("corrupt funding_b_tx_hex")?;
@@ -3734,10 +4151,7 @@ impl Engine {
                 }
                 // Claim leg A as soon as Alice's leg-B redeem reveals t. No
                 // depth gate: once t is on chain it is valid even if that spend
-                // later reorgs, so racing to redeem A is always correct — but
-                // only while inside Bob's §7.4 redeem deadline (T1 − 1h, margin
-                // 0 on regtest); past it the redeem races Alice's refund and
-                // (being unbumpable) cannot win, so leave it (leg B is gone).
+                // later reorgs. Keep trying even after T1 while leg A is unspent.
                 //
                 // Multi-machine payout gate: on a REFUND-ONLY takeover (leg-A
                 // sweep is a wallet this machine doesn't control), don't redeem
@@ -3746,14 +4160,8 @@ impl Engine {
                 // counterparty already spent leg B, this leg simply waits until
                 // the owning wallet is attached (never pays a wallet we can't use).
                 if rec.state == Signed && both_funded && self.v2_owns_redeem_payout(rec)? {
-                    let net = rec.chain_a.network;
-                    let (_, _, redeem_a_margin) = action_margins(net);
-                    let now = deadline_clock(
-                        net,
-                        local_now(),
-                        self.backend(&rec.chain_a)?.tip_median_time()?,
-                    );
-                    if action_safe(now, redeem_a_margin, rec.t1) {
+                    {
+                        // Public-secret claims have no clock cutoff.
                         let op_b = outpoint(&rec.funding_b_txid, rec.funding_b_vout)?;
                         let spk_b = p.leg_b(&secp)?.script_pubkey(&secp)?;
                         let backend_b = self.backend(&rec.chain_b)?;
@@ -3787,6 +4195,10 @@ impl Engine {
                             .backend(&rec.chain_b)?
                             .get_txout(&op_b, &spk_b)?
                             .is_some()
+                            || self
+                                .backend(&rec.chain_b)?
+                                .find_funding(&spk_b)?
+                                .is_some_and(|(_, info)| info.value_sat == rec.amount_b)
                         {
                             let r = self.adaptor_refund(&rec.swap_id)?;
                             return ev("adaptor-refund-b", format!("state {:?}", r.state));
@@ -3833,7 +4245,12 @@ impl Engine {
         let tx: bitcoin::Transaction =
             bitcoin::consensus::encode::deserialize(&hex::decode(tx_hex)?)
                 .context("corrupt final_tx_hex")?;
-        let spk = tx.output[0].script_pubkey.clone();
+        let spk = tx
+            .output
+            .first()
+            .context("settlement has no output")?
+            .script_pubkey
+            .clone();
         // Finality gate (#101): MIN over a responder quorum, never the
         // display max — a single lying view must not stop this nurse or
         // fake a Completed.
@@ -3912,7 +4329,7 @@ impl Engine {
         // or a self-rejecting same-fee replacement.
         let parent_txid = tx.compute_txid().to_string();
         if !backend.is_in_mempool(&parent_txid)? {
-            self.broadcast_swap_tx(rec.derive_scope, rec.adopted, &rec.swap_id, &backend, &tx)?;
+            self.broadcast_adaptor_claim(rec, &backend, &tx)?;
         }
         let amount = if chain.coin_id == rec.chain_b.coin_id {
             rec.amount_b
@@ -3923,7 +4340,7 @@ impl Engine {
             remaining.expect("refunds returned above"),
             backend.funding_conf_target(),
         );
-        match self.adaptor_cpfp_bump(&backend, &tx, amount, conf_target, conservative) {
+        match self.adaptor_cpfp_bump(&backend, &tx, amount, conf_target, conservative, false) {
             Ok(Some(child)) => {
                 let mut updated = rec.clone();
                 updated.last_action_height = tip_height;
@@ -3961,8 +4378,9 @@ impl Engine {
         amount: u64,
         conf_target: u16,
         conservative: bool,
+        rejected_parent: bool,
     ) -> Result<Option<bitcoin::Txid>> {
-        let parent_out = &parent.output[0];
+        let parent_out = parent.output.first().context("CPFP parent has no output")?;
         let parent_value = parent_out.value.to_sat();
         let parent_fee = amount.saturating_sub(parent_value);
         // Redeem CPFP is a claim spend: chase market bounded by the value at risk
@@ -3974,11 +4392,20 @@ impl Engine {
         // hard-capped by `parent_value` (the dust check below).
         // sat/kvB (native estimator resolution). A CPFP child is not a BIP125
         // replacement, so no incremental-relay floor applies.
-        let target_kvb = self.fee_bump.claim_feerate_kvb(
+        let mut target_kvb = self.fee_bump.claim_feerate_kvb(
             backend.fee_rate_for_kvb(conf_target, conservative)?,
             amount,
             crate::taproot::KEYPATH_REDEEM_VSIZE,
         );
+        if rejected_parent {
+            // A stale estimator must not suppress rescue of a rejected parent.
+            let parent_rate = parent_fee
+                .saturating_mul(1000)
+                .div_ceil(parent.vsize() as u64);
+            target_kvb = target_kvb
+                .max(backend.mempool_min_feerate_kvb()?)
+                .max(parent_rate.saturating_add(1000));
+        }
         let Some(child_fee) =
             cpfp_child_fee_kvb(parent_fee, crate::taproot::KEYPATH_REDEEM_VSIZE, target_kvb)
         else {
@@ -4027,7 +4454,8 @@ impl Engine {
                 script_pubkey: dest,
             }],
         };
-        let txid = backend.wallet_sign_send(&child, parent_value, &parent_out.script_pubkey)?;
+        let txid =
+            backend.wallet_sign_package(parent, &child, parent_value, &parent_out.script_pubkey)?;
         Ok(Some(txid))
     }
 
@@ -4198,8 +4626,20 @@ impl Engine {
             Role::Initiator => (&rec.chain_a, p.leg_a(&secp)?, rec.amount_a),
             Role::Participant => (&rec.chain_b, p.leg_b(&secp)?, rec.amount_b),
         };
-        let destination = old_tx.output[0].script_pubkey.clone();
-        let old_fee = amount.saturating_sub(old_tx.output[0].value.to_sat());
+        let destination = old_tx
+            .output
+            .first()
+            .context("settlement has no output")?
+            .script_pubkey
+            .clone();
+        let old_fee = amount.saturating_sub(
+            old_tx
+                .output
+                .first()
+                .context("settlement has no output")?
+                .value
+                .to_sat(),
+        );
         let old_feerate_kvb = old_fee.saturating_mul(1000) / REFUND_TX_VSIZE.max(1);
         // The v2 refund is a single-key RBF spend — same unified strategy as the
         // v1 redeem/refund (was a market-blind escalate()): market-tracking,
@@ -4242,7 +4682,16 @@ impl Engine {
                 detail: txid.to_string(),
             }));
         }
-        let outpoint = old_tx.input[0].previous_output;
+        let refund_script = leg.refund_script();
+        let outpoint = old_tx
+            .input
+            .iter()
+            .find(|input| {
+                let witness: Vec<_> = input.witness.iter().collect();
+                witness.len() >= 2 && witness[witness.len() - 2] == refund_script.as_bytes()
+            })
+            .context("settlement has no matching refund input")?
+            .previous_output;
         let refund_kp = v2_refund_key(&seed, rec, coin_of(chain)?)?.keypair(&secp);
         let new_tx = crate::taproot::build_refund_tx(
             &secp,
@@ -4431,7 +4880,10 @@ impl Engine {
                         reason: "unspecified".into(),
                     });
                 // Advisory only after funding — timelocks are the safety.
-                if rec.htlc_a_txid.is_none() && rec.htlc_b_txid.is_none() {
+                if rec.htlc_a_txid.is_none()
+                    && rec.htlc_b_txid.is_none()
+                    && !self.funding_may_exist(&rec.swap_id)
+                {
                     rec.state = State::Aborted;
                 }
                 eprintln!("counterparty abort: {}", body.reason);
@@ -4529,7 +4981,31 @@ impl Engine {
         // script+amount (scantxoutset / stored pointer); confirmed-only, so the
         // residual double-fund window is just a crash in the seconds between
         // broadcast and the `put` below, before the tx is mined.
-        let (txid, vout) = match self.locate_funding(&rec, leg)? {
+        let attempt_key = format!("funding_attempt:{}:{leg}", rec.swap_id);
+        let pending_pointer = self
+            .store
+            .meta_get(&attempt_key)?
+            .filter(|v| v != "pending")
+            .map(|txid| -> Result<(OutPoint, u64)> {
+                let vout =
+                    backend.find_vout(&txid, &hex::encode(htlc.script_pubkey().as_bytes()))?;
+                Ok((
+                    OutPoint {
+                        txid: bitcoin::Txid::from_str(&txid)?,
+                        vout,
+                    },
+                    0,
+                ))
+            })
+            .transpose()?;
+        let located = if pending_pointer.is_some() {
+            pending_pointer
+        } else if let Some(op) = backend.wallet_find_funding(&htlc.script_pubkey(), amount)? {
+            Some((op, 0))
+        } else {
+            self.locate_funding(&rec, leg)?
+        };
+        let (txid, vout) = match located {
             Some((op, _)) => (op.txid.to_string(), op.vout),
             None => {
                 // Historical guard (docs/design/STATE_RECONSTRUCTION.md §5.1): the
@@ -4554,6 +5030,11 @@ impl Engine {
                          existed and its output is spent — the swap settled; nothing to fund",
                         outpoint
                     ),
+                    Some(crate::reconstruct::LegClass::Funded { outpoint, .. }) => {
+                        self.store
+                            .meta_set(&attempt_key, &outpoint.txid.to_string())?;
+                        return self.fund(swap);
+                    }
                     _ => {}
                 }
                 // F3 fail-closed belt: an ADOPTED (taken-over / rescued) record
@@ -4583,13 +5064,22 @@ impl Engine {
                 // TOTAL spendable (own pending change included) covers the
                 // amount, the funding is QUEUED behind a confirmation — a
                 // typed, catchable non-failure the retry arms narrate.
-                let txid = match backend.wallet_send_confirmed(
-                    &address,
-                    amount,
-                    SendFee::Target(backend.funding_conf_target()),
-                ) {
-                    Ok(txid) => txid,
+                let funding_fee = self.funding_fee(&backend, amount)?;
+                let attempt_key = format!("funding_attempt:{}:{leg}", rec.swap_id);
+                ensure!(self.store.meta_get(&attempt_key)?.is_none(),
+                    "funding outcome unresolved; refusing a second send until the prior funding is located");
+                ensure!(
+                    !backend.wallet_locked()?,
+                    "wallet locked; unlock before funding"
+                );
+                self.store.meta_set(&attempt_key, "pending")?;
+                let txid = match backend.wallet_send_confirmed(&address, amount, funding_fee) {
+                    Ok(txid) => {
+                        self.store.meta_set(&attempt_key, &txid)?;
+                        txid
+                    }
                     Err(e) if crate::chain::is_insufficient_funds(&e) => {
+                        self.store.meta_del(&attempt_key)?;
                         let total = backend.wallet_balance().unwrap_or(0);
                         if total >= amount {
                             return Err(anyhow::Error::new(FundingQueued {
@@ -4599,7 +5089,12 @@ impl Engine {
                         }
                         return Err(e);
                     }
-                    Err(e) => return Err(e),
+                    Err(e) => {
+                        if crate::chain::is_pre_send_rejection(&e) {
+                            self.store.meta_del(&attempt_key)?;
+                        }
+                        return Err(e);
+                    }
                 };
                 let vout =
                     backend.find_vout(&txid, &hex::encode(htlc.script_pubkey().as_bytes()))?;
@@ -4616,13 +5111,13 @@ impl Engine {
             "a" => {
                 rec.htlc_a_txid = Some(txid.clone());
                 rec.htlc_a_vout = Some(vout);
-                rec.htlc_a_height = Some(backend.tip_height()?);
+                rec.htlc_a_height = backend.tip_height().ok();
                 rec.state = State::FundedA;
             }
             _ => {
                 rec.htlc_b_txid = Some(txid.clone());
                 rec.htlc_b_vout = Some(vout);
-                rec.htlc_b_height = Some(backend.tip_height()?);
+                rec.htlc_b_height = backend.tip_height().ok();
                 rec.state = State::FundedB;
             }
         }
@@ -4666,6 +5161,10 @@ impl Engine {
     /// §9.4 (participant: extract s from chain B, redeem chain A).
     pub fn redeem(&self, swap: &str) -> Result<SwapRecord> {
         let mut rec = self.store.get(swap)?;
+        ensure!(
+            self.drives(rec.derive_scope, rec.adopted),
+            "cannot redeem a followed swap"
+        );
         let params = self.swap_params(&rec)?;
         let seed = self.store.seed()?;
 
@@ -4740,17 +5239,15 @@ impl Engine {
                     &preimage,
                     &key,
                 )?;
-                let txid = self.broadcast_swap_tx(
-                    rec.derive_scope,
-                    rec.adopted,
-                    &rec.swap_id,
-                    &backend,
-                    &tx,
-                )?;
+                let txid = tx.compute_txid();
                 rec.preimage = Some(hex::encode(preimage));
                 rec.final_txid = Some(txid.to_string());
                 rec.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
                 rec.state = State::RedeemedB;
+                self.store
+                    .meta_set(&format!("claim_pending:{}", rec.swap_id), "v1")?;
+                self.store.put(&rec)?; // write-ahead: reveal may escape even on an RPC error
+                self.broadcast_swap_tx(rec.derive_scope, rec.adopted, &rec.swap_id, &backend, &tx)?;
             }
             Role::Participant => {
                 // `RedeemedB` is admitted for the FOLLOW-RATCHET shape: a
@@ -4795,20 +5292,16 @@ impl Engine {
                     )?,
                     vout: rec.htlc_a_vout.context("no chain-A HTLC vout")?,
                 };
-                // §7.4: Bob MUST redeem chain A before `T1 − 1h` (margin 0 on
-                // regtest) — past that, his redeem could race Alice's T1 refund.
-                let net = rec.chain_a.network;
-                let (_, _, redeem_a_margin) = action_margins(net);
+                // Public-secret claims remain eligible after T1; chain settlement decides the race.
                 let backend_a = self.backend(&rec.chain_a)?;
-                let mtp = backend_a.tip_median_time()?;
-                let now = deadline_clock(net, local_now(), mtp);
-                ensure!(
-                    action_safe(now, redeem_a_margin, rec.t1),
-                    "now {now} is within {}h of T1 {} — redeem would race Alice's refund (spec §7.4)",
-                    redeem_a_margin / 3600,
-                    rec.t1
-                );
 
+                if backend_a
+                    .get_txout(&outpoint_a, &params.htlc_a()?.script_pubkey())?
+                    .is_none()
+                {
+                    self.request_reconcile(&rec.swap_id);
+                    bail!("leg A is no longer unspent; reconciling settlement");
+                }
                 let htlc = params.htlc_a()?;
                 let key = v1_swap_key(&seed, &rec, coin_of(&rec.chain_a)?)?;
                 let destination = backend_a
@@ -4833,20 +5326,28 @@ impl Engine {
                     &preimage,
                     &key,
                 )?;
-                let txid = self.broadcast_swap_tx(
+                let txid = tx.compute_txid();
+                rec.preimage = Some(hex::encode(preimage));
+                rec.final_txid = Some(txid.to_string());
+                rec.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
+                rec.state = State::Completed;
+                self.store
+                    .meta_set(&format!("claim_pending:{}", rec.swap_id), "v1")?;
+                self.store.put(&rec)?; // write-ahead: reveal may escape even on an RPC error
+                if let Err(e) = self.broadcast_swap_tx(
                     rec.derive_scope,
                     rec.adopted,
                     &rec.swap_id,
                     &backend_a,
                     &tx,
-                )?;
-                rec.preimage = Some(hex::encode(preimage));
-                rec.final_txid = Some(txid.to_string());
-                rec.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
-                rec.state = State::Completed;
+                ) {
+                    self.reject_v1_claim(&rec, &e)?;
+                    return Err(e);
+                }
             }
         }
-        self.store.put(&rec)?;
+        self.store
+            .meta_del(&format!("claim_pending:{}", rec.swap_id))?;
         if rec.state == State::Completed {
             let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
         }
@@ -4940,12 +5441,20 @@ impl Engine {
                 build_refund_tx(&htlc, outpoint, amount, destination, fee, &key)?
             }
         };
-        let txid =
-            self.broadcast_swap_tx(rec.derive_scope, rec.adopted, &rec.swap_id, &backend, &tx)?;
+        ensure!(
+            self.drives(rec.derive_scope, rec.adopted),
+            "cannot refund a followed swap"
+        );
+        let txid = tx.compute_txid();
         rec.final_txid = Some(txid.to_string());
         rec.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
         rec.state = State::Refunded;
+        self.store
+            .meta_set(&format!("claim_pending:{}", rec.swap_id), "refund")?;
         self.store.put(&rec)?;
+        self.broadcast_swap_tx(rec.derive_scope, rec.adopted, &rec.swap_id, &backend, &tx)?;
+        self.store
+            .meta_del(&format!("claim_pending:{}", rec.swap_id))?;
         let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
         Ok(rec)
     }
@@ -5016,7 +5525,24 @@ impl Engine {
     /// compress the rest of the swap (fund B, let the initiator redeem B before
     /// T2) into an unsafe window. Nothing is locked on our side at `accepted`,
     /// so the resulting abort costs nothing.
+    fn funding_may_exist(&self, id: &str) -> bool {
+        [
+            format!("funding_attempt:{id}:a"),
+            format!("funding_attempt:{id}:b"),
+            format!("funding_tx:{id}:a"),
+        ]
+        .iter()
+        .any(|key| self.store.meta_get(key).map_or(true, |v| v.is_some()))
+    }
+
     fn funding_wait_expired(&self, rec: &SwapRecord) -> bool {
+        if ["a", "b"].iter().any(|leg| {
+            self.store
+                .meta_get(&format!("funding_attempt:{}:{leg}", rec.swap_id))
+                .map_or(true, |v| v.is_some())
+        }) {
+            return false;
+        }
         let window = u64::from(rec.t2).saturating_sub(rec.created_at);
         let deadline = rec.created_at + window / 4;
         local_now() >= deadline
@@ -7410,7 +7936,27 @@ impl Engine {
                     && sb.spend_confs >= 1 =>
             {
                 let (state, ours, detail) = Self::v1_settled_terminal(rec.role, sa, sb);
-                adopt_final(rec, ours);
+                if ours.is_none()
+                    && !Self::follow_purge_ok(
+                        rec.role,
+                        &sa.kind,
+                        &sb.kind,
+                        sa.spend_confs,
+                        sb.spend_confs,
+                        rec.n_a,
+                        rec.n_b,
+                    )
+                {
+                    return None;
+                }
+                if let Some(ours) = ours {
+                    adopt_final(rec, ours);
+                } else {
+                    rec.final_txid = None;
+                    rec.final_tx_hex = None;
+                    rec.settled = true;
+                    rec.settlement_loss = true;
+                }
                 Some((state, detail))
             }
             (LegClass::Funded { .. }, LegClass::Spent(sb)) if sb.kind == SpendKind::Redeem => {
@@ -7518,6 +8064,19 @@ impl Engine {
                     && sb.spend_confs >= 1 =>
             {
                 let (state, ours_is_a, ours, detail) = Self::v2_settled_terminal(rec.role, sa, sb);
+                if ours.is_none()
+                    && !Self::follow_purge_ok(
+                        rec.role,
+                        &sa.kind,
+                        &sb.kind,
+                        sa.spend_confs,
+                        sb.spend_confs,
+                        rec.n_a,
+                        rec.n_b,
+                    )
+                {
+                    return None;
+                }
                 Self::v2_adopt_final(rec, ours_is_a, ours);
                 Some((state, detail))
             }
@@ -7595,10 +8154,11 @@ impl Engine {
 
     /// The terminal a v1 record reaches once BOTH legs are conclusively spent
     /// — the single settled-swap matrix, shared by the adoption fast-forward
-    /// and the driver reconcile so the two can never drift. Any redeem means
-    /// the swap completed (a redeem is what moves value; a §7.4-window mixed
-    /// redeem/refund is flagged in the detail); a double refund means it
-    /// unwound. `ours` is OUR settlement spend (initiator claims leg B /
+    /// and the driver reconcile so the two can never drift. Completion requires
+    /// OUR claim leg to be redeemed. A mixed pair can leave us with neither a
+    /// claim nor a refund: represent that terminal loss as Refunded with no
+    /// own settlement transaction and an explicit loss detail.
+    /// `ours` is OUR settlement spend (initiator claims leg B /
     /// refunds leg A; participant claims leg A / refunds leg B — the same
     /// role→leg mapping as [`Engine::follow_purge_ok`]), adopted as `final_tx`
     /// so the confirmation nurse converges on it. Pure/testable.
@@ -7606,20 +8166,18 @@ impl Engine {
         role: Role,
         sa: &'a crate::reconstruct::SpentLeg,
         sb: &'a crate::reconstruct::SpentLeg,
-    ) -> (State, &'a crate::reconstruct::SpentLeg, String) {
+    ) -> (State, Option<&'a crate::reconstruct::SpentLeg>, String) {
         use crate::reconstruct::SpendKind;
-        let completed = sa.kind == SpendKind::Redeem || sb.kind == SpendKind::Redeem;
-        let (state, ours) = if completed {
-            // Initiator's claim is the leg-B redeem, participant's leg A.
-            match role {
-                Role::Initiator => (State::Completed, sb),
-                Role::Participant => (State::Completed, sa),
-            }
+        let (claim, refund) = match role {
+            Role::Initiator => (sb, sa),
+            Role::Participant => (sa, sb),
+        };
+        let (state, ours) = if claim.kind == SpendKind::Redeem {
+            (State::Completed, Some(claim))
+        } else if refund.kind == SpendKind::Refund {
+            (State::Refunded, Some(refund))
         } else {
-            match role {
-                Role::Initiator => (State::Refunded, sa),
-                Role::Participant => (State::Refunded, sb),
-            }
+            (State::Refunded, None)
         };
         let mixed = if sa.kind != sb.kind {
             " (mixed redeem/refund — §7.4 window, check history)"
@@ -7630,8 +8188,14 @@ impl Engine {
             state,
             ours,
             format!(
-                "both legs settled on-chain (A {:?}, B {:?}){mixed}",
-                sa.kind, sb.kind
+                "both legs settled on-chain (A {:?}, B {:?}){mixed}{}",
+                sa.kind,
+                sb.kind,
+                if ours.is_none() {
+                    "; loss: counterparty claimed our funding and refunded our claim leg"
+                } else {
+                    ""
+                }
             ),
         )
     }
@@ -7642,34 +8206,21 @@ impl Engine {
         role: Role,
         sa: &'a crate::reconstruct::SpentLeg,
         sb: &'a crate::reconstruct::SpentLeg,
-    ) -> (AdaptorState, bool, &'a crate::reconstruct::SpentLeg, String) {
-        use crate::reconstruct::SpendKind;
-        let completed = sa.kind == SpendKind::Redeem || sb.kind == SpendKind::Redeem;
-        let (state, ours_is_a, ours) = if completed {
-            match role {
-                Role::Initiator => (AdaptorState::Completed, false, sb),
-                Role::Participant => (AdaptorState::Completed, true, sa),
-            }
+    ) -> (
+        AdaptorState,
+        bool,
+        Option<&'a crate::reconstruct::SpentLeg>,
+        String,
+    ) {
+        let (state, ours, detail) = Self::v1_settled_terminal(role, sa, sb);
+        let completed = state == State::Completed;
+        let ours_is_a = (role == Role::Participant) == completed;
+        let state = if completed {
+            AdaptorState::Completed
         } else {
-            match role {
-                Role::Initiator => (AdaptorState::Refunded, true, sa),
-                Role::Participant => (AdaptorState::Refunded, false, sb),
-            }
+            AdaptorState::Refunded
         };
-        let mixed = if sa.kind != sb.kind {
-            " (mixed redeem/refund — §7.4 window, check history)"
-        } else {
-            ""
-        };
-        (
-            state,
-            ours_is_a,
-            ours,
-            format!(
-                "both legs settled on-chain (A {:?}, B {:?}){mixed}",
-                sa.kind, sb.kind
-            ),
-        )
+        (state, ours_is_a, ours, detail)
     }
 
     /// Adopt our settlement spend into a v2 record's per-leg `final_*` fields
@@ -7677,8 +8228,17 @@ impl Engine {
     fn v2_adopt_final(
         rec: &mut AdaptorSwapRecord,
         ours_is_a: bool,
-        ours: &crate::reconstruct::SpentLeg,
+        ours: Option<&crate::reconstruct::SpentLeg>,
     ) {
+        rec.settlement_loss = ours.is_none();
+        let Some(ours) = ours else {
+            rec.final_txid_a = None;
+            rec.final_tx_a_hex = None;
+            rec.final_txid_b = None;
+            rec.final_tx_b_hex = None;
+            rec.settled = true;
+            return;
+        };
         if ours_is_a {
             if rec.final_txid_a.is_none() {
                 rec.final_txid_a = Some(ours.spend_txid.clone());
@@ -7742,7 +8302,7 @@ impl Engine {
             {
                 (
                     State::Refunded,
-                    sa,
+                    Some(sa),
                     "leg A refunded on-chain; leg B never funded".to_string(),
                 )
             }
@@ -7753,7 +8313,7 @@ impl Engine {
             {
                 (
                     State::Refunded,
-                    sb,
+                    Some(sb),
                     "leg B refunded on-chain; leg A never funded".to_string(),
                 )
             }
@@ -7809,15 +8369,16 @@ impl Engine {
         // Our settlement spend (a same-seed machine's redeem/refund IS ours)
         // becomes `final_tx` so the existing confirmation nurse converges on
         // it; never clobber local data.
-        if updated.final_txid.is_none() {
-            updated.final_txid = Some(ours.spend_txid.clone());
-            updated.final_tx_hex = Some(ours.spend_tx_hex.clone());
-        }
+        updated.settlement_loss = ours.is_none();
+        updated.final_txid = ours.map(|s| s.spend_txid.clone());
+        updated.final_tx_hex = ours.map(|s| s.spend_tx_hex.clone());
         updated.state = state;
         // The terminal matrix above is depth-gated (`follow_purge_ok` / the
         // per-leg `deep`), so the settlement is already buried: latch it.
         updated.settled = true;
         self.store.put(&updated)?;
+        self.store
+            .meta_del(&format!("claim_pending:{}", rec.swap_id))?;
         let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
         self.mark_reconciled(&rec.swap_id);
         Ok(Some(TickEvent {
@@ -7866,7 +8427,7 @@ impl Engine {
                 (
                     AdaptorState::Refunded,
                     true,
-                    sa,
+                    Some(sa),
                     "leg A refunded on-chain; leg B never funded".to_string(),
                 )
             }
@@ -7878,7 +8439,7 @@ impl Engine {
                 (
                     AdaptorState::Refunded,
                     false,
-                    sb,
+                    Some(sb),
                     "leg B refunded on-chain; leg A never funded".to_string(),
                 )
             }
@@ -7926,6 +8487,8 @@ impl Engine {
         updated.state = state;
         updated.settled = true; // depth-gated terminal — nothing left to watch
         self.store.put_adaptor(&updated)?;
+        self.store
+            .meta_del(&format!("claim_pending:{}", rec.swap_id))?;
         let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
         self.mark_reconciled(&rec.swap_id);
         Ok(Some(TickEvent {
@@ -8298,7 +8861,125 @@ impl Engine {
         }
     }
 
+    /// Recover a pre-upgrade broadcast whose state write was lost. Discovery
+    /// is not finality: adopt authenticated shallow claims and keep nursing.
+    fn recover_unrecorded_claim(&self, rec: &SwapRecord) -> Result<Option<TickEvent>> {
+        if rec.state != State::FundedB || rec.final_tx_hex.is_some() {
+            return Ok(None);
+        }
+        let p = self.swap_params(rec)?;
+        let (chain, id, vout, height, htlc, amount) = if rec.role == Role::Initiator {
+            (
+                &rec.chain_b,
+                &rec.htlc_b_txid,
+                rec.htlc_b_vout,
+                rec.htlc_b_height,
+                p.htlc_b()?,
+                rec.amount_b,
+            )
+        } else {
+            (
+                &rec.chain_a,
+                &rec.htlc_a_txid,
+                rec.htlc_a_vout,
+                rec.htlc_a_height,
+                p.htlc_a()?,
+                rec.amount_a,
+            )
+        };
+        let (Some(id), Some(vout)) = (id, vout) else {
+            return Ok(None);
+        };
+        let op = OutPoint {
+            txid: bitcoin::Txid::from_str(id)?,
+            vout,
+        };
+        let backend = self.backend(chain)?;
+        let Some((tx, _)) =
+            backend.find_spend_tx(&op, &htlc.script_pubkey(), height.unwrap_or(0))?
+        else {
+            return Ok(None);
+        };
+        let Some(index) = tx.input.iter().position(|i| i.previous_output == op) else {
+            return Ok(None);
+        };
+        let witness = tx.input[index]
+            .witness
+            .iter()
+            .map(|v| v.to_vec())
+            .collect::<Vec<_>>();
+        let Some(secret) = extract_preimage(&witness, &p.hash_h) else {
+            return Ok(None);
+        };
+        if !crate::reconstruct::witness_authentic(&htlc.script_pubkey(), amount, &tx, index) {
+            return Ok(None);
+        }
+        let mut updated = rec.clone();
+        updated.preimage = Some(hex::encode(secret));
+        updated.final_txid = Some(tx.compute_txid().to_string());
+        updated.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
+        updated.state = if rec.role == Role::Initiator {
+            State::RedeemedB
+        } else {
+            State::Completed
+        };
+        self.store.put(&updated)?;
+        Ok(Some(TickEvent {
+            swap_id: rec.swap_id.clone(),
+            action: "claim-recovered".into(),
+            detail: "resumed confirmation and fee management for our prior claim".into(),
+        }))
+    }
+
     fn tick_one(&self, rec: &SwapRecord) -> Result<Option<TickEvent>> {
+        if rec.settled {
+            self.store
+                .meta_del(&format!("claim_pending:{}", rec.swap_id))?;
+            return Ok(None);
+        }
+
+        // A failed claim-side lookup must not suppress the opposite-chain refund.
+        if let Ok(Some(event)) = self.recover_unrecorded_claim(rec) {
+            return Ok(Some(event));
+        }
+        let pending_key = format!("claim_pending:{}", rec.swap_id);
+        if self.store.meta_get(&pending_key)?.is_some() {
+            let chain = if (rec.role == Role::Initiator) != (rec.state == State::Refunded) {
+                &rec.chain_b
+            } else {
+                &rec.chain_a
+            };
+            let pending_hex = &rec.final_tx_hex;
+            if let Some(tx_hex) = pending_hex {
+                let tx: bitcoin::Transaction =
+                    bitcoin::consensus::deserialize(&hex::decode(tx_hex)?)?;
+                let backend = self.backend(chain)?;
+                if backend
+                    .tx_confirmations(&tx.compute_txid().to_string(), None)
+                    .unwrap_or(0)
+                    == 0
+                {
+                    let result = self.broadcast_swap_tx(
+                        rec.derive_scope,
+                        rec.adopted,
+                        &rec.swap_id,
+                        &backend,
+                        &tx,
+                    );
+                    if let Err(ref e) = result {
+                        if self.reject_v1_claim(rec, e)? {
+                            return Ok(None);
+                        }
+                    }
+                    if result.is_ok() {
+                        self.store.meta_del(&pending_key)?;
+                    }
+                    // A rejected parent must not suppress fee nursing or winner adoption.
+                } else {
+                    self.store.meta_del(&pending_key)?;
+                }
+            }
+        }
         if rec.settled {
             return Ok(None); // settlement buried — nothing left to watch
         }
@@ -8544,18 +9225,8 @@ impl Engine {
                 )?;
                 if let Some(witness) = spend {
                     if extract_preimage(&witness, &params.hash_h).is_some() {
-                        let backend_a = self.backend(&rec.chain_a)?;
-                        // §7.4: claim chain A only while inside Bob's redeem
-                        // deadline (T1 − 1h); past it a redeem races Alice's
-                        // refund, so leave it (our chain-B leg is already gone).
-                        let net = rec.chain_a.network;
-                        let (_, _, redeem_a_margin) = action_margins(net);
-                        let now = deadline_clock(net, local_now(), backend_a.tip_median_time()?);
-                        if action_safe(now, redeem_a_margin, rec.t1) {
-                            let updated = self.redeem(&rec.swap_id)?;
-                            return event("auto-redeem", updated.final_txid.unwrap_or_default());
-                        }
-                        return Ok(None); // too late to redeem safely
+                        let updated = self.redeem(&rec.swap_id)?;
+                        return event("auto-redeem", updated.final_txid.unwrap_or_default());
                     }
                     // Spent without a preimage: our own refund — or a
                     // same-seed machine's settlement we haven't derived yet
@@ -8936,13 +9607,25 @@ impl Engine {
             return Ok(None);
         }
 
-        let destination = old_tx.output[0].script_pubkey.clone();
+        let destination = old_tx
+            .output
+            .first()
+            .context("settlement has no output")?
+            .script_pubkey
+            .clone();
         let vsize = if is_redeem {
             REDEEM_TX_VSIZE
         } else {
             REFUND_TX_VSIZE
         };
-        let old_fee = amount.saturating_sub(old_tx.output[0].value.to_sat());
+        let old_fee = amount.saturating_sub(
+            old_tx
+                .output
+                .first()
+                .context("settlement has no output")?
+                .value
+                .to_sat(),
+        );
         let old_feerate_kvb = old_fee.saturating_mul(1000) / vsize.max(1);
 
         // Step 3: market-tracking, value-capped target. This nurses redeem and
@@ -8981,15 +9664,28 @@ impl Engine {
         // Core-accurate dust for the real sweep output type (P2WPKH → 294), not
         // the conservative 546 — else a small-value claim bump is refused when
         // the network would still relay it.
-        let dustless =
-            amount > new_fee + crate::swap::dust_threshold(&old_tx.output[0].script_pubkey);
+        let dustless = amount
+            > new_fee
+                + crate::swap::dust_threshold(
+                    &old_tx
+                        .output
+                        .first()
+                        .context("settlement has no output")?
+                        .script_pubkey,
+                );
         if target_kvb <= old_feerate_kvb || !dustless {
             return self.reanchor_if_evicted(rec, backend, &old_tx, &old_txid);
         }
 
         // Step 4: build and broadcast the higher-fee replacement, then record the
         // block we acted in so we don't act again until the next block.
-        let outpoint = old_tx.input[0].previous_output;
+        let script = htlc.witness_script();
+        let outpoint = old_tx
+            .input
+            .iter()
+            .find(|input| input.witness.last() == Some(script.as_bytes()))
+            .context("settlement has no matching HTLC input")?
+            .previous_output;
         let seed = self.store.seed()?;
         let key = v1_swap_key(&seed, rec, coin_of(chain)?)?;
         let new_tx = if is_redeem {
@@ -9111,12 +9807,6 @@ impl Engine {
             bitcoin::consensus::encode::deserialize(&hex::decode(tx_hex)?)
                 .context("corrupt final_tx_hex")?;
         let old_txid = old_tx.compute_txid();
-        let (Some(outpoint), Some(destination)) = (
-            old_tx.input.first().map(|i| i.previous_output),
-            old_tx.output.first().map(|o| o.script_pubkey.clone()),
-        ) else {
-            return Ok(None);
-        };
         let params = self.swap_params(rec)?;
         let (htlc, from_height, is_redeem) = match (rec.role, rec.state) {
             (Role::Initiator, State::RedeemedB) => (params.htlc_b()?, rec.htlc_b_height, true),
@@ -9124,6 +9814,20 @@ impl Engine {
             (Role::Initiator, State::Refunded) => (params.htlc_a()?, rec.htlc_a_height, false),
             (Role::Participant, State::Refunded) => (params.htlc_b()?, rec.htlc_b_height, false),
             _ => return Ok(None),
+        };
+        let script = htlc.witness_script();
+        let (Some(outpoint), Some(destination)) = (
+            old_tx
+                .input
+                .iter()
+                .find(|input| input.witness.last() == Some(script.as_bytes()))
+                .map(|input| input.previous_output),
+            old_tx
+                .output
+                .first()
+                .map(|output| output.script_pubkey.clone()),
+        ) else {
+            return Ok(None);
         };
         let spend =
             backend.find_spend_tx(&outpoint, &htlc.script_pubkey(), from_height.unwrap_or(0))?;
@@ -9994,10 +10698,15 @@ impl Engine {
     /// ciphertext addressed to a pubkey.
     fn relay_send_all(&self, to: &str, envelope: &Envelope) -> Result<()> {
         let blob = crate::board::seal_envelope(to, envelope)?;
+        let relay = self.signed_envelope(
+            "relay_post",
+            &envelope.swap_id,
+            serde_json::json!({"to": to, "blob": blob, "created": local_now()}),
+        )?;
         let mut last_err = None;
         let mut sent = false;
         for (_, board) in self.boards()? {
-            match board.relay_send_blob(to, &blob) {
+            match board.relay_send_authenticated(&relay) {
                 Ok(()) => sent = true,
                 Err(err) => last_err = Some(err),
             }
@@ -10945,7 +11654,10 @@ impl Engine {
                 rec.counterparty_identity.as_deref() == Some(sender),
                 "abort signed by {sender} but counterparty pinned otherwise (spec §8.2)"
             );
-            if rec.htlc_a_txid.is_none() && rec.htlc_b_txid.is_none() {
+            if rec.htlc_a_txid.is_none()
+                && rec.htlc_b_txid.is_none()
+                && !self.funding_may_exist(&rec.swap_id)
+            {
                 rec.state = State::Aborted;
                 self.store.put(&rec)?;
                 let _ = self.tombstone_swap(&rec.swap_id); // terminal (#54)
@@ -10970,7 +11682,7 @@ impl Engine {
                 rec.funding_b_txid.is_some() && !self.adaptor_leg_b_uncommitted(&rec)
             }
         };
-        if our_leg_committed {
+        if our_leg_committed || self.funding_may_exist(swap_id) {
             return event(
                 "counterparty-abort",
                 "ignored (funded; timelocks protect)".into(),
@@ -11699,6 +12411,10 @@ impl Engine {
     /// funded — from then on, refund is the only way out (spec §8.1).
     pub fn abort(&self, swap: &str, reason: &str) -> Result<SwapRecord> {
         let mut rec = self.store.get(swap)?;
+        ensure!(
+            !self.funding_may_exist(swap),
+            "funding outcome pending; cannot abort"
+        );
         let our_leg_funded = match rec.role {
             Role::Initiator => rec.htlc_a_txid.is_some(),
             Role::Participant => rec.htlc_b_txid.is_some(),
@@ -11735,6 +12451,13 @@ impl Engine {
     /// never sign again.
     pub fn adaptor_abort(&self, swap: &str, reason: &str) -> Result<AdaptorSwapRecord> {
         let mut rec = self.store.get_adaptor(swap)?;
+        if self.cancel_conflicted_leg_a(&rec)? {
+            return self.store.get_adaptor(swap);
+        }
+        ensure!(
+            !self.funding_may_exist(swap),
+            "funding outcome pending; cannot abort"
+        );
         let our_leg_committed = match rec.role {
             Role::Initiator => rec.funding_a_txid.is_some(),
             Role::Participant => {
@@ -11991,6 +12714,67 @@ mod tests {
             Engine::open(&dir, passphrase, BTreeMap::new()).unwrap(),
             dir,
         )
+    }
+
+    #[test]
+    fn early_v2_delivery_is_retryable_but_conflicting_delivery_is_permanent() {
+        let (alice, ad) = engine_with("v2-reorder-alice", None);
+        let (bob, bd) = engine_with("v2-reorder-bob", None);
+        let rec = v2_record(&alice);
+        let message = bob
+            .signed_envelope(
+                "funding_ready",
+                &rec.swap_id,
+                serde_json::json!({"chain":"b", "txid":"11".repeat(32), "vout":0}),
+            )
+            .unwrap();
+        let early = alice.recv_adaptor(&message).unwrap_err();
+        assert!(!is_permanent(&early));
+        let mut signed = rec.clone();
+        signed.state = AdaptorState::Signed;
+        signed.counterparty_identity = Some(bob.identity().unwrap());
+        alice.store.put_adaptor(&signed).unwrap();
+        assert!(is_permanent(&alice.recv_adaptor(&message).unwrap_err()));
+        std::fs::remove_dir_all(ad).ok();
+        std::fs::remove_dir_all(bd).ok();
+    }
+
+    #[test]
+    fn ambiguous_funding_cannot_be_aborted_by_timeout_or_rpc() {
+        let (engine, dir) = engine_with("pending-fund-abort", None);
+        let (record, _) = engine
+            .offer(
+                Network::Regtest,
+                ("btcx".into(), 100),
+                ("btc".into(), 100),
+                1_700_000_002,
+                1_700_000_001,
+                None,
+                None,
+            )
+            .unwrap();
+        engine
+            .store
+            .meta_set(&format!("funding_attempt:{}:a", record.swap_id), "pending")
+            .unwrap();
+        assert!(engine.abort(&record.swap_id, "timeout").is_err());
+        assert!(!engine.funding_wait_expired(&record));
+        let _ = engine.tick();
+        assert_eq!(
+            engine.store.get(&record.swap_id).unwrap().state,
+            record.state
+        );
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn funding_economics_match_offer_floor_and_fail_before_commitment() {
+        let minimum = crate::swap::MIN_LEG_VALUE_SAT;
+        assert!(Engine::check_funding_economics(minimum, 1000).is_ok());
+        assert!(Engine::check_funding_economics(minimum - 1, 1000).is_err());
+        assert!(Engine::check_funding_economics(199_999, 100_000).is_err());
+        assert!(Engine::check_funding_economics(200_000, 100_000).is_ok());
+        assert!(Engine::check_funding_economics(1, u64::MAX).is_err());
     }
 
     #[test]
@@ -12991,6 +13775,44 @@ mod tests {
         // Both parties derived the SAME aggregate adaptor signatures.
         assert_eq!(ar.adaptor_sig_a, br.adaptor_sig_a);
         assert_eq!(ar.adaptor_sig_b, br.adaptor_sig_b);
+
+        // Adversarial replays cannot alter a signed commitment or reset its record.
+        let before = serde_json::to_value(&br).unwrap();
+        for original in [&fa, &na, &pa] {
+            bob.recv_adaptor(original).unwrap();
+        }
+        assert_eq!(
+            serde_json::to_value(bob.store.get_adaptor(&id).unwrap()).unwrap(),
+            before
+        );
+        for (chain, txid) in [("b", "cc".repeat(32)), ("a", "dd".repeat(32))] {
+            let forged = alice
+                .signed_envelope(
+                    "funding_ready",
+                    &id,
+                    serde_json::json!({"chain": chain, "txid": txid, "vout": 0}),
+                )
+                .unwrap();
+            assert!(bob.recv_adaptor(&forged).is_err());
+        }
+        assert!(bob.adaptor_accept(&init).is_err());
+        assert!(bob.adaptor_funding_ready(&id, &"ee".repeat(32), 0).is_err());
+        assert_eq!(
+            serde_json::to_value(bob.store.get_adaptor(&id).unwrap()).unwrap(),
+            before
+        );
+        for kind in ["nonces", "partial_sigs"] {
+            let mut body = if kind == "nonces" {
+                na.body.clone()
+            } else {
+                pa.body.clone()
+            };
+            for val in body.as_object_mut().unwrap().values_mut() {
+                *val = serde_json::json!("00");
+            }
+            let forged = alice.signed_envelope(kind, &id, body).unwrap();
+            assert!(bob.recv_adaptor(&forged).is_err());
+        }
 
         std::fs::remove_dir_all(&ad).ok();
         std::fs::remove_dir_all(&bd).ok();
@@ -14642,27 +15464,34 @@ mod tests {
 
         let (state, ours, detail) = Engine::v1_settled_terminal(Initiator, &ra, &rb);
         assert_eq!(state, State::Completed);
-        assert_eq!(ours.spend_txid, rb.spend_txid, "initiator's claim is leg B");
+        assert_eq!(
+            ours.unwrap().spend_txid,
+            rb.spend_txid,
+            "initiator's claim is leg B"
+        );
         assert!(!detail.contains("§7.4"), "clean completion is not mixed");
 
         let (state, ours, _) = Engine::v1_settled_terminal(Participant, &ra, &rb);
         assert_eq!(state, State::Completed);
         assert_eq!(
-            ours.spend_txid, ra.spend_txid,
+            ours.unwrap().spend_txid,
+            ra.spend_txid,
             "participant's claim is leg A"
         );
 
         let (state, ours, _) = Engine::v1_settled_terminal(Initiator, &fa, &fb);
         assert_eq!(state, State::Refunded);
         assert_eq!(
-            ours.spend_txid, fa.spend_txid,
+            ours.unwrap().spend_txid,
+            fa.spend_txid,
             "initiator refunds its leg A"
         );
 
         let (state, ours, _) = Engine::v1_settled_terminal(Participant, &fa, &fb);
         assert_eq!(state, State::Refunded);
         assert_eq!(
-            ours.spend_txid, fb.spend_txid,
+            ours.unwrap().spend_txid,
+            fb.spend_txid,
             "participant refunds its leg B"
         );
 
@@ -14675,17 +15504,128 @@ mod tests {
         let (state, ours_a, ours, _) = Engine::v2_settled_terminal(Initiator, &ra, &rb);
         assert_eq!(state, AdaptorState::Completed);
         assert!(!ours_a, "initiator's v2 claim lands in final_txid_b");
-        assert_eq!(ours.spend_txid, rb.spend_txid);
+        assert_eq!(ours.unwrap().spend_txid, rb.spend_txid);
         let (state, ours_a, ours, _) = Engine::v2_settled_terminal(Participant, &ra, &rb);
         assert_eq!(state, AdaptorState::Completed);
         assert!(ours_a, "participant's v2 claim lands in final_txid_a");
-        assert_eq!(ours.spend_txid, ra.spend_txid);
+        assert_eq!(ours.unwrap().spend_txid, ra.spend_txid);
         let (state, ours_a, _, _) = Engine::v2_settled_terminal(Initiator, &fa, &fb);
         assert_eq!(state, AdaptorState::Refunded);
         assert!(ours_a, "initiator's v2 refund lands in final_txid_a");
         let (state, ours_a, _, _) = Engine::v2_settled_terminal(Participant, &fa, &fb);
         assert_eq!(state, AdaptorState::Refunded);
         assert!(!ours_a, "participant's v2 refund lands in final_txid_b");
+    }
+
+    #[test]
+    fn mixed_settlements_do_not_adopt_the_counterpartys_spend() {
+        use crate::reconstruct::SpendKind::*;
+        for role in [Role::Initiator, Role::Participant] {
+            let (sa, sb) = if role == Role::Participant {
+                (spent_leg(Refund, 6, 'a'), spent_leg(Redeem, 6, 'b'))
+            } else {
+                (spent_leg(Redeem, 6, 'a'), spent_leg(Refund, 6, 'b'))
+            };
+            let (state, ours, detail) = Engine::v1_settled_terminal(role, &sa, &sb);
+            assert_eq!(state, State::Refunded);
+            assert!(ours.is_none());
+            assert!(detail.contains("loss:"));
+            let (state, _, ours, detail) = Engine::v2_settled_terminal(role, &sa, &sb);
+            assert_eq!(state, AdaptorState::Refunded);
+            assert!(ours.is_none());
+            assert!(detail.contains("loss:"));
+        }
+    }
+
+    #[test]
+    fn missing_inputs_abandons_only_participant_claims_and_rearms_reconcile() {
+        let (engine, dir) = engine_with("claim-rejection", None);
+        let (mut v1, _) = engine
+            .offer(
+                Network::Regtest,
+                ("btcx".into(), 50_000_000),
+                ("btc".into(), 100_000),
+                1_700_040_000,
+                1_700_020_000,
+                None,
+                None,
+            )
+            .unwrap();
+        let mut v2 = v2_record(&engine);
+        v1.role = Role::Participant;
+        v2.role = Role::Participant;
+        v1.state = State::Completed;
+        v2.state = AdaptorState::Completed;
+        v1.final_txid = Some("11".repeat(32));
+        v1.final_tx_hex = Some("deadbeef".into());
+        v2.final_txid_a = v1.final_txid.clone();
+        v2.final_tx_a_hex = v1.final_tx_hex.clone();
+        engine.store.put(&v1).unwrap();
+        engine.store.put_adaptor(&v2).unwrap();
+        for sid in [&v1.swap_id, &v2.swap_id] {
+            engine
+                .store
+                .meta_set(&format!("claim_pending:{sid}"), "pending")
+                .unwrap();
+            engine.mark_reconciled(sid);
+        }
+        let policy: anyhow::Error = crate::rpc::RpcError {
+            code: -26,
+            message: "min relay fee not met".into(),
+        }
+        .into();
+        assert!(!engine.reject_v1_claim(&v1, &policy).unwrap());
+        assert!(!engine.reject_v2_claim(&v2, &policy).unwrap());
+        let spent: anyhow::Error = crate::rpc::RpcError {
+            code: -25,
+            message: "bad-txns-inputs-missingorspent".into(),
+        }
+        .into();
+        assert!(engine.reject_v1_claim(&v1, &spent).unwrap());
+        assert!(engine.reject_v2_claim(&v2, &spent).unwrap());
+        let saved = engine.store.get(&v1.swap_id).unwrap();
+        assert_eq!(saved.state, State::FundedB);
+        assert!(saved.final_txid.is_none() && saved.final_tx_hex.is_none());
+        let saved = engine.store.get_adaptor(&v2.swap_id).unwrap();
+        assert_eq!(saved.state, AdaptorState::Signed);
+        assert!(saved.final_txid_a.is_none() && saved.final_tx_a_hex.is_none());
+        for sid in [&v1.swap_id, &v2.swap_id] {
+            assert!(engine.reconcile_pending(sid));
+            assert!(engine
+                .store
+                .meta_get(&format!("claim_pending:{sid}"))
+                .unwrap()
+                .is_none());
+        }
+        v1.role = Role::Initiator;
+        v2.role = Role::Initiator;
+        assert!(!engine.reject_v1_claim(&v1, &spent).unwrap());
+        assert!(!engine.reject_v2_claim(&v2, &spent).unwrap());
+        v1.role = Role::Participant;
+        v2.role = Role::Participant;
+        v1.state = State::Refunded;
+        v2.state = AdaptorState::Refunded;
+        assert!(!engine.reject_v1_claim(&v1, &spent).unwrap());
+        assert!(!engine.reject_v2_claim(&v2, &spent).unwrap());
+        // Settled records retire even malformed pending bytes before any RPC.
+        v1.settled = true;
+        v2.settled = true;
+        for sid in [&v1.swap_id, &v2.swap_id] {
+            engine
+                .store
+                .meta_set(&format!("claim_pending:{sid}"), "pending")
+                .unwrap();
+        }
+        assert!(engine.tick_one(&v1).unwrap().is_none());
+        assert!(engine.adaptor_tick_one(&v2).unwrap().is_none());
+        for sid in [&v1.swap_id, &v2.swap_id] {
+            assert!(engine
+                .store
+                .meta_get(&format!("claim_pending:{sid}"))
+                .unwrap()
+                .is_none());
+        }
+        std::fs::remove_dir_all(dir).ok();
     }
 
     #[test]

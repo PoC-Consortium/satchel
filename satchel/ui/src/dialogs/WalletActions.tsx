@@ -175,10 +175,10 @@ function useFeeChoice(coinId: string): FeeChoice {
   }, [coinId]);
 
   // Decimal sat/vB (up to 3 places = the estimator's sat/kvB resolution).
-  const customVb = Number(customRate);
+  const customVb = parseAmount(customRate);
   const rate =
     sel === "custom"
-      ? Number.isFinite(customVb) && customVb > 0
+      ? Number.isFinite(customVb) && customVb > 0 && customVb <= 500
         ? customVb
         : null
       : (est?.[sel] ?? null);
@@ -242,7 +242,7 @@ function FeeSelector({ t, fee, busy }: { t: Translate; fee: FeeChoice; busy: boo
           label={t("wallets.feeCustomLabel")}
           value={customRate}
           onChange={(e) => {
-            const raw = e.target.value.replace(/[^0-9.]/g, "");
+            const raw = sanitizeAmountInput(e.target.value);
             const [int, ...frac] = raw.split(".");
             setCustomRate(frac.length ? `${int}.${frac.join("").slice(0, 3)}` : int);
           }}

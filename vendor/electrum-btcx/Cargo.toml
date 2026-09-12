@@ -1,0 +1,25 @@
+[package]
+workspace = "../../pact"
+name = "electrum-btcx"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/PoC-Consortium/btcx"
+
+[dependencies]
+params-btcx = { git = "https://github.com/PoC-Consortium/btcx", rev = "7a6ec87fdd6c2aae5bb7db9f773d6ff7ca961247" }
+anyhow = "1"
+bitcoin = { version = "0.32", features = ["serde", "rand-std"] }
+bdk_wallet = { version = "2", features = ["rusqlite"] }
+electrum-client = "0.21"
+rustls = "0.23"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+hex = "0.4"
+
+webpki-roots = "1"
+x509-parser = { version = "0.18", features = ["verify"] }
+
+[dev-dependencies]
+rcgen = "0.14"

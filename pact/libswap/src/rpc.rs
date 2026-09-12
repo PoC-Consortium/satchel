@@ -17,7 +17,7 @@
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
 use std::sync::RwLock;
 use std::time::Duration;
@@ -147,6 +147,10 @@ impl RpcClient {
     const CONNECT_RETRIES: u32 = 3;
     const RETRY_BACKOFF: Duration = Duration::from_millis(250);
 
+    pub(crate) fn endpoint_key(&self) -> String {
+        format!("{}:{}{}", self.host, self.port, self.path)
+    }
+
     pub fn call(&self, method: &str, params: &[Value]) -> Result<Value> {
         let body = json!({
             "jsonrpc": "2.0", "id": "libswap", "method": method, "params": params,
@@ -171,9 +175,20 @@ impl RpcClient {
     /// the cookie file to be read again — the 401 path).
     fn call_once(&self, method: &str, body: &str, reread_cookie: bool) -> Result<Value> {
         let auth_b64 = self.auth_b64(reread_cookie)?;
+        // DNS resolution still uses the OS resolver; bound socket connection
+        // attempts independently so a black-holed node cannot hang the scheduler.
+        let addresses: Vec<_> = (self.host.as_str(), self.port)
+            .to_socket_addrs()?
+            .take(4)
+            .collect();
+        anyhow::ensure!(
+            !addresses.is_empty(),
+            "RPC hostname resolved to no addresses"
+        );
         let mut attempt = 0;
         let stream = loop {
-            match TcpStream::connect((self.host.as_str(), self.port)) {
+            let addr = &addresses[attempt as usize % addresses.len()];
+            match TcpStream::connect_timeout(addr, Duration::from_secs(2)) {
                 Ok(s) => break s,
                 Err(e) => {
                     attempt += 1;
@@ -239,11 +254,28 @@ impl RpcClient {
             body
         );
 
-        stream.set_read_timeout(Some(Duration::from_secs(120)))?;
-        stream.set_write_timeout(Some(Duration::from_secs(120)))?;
+        let timeout = response_timeout(method);
+        let deadline = std::time::Instant::now() + timeout;
+        stream.set_read_timeout(Some(timeout))?;
+        stream.set_write_timeout(Some(timeout))?;
         stream.write_all(request.as_bytes())?;
         let mut response = Vec::new();
-        stream.read_to_end(&mut response)?;
+        let mut buf = [0u8; 8192];
+        loop {
+            let remaining = deadline
+                .checked_duration_since(std::time::Instant::now())
+                .context("RPC total response deadline exceeded")?;
+            stream.set_read_timeout(Some(remaining))?;
+            let n = stream.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            anyhow::ensure!(
+                response.len() + n <= 64 * 1024 * 1024,
+                "RPC response exceeds 64 MiB"
+            );
+            response.extend_from_slice(&buf[..n]);
+        }
 
         let response = String::from_utf8_lossy(&response);
         let (head, http_body) = response
@@ -424,9 +456,46 @@ fn base64(input: &[u8]) -> String {
     out
 }
 
+fn response_timeout(method: &str) -> Duration {
+    Duration::from_secs(match method {
+        "scantxoutset" => 300,
+        "send"
+        | "bumpfee"
+        | "submitpackage"
+        | "getblock"
+        | "sendtoaddress"
+        | "sendmany"
+        | "fundrawtransaction"
+        | "walletcreatefundedpsbt"
+        | "signrawtransactionwithwallet"
+        | "listtransactions" => 120,
+        _ => 30,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn funding_and_rescue_rpcs_keep_the_long_response_deadline() {
+        for method in [
+            "send",
+            "sendtoaddress",
+            "sendmany",
+            "bumpfee",
+            "submitpackage",
+            "getblock",
+        ] {
+            assert_eq!(
+                response_timeout(method),
+                Duration::from_secs(120),
+                "{method}"
+            );
+        }
+        assert_eq!(response_timeout("scantxoutset"), Duration::from_secs(300));
+        assert_eq!(response_timeout("gettxout"), Duration::from_secs(30));
+    }
 
     #[test]
     fn base64_known_values() {
