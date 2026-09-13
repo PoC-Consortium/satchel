@@ -9,7 +9,7 @@ description = "Corkboard — the PoCX trading noticeboard: signed offers and bli
 pact-proto = { path = "../pact-proto" }
 axum = "0.7"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time"] }
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
