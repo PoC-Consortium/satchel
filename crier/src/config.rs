@@ -246,7 +246,7 @@ fn builtin_coins() -> HashMap<String, CoinInfo> {
 fn merge_coins_file(coins: &mut HashMap<String, CoinInfo>, path: &Path) -> Result<()> {
     let text = std::fs::read_to_string(path)
         .with_context(|| format!("read coins_file {}", path.display()))?;
-    let value: toml::Value = text.parse().context("parse coins_file")?;
+    let value: toml::Value = toml::from_str(&text).context("parse coins_file")?;
     let Some(entries) = value.get("coin").and_then(|v| v.as_array()) else {
         return Ok(());
     };
@@ -382,6 +382,31 @@ pub fn unix_now() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn coins_file_loads_document_and_overrides_builtin_metadata() {
+        let dir = std::env::temp_dir().join(format!("crier-coins-cfg-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("crier.toml");
+        std::fs::write(
+            dir.join("coins.toml"),
+            "[[coin]]\ncoin_id = \"btc\"\nsymbol = \"CUSTOM\"\ndecimals = 6\n\n[[coin]]\ncoin_id = \"new\"\nsymbol = \"NEW\"\ndecimals = 4\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &path,
+            "coins_file = \"coins.toml\"\n[announce]\npairs = [\"new/btc\"]\n",
+        )
+        .unwrap();
+        let cfg = Config::load(&path).unwrap();
+        assert_eq!(cfg.coin("btc").symbol, "CUSTOM");
+        assert_eq!(cfg.coin("btc").decimals, 6);
+        assert_eq!(cfg.coin("new").symbol, "NEW");
+        assert_eq!(cfg.coin("new").decimals, 4);
+        std::fs::remove_file(dir.join("coins.toml")).unwrap();
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(dir).unwrap();
+    }
 
     #[test]
     fn pair_is_unordered_and_orients_btc_as_quote() {
