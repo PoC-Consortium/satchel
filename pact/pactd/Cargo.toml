@@ -8,7 +8,7 @@ description = "Pact daemon: local JSON-RPC over libswap, SQLite persistence, aut
 [dependencies]
 libswap = { workspace = true }
 pact-nostr = { path = "../../pact-nostr" }
-nostr-sdk = "0.44"
+nostr-sdk = "0.45"
 # Only to install a process-wide rustls CryptoProvider at startup (see main()):
 # nostr-sdk → tokio-rustls pulls rustls 0.23, which refuses to auto-pick a
 # provider when both aws-lc-rs and ring are linked, breaking all wss:// relays.
