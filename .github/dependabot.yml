@@ -1,14 +1,20 @@
 version: 2
+# Report-only policy: alerts and security.yml audits stay enabled.
+# Version-update PRs are disabled below; automatic security-update PRs
+# are separately disabled in the repository's Dependabot settings.
 updates:
   - package-ecosystem: github-actions
+    open-pull-requests-limit: 0
     directory: /
     schedule:
       interval: weekly
   - package-ecosystem: cargo
+    open-pull-requests-limit: 0
     directories: [/pact, /pact-proto, /pact-nostr, /corkboard, /satchel, /crier, /tools/relay-prober]
     schedule:
       interval: weekly
   - package-ecosystem: npm
+    open-pull-requests-limit: 0
     directory: /satchel/ui
     schedule:
       interval: weekly
