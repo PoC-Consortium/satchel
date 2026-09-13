@@ -1,0 +1,179 @@
+    Fetching advisory database from `https://github.com/RustSec/advisory-db.git`
+      Loaded 1243 security advisories (from C:\Users\Johnny\.cargo\advisory-db)
+    Updating crates.io index
+    Scanning Cargo.lock for vulnerabilities (114 crate dependencies)
+Crate:     nostr
+Version:   0.44.3
+Title:     Remote Denial of Service via malformed NIP‑44 v2 payload
+Date:      2026-07-25
+ID:        RUSTSEC-2026-0216
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0216
+Severity:  7.5 (high)
+Solution:  Upgrade to >=0.44.5, <0.45.0-alpha.1 OR >=0.45.0-alpha.5
+Dependency tree:
+nostr 0.44.3
+└── pact-nostr 0.1.0
+
+Crate:     nostr
+Version:   0.44.3
+Title:     Remote Denial of Service via malformed NIP-04 IV
+Date:      2026-07-26
+ID:        RUSTSEC-2026-0219
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0219
+Severity:  7.5 (high)
+Solution:  Upgrade to >=0.44.6, <0.45.0-alpha.1 OR >=0.45.0-alpha.6
+
+Crate:     nostr
+Version:   0.44.3
+Title:     Debug output exposes NIP-46 and NIP-60 credentials
+Date:      2026-08-01
+ID:        RUSTSEC-2026-0225
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0225
+Severity:  5.5 (medium)
+Solution:  Upgrade to >=0.44.7
+
+Crate:     nostr
+Version:   0.44.3
+Title:     Wallet event parsers accept unauthenticated events
+Date:      2026-08-01
+ID:        RUSTSEC-2026-0226
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0226
+Severity:  7.5 (high)
+Solution:  Upgrade to >=0.44.7
+
+Crate:     nostr
+Version:   0.44.3
+Title:     NIP-44 v2 decryption permits resource exhaustion
+Date:      2026-08-01
+ID:        RUSTSEC-2026-0227
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0227
+Severity:  7.5 (high)
+Solution:  Upgrade to >=0.44.7
+
+Crate:     nostr
+Version:   0.44.3
+Title:     NIP-04 parsing amplifies malformed ciphertext memory use
+Date:      2026-08-01
+ID:        RUSTSEC-2026-0228
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0228
+Severity:  4.3 (medium)
+Solution:  Upgrade to >=0.44.7
+
+Crate:     nostr
+Version:   0.44.3
+Title:     NIP-98 authorization parsing permits resource exhaustion
+Date:      2026-08-01
+ID:        RUSTSEC-2026-0229
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0229
+Severity:  7.5 (high)
+Solution:  Upgrade to >=0.44.7
+
+Crate:     nostr
+Version:   0.44.3
+Title:     Empty NIP-50 search filters can panic
+Date:      2026-08-01
+ID:        RUSTSEC-2026-0230
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0230
+Severity:  7.5 (high)
+Solution:  Upgrade to >=0.44.7
+
+Crate:     instant
+Version:   0.1.13
+Warning:   unmaintained
+Title:     `instant` is unmaintained
+Date:      2024-09-01
+ID:        RUSTSEC-2024-0384
+URL:       https://rustsec.org/advisories/RUSTSEC-2024-0384
+Dependency tree:
+instant 0.1.13
+└── nostr 0.44.3
+    └── pact-nostr 0.1.0
+
+Crate:     anyhow
+Version:   1.0.102
+Warning:   unsound
+Title:     Unsoundness in `Error::downcast_mut()`
+Date:      2026-06-25
+ID:        RUSTSEC-2026-0190
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0190
+Dependency tree:
+anyhow 1.0.102
+├── pact-proto 0.1.0
+│   └── pact-nostr 0.1.0
+└── pact-nostr 0.1.0
+
+Crate:     base58ck
+Version:   0.1.100
+Warning:   yanked
+Dependency tree:
+base58ck 0.1.100
+└── bitcoin 0.32.100
+    ├── pact-proto 0.1.0
+    │   └── pact-nostr 0.1.0
+    └── pact-nostr 0.1.0
+
+Crate:     bitcoin
+Version:   0.32.100
+Warning:   yanked
+Dependency tree:
+bitcoin 0.32.100
+├── pact-proto 0.1.0
+│   └── pact-nostr 0.1.0
+└── pact-nostr 0.1.0
+
+Crate:     bitcoin-io
+Version:   0.1.100
+Warning:   yanked
+Dependency tree:
+bitcoin-io 0.1.100
+├── bitcoin_hashes 0.14.100
+│   ├── secp256k1 0.29.1
+│   │   ├── nostr 0.44.3
+│   │   │   └── pact-nostr 0.1.0
+│   │   └── bitcoin 0.32.100
+│   │       ├── pact-proto 0.1.0
+│   │       │   └── pact-nostr 0.1.0
+│   │       └── pact-nostr 0.1.0
+│   ├── nostr 0.44.3
+│   ├── bitcoin 0.32.100
+│   ├── bip39 2.2.2
+│   │   └── nostr 0.44.3
+│   └── base58ck 0.1.100
+│       └── bitcoin 0.32.100
+└── bitcoin 0.32.100
+
+Crate:     bitcoin-units
+Version:   0.1.100
+Warning:   yanked
+Dependency tree:
+bitcoin-units 0.1.100
+└── bitcoin 0.32.100
+    ├── pact-proto 0.1.0
+    │   └── pact-nostr 0.1.0
+    └── pact-nostr 0.1.0
+
+Crate:     bitcoin_hashes
+Version:   0.14.100
+Warning:   yanked
+Dependency tree:
+bitcoin_hashes 0.14.100
+├── secp256k1 0.29.1
+│   ├── nostr 0.44.3
+│   │   └── pact-nostr 0.1.0
+│   └── bitcoin 0.32.100
+│       ├── pact-proto 0.1.0
+│       │   └── pact-nostr 0.1.0
+│       └── pact-nostr 0.1.0
+├── nostr 0.44.3
+├── bitcoin 0.32.100
+├── bip39 2.2.2
+│   └── nostr 0.44.3
+└── base58ck 0.1.100
+    └── bitcoin 0.32.100
+
+Crate:     nostr
+Version:   0.44.3
+Warning:   yanked
+
+error: 8 vulnerabilities found!
+warning: 8 allowed warnings found

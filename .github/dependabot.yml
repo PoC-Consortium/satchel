@@ -1,0 +1,14 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: cargo
+    directories: [/pact, /pact-proto, /pact-nostr, /corkboard, /satchel, /crier, /tools/relay-prober]
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /satchel/ui
+    schedule:
+      interval: weekly

@@ -435,14 +435,33 @@ fn load_or_create_config(config_dir: &Path) -> anyhow::Result<Config> {
         return Ok(serde_json::from_str(&text)?);
     }
     let config = Config::default();
-    std::fs::write(&path, serde_json::to_string_pretty(&config)?)?;
+    write_private_config(&path, &serde_json::to_string_pretty(&config)?)?;
     Ok(config)
 }
 
+fn write_private_config(path: &Path, value: &str) -> anyhow::Result<()> {
+    use std::io::Write;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        options.mode(0o600);
+        if path.exists() {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+        }
+    }
+    options.open(path)?.write_all(value.as_bytes())?;
+    Ok(())
+}
+
 fn save_config(config_dir: &Path, config: &Config) -> anyhow::Result<()> {
-    std::fs::write(
-        config_path(config_dir),
-        serde_json::to_string_pretty(config)?,
+    write_private_config(
+        &config_path(config_dir),
+        &serde_json::to_string_pretty(config)?,
     )?;
     Ok(())
 }
@@ -518,19 +537,24 @@ fn spawn_pactd(config: &Config, data_dir: &Path) -> anyhow::Result<Child> {
         let coins_file = coins_file::resolve_coins_file(config_dir);
         cmd.arg("--coins-file").arg(&coins_file);
     }
+    let mut coin_arguments = Vec::<String>::new();
     for coin in &config.coins {
         // Recompose cookie-auth URLs at launch (re-read the .cookie); fall back
         // to the stored string for raw/legacy entries or if the node is down.
         let chain_data = compose::effective_chain_data(coin, active_network());
         if !chain_data.trim().is_empty() {
-            cmd.arg("--coin")
-                .arg(format!("{}={}", coin.coin_id, chain_data));
+            coin_arguments.push(format!("{}={}", coin.coin_id, chain_data));
             if let Some(n) = coin.confirmations {
                 cmd.arg("--coin-confs")
                     .arg(format!("{}={}", coin.coin_id, n));
             }
         }
     }
+    let coin_file = data_dir.join("coin-arguments.json");
+    write_private_config(&coin_file, &serde_json::to_string(&coin_arguments)?)?;
+    cmd.arg("--coin-config-file")
+        .arg(&coin_file)
+        .arg("--delete-coin-config-file");
     if !config.board_urls.is_empty() {
         cmd.arg("--board-url").arg(config.board_urls.join(","));
     }
@@ -604,7 +628,13 @@ fn stop_managed(app: &tauri::AppHandle) {
             // covers the #97 config relaunch like any other restart).
             let _ = pactd_call(&conn.url, &conn.auth, "stop", &json!([]));
         }
-        std::thread::sleep(Duration::from_millis(800));
+        let deadline = std::time::Instant::now() + Duration::from_secs(12);
+        while std::time::Instant::now() < deadline {
+            if matches!(child.try_wait(), Ok(Some(_))) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
         let _ = child.kill();
         let _ = child.wait();
     }
@@ -1496,11 +1526,14 @@ fn set_tray_status(
 /// URL here. http(s) only.
 #[tauri::command]
 fn open_external(url: String) -> Result<(), String> {
-    if !(url.starts_with("https://") || url.starts_with("http://")) {
+    let parsed = reqwest::Url::parse(&url).map_err(|e| e.to_string())?;
+    if !matches!(parsed.scheme(), "http" | "https") || parsed.host_str().is_none() {
         return Err("only http(s) URLs may be opened".into());
     }
     #[cfg(windows)]
-    let spawned = Command::new("cmd").args(["/C", "start", "", &url]).spawn();
+    let spawned = Command::new("rundll32.exe")
+        .args(["url.dll,FileProtocolHandler", parsed.as_str()])
+        .spawn();
     #[cfg(target_os = "macos")]
     let spawned = Command::new("open").arg(&url).spawn();
     #[cfg(all(unix, not(target_os = "macos")))]
@@ -1689,6 +1722,12 @@ mod update {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             pactd_rpc,

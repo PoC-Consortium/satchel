@@ -13,7 +13,7 @@
 //!   POST /v1/offers           signed offer envelope (type "offer")
 //!   GET  /v1/offers           list active offers (filters: asset pair, network)
 //!   POST /v1/offers/revoke    signed revocation (type "revoke", same identity)
-//!   POST /v1/relay            {to, blob} — store-and-forward, content-blind
+//!   POST /v1/relay            signed relay_post envelope with {to, blob, created}
 //!   POST /v1/relay/poll       signed poll (type "relay_poll") → messages since cursor
 //!
 //! All write endpoints require a valid BIP340 envelope signature
@@ -29,7 +29,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use clap::Parser;
 use pact_proto::envelope::{verify, Envelope};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::net::SocketAddr;
@@ -100,7 +100,35 @@ fn open_db(path: &PathBuf) -> Result<Connection> {
          );
          CREATE INDEX IF NOT EXISTS relay_recipient ON relay (recipient, id);",
     )?;
+    let has_sender = conn
+        .prepare("PRAGMA table_info(relay)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<rusqlite::Result<Vec<_>>>()?
+        .iter()
+        .any(|name| name == "sender");
+    if !has_sender {
+        conn.execute(
+            "ALTER TABLE relay ADD COLUMN sender TEXT NOT NULL DEFAULT ''",
+            [],
+        )?;
+    }
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS relay_sender ON relay(sender)",
+        [],
+    )?;
     Ok(conn)
+}
+
+fn prune(db: &Connection) -> Result<()> {
+    db.execute(
+        "DELETE FROM offers WHERE expires <= ?1 OR revoked != 0",
+        params![now()],
+    )?;
+    db.execute(
+        "DELETE FROM relay WHERE created < ?1",
+        params![now().saturating_sub(7 * 86400)],
+    )?;
+    Ok(())
 }
 
 fn verified(envelope: &Envelope, expected_type: &str) -> Result<(), ApiError> {
@@ -128,6 +156,16 @@ async fn post_offer(
     let ttl = ttl.min(7 * 24 * 3600); // a week, tops — offers are not archives
     let created = now();
     let db = app.db.lock().expect("db mutex");
+    prune(&db)?;
+    let total: i64 = db.query_row("SELECT COUNT(*) FROM offers", [], |r| r.get(0))?;
+    let own: i64 = db.query_row(
+        "SELECT COUNT(*) FROM offers WHERE identity = ?1",
+        params![envelope.from],
+        |r| r.get(0),
+    )?;
+    if total >= 4096 || own >= 128 {
+        return Err(ApiError(anyhow::anyhow!("offer storage quota exceeded")));
+    }
     db.execute(
         "INSERT INTO offers (offer_id, identity, envelope, created, expires)
          VALUES (?1, ?2, ?3, ?4, ?5)
@@ -156,10 +194,17 @@ async fn list_offers(
 ) -> Result<Json<Value>, ApiError> {
     let db = app.db.lock().expect("db mutex");
     let mut stmt = db.prepare(
-        "SELECT envelope FROM offers WHERE revoked = 0 AND expires > ?1 ORDER BY created DESC LIMIT 500",
+        "SELECT envelope FROM offers WHERE revoked = 0 AND expires > ?1
+         AND (?2 IS NULL OR json_extract(envelope, '$.body.give_asset') = ?2)
+         AND (?3 IS NULL OR json_extract(envelope, '$.body.get_asset') = ?3)
+         AND (?4 IS NULL OR json_extract(envelope, '$.body.network') = ?4)
+         ORDER BY created DESC LIMIT 500",
     )?;
     let rows: Vec<String> = stmt
-        .query_map(params![now()], |row| row.get(0))?
+        .query_map(
+            params![now(), filter.give, filter.get, filter.network],
+            |row| row.get(0),
+        )?
         .collect::<rusqlite::Result<_>>()?;
     let offers: Vec<Envelope> = rows
         .iter()
@@ -204,8 +249,16 @@ struct RelayPost {
 
 async fn relay_post(
     State(app): State<App>,
-    Json(message): Json<RelayPost>,
+    Json(envelope): Json<Envelope>,
 ) -> Result<Json<Value>, ApiError> {
+    verified(&envelope, "relay_post")?;
+    let created = envelope.body["created"].as_u64().unwrap_or(0);
+    if created > now().saturating_add(300) || created.saturating_add(86400) < now() {
+        return Err(ApiError(anyhow::anyhow!(
+            "relay post expired or future dated"
+        )));
+    }
+    let message: RelayPost = serde_json::from_value(envelope.body.clone())?;
     if message.blob.len() > MAX_BLOB_BYTES {
         return Err(ApiError(anyhow::anyhow!(
             "blob exceeds {MAX_BLOB_BYTES} bytes"
@@ -220,9 +273,35 @@ async fn relay_post(
         )));
     }
     let db = app.db.lock().expect("db mutex");
+    prune(&db)?;
+    // Retries remain idempotent even when the recipient is at its quota.
+    let existing: Option<i64> = db
+        .query_row(
+            "SELECT id FROM relay WHERE recipient = ?1 AND blob = ?2",
+            params![message.to, message.blob],
+            |r| r.get(0),
+        )
+        .optional()?;
+    if let Some(id) = existing {
+        return Ok(Json(json!({ "id": id })));
+    }
+    let count: i64 = db.query_row("SELECT COUNT(*) FROM relay", [], |r| r.get(0))?;
+    let recipient: i64 = db.query_row(
+        "SELECT COUNT(*) FROM relay WHERE recipient = ?1",
+        params![message.to],
+        |r| r.get(0),
+    )?;
+    let sender: i64 = db.query_row(
+        "SELECT COUNT(*) FROM relay WHERE sender = ?1",
+        params![envelope.from],
+        |r| r.get(0),
+    )?;
+    if count >= 8192 || recipient >= 256 || sender >= 256 {
+        return Err(ApiError(anyhow::anyhow!("relay storage quota exceeded")));
+    }
     db.execute(
-        "INSERT INTO relay (recipient, blob, created) VALUES (?1, ?2, ?3)",
-        params![message.to, message.blob, now()],
+        "INSERT INTO relay (recipient, blob, created, sender) SELECT ?1, ?2, ?3, ?4 WHERE NOT EXISTS (SELECT 1 FROM relay WHERE recipient = ?1 AND blob = ?2)",
+        params![message.to, message.blob, now(), envelope.from],
     )?;
     let id: i64 = db.last_insert_rowid();
     Ok(Json(json!({ "id": id })))
@@ -290,4 +369,137 @@ async fn main() -> Result<()> {
         })
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
+
+    fn app() -> App {
+        App {
+            db: Arc::new(Mutex::new(open_db(&PathBuf::from(":memory:")).unwrap())),
+        }
+    }
+
+    fn message(blob: &str, created: u64) -> Envelope {
+        let secp = Secp256k1::new();
+        let key = Keypair::from_secret_key(&secp, &SecretKey::from_slice(&[7; 32]).unwrap());
+        let mut envelope = Envelope {
+            v: 1,
+            msg_type: "relay_post".into(),
+            swap_id: "relay".into(),
+            from: key.x_only_public_key().0.to_string(),
+            body: json!({"to": key.x_only_public_key().0.to_string(), "blob": blob, "created": created}),
+            sig: String::new(),
+        };
+        pact_proto::envelope::sign(&mut envelope, &key).unwrap();
+        envelope
+    }
+
+    #[tokio::test]
+    async fn one_sender_cannot_fill_global_quota_using_many_recipients() {
+        let app = app();
+        let key =
+            Keypair::from_secret_key(&Secp256k1::new(), &SecretKey::from_slice(&[7; 32]).unwrap());
+        for i in 0..257 {
+            let mut envelope = message("sealed", now());
+            envelope.body["to"] = json!(format!("{i:064x}"));
+            pact_proto::envelope::sign(&mut envelope, &key).unwrap();
+            let result = relay_post(State(app.clone()), Json(envelope)).await;
+            assert_eq!(result.is_ok(), i < 256);
+        }
+        let count: i64 = app
+            .db
+            .lock()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM relay", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 256);
+    }
+
+    #[tokio::test]
+    async fn relay_rejects_tampering_expiry_and_oversized_blobs() {
+        let app = app();
+        let mut tampered = message("sealed", now());
+        tampered.body["blob"] = json!("changed");
+        assert!(relay_post(State(app.clone()), Json(tampered))
+            .await
+            .is_err());
+        assert!(
+            relay_post(State(app.clone()), Json(message("old", now() - 86401)))
+                .await
+                .is_err()
+        );
+        assert!(
+            relay_post(State(app.clone()), Json(message("future", now() + 600)))
+                .await
+                .is_err()
+        );
+        assert!(relay_post(
+            State(app.clone()),
+            Json(message(&"x".repeat(MAX_BLOB_BYTES + 1), now()))
+        )
+        .await
+        .is_err());
+        let count: i64 = app
+            .db
+            .lock()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM relay", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn relay_quota_pruning_and_retry_identity() {
+        let app = app();
+        let original = message("original", now());
+        let first = relay_post(State(app.clone()), Json(original.clone()))
+            .await
+            .ok()
+            .unwrap()
+            .0;
+        {
+            let db = app.db.lock().unwrap();
+            for i in 0..255 {
+                db.execute(
+                    "INSERT INTO relay(recipient, blob, created) VALUES (?1, ?2, ?3)",
+                    params![original.from, format!("filler-{i}"), now()],
+                )
+                .unwrap();
+            }
+        }
+        let retry = relay_post(State(app.clone()), Json(original.clone()))
+            .await
+            .ok()
+            .unwrap()
+            .0;
+        assert_eq!(first, retry);
+        assert!(
+            relay_post(State(app.clone()), Json(message("over quota", now())))
+                .await
+                .is_err()
+        );
+        app.db
+            .lock()
+            .unwrap()
+            .execute(
+                "UPDATE relay SET created = ?1 WHERE blob = 'filler-0'",
+                params![now() - 8 * 86400],
+            )
+            .unwrap();
+        assert!(
+            relay_post(State(app.clone()), Json(message("after pruning", now())))
+                .await
+                .is_ok()
+        );
+        let count: i64 = app
+            .db
+            .lock()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM relay", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 256);
+    }
 }

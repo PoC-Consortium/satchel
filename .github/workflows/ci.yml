@@ -2,7 +2,7 @@
 #
 # The fast gate: rustfmt + clippy + the swap engine's tests, the Satchel app
 # build + its unit tests, and the UI lint + typecheck/build. Security audits
-# live in security.yml (scheduled, non-blocking).
+# run in security.yml on pull requests as well as on schedule.
 #
 # The e2e job runs the full regtest harness (pact/harness/test_runner.py,
 # TEST_FRAMEWORK_PLAN Phase 5). Its external binaries live in an actions
@@ -18,6 +18,9 @@ on:
   push:
     branches: [master]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -27,8 +30,8 @@ jobs:
     name: Format (rustfmt)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           components: rustfmt
       - name: cargo fmt --check (all crates)
@@ -44,11 +47,11 @@ jobs:
     name: Engine (clippy + tests)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: |
             pact
@@ -58,38 +61,47 @@ jobs:
             crier
       - name: System deps
         run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libssl-dev
+      - name: Audit Rust dependencies (merge gate)
+        shell: bash
+        run: |
+          cargo install cargo-audit --locked
+          status=0
+          while IFS= read -r file; do
+            cargo audit --file "$file" || status=1
+          done < <(find . -name Cargo.lock -not -path '*/target/*' -not -path '*/node_modules/*')
+          exit "$status"
       - name: Clippy (deny warnings)
         run: |
-          cargo clippy --manifest-path pact/Cargo.toml --workspace --all-targets -- -D warnings
-          cargo clippy --manifest-path pact-nostr/Cargo.toml --all-targets -- -D warnings
-          cargo clippy --manifest-path corkboard/Cargo.toml --all-targets -- -D warnings
-          cargo clippy --manifest-path pact-proto/Cargo.toml --all-targets -- -D warnings
-          cargo clippy --manifest-path crier/Cargo.toml --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path pact/Cargo.toml --workspace --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path pact-nostr/Cargo.toml --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path corkboard/Cargo.toml --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path pact-proto/Cargo.toml --all-targets -- -D warnings
+          cargo clippy --locked --manifest-path crier/Cargo.toml --all-targets -- -D warnings
       - name: Test pact workspace (libswap + pactd + cli)
-        run: cargo test --manifest-path pact/Cargo.toml --workspace
+        run: cargo test --locked --manifest-path pact/Cargo.toml --workspace
       - name: Test pact-nostr
-        run: cargo test --manifest-path pact-nostr/Cargo.toml
+        run: cargo test --locked --manifest-path pact-nostr/Cargo.toml
       - name: Test corkboard
-        run: cargo test --manifest-path corkboard/Cargo.toml
+        run: cargo test --locked --manifest-path corkboard/Cargo.toml
       - name: Test pact-proto
-        run: cargo test --manifest-path pact-proto/Cargo.toml
+        run: cargo test --locked --manifest-path pact-proto/Cargo.toml
       - name: Test crier
-        run: cargo test --manifest-path crier/Cargo.toml
+        run: cargo test --locked --manifest-path crier/Cargo.toml
 
   app:
     name: Satchel app (clippy + build + tests)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: |
             pact
             satchel
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
@@ -110,23 +122,23 @@ jobs:
           npm run build
       - name: Build + stage sidecars
         run: |
-          cargo build --manifest-path pact/Cargo.toml -p pactd -p pact-cli
+          cargo build --locked --manifest-path pact/Cargo.toml -p pactd -p pact-cli
           mkdir -p satchel/binaries
           cp pact/target/debug/pactd    satchel/binaries/pactd-x86_64-unknown-linux-gnu
           cp pact/target/debug/pact-cli satchel/binaries/pact-cli-x86_64-unknown-linux-gnu
       - name: Clippy (deny warnings)
-        run: cargo clippy --manifest-path satchel/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --locked --manifest-path satchel/Cargo.toml --all-targets -- -D warnings
       - name: Test Satchel app
-        run: cargo test --manifest-path satchel/Cargo.toml
+        run: cargo test --locked --manifest-path satchel/Cargo.toml
 
   e2e:
     name: E2E (regtest harness)
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: |
             pact
@@ -138,7 +150,7 @@ jobs:
             build-essential cmake pkgconf libevent-dev libboost-dev \
             libsqlite3-dev libssl-dev protobuf-compiler
       - name: Cache harness binaries
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: pact/harness/bin
           key: harness-bins-${{ runner.os }}-${{ hashFiles('pact/harness/ci/fetch-binaries.sh') }}
@@ -150,14 +162,14 @@ jobs:
       # binary fingerprint, so restoring it is always safe; it saves once per
       # binary pin and shaves the funding bringup off every scenario.
       - name: Cache funded datadirs
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: pact/harness/cache
           key: harness-datadirs-${{ runner.os }}-${{ hashFiles('pact/harness/ci/fetch-binaries.sh') }}
       - name: Build workspace (pactd + pact-cli + corkboard)
         run: |
-          cargo build --manifest-path pact/Cargo.toml
-          cargo build --manifest-path corkboard/Cargo.toml
+          cargo build --locked --manifest-path pact/Cargo.toml
+          cargo build --locked --manifest-path corkboard/Cargo.toml
       - name: Run the e2e suite
         working-directory: pact/harness
         env:
@@ -165,7 +177,7 @@ jobs:
         run: python3 test_runner.py --skip-build
       - name: Upload failure workdirs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: e2e-failure-workdirs
           path: ${{ runner.temp }}/pact-*
@@ -178,14 +190,16 @@ jobs:
       run:
         working-directory: satchel/ui
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: satchel/ui/package-lock.json
       - name: Install deps
         run: npm ci
+      - name: Audit UI dependencies (merge gate)
+        run: npm audit --audit-level=high
       - name: Lint (eslint — incl. i18next/no-literal-string guard)
         run: npm run lint
       - name: Typecheck + build

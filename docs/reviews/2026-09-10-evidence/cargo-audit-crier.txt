@@ -1,0 +1,237 @@
+    Fetching advisory database from `https://github.com/RustSec/advisory-db.git`
+      Loaded 1243 security advisories (from C:\Users\Johnny\.cargo\advisory-db)
+    Updating crates.io index
+    Scanning Cargo.lock for vulnerabilities (340 crate dependencies)
+Crate:     nostr
+Version:   0.44.6
+Title:     Debug output exposes NIP-46 and NIP-60 credentials
+Date:      2026-08-01
+ID:        RUSTSEC-2026-0225
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0225
+Severity:  5.5 (medium)
+Solution:  Upgrade to >=0.44.7
+Dependency tree:
+nostr 0.44.6
+├── pact-nostr 0.1.0
+│   └── crier 0.1.0
+├── nostr-sdk 0.44.1
+│   └── crier 0.1.0
+├── nostr-relay-pool 0.44.1
+│   └── nostr-sdk 0.44.1
+├── nostr-gossip 0.44.0
+│   └── nostr-sdk 0.44.1
+├── nostr-database 0.44.0
+│   ├── nostr-sdk 0.44.1
+│   └── nostr-relay-pool 0.44.1
+└── crier 0.1.0
+
+Crate:     nostr
+Version:   0.44.6
+Title:     Wallet event parsers accept unauthenticated events
+Date:      2026-08-01
+ID:        RUSTSEC-2026-0226
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0226
+Severity:  7.5 (high)
+Solution:  Upgrade to >=0.44.7
+
+Crate:     nostr
+Version:   0.44.6
+Title:     NIP-44 v2 decryption permits resource exhaustion
+Date:      2026-08-01
+ID:        RUSTSEC-2026-0227
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0227
+Severity:  7.5 (high)
+Solution:  Upgrade to >=0.44.7
+
+Crate:     nostr
+Version:   0.44.6
+Title:     NIP-04 parsing amplifies malformed ciphertext memory use
+Date:      2026-08-01
+ID:        RUSTSEC-2026-0228
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0228
+Severity:  4.3 (medium)
+Solution:  Upgrade to >=0.44.7
+
+Crate:     nostr
+Version:   0.44.6
+Title:     NIP-98 authorization parsing permits resource exhaustion
+Date:      2026-08-01
+ID:        RUSTSEC-2026-0229
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0229
+Severity:  7.5 (high)
+Solution:  Upgrade to >=0.44.7
+
+Crate:     nostr
+Version:   0.44.6
+Title:     Empty NIP-50 search filters can panic
+Date:      2026-08-01
+ID:        RUSTSEC-2026-0230
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0230
+Severity:  7.5 (high)
+Solution:  Upgrade to >=0.44.7
+
+Crate:     nostr-relay-pool
+Version:   0.44.1
+Title:     Verification cache poisoning allows forged Nostr events to bypass signature validation
+Date:      2026-08-01
+ID:        RUSTSEC-2026-0224
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0224
+Severity:  7.5 (high)
+Solution:  Upgrade to >=0.44.2
+Dependency tree:
+nostr-relay-pool 0.44.1
+└── nostr-sdk 0.44.1
+    └── crier 0.1.0
+
+Crate:     nostr-relay-pool
+Version:   0.44.1
+Title:     Relay authentication challenges can exhaust memory
+Date:      2026-08-01
+ID:        RUSTSEC-2026-0231
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0231
+Severity:  7.5 (high)
+Solution:  Upgrade to >=0.44.3
+
+Crate:     nostr-relay-pool
+Version:   0.44.1
+Title:     Processing of unverified relay events
+Date:      2026-08-01
+ID:        RUSTSEC-2026-0232
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0232
+Severity:  7.5 (high)
+Solution:  Upgrade to >=0.44.3
+
+Crate:     rustls-webpki
+Version:   0.102.8
+Title:     CRLs not considered authoritative by Distribution Point due to faulty matching logic
+Date:      2026-03-20
+ID:        RUSTSEC-2026-0049
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0049
+Solution:  Upgrade to >=0.103.10
+Dependency tree:
+rustls-webpki 0.102.8
+└── rustls 0.22.4
+    ├── tungstenite 0.21.0
+    │   └── tokio-tungstenite 0.21.0
+    │       └── serenity 0.12.5
+    │           └── poise 0.6.2
+    │               └── crier 0.1.0
+    ├── tokio-tungstenite 0.21.0
+    └── tokio-rustls 0.25.0
+        └── tokio-tungstenite 0.21.0
+
+Crate:     rustls-webpki
+Version:   0.102.8
+Title:     Name constraints for URI names were incorrectly accepted
+Date:      2026-04-14
+ID:        RUSTSEC-2026-0098
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0098
+Solution:  Upgrade to >=0.103.12, <0.104.0-alpha.1 OR >=0.104.0-alpha.6
+
+Crate:     rustls-webpki
+Version:   0.102.8
+Title:     Name constraints were accepted for certificates asserting a wildcard name
+Date:      2026-04-14
+ID:        RUSTSEC-2026-0099
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0099
+Solution:  Upgrade to >=0.103.12, <0.104.0-alpha.1 OR >=0.104.0-alpha.6
+
+Crate:     rustls-webpki
+Version:   0.102.8
+Title:     Reachable panic in certificate revocation list parsing
+Date:      2026-04-22
+ID:        RUSTSEC-2026-0104
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0104
+Solution:  Upgrade to >=0.103.13, <0.104.0-alpha.1 OR >=0.104.0-alpha.7
+
+Crate:     derivative
+Version:   2.2.0
+Warning:   unmaintained
+Title:     `derivative` is unmaintained; consider using an alternative
+Date:      2024-06-26
+ID:        RUSTSEC-2024-0388
+URL:       https://rustsec.org/advisories/RUSTSEC-2024-0388
+Dependency tree:
+derivative 2.2.0
+└── poise 0.6.2
+    └── crier 0.1.0
+
+Crate:     instant
+Version:   0.1.13
+Warning:   unmaintained
+Title:     `instant` is unmaintained
+Date:      2024-09-01
+ID:        RUSTSEC-2024-0384
+URL:       https://rustsec.org/advisories/RUSTSEC-2024-0384
+Dependency tree:
+instant 0.1.13
+└── nostr 0.44.6
+    ├── pact-nostr 0.1.0
+    │   └── crier 0.1.0
+    ├── nostr-sdk 0.44.1
+    │   └── crier 0.1.0
+    ├── nostr-relay-pool 0.44.1
+    │   └── nostr-sdk 0.44.1
+    ├── nostr-gossip 0.44.0
+    │   └── nostr-sdk 0.44.1
+    ├── nostr-database 0.44.0
+    │   ├── nostr-sdk 0.44.1
+    │   └── nostr-relay-pool 0.44.1
+    └── crier 0.1.0
+
+Crate:     nostr-relay-pool
+Version:   0.44.1
+Warning:   unmaintained
+Title:     `nostr-relay-pool` is unmaintained
+Date:      2026-08-03
+ID:        RUSTSEC-2026-0243
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0243
+
+Crate:     lru
+Version:   0.16.4
+Warning:   unsound
+Title:     Potential use-after-free due to lack of panic safety in `LruCache::pop()`
+Date:      2026-05-12
+ID:        RUSTSEC-2026-0253
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0253
+Dependency tree:
+lru 0.16.4
+├── nostr-relay-pool 0.44.1
+│   └── nostr-sdk 0.44.1
+│       └── crier 0.1.0
+└── nostr-database 0.44.0
+    ├── nostr-sdk 0.44.1
+    └── nostr-relay-pool 0.44.1
+
+Crate:     async-utility
+Version:   0.3.1
+Warning:   yanked
+Dependency tree:
+async-utility 0.3.1
+├── nostr-sdk 0.44.1
+│   └── crier 0.1.0
+├── nostr-relay-pool 0.44.1
+│   └── nostr-sdk 0.44.1
+└── async-wsocket 0.13.2
+    └── nostr-relay-pool 0.44.1
+
+Crate:     chacha20
+Version:   0.10.1
+Warning:   yanked
+Dependency tree:
+chacha20 0.10.1
+└── rand 0.10.2
+    └── quinn-proto 0.11.16
+        └── quinn 0.11.11
+            └── reqwest 0.12.28
+                ├── serenity 0.12.5
+                │   └── poise 0.6.2
+                │       └── crier 0.1.0
+                └── crier 0.1.0
+
+Crate:     nostr-relay-pool
+Version:   0.44.1
+Warning:   yanked
+
+error: 13 vulnerabilities found!
+warning: 7 allowed warnings found

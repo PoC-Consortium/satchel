@@ -1,13 +1,13 @@
 # Security audits — dependency advisories for the Rust crates and the UI.
 #
-# Runs weekly and on demand (NOT per-PR): advisories appear independently of our
-# changes, so they shouldn't block merging. continue-on-error keeps the run
-# green while still surfacing findings in the logs. Promote to a per-PR gate in
-# ci.yml once the tree is clean.
+# Runs on pull requests, weekly and on demand; findings fail the run.
 
 name: Security
 
 on:
+  pull_request: {}
+  push:
+    branches: [master]
   schedule:
     - cron: "0 9 * * 1" # Mondays 09:00 UTC
   workflow_dispatch: {}
@@ -20,19 +20,18 @@ jobs:
     name: Cargo audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
-      - name: Audit pact workspace
-        run: cargo audit --file pact/Cargo.lock
-        continue-on-error: true
-      - name: Audit satchel
-        run: cargo audit --file satchel/Cargo.lock
-        continue-on-error: true
-      - name: Audit corkboard
-        run: cargo audit --file corkboard/Cargo.lock
-        continue-on-error: true
+      - name: Audit all Rust lockfiles
+        shell: bash
+        run: |
+          status=0
+          while IFS= read -r file; do
+            cargo audit --file "$file" || status=1
+          done < <(find . -name Cargo.lock -not -path '*/target/*' -not -path '*/node_modules/*')
+          exit "$status"
 
   npm-audit:
     name: NPM audit
@@ -41,10 +40,9 @@ jobs:
       run:
         working-directory: satchel/ui
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
       - name: Audit Satchel UI
         run: npm audit --audit-level=high
-        continue-on-error: true

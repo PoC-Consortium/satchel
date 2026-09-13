@@ -1,0 +1,108 @@
+--- C:/code/pocx/satchel/pact/libswap/src/engine.rs	2026-08-28 11:59:22.983795700 +0200
++++ C:/Users/Johnny/AppData/Local/Temp/claude/C--code-pocx-satchel/0478eb17-1748-43a0-bda6-2cf0a65e96d2/scratchpad/repro/pact/libswap/src/engine.rs	2026-09-10 07:54:25.489303900 +0200
+@@ -14938,4 +14938,105 @@
+         assert_eq!((q.needed_sat, q.total_spendable_sat), (50_000, 69_000));
+         assert!(format!("{err:#}").contains("funding queued"));
+     }
++
++    /// REVIEW PROBE (2026-09-10, scratch copy only): after `Signed`, a
++    /// `funding_ready` from the pinned counterparty naming OUR OWN leg
++    /// overwrites our persisted funding pointer; the nonce store then
++    /// refuses a second partial over the changed sighash.
++    #[test]
++    fn review_probe_funding_ready_overwrites_pointer_after_signed() {
++        let (alice, ad) = engine_with("rv-spoof-alice", None);
++        let (bob, bd) = engine_with("rv-spoof-bob", None);
++        let now = local_now() as u32;
++        let (t1, t2) = (now + 40_000, now + 20_000);
++        let (arec, init) = alice
++            .adaptor_init(
++                Network::Regtest,
++                ("btcx".into(), 50_000_000),
++                ("btc".into(), 100_000),
++                t1,
++                t2,
++            )
++            .unwrap();
++        let id = arec.swap_id.clone();
++        let (_brec, accept) = bob.adaptor_accept(&init).unwrap();
++        alice.recv_adaptor(&accept).unwrap();
++        let fa = alice
++            .adaptor_funding_ready(&id, &"aa".repeat(32), 0)
++            .unwrap();
++        let fb = bob.adaptor_funding_ready(&id, &"bb".repeat(32), 1).unwrap();
++        bob.recv_adaptor(&fa).unwrap();
++        alice.recv_adaptor(&fb).unwrap();
++        let na = alice.adaptor_nonces(&id).unwrap();
++        let nb = bob.adaptor_nonces(&id).unwrap();
++        bob.recv_adaptor(&na).unwrap();
++        alice.recv_adaptor(&nb).unwrap();
++        let pa = alice.adaptor_sign(&id).unwrap();
++        let pb = bob.adaptor_sign(&id).unwrap();
++        bob.recv_adaptor(&pa).unwrap();
++        alice.recv_adaptor(&pb).unwrap();
++        let ar = alice.adaptor_assemble(&id).unwrap();
++        let br = bob.adaptor_assemble(&id).unwrap();
++        assert_eq!(ar.state, AdaptorState::Signed);
++        assert_eq!(br.state, AdaptorState::Signed);
++        assert_eq!(br.funding_b_txid.as_deref(), Some("bb".repeat(32).as_str()));
++
++        // 1. Alice (pinned counterparty) announces a bogus pointer for BOB's leg B.
++        let spoof_b = alice
++            .signed_envelope(
++                "funding_ready",
++                &id,
++                serde_json::to_value(&crate::messages::FundingReadyV2Body {
++                    chain: "b".into(),
++                    txid: "cc".repeat(32),
++                    vout: 7,
++                })
++                .unwrap(),
++            )
++            .unwrap();
++        let br2 = bob.recv_adaptor(&spoof_b).unwrap();
++        println!(
++            "PROBE bob after spoof: state={:?} funding_b_txid={:?} vout={:?}",
++            br2.state, br2.funding_b_txid, br2.funding_b_vout
++        );
++        assert_eq!(br2.state, AdaptorState::Signed);
++        assert_eq!(br2.funding_b_txid.as_deref(), Some("cc".repeat(32).as_str()));
++        assert_eq!(br2.funding_b_vout, Some(7));
++
++        // 2. Bob announces a bogus pointer for ALICE's own leg A.
++        let spoof_a = bob
++            .signed_envelope(
++                "funding_ready",
++                &id,
++                serde_json::to_value(&crate::messages::FundingReadyV2Body {
++                    chain: "a".into(),
++                    txid: "dd".repeat(32),
++                    vout: 9,
++                })
++                .unwrap(),
++            )
++            .unwrap();
++        let ar2 = alice.recv_adaptor(&spoof_a).unwrap();
++        println!(
++            "PROBE alice after spoof: state={:?} funding_a_txid={:?} vout={:?}",
++            ar2.state, ar2.funding_a_txid, ar2.funding_a_vout
++        );
++        assert_eq!(ar2.funding_a_txid.as_deref(), Some("dd".repeat(32).as_str()));
++
++        // 3. Nonce safety: the sighash changed with the pointer, so a re-run
++        //    of the signing step must be REFUSED (no second partial per nonce).
++        let err = bob.adaptor_assemble(&id).unwrap_err();
++        println!("PROBE re-assemble after pointer change: {err:#}");
++        assert!(format!("{err:#}").contains("DIFFERENT partial"));
++        let err2 = bob.adaptor_sign(&id).unwrap_err();
++        println!("PROBE re-sign after pointer change: {err2:#}");
++        assert!(format!("{err2:#}").contains("DIFFERENT partial"));
++        // The adaptor sigs assembled earlier are untouched (still Signed).
++        let br3 = bob.store.get_adaptor(&id).unwrap();
++        assert_eq!(br3.state, AdaptorState::Signed);
++        assert_eq!(br3.adaptor_sig_b, br.adaptor_sig_b);
++
++        std::fs::remove_dir_all(&ad).ok();
++        std::fs::remove_dir_all(&bd).ok();
++    }
+ }

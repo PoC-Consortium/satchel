@@ -115,6 +115,13 @@ pub trait Noticeboard {
     fn offers(&self) -> Result<Vec<Envelope>>;
     fn revoke(&self, revocation: &Envelope) -> Result<()>;
     fn relay_send_blob(&self, to: &str, blob: &str) -> Result<()>;
+    fn relay_send_authenticated(&self, envelope: &Envelope) -> Result<()> {
+        self.relay_send_blob(
+            envelope.body["to"].as_str().context("relay recipient")?,
+            envelope.body["blob"].as_str().context("relay blob")?,
+        )
+    }
+
     fn relay_poll(&self, poll: &Envelope) -> Result<Vec<(i64, String)>>;
 
     /// Publish an encrypted-to-self swap-state snapshot for seed-only rescue
@@ -151,6 +158,13 @@ impl Noticeboard for BoardClient {
     }
     fn relay_send_blob(&self, to: &str, blob: &str) -> Result<()> {
         BoardClient::relay_send_blob(self, to, blob)
+    }
+    fn relay_send_authenticated(&self, envelope: &Envelope) -> Result<()> {
+        http_json(
+            &format!("{}/v1/relay", self.base),
+            Some(&serde_json::to_value(envelope)?),
+        )?;
+        Ok(())
     }
     fn relay_poll(&self, poll: &Envelope) -> Result<Vec<(i64, String)>> {
         BoardClient::relay_poll(self, poll)

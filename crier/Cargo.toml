@@ -17,9 +17,11 @@ nostr-sdk = "0.44"
 # provider when both aws-lc-rs and ring are linked, breaking all wss:// relays.
 # Same footgun pactd hit (pactd/src/main.rs).
 rustls = "0.23"
-poise = "0.6"
-# BTC/USD reference rate fetch (cash annotations). rustls-tls so the whole
-# binary shares one TLS story and never links a system OpenSSL.
+# Serenity 0.12 still pins an obsolete rustls/webpki for its gateway.
+# Use platform certificate validation for Discord until that dependency moves.
+poise = { version = "0.6", default-features = false, features = ["cache", "chrono", "handle_panics"] }
+serenity = { version = "0.12.5", default-features = false, features = ["native_tls_backend"] }
+# BTC/USD reference rate fetch (cash annotations), using current rustls.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "time"] }
 serde = { version = "1", features = ["derive"] }
@@ -32,5 +34,5 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 # Build/sign offer envelopes and events in tests, mirroring pact-nostr's tests.
-nostr = "0.44"
+nostr = "0.44.8"
 bitcoin = "0.32"

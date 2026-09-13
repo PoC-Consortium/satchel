@@ -135,6 +135,10 @@ pub struct SwapRecord {
     /// latch on their first post-upgrade tick.
     #[serde(default)]
     pub settled: bool,
+    /// Both legs settled but our claim leg was refunded and our funded leg
+    /// redeemed by the counterparty. Refunded is terminal, not a recovery of funds.
+    #[serde(default)]
+    pub settlement_loss: bool,
 }
 
 /// One party's durable view of one **v2** (adaptor) swap (spec v2 §9).
@@ -265,6 +269,10 @@ pub struct AdaptorSwapRecord {
     /// latch on their first post-upgrade tick.
     #[serde(default)]
     pub settled: bool,
+    /// Both legs settled but our claim leg was refunded and our funded leg
+    /// redeemed by the counterparty. Refunded is terminal, not a recovery of funds.
+    #[serde(default)]
+    pub settlement_loss: bool,
 }
 
 pub struct Store {
@@ -272,6 +280,9 @@ pub struct Store {
     /// The seed file of this data dir (extracted `seedstore` crate) — one
     /// merchant = one seed = one dir, exactly as before.
     seed_store: SeedStore,
+    // Hot-wallet cache: derived once after successful unlock, discarded with
+    // the merchant or after seed replacement. Never persisted or serialized.
+    seed_cache: std::cell::OnceCell<std::sync::Arc<PactSeed>>,
     data_dir: PathBuf,
     /// Runtime-only latch (never persisted): set true when [`Self::create_seed`]
     /// or [`Self::import_seed`] took the #120 reconfirm-with-mnemonic *recovery*
@@ -306,7 +317,7 @@ impl Store {
     }
 
     pub fn open(data_dir: &Path, passphrase: Option<&str>) -> Result<Self> {
-        std::fs::create_dir_all(data_dir)?;
+        crate::private_files::private_dir(data_dir)?;
         let conn = Connection::open(data_dir.join(DB_FILE))?;
         conn.busy_timeout(Duration::from_secs(10))?;
         conn.execute_batch(
@@ -403,6 +414,7 @@ impl Store {
         let store = Self {
             conn,
             seed_store: SeedStore::open(data_dir, passphrase)?,
+            seed_cache: std::cell::OnceCell::new(),
             data_dir: data_dir.to_path_buf(),
             pending_scope_rotation: false,
         };
@@ -453,6 +465,8 @@ impl Store {
     pub fn create_seed(&mut self, passphrase: Option<&str>, words: usize) -> Result<String> {
         let recovering = self.seed_install_would_recover();
         let phrase = self.seed_store.create_seed(passphrase, words)?;
+        self.seed_cache.take();
+        crate::private_files::private_dir(&self.data_dir)?;
         // Copy-heal (§0/§1): installing over an undecryptable keyring seed means
         // this is a new machine (or a reset keychain) — rotate the machine scope.
         self.pending_scope_rotation |= recovering;
@@ -474,6 +488,8 @@ impl Store {
     pub fn import_seed(&mut self, mnemonic: &str, passphrase: Option<&str>) -> Result<String> {
         let recovering = self.seed_install_would_recover();
         let phrase = self.seed_store.import_seed(mnemonic, passphrase)?;
+        self.seed_cache.take();
+        crate::private_files::private_dir(&self.data_dir)?;
         // Copy-heal (§0/§1): see create_seed — same rotation trigger.
         self.pending_scope_rotation |= recovering;
         Ok(phrase)
@@ -495,8 +511,13 @@ impl Store {
 
     /// The live [`PactSeed`], derived from the stored mnemonic (the
     /// `SeedStore` holds the mnemonic string; the Pact tree wraps it).
-    pub fn seed(&self) -> Result<PactSeed> {
-        PactSeed::from_mnemonic(&self.seed_store.mnemonic()?, "")
+    pub fn seed(&self) -> Result<std::sync::Arc<PactSeed>> {
+        if let Some(seed) = self.seed_cache.get() {
+            return Ok(seed.clone());
+        }
+        let seed = std::sync::Arc::new(PactSeed::from_mnemonic(&self.seed_store.mnemonic()?, "")?);
+        let _ = self.seed_cache.set(seed.clone());
+        Ok(seed)
     }
 
     /// Allocate the next BIP32 swap index (monotonic, never reused —
@@ -538,6 +559,30 @@ impl Store {
                 params![n.to_string()],
             )?;
         }
+        Ok(())
+    }
+
+    /// Creation is distinct from updates: one atomic transaction checks both
+    /// protocol namespaces and the durable consumed-id ledger.
+    pub fn create_swap(&self, id: &str, json: &str, adaptor: bool) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        let inserted = tx.execute(
+            "INSERT INTO meta(key, value) SELECT 'used_swap:' || ?1, '1'
+             WHERE NOT EXISTS (SELECT 1 FROM swaps WHERE swap_id = ?1)
+               AND NOT EXISTS (SELECT 1 FROM adaptor_swaps WHERE swap_id = ?1)
+               AND NOT EXISTS (SELECT 1 FROM meta WHERE key IN
+                   ('used_swap:' || ?1, 'purged_foreign:' || ?1))
+             ON CONFLICT(key) DO NOTHING",
+            params![id],
+        )?;
+        anyhow::ensure!(inserted == 1, "swap id already used: {id}");
+        let sql = if adaptor {
+            "INSERT INTO adaptor_swaps(swap_id, record) VALUES (?1, ?2)"
+        } else {
+            "INSERT INTO swaps(swap_id, record) VALUES (?1, ?2)"
+        };
+        tx.execute(sql, params![id, json])?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -787,6 +832,8 @@ impl Store {
         created: u64,
         expires: u64,
     ) -> Result<()> {
+        let value: serde_json::Value = serde_json::from_str(envelope)?;
+        let author = value["from"].as_str().context("offer missing author")?;
         // Addressable semantics: keep ONLY the freshest event per d_tag. A relay
         // can serve a STALE copy of an addressable event, so events for one d_tag
         // arrive out of order across the pool. The old `created < ?` delete left a
@@ -795,16 +842,16 @@ impl Store {
         // Instead: ignore an event older than what we already hold, otherwise
         // replace EVERY row for the d_tag — so a listing can never double.
         let newest: Option<i64> = self.conn.query_row(
-            "SELECT MAX(created) FROM nostr_offer_cache WHERE d_tag = ?1",
-            params![d_tag],
+            "SELECT MAX(created) FROM nostr_offer_cache WHERE d_tag = ?1 AND json_extract(envelope, '$.from') = ?2",
+            params![d_tag, author],
             |r| r.get::<_, Option<i64>>(0),
         )?;
         if matches!(newest, Some(c) if (created as i64) < c) {
             return Ok(()); // a fresher event for this d_tag is already cached
         }
         self.conn.execute(
-            "DELETE FROM nostr_offer_cache WHERE d_tag = ?1",
-            params![d_tag],
+            "DELETE FROM nostr_offer_cache WHERE d_tag = ?1 AND json_extract(envelope, '$.from') = ?2",
+            params![d_tag, author],
         )?;
         self.conn.execute(
             "INSERT OR REPLACE INTO nostr_offer_cache (event_id, d_tag, envelope, created, expires)
@@ -859,7 +906,7 @@ impl Store {
                 // by an older build still render as a single listing.
                 "SELECT envelope FROM nostr_offer_cache c
                  WHERE (c.expires = 0 OR c.expires > ?1)
-                   AND c.created = (SELECT MAX(created) FROM nostr_offer_cache WHERE d_tag = c.d_tag)",
+                   AND c.created = (SELECT MAX(created) FROM nostr_offer_cache newer WHERE newer.d_tag = c.d_tag AND json_extract(newer.envelope, '$.from') = json_extract(c.envelope, '$.from'))",
             )?;
         let rows = stmt.query_map(params![now as i64], |row| row.get::<_, String>(0))?;
         rows.map(|r| Ok(r?)).collect()
@@ -1268,6 +1315,7 @@ mod tests {
             derive_scope: 0,
             adopted: false,
             settled: false,
+            settlement_loss: false,
         }
     }
 
@@ -1282,6 +1330,52 @@ mod tests {
     }
 
     #[test]
+    fn offer_cache_identity_includes_author() {
+        let dir = temp_dir("offer-author");
+        let store = Store::init(&dir, None).unwrap();
+        store
+            .nostr_offer_cache_upsert("alice-event", "same", r#"{"from":"alice"}"#, 100, 1000)
+            .unwrap();
+        store
+            .nostr_offer_cache_upsert("mallory-event", "same", r#"{"from":"mallory"}"#, 200, 1000)
+            .unwrap();
+        assert_eq!(store.nostr_offer_cache_active(0).unwrap().len(), 2);
+        store
+            .nostr_offer_cache_remove_by_author("same", "mallory")
+            .unwrap();
+        assert_eq!(
+            store.nostr_offer_cache_active(0).unwrap(),
+            vec![r#"{"from":"alice"}"#]
+        );
+        drop(store);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn swap_creation_is_atomic_across_protocol_namespaces_and_deletion() {
+        let dir = temp_dir("create-unique");
+        let store = Store::init(&dir, None).unwrap();
+        store.create_swap("id", "original", false).unwrap();
+        assert!(store.create_swap("id", "replacement", false).is_err());
+        assert!(store.create_swap("id", "replacement", true).is_err());
+        let original: String = store
+            .conn
+            .query_row("SELECT record FROM swaps WHERE swap_id='id'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(original, "original");
+        store.delete("id").unwrap();
+        assert!(store.create_swap("id", "replacement", true).is_err());
+        assert!(std::sync::Arc::ptr_eq(
+            &store.seed().unwrap(),
+            &store.seed().unwrap()
+        ));
+        drop(store);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
     fn offer_cache_keeps_one_row_per_dtag() {
         let dir = temp_dir("offer-cache-dedup");
         let store = Store::init(&dir, None).unwrap();
@@ -1291,10 +1385,22 @@ mod tests {
         // (relays can serve addressable events out of order). The stale one is
         // ignored — the listing must not double.
         store
-            .nostr_offer_cache_upsert("evNew", "off1", "{\"v\":\"new\"}", 200, far)
+            .nostr_offer_cache_upsert(
+                "evNew",
+                "off1",
+                "{\"from\":\"alice\",\"v\":\"new\"}",
+                200,
+                far,
+            )
             .unwrap();
         store
-            .nostr_offer_cache_upsert("evOld", "off1", "{\"v\":\"old\"}", 100, far)
+            .nostr_offer_cache_upsert(
+                "evOld",
+                "off1",
+                "{\"from\":\"alice\",\"v\":\"old\"}",
+                100,
+                far,
+            )
             .unwrap();
         let active = store.nostr_offer_cache_active(0).unwrap();
         assert_eq!(active.len(), 1, "one listing per d_tag");
@@ -1302,7 +1408,13 @@ mod tests {
 
         // A genuinely newer event replaces the row in place (still one).
         store
-            .nostr_offer_cache_upsert("evNewer", "off1", "{\"v\":\"newer\"}", 300, far)
+            .nostr_offer_cache_upsert(
+                "evNewer",
+                "off1",
+                "{\"from\":\"alice\",\"v\":\"newer\"}",
+                300,
+                far,
+            )
             .unwrap();
         let active = store.nostr_offer_cache_active(0).unwrap();
         assert_eq!(active.len(), 1);
@@ -1310,7 +1422,7 @@ mod tests {
 
         // A different d_tag coexists; remove drops only its own listing.
         store
-            .nostr_offer_cache_upsert("evB", "off2", "{\"v\":\"b\"}", 150, far)
+            .nostr_offer_cache_upsert("evB", "off2", "{\"from\":\"alice\",\"v\":\"b\"}", 150, far)
             .unwrap();
         assert_eq!(store.nostr_offer_cache_active(0).unwrap().len(), 2);
         store.nostr_offer_cache_remove("off1").unwrap();

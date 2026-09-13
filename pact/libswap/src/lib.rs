@@ -34,6 +34,7 @@ pub mod machine;
 pub mod messages;
 pub mod musig;
 pub mod nostr_board;
+pub mod private_files;
 pub mod reconstruct;
 pub mod registry;
 pub mod rpc;
@@ -82,3 +83,6 @@ pub fn wire_epoch(protocol: &str) -> u32 {
         WIRE_V1
     }
 }
+
+/// Inspect or forget a self-signed Electrum server certificate pin.
+pub use electrum_btcx::backend::manage_tls_pin;

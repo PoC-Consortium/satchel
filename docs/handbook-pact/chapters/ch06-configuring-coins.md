@@ -67,6 +67,14 @@ two-phase build, CPFP, RBF bump — are served by that wallet, and the
 
 - **Mainnet requires ≥ 2 Electrum servers** — a single lying or withholding
   server must never be the only view of the chain while funds move (spec §10).
+- View independence assumes authenticated connections. `ssl://` validates
+  public CA certificates by hostname and validity, including normal renewals.
+  Self-signed servers use trust on first use: an attacker present at first
+  contact is not excluded. After verifying a changed self-signed server out
+  of band, inspect/reset its pin with `pact-cli call tlspin ssl://host:port
+  inspect` (or `forget`), then restart pactd. A deliberate CA-to-self-signed
+  migration also requires `forget` after out-of-band verification. `tcp://` is plaintext and does
+  not protect against a network attacker controlling multiple views.
 - Every server passes a **capability handshake** before use:
   `server.version` (protocol 1.4+), `server.features` cross-checks
   (`genesis_hash` must match; **pruned servers are refused** — a restored
@@ -261,3 +269,19 @@ covered in full in the API part of this handbook, but worth knowing here:
 
 *See the chapter on coins-and-pairs RPCs for the full field lists and return
 shapes.*
+
+### Default TLS views (2026-09-11)
+
+The shipped BTC mainnet list now contains six endpoints and the LTC list three,
+verified through the production TLS, protocol-version, and genesis checks.
+We retain strict hostname/validity validation, including for self-signed TOFU;
+X.509 v1, CA-only leaf certificates, and CN-only certificates without SANs are
+not supported. Incompatible defaults were removed rather than weakening this
+policy. A server with a wrong-host certificate was also removed, as was an
+unreachable LTC endpoint. Existing user overrides are not rewritten automatically;
+remove incompatible entries or ask their operators to renew compliant certificates.
+
+The LTC list has two cipig.net endpoints and one petrkr.net endpoint, so it has
+only two apparent operator groups. Endpoint count is not independent-operator
+count, and availability is a point-in-time observation. Add independently operated,
+validated views where available; a failed view quorum stops progress safely.

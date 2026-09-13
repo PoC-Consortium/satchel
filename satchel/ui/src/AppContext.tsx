@@ -233,7 +233,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // pre-record) in another. We fold all three into one array so the ledger,
   // header count, and active-swaps dock cover every protocol + the "initiating"
   // pre-swap. A pending take is dropped once its real record exists (same id).
+  const refreshSwapsPending = useRef(false);
   const refreshSwaps = useCallback(async () => {
+    if (refreshSwapsPending.current) return;
+    refreshSwapsPending.current = true;
     try {
       const [v1, v2, pend, prog] = await Promise.all([
         rpc<V1SwapRecord[]>("listswaps"),
@@ -266,13 +269,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setConn(true);
     } catch {
       setConn(false);
+    } finally {
+      refreshSwapsPending.current = false;
     }
   }, [setConn]);
 
   // listcoins drives the header per-coin health glyphs (live-probed status +
   // tip). Polled globally while connected so the indicators stay fresh on any
   // tab; coin symbols are cached for leg labels.
+  const refreshCoinsPending = useRef(false);
   const refreshCoins = useCallback(async () => {
+    if (refreshCoinsPending.current) return;
+    refreshCoinsPending.current = true;
     try {
       const r = await rpc<{ coins: CoinInfo[] }>("listcoins");
       setCoins(r.coins);
@@ -281,6 +289,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setConn(true);
     } catch {
       setConn(false);
+    } finally {
+      refreshCoinsPending.current = false;
     }
   }, [setConn, setSymbol]);
 
@@ -319,12 +329,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Nostr relay connectivity for the header dot. Cheap (a local pactd call); the
   // RELAY poll cadence (pactd tick) is separate — this only reads pactd's view.
+  const refreshRelaysPending = useRef(false);
   const refreshRelays = useCallback(async () => {
+    if (refreshRelaysPending.current) return;
+    refreshRelaysPending.current = true;
     try {
       const r = await rpc<{ relays: RelayStatus[] }>("boardstatus");
       setRelays(r.relays || []);
     } catch {
       /* leave last-known; the engine dot already covers pactd being down */
+    } finally {
+      refreshRelaysPending.current = false;
     }
   }, []);
 

@@ -66,6 +66,7 @@ export function milestone(s: Swap): { rank: number; event: NotifyEvent | null } 
 // narrate() is a pure helper (no React context), so it translates via the tr()
 // module mirror rather than the useT() hook.
 export function narrate(s: Swap): string {
+  if (s.settlement_loss) return tr("settlement.loss");
   const a = asset(s.chain_a).toUpperCase();
   const b = asset(s.chain_b).toUpperCase();
   const t1 = new Date(s.t1 * 1000).toLocaleTimeString();

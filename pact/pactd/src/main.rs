@@ -137,6 +137,12 @@ struct Args {
     /// the flag once per coin to run a multi-coin engine.
     #[arg(long = "coin")]
     coins: Vec<String>,
+    /// Private JSON array of coin backend arguments (keeps RPC secrets out of argv).
+    #[arg(long)]
+    coin_config_file: Option<PathBuf>,
+    /// Remove the private launch-arguments file after successfully reading it.
+    #[arg(long)]
+    delete_coin_config_file: bool,
     /// Per-coin confirmation depth (reorg-safety/finality), repeatable:
     /// `--coin-confs <coin_id>=<N>` (e.g. `--coin-confs btc=3`). The number of
     /// confirmations before a funding/redeem on that coin is treated final;
@@ -494,7 +500,9 @@ impl Params {
         v.as_u64()
             .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
             .with_context(|| format!("param '{name}' must be a u32"))
-            .map(|n: u64| n as u32)
+            .and_then(|n: u64| {
+                u32::try_from(n).with_context(|| format!("param '{name}' exceeds u32"))
+            })
     }
     fn u64(&self, i: usize, name: &str) -> Result<u64> {
         let v = self.get(i, name)?;
@@ -650,6 +658,7 @@ const METHODS: &[(&str, &str, &str, &str)] = &[
         "",
         "Machine-readable array of all method names.",
     ),
+    ("coins", "tlspin", "<ssl://host:port> <inspect|forget>", "Inspect or reset self-signed Electrum trust after verifying the server out of band."),
     ("control", "stop", "", "Shut pactd down cleanly."),
     (
         "control",
@@ -1202,6 +1211,15 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             })
             .await?;
             Ok(fee_policy_json(&policy))
+        }
+        "tlspin" => {
+            let endpoint = p.str(0, "endpoint")?;
+            let action = p.str(1, "action")?;
+            ensure!(
+                matches!(action.as_str(), "inspect" | "forget"),
+                "action must be inspect or forget"
+            );
+            libswap::manage_tls_pin(&endpoint, action == "forget")
         }
         "listcoins" => {
             // Shipped registry + which are configured + a live connection
@@ -1958,7 +1976,11 @@ async fn dispatch(app: &App, method: &str, params: Value) -> Result<Value> {
             // target (a preset); neither = the 6-block Normal baseline.
             // Targets clamp to Core's estimatesmartfee range (1..=1008).
             let fee = match (p.opt_u64(3, "conf_target"), p.opt_f64(4, "fee_rate")) {
-                (_, Some(rate)) if rate > 0.0 => {
+                (_, Some(rate)) => {
+                    anyhow::ensure!(
+                        rate.is_finite() && rate > 0.0 && rate <= 500.0,
+                        "fee_rate must be between 0 and 500 sat/vB"
+                    );
                     SendFee::RatePerKvb((rate * 1000.0).round() as u64)
                 }
                 (Some(target), _) => SendFee::Target(target.clamp(1, 1008) as u16),
@@ -2140,7 +2162,8 @@ fn write_cookie(data_dir: &Path) -> Result<String> {
     let mut bytes = [0u8; 32];
     bitcoin::secp256k1::rand::thread_rng().fill_bytes(&mut bytes);
     let creds = format!("__cookie__:{}", hex::encode(bytes));
-    std::fs::write(data_dir.join(COOKIE_FILE), &creds).context("writing .cookie")?;
+    libswap::private_files::write_private(&data_dir.join(COOKIE_FILE), creds.as_bytes())
+        .context("writing .cookie")?;
     Ok(creds)
 }
 
@@ -2229,7 +2252,14 @@ async fn main() -> Result<()> {
     // and the relays never reach Connected; ws:// works because it skips TLS).
     // Install the provider explicitly, before any relay connection is attempted.
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-    let args = Args::parse();
+    let mut args = Args::parse();
+    if let Some(path) = &args.coin_config_file {
+        let coins: Vec<String> = serde_json::from_slice(&std::fs::read(path)?)?;
+        args.coins.extend(coins);
+        if args.delete_coin_config_file {
+            std::fs::remove_file(path).context("remove private launch arguments")?;
+        }
+    }
     let network = parse_network(&args.network)?;
     // Resolve the data dir (explicit flag or the platform default) and make
     // sure it exists before anything (logging, seed, cookie) writes into it.
@@ -2237,7 +2267,7 @@ async fn main() -> Result<()> {
         Some(d) => d.clone(),
         None => default_data_dir(&args.network)?,
     };
-    std::fs::create_dir_all(&data_dir)
+    libswap::private_files::private_dir(&data_dir)
         .with_context(|| format!("creating data dir {}", data_dir.display()))?;
     // §0: take the exclusive data-dir lock BEFORE anything opens the store — one
     // pactd per data dir. Held for the whole process by `_data_dir_lock` (the OS
@@ -2723,6 +2753,8 @@ mod tests {
             data_dir: Some(PathBuf::from(".")),
             coins_file: None,
             coins: coins.into_iter().map(String::from).collect(),
+            coin_config_file: None,
+            delete_coin_config_file: false,
             coin_confs: vec![],
             listen: "127.0.0.1:9737".parse().unwrap(),
             network: "regtest".into(),

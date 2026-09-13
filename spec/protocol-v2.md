@@ -40,9 +40,9 @@ key *types*:
 | Material | Path | v2 key type |
 |---|---|---|
 | Identity key | `m/7228'/0'/0'` | BIP340 x-only (unchanged) |
-| Swap key, chain *c*, swap index *i* | `m/7228'/1'/coin(c)'/i'` | secp256k1, used as a **BIP340 x-only key and MuSig2 signer** (was ECDSA) |
-| Refund key, chain *c*, swap index *i* | `m/7228'/3'/coin(c)'/i'` | secp256k1 x-only — signs the single-key CLTV refund tapleaf |
-| Adaptor-secret source, swap index *i* | `m/7228'/2'/i'` | feeds §3.1 (was the preimage source) |
+| Swap key, chain *c*, swap index *i* | `m/7228'/1'/coin(c)'/scope_hi'/scope_lo'/i'` | secp256k1, used as a **BIP340 x-only key and MuSig2 signer** (was ECDSA) |
+| Refund key, chain *c*, swap index *i* | `m/7228'/3'/coin(c)'/scope_hi'/scope_lo'/i'` | secp256k1 x-only — signs the single-key CLTV refund tapleaf |
+| Adaptor-secret source, swap index *i* | `m/7228'/2'/scope_hi'/scope_lo'/i'` | feeds §3.1 (was the preimage source) |
 
 `coin(c)`, swap-key indexing, and "one swap key per chain per swap" are
 inherited from v1 §4.1–4.2 — including the initiator-counter / participant-
@@ -58,7 +58,7 @@ independent of the MuSig2 aggregate.
 Alice (only) derives, for her swap index `i`:
 
 ```
-k  = private key at m/7228'/2'/i'                     (32 bytes)
+k  = private key at m/7228'/2'/scope_hi'/scope_lo'/i'                     (32 bytes)
 t  = TaggedHash("pact/adaptor/secret/v2", k)  mod n   (a valid secp256k1 scalar, ≠ 0)
 T  = t·G                                              (the adaptor point)
 ```
@@ -187,10 +187,11 @@ pattern), so both redeems can be pre-signed. Message sequence:
    is authoritative. It only speeds a status update, never safety or completion.
 8. **`abort`** (either): as v1.
 
-A party MUST NOT broadcast its funding until it holds a verified
-`AdaptorSignature` for the redeem of the leg it is *claiming* (so it can
-always make progress) and the §4 refund path is constructed (so it can
-always recover).
+Alice may broadcast leg A after acceptance, before adaptor signatures are
+available; its single-key CLTV refund path MUST be constructible first. Bob
+builds leg B without broadcasting, exchanges nonces and partial signatures,
+and MUST NOT broadcast leg B until he holds a verified `AdaptorSignature`
+for the leg-A redeem he will claim and can construct his leg-B refund.
 
 ## 8. Timelocks, fees, adversarial model
 
@@ -216,13 +217,14 @@ v2 spend types diverge — the one real deviation from "inherited unchanged":
   require a fresh interactive signing round. An implementation MUST instead pick
   a sufficiently generous redeem fee at signing time, rely on a wide redeem
   window, and rebroadcast the byte-identical tx while it is unconfirmed.
-  Bumpable cooperative redeems (a pre-signed fee ladder, or a CPFP anchor in the
-  redeem template) are a `pact-htlc-v3` consideration since they change the
-  signed transaction set.
+  A wallet-owned redeem output can fund a CPFP child without changing the
+  signed redeem. Package submission may relay a rejected parent together with
+  this child where supported. Pre-signed fee ladders would change the signing
+  protocol and require a separate protocol revision.
 
 ## 9. Recovery
 
-Seed + swap index (Alice) or seed + adaptor point `T` (Bob, whose keys are
+Seed + derive_scope + swap index (Alice) or seed + adaptor point `T` (Bob, whose keys are
 anchored to `T` — v1 §4.2) re-derive every long-term key (swap, refund),
 and Alice's index also re-derives `t`. This is always enough to take the
 **refund** path via the §4 tapleaf. Completing an in-flight **cooperative** redeem additionally needs
@@ -245,3 +247,23 @@ resolver (`registry::select_protocol`).
 Vectors fix: the derived `t`/`T`, both swap + refund pubkeys, the aggregated
 internal key `P`, the P2TR addresses, and the refund tapleaf script — the
 deterministic, transcript-independent values.
+
+### Recovery and fee-policy clarifications (2026-09-11)
+
+The scope-zero legacy rule and backup requirements in protocol.md apply to all
+counter-based v2 paths. The seed alone does not determine a nonzero scope.
+
+Do not clone a live datadir onto concurrently signing machines. Nonce session
+state is single-writer state and is not transferred in recovery snapshots.
+Funding outpoints used by a nonce/signature session are immutable. A chain
+replacement may be used to build a unilateral refund; it MUST NOT silently
+replace the signing commitment or reopen a consumed nonce session.
+
+A participant rejects a committed redeem fee below its local policy. Current
+estimates cannot guarantee future relay acceptance. The Core implementation
+attempts parent-plus-child package submission when standalone claim relay
+fails, where supported by the node; other backends retain standalone relay
+and CPFP limitations. A key-path redeem is not re-signable for RBF; its
+transaction uses a non-RBF sequence. Wallet-owned sweep outputs support CPFP.
+Once `t` is public, the participant keeps attempting its claim without a clock
+cutoff. A near/past refund deadline is a reason to accelerate, not abandon it.
