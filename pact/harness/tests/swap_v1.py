@@ -39,18 +39,24 @@ from framework.util import (  # noqa: E402
 )
 
 
-def test_complete_swap(h, late_refund=False):
+def test_complete_swap(h, late_refund=False, recovery=None):
     """Happy path, fully manual: the Phase 1 definition of done.
     Each party runs its own pactd; pact-cli drives it (bitcoin-cli style)."""
-    alice = Party("alice", h, h.workdir, "alice_btcx", "alice_btc").start()
+    alice = Party("alice", h, h.workdir, "alice_btcx", "alice_btc",
+                  coin_confs={"btc": 3} if recovery == "shallow" else None).start()
     bob = Party("bob", h, h.workdir, "bob_btcx", "bob_btc").start()
     try:
         before = balances(h)
 
         sid, m_funded_a, m_funded_b = handshake_and_fund(h, alice, bob, "01")
+        if recovery == "shallow":
+            h.btc.generate(2, "bob_btc")
         alice.cli("recv", "--in", m_funded_b)
-
         alice.cli("redeem", "--swap", sid)          # reveals s on the BTC chain
+        if recovery:
+            from framework.settlement import settlement_case
+            settlement_case(h, alice, bob, sid, False, recovery)
+            return
         h.btc.generate(1, "bob_btc")
         if late_refund:
             import sqlite3
@@ -220,12 +226,12 @@ def test_daemon_autopilot_swap(h):
 
         # Settled latch (2026-08-28 scheduler-stall fix): Bob's chain-A redeem
         # is watched (nurse + progress line) only until it is n_a-deep; then the
-        # tick reports `settled` ONCE, the flag persists, and the swap drops out
+        # tick reports settlement (nurse or reconcile), the flag persists, and the swap drops out
         # of swapprogress — no chain round-trip for it ever again.
         rec = bob.rpc("getswap", sid)
         assert rec["settled"] is False, rec
         h.pocx.generate(rec["n_a"], "alice_btcx")
-        drive_until(bob, lambda evs: any(e["action"] == "settled" for e in evs), tries=3)
+        drive_until(bob, lambda evs: any(e["action"] in ("settled", "reconciled") for e in evs), tries=3)
         assert bob.rpc("getswap", sid)["settled"] is True
         events = bob.tick()
         assert not any(e["swap_id"] == sid for e in events), f"settled swap still ticking: {events}"
@@ -276,7 +282,7 @@ def test_daemon_autopilot_refund(h):
             rec = party.rpc("getswap", sid)
             assert rec["state"] == "refunded", rec["state"]
             node.generate(rec[depth], wallet)
-            drive_until(party, lambda evs: any(e["action"] == "settled" for e in evs),
+            drive_until(party, lambda evs: any(e["action"] in ("settled", "reconciled") for e in evs),
                         tries=3)
             assert party.rpc("getswap", sid)["settled"] is True
             assert all(p["swap_id"] != sid for p in party.rpc("swapprogress")), \
@@ -1682,7 +1688,49 @@ class LateClaimAfterRefundV1(PactTestFramework):
         test_complete_swap(self.h, late_refund=True)
 
 
+class SettlementRecoveryParticipantConflictV1(PactTestFramework):
+    def run_test(self):
+        test_complete_swap(self.h, recovery="participant_conflict")
+
+
+class SettlementRecoveryInitiatorConflictV1(PactTestFramework):
+    def run_test(self):
+        test_complete_swap(self.h, recovery="initiator_conflict")
+
+
+class SettlementRecoveryEvictedRevealV1(PactTestFramework):
+    def run_test(self):
+        test_complete_swap(self.h, recovery="evicted")
+
+
+class SettlementRecoveryRevealOutageV1(PactTestFramework):
+    def run_test(self):
+        test_complete_swap(self.h, recovery="outage")
+
+
+class SettlementRecoveryFinalRevealV1(PactTestFramework):
+    def run_test(self):
+        test_complete_swap(self.h, recovery="final")
+
+
+class SettlementRecoveryShallowRevealV1(PactTestFramework):
+    def run_test(self):
+        test_complete_swap(self.h, recovery="shallow")
+
+
+class SettlementRecoveryLostRefundV1(PactTestFramework):
+    def run_test(self):
+        test_complete_swap(self.h, recovery="lost_refund")
+
+
 SCENARIOS = [
+    SettlementRecoveryParticipantConflictV1,
+    SettlementRecoveryInitiatorConflictV1,
+    SettlementRecoveryEvictedRevealV1,
+    SettlementRecoveryRevealOutageV1,
+    SettlementRecoveryFinalRevealV1,
+    SettlementRecoveryShallowRevealV1,
+    SettlementRecoveryLostRefundV1,
     LateClaimAfterRefundV1,
     BroadcastRecoveryV1,
     CompleteSwap,

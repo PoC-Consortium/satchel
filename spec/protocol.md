@@ -595,7 +595,7 @@ Preconditions: `accept` received and validated; transcript persisted.
 ### 9.4 Bob: extract `s`, redeem chain A
 
 1. On seeing the chain-B HTLC spent, extract `s`, check `SHA256(s) = H`.
-2. Broadcast the chain-A redeem paying his core wallet; before `T1 − 1 h`;
+2. Broadcast the chain-A redeem paying his core wallet while the output remains unspent;
    fee-bump until confirmed; then cancel his scheduled `T2` refund.
 
 ### 9.5 Refund paths
