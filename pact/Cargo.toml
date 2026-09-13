@@ -22,43 +22,27 @@ electrum-btcx = { git = "https://github.com/PoC-Consortium/btcx", rev = "7a6ec87
 wallet-btcx = { git = "https://github.com/PoC-Consortium/btcx", rev = "7a6ec87fdd6c2aae5bb7db9f773d6ff7ca961247", features = ["swap-support"] }
 
 # Bitcoin stack — versions must stay mutually compatible (all on bitcoin 0.32).
-bitcoin = { version = "0.32", features = ["serde", "rand-std"] }
-miniscript = "12"
-# rusqlite feature: bdk's sqlite persister; pinned 0.31 = our own rusqlite,
-# so the bundled libsqlite3-sys stays a single native link.
-bdk_wallet = { version = "2", features = ["rusqlite"] }
-electrum-client = "0.21"
-# Electrum ssl:// uses the vendored CA-validation/self-signed TOFU verifier;
-# pactd separately installs the process CryptoProvider. Same 0.23 as the tree.
-rustls = "0.23"
-bech32 = "0.11"
-bip39 = "2"
-
+bitcoin = { version = "0.32.102", features = ["serde", "rand-std"] }
+miniscript = "13.1.0"
 # v2 adaptor swaps (pact-htlc-v2): MuSig2 + Schnorr adaptor signatures.
 # NOTE: musig2 pulls secp256k1 0.31, *separate* from bitcoin 0.32's 0.29 —
 # never mix the two types; convert at the boundary by bytes (spec/protocol-v2.md).
-musig2 = { version = "0.4", features = ["rand"] }
+musig2 = { version = "0.4.1", features = ["rand"] }
 
-scrypt = { version = "0.11", default-features = false }
-chacha20poly1305 = "0.10"
-# OS keystore for the unattended seed-at-rest wrap (#120). Only the native
-# backends — Windows Credential Manager + macOS Keychain — no external C deps
-# (Linux Secret Service is deliberately not used; see libswap's target gate).
-keyring = { version = "3", features = ["apple-native", "windows-native"] }
-
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time", "sync"] }
-axum = "0.7"
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "net", "signal", "time", "sync"] }
+axum = "0.8.9"
+# BDK and the pinned upstream wallet require a single SQLite 0.31 native link.
 rusqlite = { version = "0.31", features = ["bundled"] }
-clap = { version = "4", features = ["derive"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-toml = "0.8"
-anyhow = "1"
-thiserror = "1"
-hex = "0.4"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tracing-appender = "0.2"
+clap = { version = "4.6.6", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+toml = "1.1.6"
+anyhow = "1.0.104"
+thiserror = "2.0.20"
+hex = "0.4.3"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+tracing-appender = "0.2.5"
 
 [profile.release]
 lto = true

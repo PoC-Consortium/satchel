@@ -39,4 +39,4 @@ name = "gen-vectors-v2"
 path = "examples/gen-vectors-v2.rs"
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2"
+libc = "0.2.189"

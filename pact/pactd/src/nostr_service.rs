@@ -388,7 +388,11 @@ impl NostrService {
     }
 
     async fn fetch(&self, filter: Filter) -> Result<Vec<Event>> {
-        let events = self.client.fetch_events(filter, FETCH_TIMEOUT).await?;
+        let events = self
+            .client
+            .fetch_events(filter)
+            .timeout(FETCH_TIMEOUT)
+            .await?;
         Ok(events.into_iter().collect())
     }
 

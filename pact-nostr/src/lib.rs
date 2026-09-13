@@ -23,6 +23,7 @@
 //! [`Noticeboard`]: # "see libswap"
 
 use anyhow::{ensure, Context, Result};
+use nostr::event::FinalizeEvent;
 use nostr::prelude::*;
 use pact_proto::envelope::Envelope;
 
@@ -100,7 +101,7 @@ pub fn offer_event(offer: &Envelope, keys: &Keys, now: u64) -> Result<Event> {
     if let Some(exp) = offer_expiration(offer, now) {
         builder = builder.tag(Tag::expiration(Timestamp::from(exp)));
     }
-    builder.sign_with_keys(keys).context("sign offer event")
+    builder.finalize(keys).context("sign offer event")
 }
 
 /// Parse a Pact `offer` envelope back out of a Nostr offer event. Verifies
@@ -136,7 +137,7 @@ pub fn revocation_event(swap_id: &str, keys: &Keys) -> Result<Event> {
     let coordinate = format!("{OFFER_KIND}:{}:{swap_id}", keys.public_key().to_hex());
     EventBuilder::new(Kind::EventDeletion, "")
         .tag(Tag::parse(["a", &coordinate])?)
-        .sign_with_keys(keys)
+        .finalize(keys)
         .context("sign offer revocation event")
 }
 
@@ -149,7 +150,7 @@ pub fn giftwrap(recipient_xonly_hex: &str, sealed_blob: &str) -> Result<Event> {
     let ephemeral = Keys::generate();
     EventBuilder::new(Kind::Custom(GIFTWRAP_KIND), sealed_blob.to_string())
         .tag(Tag::public_key(recipient))
-        .sign_with_keys(&ephemeral)
+        .finalize(&ephemeral)
         .context("sign gift-wrap event")
 }
 
@@ -284,7 +285,7 @@ pub fn snapshot_event(
     EventBuilder::new(Kind::Custom(SNAPSHOT_KIND), sealed_blob.to_string())
         .tag(Tag::identifier(dtag.to_string()))
         .custom_created_at(Timestamp::from(created_at))
-        .sign_with_keys(keys)
+        .finalize(keys)
         .context("sign snapshot event")
 }
 
@@ -299,7 +300,7 @@ pub fn snapshot_tombstone_event(dtag: &str, keys: &Keys, created_at: u64) -> Res
     EventBuilder::new(Kind::EventDeletion, "")
         .tag(Tag::parse(["a", &coordinate])?)
         .custom_created_at(Timestamp::from(created_at))
-        .sign_with_keys(keys)
+        .finalize(keys)
         .context("sign snapshot tombstone event")
 }
 
@@ -459,7 +460,7 @@ mod tests {
         let coordinate = format!("{OFFER_KIND}:{a_x}:victimoffer01");
         let forged = EventBuilder::new(Kind::EventDeletion, "")
             .tag(Tag::parse(["a", &coordinate]).unwrap())
-            .sign_with_keys(&a_keys)
+            .finalize(&a_keys)
             .unwrap();
         let got = revoked_offer_from_event(&forged).expect("valid self-coordinate");
         assert_eq!(
@@ -478,7 +479,7 @@ mod tests {
         let coordinate = format!("{OFFER_KIND}:{b_x}:beefbeef");
         let forged = EventBuilder::new(Kind::EventDeletion, "")
             .tag(Tag::parse(["a", &coordinate]).unwrap())
-            .sign_with_keys(&a_keys)
+            .finalize(&a_keys)
             .unwrap();
         assert_eq!(revoked_offer_from_event(&forged), None);
     }

@@ -390,7 +390,7 @@ function NavRow({
         primary={label}
         slotProps={{
           primary: {
-            fontWeight: active ? 600 : 500,
+            sx: { fontWeight: active ? 600 : 500 },
             color: active ? "text.primary" : "text.secondary",
             noWrap: true,
           },

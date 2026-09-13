@@ -38,7 +38,7 @@ export default function Wizard({
   const [label, setLabel] = useState("");
 
   return (
-    <Dialog open maxWidth="sm" fullWidth disableEscapeKeyDown={firstRun} onClose={firstRun ? undefined : onClose}>
+    <Dialog open maxWidth="sm" fullWidth onClose={firstRun ? undefined : onClose}>
       {step === "name" && (
         <>
           <DialogTitle>

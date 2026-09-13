@@ -49,7 +49,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [opts, setOpts] = useState<ConfirmOpts | null>(null);
   // null = no body override; the caller's static confirmDisabled applies.
   const [bodyDisabled, setBodyDisabled] = useState<boolean | null>(null);
-  const resolver = useRef<(v: boolean) => void>();
+  const resolver = useRef<((v: boolean) => void) | undefined>(undefined);
 
   const confirm = useCallback<ConfirmFn>((o) => {
     setOpts(o);

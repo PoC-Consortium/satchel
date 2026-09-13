@@ -36,3 +36,5 @@ CLAUDE.md
 .DS_Store
 Thumbs.db
 .docwork/
+satchel/ui/test-results/
+satchel/ui/playwright-report/

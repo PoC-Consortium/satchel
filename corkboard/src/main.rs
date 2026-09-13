@@ -101,6 +101,10 @@ fn now() -> u64 {
         .as_secs()
 }
 
+fn sql_now() -> i64 {
+    i64::try_from(now()).expect("clock exceeds SQLite timestamp range")
+}
+
 fn open_db(path: &PathBuf) -> Result<Connection> {
     let conn = Connection::open(path)?;
     conn.busy_timeout(std::time::Duration::from_secs(10))?;
@@ -153,7 +157,7 @@ fn open_db(path: &PathBuf) -> Result<Connection> {
             Ok((created, expires)) => {
                 conn.execute(
                     "UPDATE offers SET created=?2, expires=?3 WHERE offer_id=?1",
-                    params![id, created, expires],
+                    params![id, i64::try_from(created)?, i64::try_from(expires)?],
                 )?;
             }
             Err(_) => {
@@ -165,10 +169,10 @@ fn open_db(path: &PathBuf) -> Result<Connection> {
 }
 
 fn prune(db: &Connection) -> Result<()> {
-    db.execute("DELETE FROM offers WHERE expires <= ?1", params![now()])?;
+    db.execute("DELETE FROM offers WHERE expires <= ?1", params![sql_now()])?;
     db.execute(
         "DELETE FROM relay WHERE created < ?1",
-        params![now().saturating_sub(7 * 86400)],
+        params![sql_now().saturating_sub(7 * 86400)],
     )?;
     Ok(())
 }
@@ -230,8 +234,8 @@ async fn post_offer(
             envelope.swap_id,
             envelope.from,
             serde_json::to_string(&envelope)?,
-            created,
-            expires
+            i64::try_from(created)?,
+            i64::try_from(expires)?
         ],
     )?;
     Ok(Json(json!({ "offer_id": envelope.swap_id })))
@@ -258,7 +262,7 @@ async fn list_offers(
     )?;
     let rows: Vec<String> = stmt
         .query_map(
-            params![now(), filter.give, filter.get, filter.network],
+            params![sql_now(), filter.give, filter.get, filter.network],
             |row| row.get(0),
         )?
         .collect::<rusqlite::Result<_>>()?;
@@ -357,7 +361,7 @@ async fn relay_post(
     }
     db.execute(
         "INSERT INTO relay (recipient, blob, created, sender) SELECT ?1, ?2, ?3, ?4 WHERE NOT EXISTS (SELECT 1 FROM relay WHERE recipient = ?1 AND blob = ?2)",
-        params![message.to, message.blob, now(), envelope.from],
+        params![message.to, message.blob, sql_now(), envelope.from],
     )?;
     let id: i64 = db.last_insert_rowid();
     Ok(Json(json!({ "id": id })))
@@ -511,7 +515,7 @@ mod tests {
                 .is_err()
         );
         assert!(post_offer(State(app.clone()), Json(original)).await.is_ok());
-        let expires: u64 = app
+        let expires: i64 = app
             .db
             .lock()
             .unwrap()
@@ -521,7 +525,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(expires, created + 3600);
+        assert_eq!(expires, i64::try_from(created + 3600).unwrap());
         assert!(
             post_offer(State(app), Json(offer("original", created + 1, 3600)))
                 .await
@@ -558,7 +562,7 @@ mod tests {
             prune(&db).unwrap();
             db.execute(
                 "UPDATE offers SET created=?1, expires=?2",
-                params![now(), now() + 3600],
+                params![sql_now(), sql_now() + 3600],
             )
             .unwrap();
         }
@@ -566,7 +570,7 @@ mod tests {
         let app = App {
             db: Arc::new(Mutex::new(open_db(&path).unwrap())),
         };
-        let row: (u64, u64, bool) = app
+        let row: (i64, i64, bool) = app
             .db
             .lock()
             .unwrap()
@@ -574,7 +578,14 @@ mod tests {
                 Ok((r.get(0)?, r.get(1)?, r.get(2)?))
             })
             .unwrap();
-        assert_eq!(row, (created, created + 3600, true));
+        assert_eq!(
+            row,
+            (
+                i64::try_from(created).unwrap(),
+                i64::try_from(created + 3600).unwrap(),
+                true
+            )
+        );
         let rejected = post_offer(State(app.clone()), Json(original))
             .await
             .err()
@@ -658,7 +669,7 @@ mod tests {
             for i in 0..255 {
                 db.execute(
                     "INSERT INTO relay(recipient, blob, created) VALUES (?1, ?2, ?3)",
-                    params![original.from, format!("filler-{i}"), now()],
+                    params![original.from, format!("filler-{i}"), sql_now()],
                 )
                 .unwrap();
             }
@@ -679,7 +690,7 @@ mod tests {
             .unwrap()
             .execute(
                 "UPDATE relay SET created = ?1 WHERE blob = 'filler-0'",
-                params![now() - 8 * 86400],
+                params![sql_now() - 8 * 86400],
             )
             .unwrap();
         assert!(

@@ -376,7 +376,7 @@ function FeesTab() {
       type="number"
       value={pol[key]}
       disabled={busy}
-      inputProps={{ min, max, step: 1 }}
+      slotProps={{ htmlInput: { min, max, step: 1 } }}
       onChange={(e) => {
         const v = Math.floor(Number(e.target.value));
         if (Number.isFinite(v)) setPol({ ...pol, [key]: v });
@@ -447,7 +447,7 @@ function NotificationsTab() {
         checked={n[key]}
         disabled={key !== "enabled" && !n.enabled}
         onChange={(_, on) => set({ [key]: on })}
-        inputProps={{ "aria-label": label }}
+        slotProps={{ input: { "aria-label": label } }}
       />
     </Row>
   );

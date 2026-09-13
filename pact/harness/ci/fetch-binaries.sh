@@ -27,11 +27,11 @@
 set -euo pipefail
 
 # ---- pins ------------------------------------------------------------------
-BITCOIN_VER=31.0
-BITCOIN_SHA256=d3e4c58a35b1d0a97a457462c94f55501ad167c660c245cb1ffa565641c65074
+BITCOIN_VER=31.1
+BITCOIN_SHA256=b80d9c3e04da78fb6f0569685673418cf686fadba9042d926d13fb87ff503f9e
 
-LITECOIN_VER=0.21.5.5
-LITECOIN_SHA256=623410d4f2695a68aa71332ae0672fee19276f41c1c63a531f97e24a50edde14
+LITECOIN_VER=0.21.5.8
+LITECOIN_SHA256=43200c9f9d65ebc126ea5833ca9429e144c4b3273da6bb9f4e89fd7450ab1be9
 
 ELECTRS_TAG=v0.11.1-btcx.1
 ELECTRS_BTCX_SHA256=d1ae81c2564f5f4bf42bcca8b425877098d9ec0d45557ec76e19fae659ad42cb
@@ -81,7 +81,7 @@ have btc-bitcoind || {
 
 have litecoind || {
     echo "== Litecoin Core $LITECOIN_VER"
-    fetch "https://download.litecoin.org/litecoin-$LITECOIN_VER/linux/litecoin-$LITECOIN_VER-x86_64-linux-gnu.tar.gz" \
+    fetch "https://github.com/litecoin-project/litecoin/releases/download/v$LITECOIN_VER/litecoin-$LITECOIN_VER-x86_64-linux-gnu.tar.gz" \
           "$LITECOIN_SHA256" "$WORK/litecoin.tar.gz"
     tar -xzf "$WORK/litecoin.tar.gz" -C "$WORK" "litecoin-$LITECOIN_VER/bin/litecoind"
     install -m 755 "$WORK/litecoin-$LITECOIN_VER/bin/litecoind" "$BIN_DIR/litecoind"
