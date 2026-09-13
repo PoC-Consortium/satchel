@@ -150,7 +150,7 @@ jobs:
             build-essential cmake pkgconf libevent-dev libboost-dev \
             libsqlite3-dev libssl-dev protobuf-compiler
       - name: Cache harness binaries
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: pact/harness/bin
           key: harness-bins-${{ runner.os }}-${{ hashFiles('pact/harness/ci/fetch-binaries.sh') }}
@@ -162,7 +162,7 @@ jobs:
       # binary fingerprint, so restoring it is always safe; it saves once per
       # binary pin and shaves the funding bringup off every scenario.
       - name: Cache funded datadirs
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: pact/harness/cache
           key: harness-datadirs-${{ runner.os }}-${{ hashFiles('pact/harness/ci/fetch-binaries.sh') }}
