@@ -7,7 +7,7 @@ description = "Corkboard — the PoCX trading noticeboard: signed offers and bli
 
 [dependencies]
 pact-proto = { path = "../pact-proto" }
-axum = "0.7"
+axum = "0.8"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 clap = { version = "4", features = ["derive"] }
