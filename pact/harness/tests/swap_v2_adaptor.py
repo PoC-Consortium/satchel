@@ -41,10 +41,11 @@ def _broadcast_leg_b(bob, chain, wallet, confs=1):
         chain.generate(confs, wallet)
 
 
-def test_adaptor_swap(h, late_refund=False):
+def test_adaptor_swap(h, late_refund=False, recovery=None):
     # auto_init=False: start seedless so setup_seed()'s createseed can run (the
     # default auto_init would create a seed on boot → createseed then conflicts).
-    alice = Party("ad-alice", h, h.workdir, "alice_btcx", "alice_btc", auto_init=False).start()
+    alice = Party("ad-alice", h, h.workdir, "alice_btcx", "alice_btc", auto_init=False,
+                  coin_confs={"btc": 3} if recovery == "shallow" else None).start()
     bob = Party("ad-bob", h, h.workdir, "bob_btcx", "bob_btc", auto_init=False).start()
     try:
         alice.setup_seed()
@@ -89,7 +90,7 @@ def test_adaptor_swap(h, late_refund=False):
 
         # Two-phase (spec §7): now that both hold verified adaptor sigs and leg A
         # is confirmed, the taker broadcasts its pre-built leg B.
-        _broadcast_leg_b(bob, h.btc, "bob_btc")
+        _broadcast_leg_b(bob, h.btc, "bob_btc", confs=3 if recovery == "shallow" else 1)
 
         # Funding outpoints, from the funding_ready bodies.
         a_txid, a_vout = fa["body"]["txid"], fa["body"]["vout"]   # leg A (PoCX)
@@ -97,6 +98,10 @@ def test_adaptor_swap(h, late_refund=False):
 
         # Alice redeems leg B (reveals t on chain); Bob extracts t, redeems A.
         alice.rpc("adaptorredeem", sid)
+        if recovery:
+            from framework.settlement import settlement_case
+            settlement_case(h, alice, bob, sid, True, recovery)
+            return
         h.btc.generate(1, "bob_btc")
         if late_refund:
             import sqlite3
@@ -156,7 +161,7 @@ def test_adaptor_swap(h, late_refund=False):
         drive_until(alice, lambda evs: any(e["action"] in ("adaptor-completed", "reconciled")
                                            for e in evs), tries=3)
         assert v2rec(alice)["state"] == "completed", v2rec(alice)
-        drive_until(bob, lambda evs: any(e["action"] == "settled" for e in evs), tries=3)
+        drive_until(bob, lambda evs: any(e["action"] in ("settled", "reconciled") for e in evs), tries=3)
         assert v2rec(bob)["settled"] is True
         for party in (alice, bob):
             events = party.tick()
@@ -830,7 +835,49 @@ class LateClaimAfterRefundV2(PactTestFramework):
         test_adaptor_swap(self.h, late_refund=True)
 
 
+class SettlementRecoveryParticipantConflictV2(PactTestFramework):
+    def run_test(self):
+        test_adaptor_swap(self.h, recovery="participant_conflict")
+
+
+class SettlementRecoveryInitiatorConflictV2(PactTestFramework):
+    def run_test(self):
+        test_adaptor_swap(self.h, recovery="initiator_conflict")
+
+
+class SettlementRecoveryEvictedRevealV2(PactTestFramework):
+    def run_test(self):
+        test_adaptor_swap(self.h, recovery="evicted")
+
+
+class SettlementRecoveryRevealOutageV2(PactTestFramework):
+    def run_test(self):
+        test_adaptor_swap(self.h, recovery="outage")
+
+
+class SettlementRecoveryFinalRevealV2(PactTestFramework):
+    def run_test(self):
+        test_adaptor_swap(self.h, recovery="final")
+
+
+class SettlementRecoveryShallowRevealV2(PactTestFramework):
+    def run_test(self):
+        test_adaptor_swap(self.h, recovery="shallow")
+
+
+class SettlementRecoveryLostRefundV2(PactTestFramework):
+    def run_test(self):
+        test_adaptor_swap(self.h, recovery="lost_refund")
+
+
 SCENARIOS = [
+    SettlementRecoveryParticipantConflictV2,
+    SettlementRecoveryInitiatorConflictV2,
+    SettlementRecoveryEvictedRevealV2,
+    SettlementRecoveryRevealOutageV2,
+    SettlementRecoveryFinalRevealV2,
+    SettlementRecoveryShallowRevealV2,
+    SettlementRecoveryLostRefundV2,
     ConflictedLegAIntent,
     LateClaimAfterRefundV2,
     AdaptorSwap,

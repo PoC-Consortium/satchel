@@ -1,0 +1,1669 @@
+[e2e] building pact workspace ...
+python :     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.24s
+In Zeile:2 Zeichen:49
++ ... FFERED='1'; python -X utf8 test_runner.py --rebuild-cache *> ../../do ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `d...get(s) in 0.24s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[e2e] building corkboard ...
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+
+================ framework_selftest.py ================
+
+===== PortRegistryMainnetSafe =====
+[selftest] registry OK (38 ports, 9737/9738 excluded)
+----- PortRegistryMainnetSafe PASSED (0s)
+
+===== PortAllocatorResets =====
+[selftest] allocator OK (base 19737, cap 19749)
+----- PortAllocatorResets PASSED (6s)
+
+===== BinaryResolver =====
+[selftest] resolver OK (5 binaries)
+----- BinaryResolver PASSED (0s)
+
+GREEN: all 3 scenario(s) pass.
+
+================ multimachine.py ================
+
+===== MultiMachinePartition =====
+[mm] data-dir lock OK (2nd pactd refused, exit 1)
+[mm] distinct machine labels OK (A=M-5505 B=M-2fe6)
+[mm] partition OK (swap ids + scopes distinct: 1989688579547004257 vs 1883927361077160624)
+----- MultiMachinePartition PASSED (1s)
+
+GREEN: all 1 scenario(s) pass.
+
+================ swap_v1.py ================
+
+===== SettlementRecoveryParticipantConflictV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryParticipantConflictV1-6w1y9zpp
+[cache] building funded regtest datadirs (one-time) ...
+[cache] datadir cache ready at C:\Code\Pocx\satchel\pact\harness\cache
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice on :19737
+[e2e] pactd up for bob on :19738
+[e2e] alice: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryParticipantConflictV1-6w1y9zpp\01_init.json
+[e2e] bob: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryParticipantConflictV1-6w1y9zpp\01_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryParticipantConflictV1-6w1y9zpp\01_accept.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryParticipantConflictV1-6w1y9zpp\01_accept.json
+[e2e] alice: pact-cli fund --swap 601f06e676807dc1 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryParticipantConflictV1-6w1y9zpp\01_funded_a.json
+[e2e] bob: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryParticipantConflictV1-6w1y9zpp\01_funded_a.json
+[e2e] bob: pact-cli fund --swap 601f06e676807dc1 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryParticipantConflictV1-6w1y9zpp\01_funded_b.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryParticipantConflictV1-6w1y9zpp\01_funded_b.json
+[e2e] alice: pact-cli redeem --swap 601f06e676807dc1
+[e2e]   scheduler[bob]: reconciled chain truth → Refunded: both legs settled on-chain (A Refund, B Redeem) (mixed redeem/refund — §7.4 window, check history); loss: counterparty claimed our funding and refunded our claim leg
+[e2e] settlement recovery v1 participant_conflict passed
+----- SettlementRecoveryParticipantConflictV1 PASSED (33s)
+
+===== SettlementRecoveryInitiatorConflictV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryInitiatorConflictV1-2en1pao2
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice on :19737
+[e2e] pactd up for bob on :19738
+[e2e] alice: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryInitiatorConflictV1-2en1pao2\01_init.json
+[e2e] bob: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryInitiatorConflictV1-2en1pao2\01_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryInitiatorConflictV1-2en1pao2\01_accept.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryInitiatorConflictV1-2en1pao2\01_accept.json
+[e2e] alice: pact-cli fund --swap 4397289c95f5d72c --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryInitiatorConflictV1-2en1pao2\01_funded_a.json
+[e2e] bob: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryInitiatorConflictV1-2en1pao2\01_funded_a.json
+[e2e] bob: pact-cli fund --swap 4397289c95f5d72c --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryInitiatorConflictV1-2en1pao2\01_funded_b.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryInitiatorConflictV1-2en1pao2\01_funded_b.json
+[e2e] alice: pact-cli redeem --swap 4397289c95f5d72c
+[e2e]   scheduler[alice]: auto-refund 57d12d505af4966d35aed170b059ec3fc4c99cf75f9d74f995572bcd132739d5
+[e2e]   scheduler[alice]: reconciled chain truth → Refunded: both legs settled on-chain (A Refund, B Refund)
+[e2e] settlement recovery v1 initiator_conflict passed
+----- SettlementRecoveryInitiatorConflictV1 PASSED (15s)
+
+===== SettlementRecoveryEvictedRevealV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryEvictedRevealV1-udtvfgpv
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice on :19737
+[e2e] pactd up for bob on :19738
+[e2e] alice: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryEvictedRevealV1-udtvfgpv\01_init.json
+[e2e] bob: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryEvictedRevealV1-udtvfgpv\01_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryEvictedRevealV1-udtvfgpv\01_accept.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryEvictedRevealV1-udtvfgpv\01_accept.json
+[e2e] alice: pact-cli fund --swap 845f4aa9ab96f76b --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryEvictedRevealV1-udtvfgpv\01_funded_a.json
+[e2e] bob: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryEvictedRevealV1-udtvfgpv\01_funded_a.json
+[e2e] bob: pact-cli fund --swap 845f4aa9ab96f76b --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryEvictedRevealV1-udtvfgpv\01_funded_b.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryEvictedRevealV1-udtvfgpv\01_funded_b.json
+[e2e] alice: pact-cli redeem --swap 845f4aa9ab96f76b
+[e2e]   scheduler[alice]: auto-refund 8d4ad134e7610ba7fd655b5365c3ab8f05bf3e4bb72b9e86c6ab661904c43251
+[e2e]   scheduler[alice]: settled 8d4ad134e7610ba7fd655b5365c3ab8f05bf3e4bb72b9e86c6ab661904c43251 2 deep — chain watch retired
+[e2e] settlement recovery v1 evicted passed
+----- SettlementRecoveryEvictedRevealV1 PASSED (15s)
+
+===== SettlementRecoveryRevealOutageV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryRevealOutageV1-lav3ga7w
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice on :19737
+[e2e] pactd up for bob on :19738
+[e2e] alice: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryRevealOutageV1-lav3ga7w\01_init.json
+[e2e] bob: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryRevealOutageV1-lav3ga7w\01_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryRevealOutageV1-lav3ga7w\01_accept.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryRevealOutageV1-lav3ga7w\01_accept.json
+[e2e] alice: pact-cli fund --swap e9b64bd6beefea97 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryRevealOutageV1-lav3ga7w\01_funded_a.json
+[e2e] bob: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryRevealOutageV1-lav3ga7w\01_funded_a.json
+[e2e] bob: pact-cli fund --swap e9b64bd6beefea97 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryRevealOutageV1-lav3ga7w\01_funded_b.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryRevealOutageV1-lav3ga7w\01_funded_b.json
+[e2e] alice: pact-cli redeem --swap e9b64bd6beefea97
+[e2e]   scheduler[alice]: auto-refund d0818041a7744d58182e38d93f6aa86f495dff5794eb7e8e4c39e93bb86863c9
+[e2e]   scheduler[alice]: settled d0818041a7744d58182e38d93f6aa86f495dff5794eb7e8e4c39e93bb86863c9 2 deep — chain watch retired
+[e2e] settlement recovery v1 outage passed
+----- SettlementRecoveryRevealOutageV1 PASSED (41s)
+
+===== SettlementRecoveryFinalRevealV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryFinalRevealV1-o_l_svt1
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice on :19737
+[e2e] pactd up for bob on :19738
+[e2e] alice: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryFinalRevealV1-o_l_svt1\01_init.json
+[e2e] bob: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryFinalRevealV1-o_l_svt1\01_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryFinalRevealV1-o_l_svt1\01_accept.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryFinalRevealV1-o_l_svt1\01_accept.json
+[e2e] alice: pact-cli fund --swap 21a07c861b52e9fe --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryFinalRevealV1-o_l_svt1\01_funded_a.json
+[e2e] bob: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryFinalRevealV1-o_l_svt1\01_funded_a.json
+[e2e] bob: pact-cli fund --swap 21a07c861b52e9fe --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryFinalRevealV1-o_l_svt1\01_funded_b.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryFinalRevealV1-o_l_svt1\01_funded_b.json
+[e2e] alice: pact-cli redeem --swap 21a07c861b52e9fe
+[e2e]   scheduler[alice]: completed 2ddde79ac6c192a3df39bf1ea83d48b0a2890c9a70c1c90881398f0e8316d6a9
+[e2e] settlement recovery v1 final passed
+----- SettlementRecoveryFinalRevealV1 PASSED (13s)
+
+===== SettlementRecoveryShallowRevealV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryShallowRevealV1-q0ity192
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice on :19737
+[e2e] pactd up for bob on :19738
+[e2e] alice: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryShallowRevealV1-q0ity192\01_init.json
+[e2e] bob: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryShallowRevealV1-q0ity192\01_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryShallowRevealV1-q0ity192\01_accept.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryShallowRevealV1-q0ity192\01_accept.json
+[e2e] alice: pact-cli fund --swap 639b0ab39b9b3617 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryShallowRevealV1-q0ity192\01_funded_a.json
+[e2e] bob: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryShallowRevealV1-q0ity192\01_funded_a.json
+[e2e] bob: pact-cli fund --swap 639b0ab39b9b3617 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryShallowRevealV1-q0ity192\01_funded_b.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryShallowRevealV1-q0ity192\01_funded_b.json
+[e2e] alice: pact-cli redeem --swap 639b0ab39b9b3617
+[e2e]   scheduler[alice]: auto-refund e31e1d30681921ff269112f48cd04af1265b1bb150c45331a699d2bb0002f5cd
+[e2e]   scheduler[alice]: settled e31e1d30681921ff269112f48cd04af1265b1bb150c45331a699d2bb0002f5cd 2 deep — chain watch retired
+[e2e] settlement recovery v1 shallow passed
+----- SettlementRecoveryShallowRevealV1 PASSED (13s)
+
+===== SettlementRecoveryLostRefundV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryLostRefundV1-dab29jj8
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice on :19737
+[e2e] pactd up for bob on :19738
+[e2e] alice: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryLostRefundV1-dab29jj8\01_init.json
+[e2e] bob: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryLostRefundV1-dab29jj8\01_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryLostRefundV1-dab29jj8\01_accept.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryLostRefundV1-dab29jj8\01_accept.json
+[e2e] alice: pact-cli fund --swap 342320345129d662 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryLostRefundV1-dab29jj8\01_funded_a.json
+[e2e] bob: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryLostRefundV1-dab29jj8\01_funded_a.json
+[e2e] bob: pact-cli fund --swap 342320345129d662 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryLostRefundV1-dab29jj8\01_funded_b.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryLostRefundV1-dab29jj8\01_funded_b.json
+[e2e] alice: pact-cli redeem --swap 342320345129d662
+[e2e]   scheduler[alice]: reconciled chain truth → Completed: both legs settled on-chain (A Redeem, B Redeem)
+[e2e] settlement recovery v1 lost_refund passed
+----- SettlementRecoveryLostRefundV1 PASSED (15s)
+
+===== LateClaimAfterRefundV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-LateClaimAfterRefundV1-cc6uzt0x
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice on :19737
+[e2e] pactd up for bob on :19738
+[e2e] alice: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-LateClaimAfterRefundV1-cc6uzt0x\01_init.json
+[e2e] bob: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-LateClaimAfterRefundV1-cc6uzt0x\01_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-LateClaimAfterRefundV1-cc6uzt0x\01_accept.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-LateClaimAfterRefundV1-cc6uzt0x\01_accept.json
+[e2e] alice: pact-cli fund --swap 0395df69d01259b6 --out C:\Users\Johnny\AppData\Local\Temp\pact-LateClaimAfterRefundV1-cc6uzt0x\01_funded_a.json
+[e2e] bob: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-LateClaimAfterRefundV1-cc6uzt0x\01_funded_a.json
+[e2e] bob: pact-cli fund --swap 0395df69d01259b6 --out C:\Users\Johnny\AppData\Local\Temp\pact-LateClaimAfterRefundV1-cc6uzt0x\01_funded_b.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-LateClaimAfterRefundV1-cc6uzt0x\01_funded_b.json
+[e2e] alice: pact-cli redeem --swap 0395df69d01259b6
+[e2e] alice: pact-cli refund --swap 0395df69d01259b6
+[e2e] bob: pact-cli redeem --swap 0395df69d01259b6
+[e2e] correctly rejected: already refunded leg A
+[e2e]   scheduler[alice]: reconciled chain truth → Completed: both legs settled on-chain (A Refund, B Redeem) (mixed redeem/refund — §7.4 window, check history)
+[e2e]   scheduler[bob]: reconciled chain truth → Refunded: both legs settled on-chain (A Refund, B Redeem) (mixed redeem/refund — §7.4 window, check history); loss: counterparty claimed our funding and refunded our claim leg
+[e2e] late losing claim stayed out of Completed; refund retry used chain A
+----- LateClaimAfterRefundV1 PASSED (13s)
+
+===== BroadcastRecoveryV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-BroadcastRecoveryV1-7x9r6idg
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for wal-alice on :19737
+[e2e] pactd up for wal-bob on :19738
+[e2e] wal-alice: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-BroadcastRecoveryV1-7x9r6idg\wal-init.json
+[e2e] wal-bob: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-BroadcastRecoveryV1-7x9r6idg\wal-init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-BroadcastRecoveryV1-7x9r6idg\wal-accept.json
+[e2e] wal-alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-BroadcastRecoveryV1-7x9r6idg\wal-accept.json
+[e2e] wal-alice: pact-cli fund --swap 85a0b4159280fc07 --out C:\Users\Johnny\AppData\Local\Temp\pact-BroadcastRecoveryV1-7x9r6idg\wal-fa.json
+[e2e] pactd up for wal-alice on :19737
+[e2e] wal-alice: pact-cli fund --swap 85a0b4159280fc07 --out C:\Users\Johnny\AppData\Local\Temp\pact-BroadcastRecoveryV1-7x9r6idg\wal-fa.json
+[e2e] wal-bob: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-BroadcastRecoveryV1-7x9r6idg\wal-fa.json
+[e2e] wal-bob: pact-cli fund --swap 85a0b4159280fc07 --out C:\Users\Johnny\AppData\Local\Temp\pact-BroadcastRecoveryV1-7x9r6idg\wal-fb.json
+[e2e] wal-alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-BroadcastRecoveryV1-7x9r6idg\wal-fb.json
+[e2e] wal-alice: pact-cli redeem --swap 85a0b4159280fc07
+[e2e] pactd up for wal-alice on :19737
+[e2e]   scheduler[wal-alice]: claim-recovered resumed confirmation and fee management for our prior claim
+[e2e] wal-bob: pact-cli redeem --swap 85a0b4159280fc07
+[e2e] recovered ambiguous funding, lost claim write and late claim
+----- BroadcastRecoveryV1 PASSED (14s)
+
+===== CompleteSwap =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-CompleteSwap-n2d3in2a
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice on :19737
+[e2e] pactd up for bob on :19738
+[e2e] alice: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-CompleteSwap-n2d3in2a\01_init.json
+[e2e] bob: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-CompleteSwap-n2d3in2a\01_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-CompleteSwap-n2d3in2a\01_accept.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-CompleteSwap-n2d3in2a\01_accept.json
+[e2e] alice: pact-cli fund --swap 58d1427cb9cccec0 --out C:\Users\Johnny\AppData\Local\Temp\pact-CompleteSwap-n2d3in2a\01_funded_a.json
+[e2e] bob: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-CompleteSwap-n2d3in2a\01_funded_a.json
+[e2e] bob: pact-cli fund --swap 58d1427cb9cccec0 --out C:\Users\Johnny\AppData\Local\Temp\pact-CompleteSwap-n2d3in2a\01_funded_b.json
+[e2e] alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-CompleteSwap-n2d3in2a\01_funded_b.json
+[e2e] alice: pact-cli redeem --swap 58d1427cb9cccec0
+[e2e] bob: pact-cli redeem --swap 58d1427cb9cccec0
+[e2e] complete-swap scenario OK
+----- CompleteSwap PASSED (11s)
+
+===== Refund =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-Refund-7auz9mvy
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice2 on :19737
+[e2e] pactd up for bob2 on :19738
+[e2e] alice2: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-Refund-7auz9mvy\11_init.json
+[e2e] bob2: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-Refund-7auz9mvy\11_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-Refund-7auz9mvy\11_accept.json
+[e2e] alice2: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-Refund-7auz9mvy\11_accept.json
+[e2e] alice2: pact-cli fund --swap 4ed07bb78111959a --out C:\Users\Johnny\AppData\Local\Temp\pact-Refund-7auz9mvy\11_funded_a.json
+[e2e] bob2: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-Refund-7auz9mvy\11_funded_a.json
+[e2e] bob2: pact-cli fund --swap 4ed07bb78111959a --out C:\Users\Johnny\AppData\Local\Temp\pact-Refund-7auz9mvy\11_funded_b.json
+[e2e] bob2: pact-cli refund --swap 4ed07bb78111959a
+[e2e] correctly rejected: premature Bob refund
+[e2e] alice2: pact-cli refund --swap 4ed07bb78111959a
+[e2e] correctly rejected: premature Alice refund
+[e2e] alice2: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-Refund-7auz9mvy\11_funded_b.json
+[e2e] alice2: pact-cli redeem --swap 4ed07bb78111959a
+[e2e] correctly rejected: late Alice redeem past T2
+[e2e] bob2: pact-cli refund --swap 4ed07bb78111959a
+[e2e] alice2: pact-cli refund --swap 4ed07bb78111959a
+[e2e] refund scenario OK
+----- Refund PASSED (13s)
+
+===== DaemonAutopilotSwap =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-DaemonAutopilotSwap-fp51ehwf
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice3 on :19737
+[e2e] pactd up for bob3 on :19738
+[e2e] correctly rejected: JSON-RPC call without cookie
+[e2e] wallet RPCs OK (balance/receive/send + chain guard)
+[e2e] bob3: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-DaemonAutopilotSwap-fp51ehwf\21_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-DaemonAutopilotSwap-fp51ehwf\22_accept.json
+[e2e] bob3: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-DaemonAutopilotSwap-fp51ehwf\23_funded_a.json
+[e2e] bob3: pact-cli fund --swap c6ecae891c39cc2e --out C:\Users\Johnny\AppData\Local\Temp\pact-DaemonAutopilotSwap-fp51ehwf\24_funded_b.json
+[e2e]   scheduler[alice3]: auto-redeem 4bf86f355165581bb2fec748476615edeb5907866c4379408133d6f1362a750a
+[e2e]   scheduler[alice3]: fee-bump 8e3ce6b84511ab55dd19cb11fb9d723a04d44fcfb7f561c525e963e581ec4835 (fee 155 -> 1550 sat, 1.000 -> 10.000 sat/vB)
+[e2e]   scheduler[bob3]: auto-redeem 99e3eedb210a468ff42e8d34a1eef06723d39f0c76545ca622c4a57f0d898ad3
+[e2e]   scheduler[alice3]: completed 8e3ce6b84511ab55dd19cb11fb9d723a04d44fcfb7f561c525e963e581ec4835
+[e2e]   scheduler[bob3]: reconciled chain truth → Completed: both legs settled on-chain (A Redeem, B Redeem)
+[e2e] daemon-autopilot swap scenario OK
+----- DaemonAutopilotSwap PASSED (12s)
+
+===== DaemonAutopilotRefund =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-DaemonAutopilotRefund-qeug1mtp
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice4 on :19737
+[e2e] pactd up for bob4 on :19738
+[e2e] alice4: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-DaemonAutopilotRefund-qeug1mtp\31_init.json
+[e2e] bob4: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-DaemonAutopilotRefund-qeug1mtp\31_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-DaemonAutopilotRefund-qeug1mtp\31_accept.json
+[e2e] alice4: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-DaemonAutopilotRefund-qeug1mtp\31_accept.json
+[e2e] alice4: pact-cli fund --swap 015a1b7296df3e33 --out C:\Users\Johnny\AppData\Local\Temp\pact-DaemonAutopilotRefund-qeug1mtp\31_funded_a.json
+[e2e] bob4: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-DaemonAutopilotRefund-qeug1mtp\31_funded_a.json
+[e2e] bob4: pact-cli fund --swap 015a1b7296df3e33 --out C:\Users\Johnny\AppData\Local\Temp\pact-DaemonAutopilotRefund-qeug1mtp\31_funded_b.json
+[e2e]   scheduler[bob4]: auto-refund ffbf0604ad217475304bedc5031805fa7228ffb7e37d53945853b0b1ca60fcec
+[e2e]   scheduler[alice4]: auto-refund c5129b2ac1af1832d424f64caca7d88ade0f1eceecdf4451e1803e649e18dc56
+[e2e]   scheduler[bob4]: settled ffbf0604ad217475304bedc5031805fa7228ffb7e37d53945853b0b1ca60fcec 2 deep — chain watch retired
+[e2e]   scheduler[alice4]: settled c5129b2ac1af1832d424f64caca7d88ade0f1eceecdf4451e1803e649e18dc56 2 deep — chain watch retired
+[e2e] daemon-autopilot refund scenario OK
+----- DaemonAutopilotRefund PASSED (14s)
+
+===== ChainWatchedFunding =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-ChainWatchedFunding-b79hjni_
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alicecw on :19737
+[e2e] pactd up for bobcw on :19738
+[e2e] alicecw: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-ChainWatchedFunding-b79hjni_\cw_init.json
+[e2e] bobcw: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-ChainWatchedFunding-b79hjni_\cw_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-ChainWatchedFunding-b79hjni_\cw_accept.json
+[e2e] alicecw: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-ChainWatchedFunding-b79hjni_\cw_accept.json
+[e2e] alicecw: pact-cli fund --swap e08d9a9e9671ab97 --out C:\Users\Johnny\AppData\Local\Temp\pact-ChainWatchedFunding-b79hjni_\cw_funded_a.json
+[e2e]   scheduler[bobcw]: funded-a chain-A HTLC confirmed; ready to fund chain B
+[e2e] bobcw: pact-cli fund --swap e08d9a9e9671ab97 --out C:\Users\Johnny\AppData\Local\Temp\pact-ChainWatchedFunding-b79hjni_\cw_funded_b.json
+[e2e]   scheduler[alicecw]: funded-b chain-B HTLC confirmed (chain-watched)
+[e2e]   scheduler[alicecw]: auto-redeem cd35c73a452ff6e631b996ff2790129e5bb13eb1effb331a8ac303441b5504ce
+[e2e]   scheduler[bobcw]: auto-redeem cc453ec1a73064c0e91c40ca7cda2f1d29c6c350cbdf216fba50a0b16d05a5ff
+[e2e] chain-watched funding (no funded messages) scenario OK
+----- ChainWatchedFunding PASSED (12s)
+
+===== FundingFeeBumpV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-FundingFeeBumpV1-ndha_qv2
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alicefb on :19737
+[e2e] pactd up for bobfb on :19738
+[e2e] alicefb: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-FundingFeeBumpV1-ndha_qv2\fb_init.json
+[e2e] bobfb: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-FundingFeeBumpV1-ndha_qv2\fb_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-FundingFeeBumpV1-ndha_qv2\fb_accept.json
+[e2e] alicefb: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-FundingFeeBumpV1-ndha_qv2\fb_accept.json
+[e2e] alicefb: pact-cli fund --swap 6bbb5cd4d18c3258 --out C:\Users\Johnny\AppData\Local\Temp\pact-FundingFeeBumpV1-ndha_qv2\fb_funded_a.json
+[e2e]   scheduler[alicefb]: funding-fee-bump leg a: d9b0953eda6d30cae2a98353ca3f6af9b8b1cc56c5602735c72cb9df1b2d5e19 (funding 1.000 -> 3.000 sat/vB)
+[e2e] funding bumped: leg a: d9b0953eda6d30cae2a98353ca3f6af9b8b1cc56c5602735c72cb9df1b2d5e19 (funding 1.000 -> 3.000 sat/vB)
+[e2e] funding RBF: 3bbecc301543… replaced by d9b0953eda6d…
+[e2e]   scheduler[bobfb]: funded-a chain-A HTLC confirmed; ready to fund chain B
+[e2e] bobfb: pact-cli fund --swap 6bbb5cd4d18c3258 --out C:\Users\Johnny\AppData\Local\Temp\pact-FundingFeeBumpV1-ndha_qv2\fb_funded_b.json
+[e2e]   scheduler[alicefb]: funded-b chain-B HTLC confirmed (chain-watched)
+[e2e]   scheduler[alicefb]: auto-redeem 31d163063dfd52520acfabf9c51fe5b6abbbd9ddbdebdeab0913546ddcf97bcf
+[e2e]   scheduler[bobfb]: auto-redeem e9b31c28b551cbd1f85154f5e70419cc6f7e963367aa2a2ad032bbab9bde6c29
+[e2e] funding-fee-bump (v1 RBF) scenario OK
+----- FundingFeeBumpV1 PASSED (12s)
+
+===== FundingRbfPointerResync =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-FundingRbfPointerResync-ffjon575
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alicers on :19737
+[e2e] pactd up for bobrs on :19738
+[e2e] alicers: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-FundingRbfPointerResync-ffjon575\rs_init.json
+[e2e] bobrs: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-FundingRbfPointerResync-ffjon575\rs_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-FundingRbfPointerResync-ffjon575\rs_accept.json
+[e2e] alicers: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-FundingRbfPointerResync-ffjon575\rs_accept.json
+[e2e] alicers: pact-cli fund --swap 92a5ac9bd14f3334 --out C:\Users\Johnny\AppData\Local\Temp\pact-FundingRbfPointerResync-ffjon575\rs_funded_a.json
+[e2e]   scheduler[alicers]: funding-pointer-resync leg a: 43a0d8fa3114a099e84d54a62a18e4d8b7d69ba2af22849518c818e10b3fb518:0 -> 06548e6c52edb20c26c884a5a44864275ad37ebf6e78c3e4fffb5dbd91d0a5ed:1 (stale post-RBF pointer healed; refund re-signed)
+[e2e] pointer healed: leg a: 43a0d8fa3114a099e84d54a62a18e4d8b7d69ba2af22849518c818e10b3fb518:0 -> 06548e6c52edb20c26c884a5a44864275ad37ebf6e78c3e4fffb5dbd91d0a5ed:1 (stale post-RBF pointer healed; refund re-signed)
+[e2e]   scheduler[bobrs]: funded-a chain-A HTLC confirmed; ready to fund chain B
+[e2e] bobrs: pact-cli fund --swap 92a5ac9bd14f3334 --out C:\Users\Johnny\AppData\Local\Temp\pact-FundingRbfPointerResync-ffjon575\rs_funded_b.json
+[e2e]   scheduler[alicers]: funded-b chain-B HTLC confirmed (chain-watched)
+[e2e]   scheduler[alicers]: auto-redeem 6811be0f618202f405b6135b98cfd4c6053f2f94e31df2a09dafcf22b0646fd7
+[e2e]   scheduler[bobrs]: auto-redeem 9f7b64174a2ef2af0520f5abfb9f75ef8a91c7aad211c712d7b10e31f0f5ae86
+[e2e] funding-RBF pointer-resync scenario OK
+----- FundingRbfPointerResync PASSED (12s)
+
+===== TakerDisplayFollowsRbf =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-TakerDisplayFollowsRbf-i3_l2f0p
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alicetd on :19737
+[e2e] pactd up for bobtd on :19738
+[e2e] alicetd: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-TakerDisplayFollowsRbf-i3_l2f0p\td_init.json
+[e2e] bobtd: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-TakerDisplayFollowsRbf-i3_l2f0p\td_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-TakerDisplayFollowsRbf-i3_l2f0p\td_accept.json
+[e2e] alicetd: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-TakerDisplayFollowsRbf-i3_l2f0p\td_accept.json
+[e2e] alicetd: pact-cli fund --swap 2481b7f2e982b9e0 --out C:\Users\Johnny\AppData\Local\Temp\pact-TakerDisplayFollowsRbf-i3_l2f0p\td_funded_a.json
+[e2e] bobtd: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-TakerDisplayFollowsRbf-i3_l2f0p\td_funded_a.json
+[e2e] taker dock follows the RBF replacement (no frozen 0/n)
+[e2e]   scheduler[bobtd]: funded-a chain-A HTLC confirmed; ready to fund chain B
+[e2e] bobtd: pact-cli fund --swap 2481b7f2e982b9e0 --out C:\Users\Johnny\AppData\Local\Temp\pact-TakerDisplayFollowsRbf-i3_l2f0p\td_funded_b.json
+[e2e]   scheduler[alicetd]: funding-pointer-resync leg a: 7d813c95e47d738648b071c53f1193ec11af46405ee36d9a4fbe91d734232d79:1 -> 344b20eaabcff85cea2a8ffaa69e16f7220b0e7474f5258dae1834c8d6ad3b7b:1 (stale post-RBF pointer healed; refund re-signed)
+[e2e]   scheduler[alicetd]: funded-b chain-B HTLC confirmed (chain-watched)
+[e2e]   scheduler[alicetd]: auto-redeem 522a9f54fda16b0d420eddc42732d645e24cfa840a0640d789525d6ef164ee7f
+[e2e]   scheduler[bobtd]: auto-redeem f53920f51ec0d21bd119acb21dc3b9e1b9dab486ab40cd92c80a05d3c4f471ca
+[e2e] taker-display-follows-RBF scenario OK
+----- TakerDisplayFollowsRbf PASSED (12s)
+
+===== SettlementRbfRaceRedeem =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRedeem-yfvwwltl
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice_sr on :19737
+[e2e] pactd up for bob_sr on :19738
+[e2e] alice_sr: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRedeem-yfvwwltl\71_init.json
+[e2e] bob_sr: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRedeem-yfvwwltl\71_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRedeem-yfvwwltl\71_accept.json
+[e2e] alice_sr: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRedeem-yfvwwltl\71_accept.json
+[e2e] alice_sr: pact-cli fund --swap eaee17aa154e7731 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRedeem-yfvwwltl\71_funded_a.json
+[e2e] bob_sr: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRedeem-yfvwwltl\71_funded_a.json
+[e2e] bob_sr: pact-cli fund --swap eaee17aa154e7731 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRedeem-yfvwwltl\71_funded_b.json
+[e2e] alice_sr: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRedeem-yfvwwltl\71_funded_b.json
+[e2e]   scheduler[alice_sr]: auto-redeem 1edf0262b5a20a63869d8c9af87b3e5758c7373bbb63bd4339fdbb4f15c4ba94
+[e2e]   scheduler[alice_sr]: fee-bump f78da7f1b66ac743ab536bcb2e4c14d2d35d38f8e7ba1ccdc447fdf1d69348b5 (fee 155 -> 1550 sat, 1.000 -> 10.000 sat/vB)
+[e2e]   scheduler[alice_sr]: settlement-pointer-heal f78da7f1b66ac743ab536bcb2e4c14d2d35d38f8e7ba1ccdc447fdf1d69348b5 -> 1edf0262b5a20a63869d8c9af87b3e5758c7373bbb63bd4339fdbb4f15c4ba94 (our settlement won the RBF race under the replaced txid; confirmation watch repointed)
+[e2e]   scheduler[alice_sr]: completed 1edf0262b5a20a63869d8c9af87b3e5758c7373bbb63bd4339fdbb4f15c4ba94
+[e2e]   scheduler[bob_sr]: auto-redeem d3c5339a81842721917a6c21d7a450c8aed957002a15fc98b6912ca319d77404
+[e2e] settlement RBF race (redeem) scenario OK
+----- SettlementRbfRaceRedeem PASSED (12s)
+
+===== SettlementRbfRaceRefund =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRefund-u_n67e79
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice_srr on :19737
+[e2e] pactd up for bob_srr on :19738
+[e2e] alice_srr: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRefund-u_n67e79\72_init.json
+[e2e] bob_srr: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRefund-u_n67e79\72_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRefund-u_n67e79\72_accept.json
+[e2e] alice_srr: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRefund-u_n67e79\72_accept.json
+[e2e] alice_srr: pact-cli fund --swap aaede878de658c98 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRefund-u_n67e79\72_funded_a.json
+[e2e] bob_srr: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRefund-u_n67e79\72_funded_a.json
+[e2e] bob_srr: pact-cli fund --swap aaede878de658c98 --out C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRbfRaceRefund-u_n67e79\72_funded_b.json
+[e2e]   scheduler[bob_srr]: auto-refund c03ca8c2eb5bd0aacc7e84bccf8c4ce21834ae6ab65ee94cf774126587056ecc
+[e2e]   scheduler[bob_srr]: fee-bump 8c4e0461631c7dc47d2f819c808da393a5f357ab5514edd83e8d2366300cc19a (fee 146 -> 1460 sat, 1.000 -> 10.000 sat/vB)
+[e2e]   scheduler[bob_srr]: settlement-pointer-heal 8c4e0461631c7dc47d2f819c808da393a5f357ab5514edd83e8d2366300cc19a -> c03ca8c2eb5bd0aacc7e84bccf8c4ce21834ae6ab65ee94cf774126587056ecc (our settlement won the RBF race under the replaced txid; confirmation watch repointed)
+[e2e]   scheduler[alice_srr]: auto-refund a34774543ce0627291b152fba234f3a6fafe933f627d557a006a4d33c1512cf1
+[e2e] settlement RBF race (refund) scenario OK
+----- SettlementRbfRaceRefund PASSED (13s)
+
+===== SiblingFundingQueueV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SiblingFundingQueueV1-la0dohsv
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice_sq on :19737
+[e2e] pactd up for bob_sq on :19738
+[e2e] alice_sq: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314245 --t2 1789307045 --out C:\Users\Johnny\AppData\Local\Temp\pact-SiblingFundingQueueV1-la0dohsv\81_init.json
+[e2e] bob_sq: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-SiblingFundingQueueV1-la0dohsv\81_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-SiblingFundingQueueV1-la0dohsv\81_accept.json
+[e2e] alice_sq: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SiblingFundingQueueV1-la0dohsv\81_accept.json
+[e2e] alice_sq: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314245 --t2 1789307045 --out C:\Users\Johnny\AppData\Local\Temp\pact-SiblingFundingQueueV1-la0dohsv\82_init.json
+[e2e] bob_sq: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-SiblingFundingQueueV1-la0dohsv\82_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-SiblingFundingQueueV1-la0dohsv\82_accept.json
+[e2e] alice_sq: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-SiblingFundingQueueV1-la0dohsv\82_accept.json
+[e2e]   scheduler[alice_sq]: auto-fund retried chain-A funding
+[e2e]   scheduler[alice_sq]: funding-queued chain A: funding queued: 5000000000 sat needed and confirmed coins are short, but total spendable 6999999835 sat covers it — waiting for our own change to confirm (fundings spend confirmed coins only)
+[e2e]   scheduler[alice_sq]: funding-queued chain A: funding queued: 5000000000 sat needed and confirmed coins are short, but total spendable 6999999835 sat covers it — waiting for our own change to confirm (fundings spend confirmed coins only)
+[e2e]   scheduler[alice_sq]: funding-fee-bump leg a: 6233f367366d435409c9bc144f8b59d4c5d364c87ef7562207905ca4fd902506 (funding 1.000 -> 3.000 sat/vB)
+[e2e]   scheduler[alice_sq]: funding-queued chain A: funding queued: 5000000000 sat needed and confirmed coins are short, but total spendable 6999999505 sat covers it — waiting for our own change to confirm (fundings spend confirmed coins only)
+[e2e]   scheduler[alice_sq]: auto-fund retried chain-A funding
+[e2e]   scheduler[bob_sq]: auto-fund chain-A confirmed; funded chain B
+[e2e]   scheduler[alice_sq]: funded-b chain-B HTLC confirmed (chain-watched)
+[e2e]   scheduler[bob_sq]: auto-fund chain-A confirmed; funded chain B
+[e2e]   scheduler[alice_sq]: auto-redeem b0262989e5dbac182468a8f41a8b6f26bd0dd6319ceba44b212dc5a81ec46268
+[e2e]   scheduler[alice_sq]: funded-b chain-B HTLC confirmed (chain-watched)
+[e2e]   scheduler[bob_sq]: auto-redeem 0dae365fc23fc201b4f45a988831709d76604b01a17d5908b2ab0131cb70c447
+[e2e]   scheduler[alice_sq]: completed b0262989e5dbac182468a8f41a8b6f26bd0dd6319ceba44b212dc5a81ec46268
+[e2e]   scheduler[alice_sq]: auto-redeem 824d11c97dc4924a5ac9b8f04ca949aac760d769a9ff08b734706e290a8ddd3d
+[e2e]   scheduler[bob_sq]: settled 0dae365fc23fc201b4f45a988831709d76604b01a17d5908b2ab0131cb70c447 1 deep — chain watch retired
+[e2e]   scheduler[bob_sq]: auto-redeem 00a04975eb441acd8643c876acfabc9f0c0c2623ce7e0890fb334921e97a35c2
+[e2e]   scheduler[alice_sq]: completed 824d11c97dc4924a5ac9b8f04ca949aac760d769a9ff08b734706e290a8ddd3d
+[e2e]   scheduler[bob_sq]: settled 00a04975eb441acd8643c876acfabc9f0c0c2623ce7e0890fb334921e97a35c2 1 deep — chain watch retired
+[e2e] sibling funding queue scenario OK
+----- SiblingFundingQueueV1 PASSED (27s)
+
+===== RefundSurvivesOtherChainOutage =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-RefundSurvivesOtherChainOutage-w9l41tli
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice-oc on :19737
+[e2e] pactd up for bob-oc on :19738
+[e2e] alice-oc: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-RefundSurvivesOtherChainOutage-w9l41tli\oc_init.json
+[e2e] bob-oc: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-RefundSurvivesOtherChainOutage-w9l41tli\oc_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-RefundSurvivesOtherChainOutage-w9l41tli\oc_accept.json
+[e2e] alice-oc: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-RefundSurvivesOtherChainOutage-w9l41tli\oc_accept.json
+[e2e] alice-oc: pact-cli fund --swap 0bb8733ecfa1a2eb --out C:\Users\Johnny\AppData\Local\Temp\pact-RefundSurvivesOtherChainOutage-w9l41tli\oc_funded_a.json
+[e2e] bob-oc: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-RefundSurvivesOtherChainOutage-w9l41tli\oc_funded_a.json
+[e2e] bob-oc: pact-cli fund --swap 0bb8733ecfa1a2eb --out C:\Users\Johnny\AppData\Local\Temp\pact-RefundSurvivesOtherChainOutage-w9l41tli\oc_funded_b.json
+[e2e]   scheduler[alice-oc]: auto-refund 7b6a98ddfe19e17c5a5eebd3e9806daa5d9a2a335a809641f2ae90d9d9c39fb0
+[e2e] leg-A refund fired with chain B unreachable
+----- RefundSurvivesOtherChainOutage PASSED (31s)
+
+===== V1SwapLtcLegB =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-V1SwapLtcLegB-3i_foeoi
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] ltc node up (rpc :19643)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for v1ltc-alice on :19737
+[e2e] pactd up for v1ltc-bob on :19738
+[e2e] v1ltc-alice: pact-cli offer --give btcx:50.0 --get ltc:0.5 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-V1SwapLtcLegB-3i_foeoi\ltc_init.json
+[e2e] v1ltc-bob: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-V1SwapLtcLegB-3i_foeoi\ltc_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-V1SwapLtcLegB-3i_foeoi\ltc_accept.json
+[e2e] v1ltc-alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-V1SwapLtcLegB-3i_foeoi\ltc_accept.json
+[e2e] v1ltc-alice: pact-cli fund --swap 9a6d45a94d2dfe1f --out C:\Users\Johnny\AppData\Local\Temp\pact-V1SwapLtcLegB-3i_foeoi\ltc_funded_a.json
+[e2e] v1ltc-bob: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-V1SwapLtcLegB-3i_foeoi\ltc_funded_a.json
+[e2e] v1ltc-bob: pact-cli fund --swap 9a6d45a94d2dfe1f --out C:\Users\Johnny\AppData\Local\Temp\pact-V1SwapLtcLegB-3i_foeoi\ltc_funded_b.json
+[e2e] v1ltc-alice: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-V1SwapLtcLegB-3i_foeoi\ltc_funded_b.json
+[e2e] v1ltc-alice: pact-cli redeem --swap 9a6d45a94d2dfe1f
+[e2e] v1ltc-bob: pact-cli redeem --swap 9a6d45a94d2dfe1f
+[e2e] v1 swap with LTC leg B OK (confirmed-input fallback on litecoind)
+----- V1SwapLtcLegB PASSED (14s)
+
+===== FundingBumpDescendantBelt =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-FundingBumpDescendantBelt-sfgkqmbk
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice_db on :19737
+[e2e] pactd up for bob_db on :19738
+[e2e] alice_db: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314245 --t2 1789307045 --out C:\Users\Johnny\AppData\Local\Temp\pact-FundingBumpDescendantBelt-sfgkqmbk\85_init.json
+[e2e] bob_db: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-FundingBumpDescendantBelt-sfgkqmbk\85_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-FundingBumpDescendantBelt-sfgkqmbk\85_accept.json
+[e2e] alice_db: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-FundingBumpDescendantBelt-sfgkqmbk\85_accept.json
+[e2e]   scheduler[alice_db]: auto-fund retried chain-A funding
+[e2e]   scheduler[alice_db]: funding-bump-skipped-descendants leg a: RPC error -8: Transaction has descendants in the wallet
+[e2e]   scheduler[bob_db]: auto-fund chain-A confirmed; funded chain B
+[e2e]   scheduler[alice_db]: funded-b chain-B HTLC confirmed (chain-watched)
+[e2e]   scheduler[alice_db]: auto-redeem 50dfc37dcf6ab54accfd5fb9b6b3e56f8f64054a551f9f214d4cc211526b759f
+[e2e]   scheduler[bob_db]: auto-redeem c692ea72a61123068087b8f02f6c1b9d034c722beb9c55e840de83e7477c9f8a
+[e2e]   scheduler[alice_db]: completed 50dfc37dcf6ab54accfd5fb9b6b3e56f8f64054a551f9f214d4cc211526b759f
+[e2e]   scheduler[bob_db]: settled c692ea72a61123068087b8f02f6c1b9d034c722beb9c55e840de83e7477c9f8a 1 deep — chain watch retired
+[e2e] funding-bump descendant belt scenario OK
+----- FundingBumpDescendantBelt PASSED (13s)
+
+===== BalanceValidation =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-BalanceValidation-cu0n67i7
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alicebal on :19737
+[e2e] alicebal: pact-cli board post --give btcx:1000000.0 --get btc:0.001
+[e2e] correctly rejected: over-balance offer
+[e2e] balance-validation scenario OK
+----- BalanceValidation PASSED (7s)
+
+===== CreateImportThenSwap =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-CreateImportThenSwap-45klk8p0
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice6 on :19737
+[e2e] pactd up for bob6 on :19738
+[e2e] alice6: pact-cli offer --give btcx:50.0 --get btc:0.001 --t1 1789314128 --t2 1789306928 --out C:\Users\Johnny\AppData\Local\Temp\pact-CreateImportThenSwap-45klk8p0\61_init.json
+[e2e] bob6: pact-cli accept --in C:\Users\Johnny\AppData\Local\Temp\pact-CreateImportThenSwap-45klk8p0\61_init.json --out C:\Users\Johnny\AppData\Local\Temp\pact-CreateImportThenSwap-45klk8p0\61_accept.json
+[e2e] alice6: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-CreateImportThenSwap-45klk8p0\61_accept.json
+[e2e] alice6: pact-cli fund --swap c6d7bd079bcbfdfe --out C:\Users\Johnny\AppData\Local\Temp\pact-CreateImportThenSwap-45klk8p0\61_funded_a.json
+[e2e] bob6: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-CreateImportThenSwap-45klk8p0\61_funded_a.json
+[e2e] bob6: pact-cli fund --swap c6d7bd079bcbfdfe --out C:\Users\Johnny\AppData\Local\Temp\pact-CreateImportThenSwap-45klk8p0\61_funded_b.json
+[e2e] alice6: pact-cli recv --in C:\Users\Johnny\AppData\Local\Temp\pact-CreateImportThenSwap-45klk8p0\61_funded_b.json
+[e2e] alice6: pact-cli redeem --swap c6d7bd079bcbfdfe
+[e2e] bob6: pact-cli redeem --swap c6d7bd079bcbfdfe
+[e2e] create-import-then-swap scenario OK
+----- CreateImportThenSwap PASSED (15s)
+
+===== CoinSetup =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-CoinSetup-szv299k6
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for alice7 on :19737
+[e2e] listcoins OK (configured + connected + genesis)
+[e2e] listpairs OK (POCX<->BTC available via HTLC)
+[e2e] correctly rejected: btcx pointed at the BTC node
+[e2e] coin-setup scenario OK
+----- CoinSetup PASSED (7s)
+
+===== CorkboardSwap =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-CorkboardSwap-q79fuahs
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] corkboard up on :19790
+[e2e] pactd up for alice5 on :19737
+[e2e] pactd up for bob5 on :19738
+[e2e] pactd up for carol5 on :19739
+[e2e] offer withdraw OK
+[e2e] carol5: pact-cli board take --offer 65e6e2236b55611b
+[e2e] carol5: pact-cli board sync
+[e2e] competing-take rejection + auto-delist OK
+[e2e]   board[bob5]: init->accept offer 65e6e2236b55611b
+[e2e]   board[alice5]: auto-fund after accept
+[e2e]   board[bob5]: auto-fund after funded
+[e2e]   board[alice5]: recv funded
+[e2e]   board[alice5]: auto-redeem 7ef2db57b46511fb762cb3bc16542ce97c3ad4b46c1e410a88dc512e561e
+[e2e]   board[bob5]: auto-redeem 0af2791fff9218b3304935f5d3ecaa0781f8214cf36362f24b6e8b6408de
+[e2e]   board[alice5]: completed 7ef2db57b46511fb762cb3bc16542ce97c3ad4b46c1e410a88dc512e561e
+[e2e]   board[bob5]: settled 0af2791fff9218b3304935f5d3ecaa0781f8214cf36362f24b6e8b6408de
+[e2e] board swap 4597315eff7b6de2 completed in 4 rounds
+[e2e] all 7 relay blobs are sealed (E2E encrypted)
+[e2e] corkboard swap scenario OK
+----- CorkboardSwap PASSED (17s)
+
+===== OfferRevokeOnOpen =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-OfferRevokeOnOpen-7__cdzik
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] corkboard up on :19790
+[e2e] pactd up for roo1 on :19737
+[e2e] pactd up for roo1 on :19737
+[e2e] restart retired the live offer (revoked_on_open + de-listed)
+[e2e] revoke-on-open + revive-as-fresh-post + dismiss OK
+----- OfferRevokeOnOpen PASSED (8s)
+
+===== BoardResetRecovery =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-BoardResetRecovery-wthr0rek
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] corkboard up on :19790
+[e2e] pactd up for alicerst on :19737
+[e2e] pactd up for bobrst on :19738
+[e2e] corkboard up on :19790
+[e2e] board-reset recovery scenario OK
+----- BoardResetRecovery PASSED (18s)
+
+===== NostrRelaySwap =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-NostrRelaySwap-2r23y2mi
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for alicenos on :19737
+[e2e] pactd up for bobnos on :19738
+[e2e] nostr-relay swap scenario OK (live relay round-trip)
+----- NostrRelaySwap PASSED (18s)
+
+===== ConcurrentDrainNoDoubleSend =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-ConcurrentDrainNoDoubleSend-78e2rnu7
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for alicedrain on :19737
+[e2e] pactd up for bobdrain on :19738
+[e2e] concurrent-drain no-double-send OK (0 duplicate takes under 800ms delay)
+----- ConcurrentDrainNoDoubleSend PASSED (20s)
+
+===== PrivateOfferSwap =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-PrivateOfferSwap-pokmuqwx
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] corkboard up on :19790
+[e2e] pactd up for alicePO on :19737
+[e2e] pactd up for bobPO on :19738
+[e2e] private offer created off-board (slip handed over out of band)
+[e2e]   board[alicePO]: take->init offer 78ccd451a397dad9
+[e2e]   board[bobPO]: init->accept offer 78ccd451a397dad9
+[e2e]   board[alicePO]: auto-fund after accept
+[e2e]   board[bobPO]: auto-fund after funded
+[e2e]   board[alicePO]: recv funded
+[e2e]   board[alicePO]: auto-redeem 736f26faca168c44ecc568b69932043751dea547cb6888160c2ddffc5052
+[e2e]   board[bobPO]: auto-redeem 5e80f41283051d78880be5f6fd4215f575b536436511ee985eebebdeb321
+[e2e]   board[alicePO]: completed 736f26faca168c44ecc568b69932043751dea547cb6888160c2ddffc5052
+[e2e]   board[bobPO]: settled 5e80f41283051d78880be5f6fd4215f575b536436511ee985eebebdeb321
+[e2e] private swap 6d3800adbf549e2c completed in 4 rounds
+[e2e] private-offer swap scenario OK
+----- PrivateOfferSwap PASSED (13s)
+
+GREEN: all 32 scenario(s) pass.
+
+================ swap_v1_rescue.py ================
+
+===== RescueTakerCommittedV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-RescueTakerCommittedV1-4yz23sei
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for mkrcv1 on :19737
+[e2e] pactd up for tkrcv1 on :19738
+[e2e]   rcv1[mkrcv1]: take->init offer c1b88f0aa965d272
+[e2e]   rcv1[tkrcv1]: init->accept offer c1b88f0aa965d272
+[e2e]   rcv1[mkrcv1]: auto-fund after accept
+[e2e]   rcv1[tkrcv1]: auto-fund after funded
+[e2e] rcv1: taker @ committed (own leg: fbfad3f0398e8555) — wiping mid-swap
+[e2e] pactd up for tkrcv1 on :19739
+[e2e] rcv1: swap 28fba725860fbde4 auto-followed from relay snapshot + taken over
+[e2e]   rcv1[mkrcv1]: funded-b chain-B HTLC confirmed (chain-watched)
+[e2e]   rcv1[mkrcv1]: recv funded
+[e2e]   rcv1[mkrcv1]: auto-redeem 11a6fb02f8c9106c71a9b470a33729dfa53636778b44b114ef8c96920945ba70
+[e2e]   rcv1[tkrcv1]: auto-redeem 997ded463f128a131c6d083ae0babb53d55f965fe0080837d1b5300965909f58
+[e2e] rcv1: seed-only rescue completed; own leg adopted, not re-funded
+----- RescueTakerCommittedV1 PASSED (23s)
+
+===== RescueTakerCommittedV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-RescueTakerCommittedV2-aeyshcio
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for mkrcv2 on :19737
+[e2e] pactd up for tkrcv2 on :19738
+[e2e]   rcv2[mkrcv2]: take->init offer 455ae375aacb461d
+[e2e]   rcv2[tkrcv2]: init->accept offer 455ae375aacb461d
+[e2e]   rcv2[mkrcv2]: adaptor-fund broadcast leg A + funding_ready
+[e2e]   rcv2[tkrcv2]: adaptor-fund built leg B (unbroadcast) + funding_ready
+[e2e]   rcv2[mkrcv2]: adaptor-nonces sent public nonces
+[e2e]   rcv2[tkrcv2]: adaptor-nonces sent public nonces
+[e2e]   rcv2[mkrcv2]: adaptor-signed partial adaptor sig sent
+[e2e]   rcv2[tkrcv2]: adaptor-assembled state Signed
+[e2e]   rcv2[tkrcv2]: adaptor-fund-b broadcast leg B e74f2c24bbb512704dafb7dc958ee9f5c108010bd3ce7495bb39ac
+[e2e] rcv2: taker @ committed (own leg: e74f2c24bbb51270) — wiping mid-swap
+[e2e] pactd up for tkrcv2 on :19739
+[e2e] rcv2: swap f747c8a02f70f1ff auto-followed from relay snapshot + taken over
+[e2e]   rcv2[tkrcv2]: adaptor-recv partial_sigs
+[e2e]   rcv2[tkrcv2]: adaptor-recv nonces
+[e2e]   rcv2[tkrcv2]: adaptor-recv funding_ready
+[e2e]   rcv2[tkrcv2]: init-ignored no pending take on this machine (another machine on this seed may be d
+[e2e]   rcv2[tkrcv2]: adaptor-fund-b broadcast leg B e74f2c24bbb512704dafb7dc958ee9f5c108010bd3ce7495bb39ac
+[e2e]   rcv2[mkrcv2]: adaptor-assembled state Signed
+[e2e]   rcv2[mkrcv2]: adaptor-redeem-b revealed t; state RedeemedB
+[e2e]   rcv2[tkrcv2]: adaptor-redeem-a extracted t; state Completed
+[e2e] rcv2: seed-only rescue completed; own leg adopted, not re-funded
+----- RescueTakerCommittedV2 PASSED (25s)
+
+===== RescueMakerFundedAV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-RescueMakerFundedAV1-rthwi_dj
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for mkrcm1 on :19737
+[e2e] pactd up for tkrcm1 on :19738
+[e2e]   rcm1[mkrcm1]: take->init offer 514c8c6ca60a9ff9
+[e2e]   rcm1[tkrcm1]: init->accept offer 514c8c6ca60a9ff9
+[e2e]   rcm1[mkrcm1]: auto-fund after accept
+[e2e] rcm1: maker @ funded_a (own leg: a9b8486c7f8133da) — wiping mid-swap
+[e2e] pactd up for mkrcm1 on :19739
+[e2e] rcm1: swap dfd81dfb56c49150 auto-followed from relay snapshot + taken over
+[e2e]   rcm1[mkrcm1]: relay-error permanent handshake failure (will not retry): accept in state Accepted
+[e2e]   rcm1[mkrcm1]: auto-fund retried chain-A funding
+[e2e]   rcm1[tkrcm1]: auto-fund after funded
+[e2e]   rcm1[mkrcm1]: funded-b chain-B HTLC confirmed (chain-watched)
+[e2e]   rcm1[tkrcm1]: recv funded
+[e2e]   rcm1[mkrcm1]: recv funded
+[e2e]   rcm1[mkrcm1]: auto-redeem e012e5ea8a3439b7c645ccb0a423bf4c68b0c114a66ca71e441eb7e59b698735
+[e2e]   rcm1[tkrcm1]: auto-redeem 76484a6a230edb7ca81bfd071139026694c793b9ae6966517b4a69a75d13a362
+[e2e] rcm1: seed-only rescue completed; own leg adopted, not re-funded
+----- RescueMakerFundedAV1 PASSED (22s)
+
+===== RescueTakerAcceptedV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-RescueTakerAcceptedV1-cnu3gki4
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for mkrct1 on :19737
+[e2e] pactd up for tkrct1 on :19738
+[e2e]   rct1[mkrct1]: take->init offer f8ab8a6d18145719
+[e2e]   rct1[tkrct1]: init->accept offer f8ab8a6d18145719
+[e2e] rct1: taker @ accepted (own leg: None) — wiping mid-swap
+[e2e] pactd up for tkrct1 on :19739
+[e2e] rct1: F3 belt held — blind backup refused to fund its leg
+[e2e] rct1: stalled swap auto-aborted past the deadline — no ghost
+----- RescueTakerAcceptedV1 PASSED (28s)
+
+===== RescueTakerPostRevealV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-RescueTakerPostRevealV1-nyzju37b
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for mkrct2 on :19737
+[e2e] pactd up for tkrct2 on :19738
+[e2e]   rct2[mkrct2]: take->init offer 423ce42b7d2ef400
+[e2e]   rct2[tkrct2]: init->accept offer 423ce42b7d2ef400
+[e2e]   rct2[mkrct2]: auto-fund after accept
+[e2e]   rct2[tkrct2]: auto-fund after funded
+[e2e]   rct2[mkrct2]: funded-b chain-B HTLC confirmed (chain-watched)
+[e2e]   rct2[mkrct2]: recv funded
+[e2e]   rct2[mkrct2]: auto-redeem 76f160a0e94847a5b10519c68b8b1618aaf920f293483074b4d6af2f072ddd9e
+[e2e]   rct2[tkrct2]: auto-redeem 73f0a1542f6fa091734bfe0c05333b01a46bfd71f1664e6ebe304e1d0fe3f195
+[e2e] rct2: taker @ post_reveal (own leg: 258588f72bd8e193) — wiping mid-swap
+[e2e] pactd up for tkrct2 on :19739
+[e2e] rct2: swap c96b9aafe3f1af75 auto-followed from relay snapshot + taken over
+[e2e]   rct2[mkrct2]: completed 76f160a0e94847a5b10519c68b8b1618aaf920f293483074b4d6af2f072ddd9e
+[e2e]   rct2[tkrct2]: reconciled chain truth → Completed: both legs settled on-chain (A Redeem, B Redee
+[e2e] rct2: seed-only rescue completed; own leg adopted, not re-funded
+----- RescueTakerPostRevealV1 PASSED (23s)
+
+===== RescueMakerCommittedV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-RescueMakerCommittedV2-w2tkh5te
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for mkrcm2 on :19737
+[e2e] pactd up for tkrcm2 on :19738
+[e2e]   rcm2[mkrcm2]: take->init offer cd34f1f6114ea522
+[e2e]   rcm2[tkrcm2]: init->accept offer cd34f1f6114ea522
+[e2e]   rcm2[mkrcm2]: adaptor-fund broadcast leg A + funding_ready
+[e2e]   rcm2[tkrcm2]: adaptor-fund built leg B (unbroadcast) + funding_ready
+[e2e]   rcm2[mkrcm2]: adaptor-nonces sent public nonces
+[e2e]   rcm2[tkrcm2]: adaptor-nonces sent public nonces
+[e2e]   rcm2[mkrcm2]: adaptor-signed partial adaptor sig sent
+[e2e]   rcm2[tkrcm2]: adaptor-assembled state Signed
+[e2e]   rcm2[tkrcm2]: adaptor-fund-b broadcast leg B 30d13434561218dde41af57b2b91e8db6828bd39355860be7aa2d1
+[e2e]   rcm2[mkrcm2]: adaptor-assembled state Signed
+[e2e] rcm2: maker @ committed (own leg: 6dabe2cadc162834) — wiping mid-swap
+[e2e] pactd up for mkrcm2 on :19739
+[e2e] rcm2: swap ff48500cc6ede18a auto-followed from relay snapshot + taken over
+[e2e]   rcm2[mkrcm2]: adaptor-recv partial_sigs
+[e2e]   rcm2[mkrcm2]: adaptor-recv nonces
+[e2e]   rcm2[mkrcm2]: adaptor-recv funding_ready
+[e2e]   rcm2[mkrcm2]: adaptor-recv accept
+[e2e]   rcm2[mkrcm2]: take-ignored take for an offer this machine does not own — ignored
+[e2e]   rcm2[mkrcm2]: adaptor-redeem-b revealed t; state RedeemedB
+[e2e]   rcm2[tkrcm2]: adaptor-redeem-a extracted t; state Completed
+[e2e] rcm2: seed-only rescue completed; own leg adopted, not re-funded
+----- RescueMakerCommittedV2 PASSED (26s)
+
+===== RescueMakerRefundV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-RescueMakerRefundV1-s0qy8mxx
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for mkrcr1 on :19737
+[e2e] pactd up for tkrcr1 on :19738
+[e2e]   rcr1[mkrcr1]: take->init offer f6d7612841a4ba99
+[e2e]   rcr1[tkrcr1]: init->accept offer f6d7612841a4ba99
+[e2e]   rcr1[mkrcr1]: auto-fund after accept
+[e2e] rcr1: maker @ funded_a (own leg: 0510252f104029c1) — wiping mid-swap
+[e2e] pactd up for mkrcr1 on :19739
+[e2e] rcr1: swap 768a74d9672be8c9 auto-followed from relay snapshot + taken over
+[e2e]   rcr1[mkrcr1]: auto-refund e3d5937ed19f3228951646e3c700ca315c30a855dc36e21574b545fd418211e3
+[e2e]   rcr1[tkrcr1]: recv funded
+[e2e] rcr1: seed-only rescue refunded; leg A reclaimed, not re-funded
+----- RescueMakerRefundV1 PASSED (24s)
+
+===== RescueTakerPostRevealV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-RescueTakerPostRevealV2-g3y45t5z
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for mkrct2v2 on :19737
+[e2e] pactd up for tkrct2v2 on :19738
+[e2e]   rct2v2[mkrct2v2]: take->init offer db87ab480190ec55
+[e2e]   rct2v2[tkrct2v2]: init->accept offer db87ab480190ec55
+[e2e]   rct2v2[mkrct2v2]: adaptor-fund broadcast leg A + funding_ready
+[e2e]   rct2v2[tkrct2v2]: adaptor-fund built leg B (unbroadcast) + funding_ready
+[e2e]   rct2v2[mkrct2v2]: adaptor-nonces sent public nonces
+[e2e]   rct2v2[tkrct2v2]: adaptor-nonces sent public nonces
+[e2e]   rct2v2[mkrct2v2]: adaptor-signed partial adaptor sig sent
+[e2e]   rct2v2[tkrct2v2]: adaptor-assembled state Signed
+[e2e]   rct2v2[tkrct2v2]: adaptor-fund-b broadcast leg B c8072bf2e765e320ee8b4ce4b20920440cf90a43b28b77d88a9329
+[e2e]   rct2v2[mkrct2v2]: adaptor-assembled state Signed
+[e2e]   rct2v2[mkrct2v2]: adaptor-redeem-b revealed t; state RedeemedB
+[e2e]   rct2v2[tkrct2v2]: adaptor-redeem-a extracted t; state Completed
+[e2e] rct2v2: taker @ post_reveal (own leg: c8072bf2e765e320) — wiping mid-swap
+[e2e] pactd up for tkrct2v2 on :19739
+[e2e] rct2v2: swap febb352c570f00da auto-followed from relay snapshot + taken over
+[e2e]   rct2v2[mkrct2v2]: adaptor-completed fb716435c7e4f330b53a56b274a568ec3330ce0ec4c450307e646049c7bc8eb5
+[e2e]   rct2v2[tkrct2v2]: adaptor-recv partial_sigs
+[e2e]   rct2v2[tkrct2v2]: adaptor-recv nonces
+[e2e]   rct2v2[tkrct2v2]: adaptor-recv funding_ready
+[e2e]   rct2v2[tkrct2v2]: init-ignored no pending take on this machine (another machine on this seed may be d
+[e2e]   rct2v2[tkrct2v2]: reconciled chain truth → Completed: both legs settled on-chain (A Redeem, B Redee
+[e2e] rct2v2: seed-only rescue completed; own leg adopted, not re-funded
+----- RescueTakerPostRevealV2 PASSED (26s)
+
+GREEN: all 8 scenario(s) pass.
+
+================ swap_v2_adaptor.py ================
+
+===== SettlementRecoveryParticipantConflictV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryParticipantConflictV2-5y0nu3sg
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for ad-alice on :19737
+[e2e] pactd up for ad-bob on :19738
+[e2e]   scheduler[ad-bob]: reconciled chain truth → Refunded: both legs settled on-chain (A Refund, B Redeem) (mixed redeem/refund — §7.4 window, check history); loss: counterparty claimed our funding and refunded our claim leg
+[e2e] settlement recovery v2 participant_conflict passed
+----- SettlementRecoveryParticipantConflictV2 PASSED (15s)
+
+===== SettlementRecoveryInitiatorConflictV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryInitiatorConflictV2-g4k4ezdx
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for ad-alice on :19737
+[e2e] pactd up for ad-bob on :19738
+[e2e]   scheduler[ad-alice]: adaptor-refund stalled swap refunded; state Refunded
+[e2e]   scheduler[ad-alice]: reconciled chain truth → Refunded: both legs settled on-chain (A Refund, B Refund)
+[e2e] settlement recovery v2 initiator_conflict passed
+----- SettlementRecoveryInitiatorConflictV2 PASSED (15s)
+
+===== SettlementRecoveryEvictedRevealV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryEvictedRevealV2-lo89idjf
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for ad-alice on :19737
+[e2e] pactd up for ad-bob on :19738
+[e2e]   scheduler[ad-alice]: adaptor-refund stalled swap refunded; state Refunded
+[e2e]   scheduler[ad-alice]: settled 7b4a45968f68780ded2d55153f4c6f823c309b1d30798cee3fa55d027deab3e6 2 deep — chain watch retired
+[e2e] settlement recovery v2 evicted passed
+----- SettlementRecoveryEvictedRevealV2 PASSED (15s)
+
+===== SettlementRecoveryRevealOutageV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryRevealOutageV2-gxqbgpx6
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for ad-alice on :19737
+[e2e] pactd up for ad-bob on :19738
+[e2e]   scheduler[ad-alice]: adaptor-refund stalled swap refunded; state Refunded
+[e2e]   scheduler[ad-alice]: settled 7c16497f2182d4f5a4f6be322a2c91ae8cfcfbbda4b0f104dc182ebda5f272e6 2 deep — chain watch retired
+[e2e] settlement recovery v2 outage passed
+----- SettlementRecoveryRevealOutageV2 PASSED (59s)
+
+===== SettlementRecoveryFinalRevealV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryFinalRevealV2-ahum2omx
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for ad-alice on :19737
+[e2e] pactd up for ad-bob on :19738
+[e2e]   scheduler[ad-alice]: adaptor-completed 2fe762f0d61780ee9b12c77dc08c6641c0c0d7897b2cb68d903ceb8731353e41
+[e2e] settlement recovery v2 final passed
+----- SettlementRecoveryFinalRevealV2 PASSED (13s)
+
+===== SettlementRecoveryShallowRevealV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryShallowRevealV2-i2h2kdfj
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for ad-alice on :19737
+[e2e] pactd up for ad-bob on :19738
+[e2e]   scheduler[ad-alice]: adaptor-refund stalled swap refunded; state Refunded
+[e2e]   scheduler[ad-alice]: settled cfffdad387cdbdd24932268dc49e9504c682ac0cbdcca41c3f9607466a63a70e 2 deep — chain watch retired
+[e2e] settlement recovery v2 shallow passed
+----- SettlementRecoveryShallowRevealV2 PASSED (13s)
+
+===== SettlementRecoveryLostRefundV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SettlementRecoveryLostRefundV2-5kg6lubn
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for ad-alice on :19737
+[e2e] pactd up for ad-bob on :19738
+[e2e]   scheduler[ad-alice]: reconciled chain truth → Completed: both legs settled on-chain (A Redeem, B Redeem)
+[e2e] settlement recovery v2 lost_refund passed
+----- SettlementRecoveryLostRefundV2 PASSED (15s)
+
+===== ConflictedLegAIntent =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-ConflictedLegAIntent-8ugao2ie
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for intent-alice on :19737
+[e2e] pactd up for intent-bob on :19738
+[e2e] pactd up for intent-alice on :19737
+[e2e] live intent protected; confirmed-conflict intent cancelled and unlocked
+----- ConflictedLegAIntent PASSED (11s)
+
+===== LateClaimAfterRefundV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-LateClaimAfterRefundV2-8jpk6uua
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for ad-alice on :19737
+[e2e] pactd up for ad-bob on :19738
+[e2e]   scheduler[ad-alice]: reconciled chain truth → Completed: both legs settled on-chain (A Refund, B Redeem) (mixed redeem/refund — §7.4 window, check history)
+[e2e]   scheduler[ad-bob]: reconciled chain truth → Refunded: both legs settled on-chain (A Refund, B Redeem) (mixed redeem/refund — §7.4 window, check history); loss: counterparty claimed our funding and refunded our claim leg
+[e2e] v2 late losing claim stayed out of Completed; refund retry used chain A
+----- LateClaimAfterRefundV2 PASSED (14s)
+
+===== AdaptorSwap =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-AdaptorSwap-ty1m03jp
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for ad-alice on :19737
+[e2e] pactd up for ad-bob on :19738
+[e2e] adaptor swap OK: both legs cooperatively key-path-redeemed
+[e2e] redeems landed in spendable core wallets (fresh sweep addrs)
+[e2e]   scheduler[ad-alice]: reconciled chain truth → Completed: both legs settled on-chain (A Redeem, B Redeem)
+[e2e]   scheduler[ad-bob]: reconciled chain truth → Completed: both legs settled on-chain (A Redeem, B Redeem)
+[e2e] settled latch: the participant record retired its chain watch (v2)
+----- AdaptorSwap PASSED (12s)
+
+===== AdaptorRefund =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-AdaptorRefund-71t6td9x
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for adr-alice on :19737
+[e2e] pactd up for adr-bob on :19738
+[e2e] adaptor refund OK: both legs reclaimed via the CLTV tapleaf
+----- AdaptorRefund PASSED (13s)
+
+===== AdaptorRefundFeebump =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-AdaptorRefundFeebump-9smbodbj
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for adfb-alice on :19737
+[e2e] pactd up for adfb-bob on :19738
+[e2e]   feebump[alice]: adaptor-fee-bump 1c2e5177b7b54ffefe10ba8919ae07318a45ce7f4400cad13fca5aa1e9614ed9 (refu
+[e2e] adaptor refund fee-bump OK: stuck refund RBF-escalated then confirmed
+----- AdaptorRefundFeebump PASSED (13s)
+
+===== AdaptorRedeemCpfp =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-AdaptorRedeemCpfp-vb1d8ni4
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for adcp-alice on :19737
+[e2e] pactd up for adcp-bob on :19738
+[e2e]   cpfp[alice]: adaptor-cpfp 583edb0b0b325d17c1f030d57465e78ff8623191500e4769eaed2f1d887ef759 (rede
+[e2e] adaptor redeem CPFP OK: stuck redeem bumped by a self-funded child
+----- AdaptorRedeemCpfp PASSED (12s)
+
+===== AdaptorFundingCpfp =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-AdaptorFundingCpfp-orp8axac
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for adfc-alice on :19737
+[e2e] pactd up for adfc-bob on :19738
+[e2e]   fundcpfp[alice]: funding-cpfp-bump leg a: 559fe36591c3cc8e19e2258e159e8e72eb208d19877a25dc53da25933beaef1
+[e2e] v2 funding CPFP'd, outpoint 02dd62c1fbfd…:1 intact
+[e2e]   v2[alice]: adaptor-redeem-b revealed t; state RedeemedB
+[e2e]   v2[bob]: adaptor-redeem-a extracted t; state Completed
+[e2e] funding-cpfp-bump (v2) OK: child bumped the lock, swap completed cleanly
+----- AdaptorFundingCpfp PASSED (12s)
+
+===== AdaptorDepthGate =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-AdaptorDepthGate-51g690_f
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for adg-alice on :19737
+[e2e] pactd up for adg-bob on :19738
+[e2e] adaptor depth gate OK: reveal withheld at 1 conf, fired at 2
+----- AdaptorDepthGate PASSED (11s)
+
+===== AdaptorDirectRedeemGate =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-AdaptorDirectRedeemGate-_ohgywlh
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for adr-alice on :19737
+[e2e] pactd up for adr-bob on :19738
+[e2e] direct adaptorredeem gate OK: refused at 0 conf, accepted at n_b
+----- AdaptorDirectRedeemGate PASSED (11s)
+
+===== SiblingFundingQueueV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-SiblingFundingQueueV2-vx55bcd1
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for sq2-alice on :19737
+[e2e] pactd up for sq2-bob on :19738
+[e2e]   scheduler[sq2-alice]: funding-queued funding queued: 5000000000 sat needed and confirmed coins are short, but total spendable 6999999835 sat covers it — waiting for our own change to confirm (fundings spend confirmed coins only)
+[e2e]   scheduler[sq2-alice]: adaptor-fund retried leg-A funding + funding_ready
+[e2e] v2 sibling funding queue OK: confirmed-only leg A, queued then funded
+----- SiblingFundingQueueV2 PASSED (12s)
+
+===== AdaptorCorkboardSwap =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-AdaptorCorkboardSwap-akwabppr
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] corkboard up on :19790
+[e2e] pactd up for adcb-maker on :19737
+[e2e] pactd up for adcb-taker on :19738
+[e2e]   v2board[adcb-maker]: take->init offer bdc510ce5c0d456d
+[e2e]   v2board[adcb-taker]: init->accept offer bdc510ce5c0d456d
+[e2e]   v2board[adcb-maker]: adaptor-fund broadcast leg A + funding_ready
+[e2e]   v2board[adcb-taker]: adaptor-fund built leg B (unbroadcast) + funding_ready
+[e2e]   v2board[adcb-maker]: adaptor-nonces sent public nonces
+[e2e]   v2board[adcb-taker]: adaptor-nonces sent public nonces
+[e2e]   v2board[adcb-maker]: adaptor-signed partial adaptor sig sent
+[e2e]   v2board[adcb-taker]: adaptor-assembled state Signed
+[e2e]   v2board[adcb-taker]: adaptor-fund-b broadcast leg B dd909977cccc29417054c20dc03f2699263c1dd59aff
+[e2e]   v2board[adcb-maker]: adaptor-assembled state Signed
+[e2e]   v2board[adcb-maker]: adaptor-redeem-b revealed t; state RedeemedB
+[e2e]   v2board[adcb-taker]: adaptor-redeem-a extracted t; state Completed
+[e2e] board v2 swap completed (maker=redeemed_b, taker=completed)
+----- AdaptorCorkboardSwap PASSED (19s)
+
+===== AdaptorRedeemCpfpLtc =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-AdaptorRedeemCpfpLtc-ff4hivpf
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] ltc node up (rpc :19643)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[e2e] pactd up for adcpl-alice on :19737
+[e2e] pactd up for adcpl-bob on :19738
+[e2e]   cpfp-ltc[alice]: adaptor-cpfp 191310b3cb7bc0122601de4c0081cbe081da546e94b2dc5ad3d5886720acf3f4 (rede
+[e2e] adaptor redeem CPFP on LTC OK: stuck litecoind redeem bumped by a child
+----- AdaptorRedeemCpfpLtc PASSED (19s)
+
+GREEN: all 19 scenario(s) pass.
+
+================ nodeless.py ================
+
+===== V1NodelessMaker =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-V1NodelessMaker-podgp142
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[nodeless] electrs synced
+[e2e] corkboard up on :19790
+[e2e] pactd up for nl-alice1 on :19737
+[e2e] pactd up for nl-bob1 on :19738
+[nodeless] nl-alice1: bdk wallet funded with 6000000000 sat
+[nodeless]   nl-alice1: take->init offer 684d9f4791c4a68e
+[nodeless]   nl-bob1: init->accept offer 684d9f4791c4a68e
+[nodeless]   nl-alice1: auto-fund after accept
+[nodeless]   nl-bob1: recv funded
+[nodeless]   nl-bob1: auto-fund chain-A confirmed; funded chain B
+[nodeless]   nl-alice1: recv funded
+[nodeless]   nl-alice1: auto-redeem d67847aff9ca9d40390daba78ffb0623ea4b753cee9606b8327cab7f60806be0
+[nodeless]   nl-bob1: auto-redeem 06b49bf1a738a8c5c78b2f86ba31dd1b617a3923acf6642d1980b2ad831b0364
+[nodeless]   nl-alice1: completed d67847aff9ca9d40390daba78ffb0623ea4b753cee9606b8327cab7f60806be0
+[nodeless]   nl-bob1: reconciled chain truth → Completed: both legs settled on-chain (A Redeem, B Redee
+[nodeless] v1 nodeless-maker f48622e0eb2f42b0 completed in 5 rounds
+[nodeless] v1 nodeless-maker OK (balance + activity verified)
+----- V1NodelessMaker PASSED (35s)
+
+===== V2NodelessTaker =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-V2NodelessTaker-35phrwto
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[nodeless] electrs synced
+[e2e] corkboard up on :19790
+[e2e] pactd up for nl-alice2 on :19737
+[e2e] pactd up for nl-bob2 on :19738
+[nodeless] nl-alice2: bdk wallet funded with 6000000000 sat
+[nodeless]   nl-bob2: take->init offer 02000b9829bdd4d8
+[nodeless]   nl-alice2: init->accept offer 02000b9829bdd4d8
+[nodeless]   nl-bob2: adaptor-fund broadcast leg A + funding_ready
+[nodeless]   nl-alice2: adaptor-fund built leg B (unbroadcast) + funding_ready
+[nodeless]   nl-bob2: adaptor-nonces sent public nonces
+[nodeless]   nl-alice2: adaptor-nonces sent public nonces
+[nodeless]   nl-bob2: adaptor-signed partial adaptor sig sent
+[nodeless]   nl-alice2: adaptor-assembled state Signed
+[nodeless]   nl-alice2: adaptor-fund-b broadcast leg B a5d61b44f7cae853da1d9993e96a5d2d330b237c6f6f51adfc7875
+[nodeless]   nl-bob2: adaptor-assembled state Signed
+[nodeless]   nl-bob2: adaptor-redeem-b revealed t; state RedeemedB
+[nodeless]   nl-alice2: adaptor-redeem-a extracted t; state Completed
+[nodeless]   nl-bob2: adaptor-completed 179b9f6c0034495e003736255971220e65194712c4b5699674c4f0f40caf0a57
+[nodeless] v2 nodeless-taker 91f66003a688706d completed in 7 rounds
+[nodeless] v2 nodeless-taker OK (two-phase bdk leg B verified)
+----- V2NodelessTaker PASSED (35s)
+
+===== V2CancelReleasesBdkInputs =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-V2CancelReleasesBdkInputs-zmvc0g9y
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[nodeless] electrs synced
+[e2e] corkboard up on :19790
+[e2e] pactd up for nl-alice3 on :19737
+[e2e] pactd up for nl-bob3 on :19738
+[nodeless] nl-alice3: bdk wallet funded with 6000000000 sat
+[nodeless]   nl-bob3: take->init offer 52111773ed18b11b
+[nodeless]   nl-alice3: init->accept offer 52111773ed18b11b
+[nodeless]   nl-bob3: adaptor-fund broadcast leg A + funding_ready
+[nodeless]   nl-alice3: adaptor-fund built leg B (unbroadcast) + funding_ready
+[nodeless] leg B built: 5000000155 sat reserved
+[nodeless] v2 cancel OK: reserved inputs released, balance restored
+----- V2CancelReleasesBdkInputs PASSED (32s)
+
+===== V1NodelessBothSides =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-V1NodelessBothSides-ucv2_zi0
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[nodeless] electrs synced
+[e2e] corkboard up on :19790
+[e2e] pactd up for nl-alice4 on :19737
+[e2e] pactd up for nl-bob4 on :19738
+[nodeless] nl-alice4: bdk wallet funded with 6000000000 sat
+[nodeless]   nl-alice4: take->init offer 641d41260385ed02
+[nodeless]   nl-bob4: init->accept offer 641d41260385ed02
+[nodeless]   nl-alice4: auto-fund after accept
+[nodeless]   nl-bob4: recv funded
+[nodeless]   nl-bob4: auto-fund chain-A confirmed; funded chain B
+[nodeless]   nl-alice4: recv funded
+[nodeless]   nl-alice4: auto-redeem 2b4232c344c15621d70a2c3cc2f0a56c50ffc1cb18169db48c31897f5f2b25bc
+[nodeless]   nl-bob4: auto-redeem a5b810f8b1fe802f996d198ded24ea4a7ab04910330909f1f5c9a7e1a2fb578b
+[nodeless]   nl-alice4: completed 2b4232c344c15621d70a2c3cc2f0a56c50ffc1cb18169db48c31897f5f2b25bc
+[nodeless]   nl-bob4: reconciled chain truth → Completed: both legs settled on-chain (A Redeem, B Redee
+[nodeless] v1 nodeless-both 1ce27d2bb102923c completed in 5 rounds
+[nodeless] v1 nodeless-both OK (bob's bdk redeem: 4999999845 sat)
+----- V1NodelessBothSides PASSED (49s)
+
+GREEN: all 4 scenario(s) pass.
+
+================ follow.py ================
+
+===== ObserveAfterCompletion =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-ObserveAfterCompletion-81022t2q
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :18332)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[follow-e2e] both electrs synced
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for fmk1 on :19737
+[e2e] pactd up for ftk1 on :19738
+[follow-e2e]   drive[fmk1]: take->init offer 331624552fcdb089
+[follow-e2e]   drive[ftk1]: init->accept offer 331624552fcdb089
+[follow-e2e]   drive[fmk1]: auto-fund after accept
+[follow-e2e]   drive[ftk1]: auto-fund after funded
+[follow-e2e]   drive[fmk1]: funded-b chain-B HTLC confirmed (chain-watched)
+[follow-e2e]   drive[fmk1]: recv funded
+[follow-e2e]   drive[fmk1]: auto-redeem 67150a97c84c125e2e4a3902bed83b0783614678869a3a9a415fdf4afb95619d
+[follow-e2e]   drive[ftk1]: auto-redeem 76a310580beaee51a2dea48d95f5224b2d423586ad8f445f8f1fbe8a96d7b2c0
+[follow-e2e] cell1: maker at redeemed_b — stopping (snapshot lingers)
+[e2e] pactd up for fob1 on :19739
+[follow-e2e]   observe[fob1]: relay-retry attempt 1: unknown swap d6aa828544e0b5d7: Query returned no rows
+[follow-e2e]   observe[fob1]: relay-retry attempt 2: unknown swap d6aa828544e0b5d7: Query returned no rows
+[follow-e2e] cell1 OK: settled swap never ghosted, nothing funded
+----- ObserveAfterCompletion PASSED (28s)
+
+===== DormantObserverTakeover =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-DormantObserverTakeover-j1jmspsk
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :18332)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[follow-e2e] both electrs synced
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for fmk2 on :19737
+[e2e] pactd up for ftk2 on :19738
+[follow-e2e]   drive[fmk2]: take->init offer 35bb094d53b53443
+[follow-e2e]   drive[ftk2]: init->accept offer 35bb094d53b53443
+[follow-e2e]   drive[fmk2]: auto-fund after accept
+[follow-e2e]   drive[ftk2]: auto-fund after funded
+[follow-e2e] cell2: both legs funded (A 61bbe7a9bd39ef20) — closing the main session
+[e2e] pactd up for fob2 on :19739
+[follow-e2e]   reconstruct[fob2]: follow-ignored `funded` for another machine's swap — a follower advances by chain onl
+[follow-e2e]   reconstruct[fob2]: follow-ignored `accept` for another machine's swap — a follower advances by chain onl
+[follow-e2e]   reconstruct[fob2]: take-ignored take for an offer this machine does not own — ignored
+[follow-e2e]   finish[fob2]: auto-redeem d1e8dd1f70346a82a925172aee2582e1762f396cfd906bcfa2308d1f5e46c69d
+[follow-e2e]   finish[ftk2]: auto-redeem 9e6f3801e6866b40b6ecd1c2b33931f18cdfff3183cdb2aa0bbb37de41f739b1
+[follow-e2e]   finish[fob2]: completed d1e8dd1f70346a82a925172aee2582e1762f396cfd906bcfa2308d1f5e46c69d
+[follow-e2e]   finish[ftk2]: settled 9e6f3801e6866b40b6ecd1c2b33931f18cdfff3183cdb2aa0bbb37de41f739b1 1 dee
+[follow-e2e] cell2 OK: mid-swap takeover completed on the original funding
+----- DormantObserverTakeover PASSED (31s)
+
+===== WalletAssistedCoreOnly =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-WalletAssistedCoreOnly-v_8fx1sw
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :18332)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[follow-e2e] both electrs synced
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for fmk3 on :19737
+[e2e] pactd up for ftk3 on :19738
+[follow-e2e]   drive[fmk3]: take->init offer 5b83db00332ea3a6
+[follow-e2e]   drive[ftk3]: init->accept offer 5b83db00332ea3a6
+[follow-e2e]   drive[fmk3]: auto-fund after accept
+[follow-e2e]   drive[ftk3]: auto-fund after funded
+[e2e] pactd up for fob3 on :19739
+[follow-e2e]   import3[fob3]: relay-retry attempt 1: unknown swap 3f33de456d0ea993: Query returned no rows
+[follow-e2e]   import3[fob3]: follow-ignored `funded` for another machine's swap — a follower advances by chain onl
+[follow-e2e]   import3[fob3]: init-ignored no pending take on this machine (another machine on this seed may be d
+[follow-e2e]   settle3[fmk3]: their-lock chain-B HTLC seen; burying to n_b (chain-watched)
+[follow-e2e]   settle3[fmk3]: recv funded
+[follow-e2e]   settle3[fmk3]: auto-redeem b4616b79dae6e9afe7482b5dd20d5d45b9b0039228081ad2a8feb407a64d9f28
+[follow-e2e]   settle3[ftk3]: auto-redeem 9b674df1c521351a689361b16935929fb9afceaf58edaeee1bbc0556e583132c
+[follow-e2e]   settle3[fmk3]: completed b4616b79dae6e9afe7482b5dd20d5d45b9b0039228081ad2a8feb407a64d9f28
+[follow-e2e]   settle3[ftk3]: settled 9b674df1c521351a689361b16935929fb9afceaf58edaeee1bbc0556e583132c 1 dee
+[follow-e2e]   resolve3[fob3]: followed-purged another machine's swap completed on-chain; removed from this machine's
+[follow-e2e] cell3 OK: Core-only observer resolved the settled swap via the shared wallet
+----- WalletAssistedCoreOnly PASSED (29s)
+
+GREEN: all 3 scenario(s) pass.
+
+================ takeover.py ================
+
+===== RefundOnlyTakeoverV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-RefundOnlyTakeoverV2-9b7p7879
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :18332)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[follow-e2e] both electrs synced
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for tomk on :19737
+[e2e] pactd up for totk on :19738
+[follow-e2e]   drive[tomk]: take->init offer 923f6513c127580f
+[follow-e2e]   drive[totk]: init->accept offer 923f6513c127580f
+[follow-e2e]   drive[tomk]: adaptor-fund broadcast leg A + funding_ready
+[follow-e2e]   drive[totk]: adaptor-fund built leg B (unbroadcast) + funding_ready
+[follow-e2e]   drive[tomk]: adaptor-nonces sent public nonces
+[follow-e2e]   drive[totk]: adaptor-nonces sent public nonces
+[follow-e2e]   drive[tomk]: adaptor-signed partial adaptor sig sent
+[follow-e2e]   drive[totk]: adaptor-assembled state Signed
+[follow-e2e]   drive[totk]: adaptor-fund-b broadcast leg B 291244564d56ba64fff84771e954f8be23cb85c01cd101d9165667
+[follow-e2e]   drive[tomk]: adaptor-assembled state Signed
+[takeover-e2e] maker Signed (leg A a5acf0f3a24c0c7d) — killing the owner
+[e2e] pactd up for tobk on :19739
+[follow-e2e]   import[tobk]: relay-retry attempt 1: unknown adaptor swap d745edd8ddc505e1: Query returned no ro
+[takeover-e2e] takeover adopted d745edd8ddc505e1 refund-only (foreign sweep)
+[follow-e2e]   no-redeem[tobk]: adaptor-recv partial_sigs
+[follow-e2e]   no-redeem[tobk]: adaptor-recv nonces
+[follow-e2e]   no-redeem[tobk]: adaptor-recv funding_ready
+[follow-e2e]   no-redeem[tobk]: adaptor-recv accept
+[follow-e2e]   no-redeem[tobk]: take-ignored take for an offer this machine does not own — ignored
+[follow-e2e]   refund[tobk]: adaptor-refund-a state Refunded
+[follow-e2e]   refund[totk]: adaptor-refund-b state Refunded
+[takeover-e2e] refund-only takeover OK: adopted, rode to leg-A refund on the original funding, never redeemed to a foreign wallet
+----- RefundOnlyTakeoverV2 PASSED (46s)
+
+===== HotStandbyTakeoverV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-HotStandbyTakeoverV1-mwc06dh_
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :18332)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[follow-e2e] both electrs synced
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for hsmk on :19737
+[e2e] pactd up for hstk on :19738
+[e2e] pactd up for hssb on :19739
+[follow-e2e]   standby[hssb]: take-ignored take for an offer this machine does not own — ignored
+[follow-e2e]   drive[hsmk]: take->init offer 27214dd811002953
+[follow-e2e]   drive[hstk]: init->accept offer 27214dd811002953
+[follow-e2e]   standby[hssb]: relay-retry attempt 1: unknown swap eac7d994c4b9592f: Query returned no rows
+[follow-e2e]   drive[hsmk]: auto-fund after accept
+[follow-e2e]   standby[hssb]: relay-retry attempt 2: unknown swap eac7d994c4b9592f: Query returned no rows
+[follow-e2e]   drive[hstk]: auto-fund after funded
+[follow-e2e]   standby[hssb]: follow-ignored `accept` for another machine's swap — a follower advances by chain onl
+[takeover-e2e] both legs funded (A 06c6465a297053f1); standby followed read-only — hard-killing the owner
+[follow-e2e]   finish[hssb]: recv funded
+[follow-e2e]   finish[hssb]: auto-redeem 9e301592f5a1a0c56893df5cff5325e6cae6cfcec584dcb480cbc3bd8e603d63
+[follow-e2e]   finish[hstk]: auto-redeem 0f82f74e07fada2e4037076ae548a6eed009d73f60326f50c0c021f4f502c9cd
+[follow-e2e]   finish[hssb]: completed 9e301592f5a1a0c56893df5cff5325e6cae6cfcec584dcb480cbc3bd8e603d63
+[follow-e2e]   finish[hstk]: settled 0f82f74e07fada2e4037076ae548a6eed009d73f60326f50c0c021f4f502c9cd 1 dee
+[takeover-e2e] hot-standby OK: followed live, took over a killed owner, completed on the original funding
+----- HotStandbyTakeoverV1 PASSED (28s)
+
+===== TakerHotStandbyV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-TakerHotStandbyV1-iw3funv4
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :18332)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[follow-e2e] both electrs synced
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for thmk on :19737
+[e2e] pactd up for thtk on :19738
+[e2e] pactd up for thsb on :19739
+[follow-e2e]   drive[thmk]: take->init offer 397a86128c827136
+[follow-e2e]   drive[thtk]: init->accept offer 397a86128c827136
+[follow-e2e]   standby[thsb]: init-ignored no pending take on this machine (another machine on this seed may be d
+[follow-e2e]   drive[thmk]: auto-fund after accept
+[follow-e2e]   drive[thtk]: auto-fund after funded
+[follow-e2e]   standby[thsb]: follow-ignored `funded` for another machine's swap — a follower advances by chain onl
+[takeover-e2e] both funded (B f6aabd988bb075e1) — hard-killing the taker
+[follow-e2e]   finish[thmk]: their-lock chain-B HTLC seen; burying to n_b (chain-watched)
+[follow-e2e]   finish[thmk]: recv funded
+[follow-e2e]   finish[thmk]: auto-redeem 1a0a82e0869c4e314f4d1a51c00bc81b47d07b759ad02f2084c0db8c114acf96
+[follow-e2e]   finish[thsb]: auto-redeem 00e745b004c9144950006ec71bd70f737da7fe8af651deb7e05efb6dd8911f25
+[follow-e2e]   finish[thmk]: completed 1a0a82e0869c4e314f4d1a51c00bc81b47d07b759ad02f2084c0db8c114acf96
+[takeover-e2e] taker hot-standby OK: took over a killed taker, completed on the original leg-B funding
+----- TakerHotStandbyV1 PASSED (28s)
+
+===== TakerCommittedTakeoverV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-TakerCommittedTakeoverV2-tjsg60vy
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :18332)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[follow-e2e] both electrs synced
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for tcmk on :19737
+[e2e] pactd up for tctk on :19738
+[e2e] pactd up for tcsb on :19739
+[follow-e2e]   drive[tcmk]: take->init offer 2aa3179f48afacce
+[follow-e2e]   drive[tctk]: init->accept offer 2aa3179f48afacce
+[follow-e2e]   standby[tcsb]: init-ignored no pending take on this machine (another machine on this seed may be d
+[follow-e2e]   drive[tcmk]: adaptor-fund broadcast leg A + funding_ready
+[follow-e2e]   standby[tcsb]: follow-ignored `funding_ready` for another machine's swap — a follower advances by ch
+[follow-e2e]   drive[tctk]: adaptor-fund built leg B (unbroadcast) + funding_ready
+[follow-e2e]   drive[tcmk]: adaptor-nonces sent public nonces
+[follow-e2e]   drive[tctk]: adaptor-nonces sent public nonces
+[follow-e2e]   standby[tcsb]: follow-ignored `nonces` for another machine's swap — a follower advances by chain onl
+[follow-e2e]   drive[tcmk]: adaptor-signed partial adaptor sig sent
+[follow-e2e]   standby[tcsb]: follow-ignored `partial_sigs` for another machine's swap — a follower advances by cha
+[follow-e2e]   drive[tctk]: adaptor-assembled state Signed
+[follow-e2e]   drive[tctk]: adaptor-fund-b broadcast leg B a11b776cdb21fa7a6705fec5d9e41e6803669d887cd8ac96d0fca0
+[follow-e2e]   settle[tcmk]: adaptor-assembled state Signed
+[takeover-e2e] taker committed leg B (a11b776cdb21fa7a) — killing it
+[follow-e2e]   finish[tcmk]: adaptor-redeem-b revealed t; state RedeemedB
+[follow-e2e]   finish[tcsb]: adaptor-redeem-a extracted t; state Completed
+[follow-e2e]   finish[tcsb]: settled 2b11ca7dccc2b9b9b81d3057e2166c8377e7c268ec2563ddcd0645babca5b740 1 dee
+[follow-e2e]   finish[tcmk]: adaptor-completed 8fbcd0a28b6a8a1c711f9e0d6e5ee5f21cd4111cd181abaebd2fd80a45291762
+[takeover-e2e] v2 taker-committed takeover OK: adopted, completed on the original leg-B funding
+----- TakerCommittedTakeoverV2 PASSED (37s)
+
+===== PrefundTakeoverAbortsBlind =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-PrefundTakeoverAbortsBlind-y4gn1x99
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :18332)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[follow-e2e] both electrs synced
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for pbmk on :19737
+[e2e] pactd up for pbtk on :19738
+[e2e] pactd up for pbsb on :19739
+[follow-e2e]   drive[pbmk]: take->init offer 5d0558397f217a80
+[follow-e2e]   standby[pbsb]: take-ignored take for an offer this machine does not own — ignored
+[follow-e2e]   drive[pbtk]: init->accept offer 5d0558397f217a80
+[follow-e2e]   drive[pbmk]: recv accept
+[follow-e2e]   standby[pbsb]: relay-retry attempt 1: unknown swap a5be5cb2f74fd7d4: Query returned no rows
+[follow-e2e]   import[pbsb]: follow-ignored `accept` for another machine's swap — a follower advances by chain onl
+[takeover-e2e] pre-funding swap a5be5cb2f74fd7d4 followed — killing the maker
+[follow-e2e]   abort[pbsb]: error refusing to fund leg a of adopted swap a5be5cb2f74fd7d4: cannot confir
+[follow-e2e]   abort[pbsb]: error refusing to fund leg a of adopted swap a5be5cb2f74fd7d4: cannot confir
+[follow-e2e]   abort[pbsb]: error refusing to fund leg a of adopted swap a5be5cb2f74fd7d4: cannot confir
+[follow-e2e]   abort[pbsb]: error refusing to fund leg a of adopted swap a5be5cb2f74fd7d4: cannot confir
+[follow-e2e]   abort[pbsb]: error refusing to fund leg a of adopted swap a5be5cb2f74fd7d4: cannot confir
+[follow-e2e]   abort[pbsb]: abort-timeout no funding within 5s; aborted
+[follow-e2e]   abort[pbtk]: recv counterparty abort: pre-funding handshake timed out
+[takeover-e2e] blind pre-funding takeover OK: belt blocked funding, clean abort reached both sides
+----- PrefundTakeoverAbortsBlind PASSED (25s)
+
+===== PrefundTakeoverFundsProvable =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-PrefundTakeoverFundsProvable-ehm6ica_
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :18332)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[follow-e2e] both electrs synced
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for ppmk on :19737
+[e2e] pactd up for pptk on :19738
+[e2e] pactd up for ppsb on :19739
+[follow-e2e]   standby[ppsb]: take-ignored take for an offer this machine does not own — ignored
+[follow-e2e]   drive[ppmk]: take->init offer 56ed07adddec5554
+[follow-e2e]   drive[pptk]: init->accept offer 56ed07adddec5554
+[follow-e2e]   drive[ppmk]: recv accept
+[follow-e2e]   standby[ppsb]: relay-retry attempt 1: unknown swap 464d2fdaececf79f: Query returned no rows
+[follow-e2e]   import[ppsb]: follow-ignored `accept` for another machine's swap — a follower advances by chain onl
+[takeover-e2e] pre-funding swap 464d2fdaececf79f followed — killing the maker
+[follow-e2e]   finish[ppsb]: auto-fund retried chain-A funding
+[follow-e2e]   finish[pptk]: auto-fund after funded
+[follow-e2e]   finish[ppsb]: funded-b chain-B HTLC confirmed (chain-watched)
+[follow-e2e]   finish[ppsb]: recv funded
+[follow-e2e]   finish[ppsb]: auto-redeem e6edc03318eabc05703f4839772d02ef663008cb75d611981b77e64da4b9d5bf
+[follow-e2e]   finish[pptk]: auto-redeem 5790293ecfdea14e9096da903186913bbd95b086e69c5b39c7d137aa792d5b5c
+[follow-e2e]   finish[ppsb]: completed e6edc03318eabc05703f4839772d02ef663008cb75d611981b77e64da4b9d5bf
+[follow-e2e]   finish[pptk]: settled 5790293ecfdea14e9096da903186913bbd95b086e69c5b39c7d137aa792d5b5c 1 dee
+[takeover-e2e] provable pre-funding takeover OK: belt proved unfunded, standby funded and completed the swap
+----- PrefundTakeoverFundsProvable PASSED (26s)
+
+===== TakerPostRevealTakeoverV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-TakerPostRevealTakeoverV1-gm4cwuub
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :18332)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[follow-e2e] both electrs synced
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for prmk on :19737
+[e2e] pactd up for prtk on :19738
+[e2e] pactd up for prsb on :19739
+[follow-e2e]   drive[prmk]: take->init offer d3c5d2eaa10c6bfc
+[follow-e2e]   drive[prtk]: init->accept offer d3c5d2eaa10c6bfc
+[follow-e2e]   standby[prsb]: init-ignored no pending take on this machine (another machine on this seed may be d
+[follow-e2e]   drive[prmk]: auto-fund after accept
+[follow-e2e]   drive[prtk]: auto-fund chain-A confirmed; funded chain B
+[follow-e2e]   standby[prsb]: follow-ignored `funded` for another machine's swap — a follower advances by chain onl
+[follow-e2e]   reveal[prmk]: their-lock chain-B HTLC seen; burying to n_b (chain-watched)
+[follow-e2e]   reveal[prmk]: recv funded
+[follow-e2e]   reveal[prmk]: auto-redeem fb6001275cd2261ef8e2f0fa647df60cc97808e47470f15da255981ff5e42dbb
+[takeover-e2e] reveal is public (54437e886e5192c8) — killing the taker before its leg-A claim
+[follow-e2e]   finish[prsb]: auto-redeem 27f6d1c4ca168fa393211f81f37ede4f15838d1ad91a5fb2f25ab841dd71d242
+[follow-e2e]   finish[prsb]: reconciled chain truth → Completed: both legs settled on-chain (A Redeem, B Redee
+[follow-e2e]   finish[prmk]: completed fb6001275cd2261ef8e2f0fa647df60cc97808e47470f15da255981ff5e42dbb
+[takeover-e2e] post-reveal taker takeover OK: adopted, claimed leg A from the chain-visible secret
+----- TakerPostRevealTakeoverV1 PASSED (28s)
+
+===== TakerPostRevealTakeoverV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-TakerPostRevealTakeoverV2-msxknl0f
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :18332)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[follow-e2e] both electrs synced
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for pvmk on :19737
+[e2e] pactd up for pvtk on :19738
+[e2e] pactd up for pvsb on :19739
+[follow-e2e]   drive[pvmk]: take->init offer 92aaeac7c622ce8b
+[follow-e2e]   drive[pvtk]: init->accept offer 92aaeac7c622ce8b
+[follow-e2e]   standby[pvsb]: init-ignored no pending take on this machine (another machine on this seed may be d
+[follow-e2e]   drive[pvmk]: adaptor-fund broadcast leg A + funding_ready
+[follow-e2e]   drive[pvtk]: adaptor-fund built leg B (unbroadcast) + funding_ready
+[follow-e2e]   standby[pvsb]: follow-ignored `funding_ready` for another machine's swap — a follower advances by ch
+[follow-e2e]   drive[pvmk]: adaptor-nonces sent public nonces
+[follow-e2e]   drive[pvtk]: adaptor-nonces sent public nonces
+[follow-e2e]   standby[pvsb]: follow-ignored `nonces` for another machine's swap — a follower advances by chain onl
+[follow-e2e]   drive[pvmk]: adaptor-signed partial adaptor sig sent
+[follow-e2e]   standby[pvsb]: follow-ignored `partial_sigs` for another machine's swap — a follower advances by cha
+[follow-e2e]   drive[pvtk]: adaptor-assembled state Signed
+[follow-e2e]   drive[pvtk]: adaptor-fund-b broadcast leg B b3e55753a3eab87d52af5b0f9be44179ea5c39d178fb4aa8e0d4f4
+[follow-e2e]   settle[pvmk]: adaptor-assembled state Signed
+[follow-e2e]   reveal[pvmk]: adaptor-redeem-b revealed t; state RedeemedB
+[takeover-e2e] v2 reveal is public (d81be498cfe24d86) — killing the taker before its leg-A claim
+[follow-e2e]   finish[pvsb]: adaptor-redeem-a extracted t; state Completed
+[follow-e2e]   finish[pvsb]: reconciled chain truth → Completed: both legs settled on-chain (A Redeem, B Redee
+[follow-e2e]   finish[pvmk]: adaptor-completed 4b597582a78e94a2833d09f35850b7e79731cd75bf33927d6ef0cb7a69a36092
+[takeover-e2e] v2 post-reveal taker takeover OK: adopted at redeemed_b, claimed leg A from the chain-visible reveal
+----- TakerPostRevealTakeoverV2 PASSED (44s)
+
+===== OwnerReturnsAfterTakeoverV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-OwnerReturnsAfterTakeoverV1-faj7j70m
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :18332)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[follow-e2e] both electrs synced
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for ormk on :19737
+[e2e] pactd up for ortk on :19738
+[e2e] pactd up for orsb on :19739
+[follow-e2e]   standby[orsb]: take-ignored take for an offer this machine does not own — ignored
+[follow-e2e]   drive[ormk]: take->init offer 2446778f75ff42f5
+[follow-e2e]   drive[ortk]: init->accept offer 2446778f75ff42f5
+[follow-e2e]   drive[ormk]: auto-fund after accept
+[follow-e2e]   standby[orsb]: relay-retry attempt 1: unknown swap 1f90320ba3efa78a: Query returned no rows
+[follow-e2e]   drive[ortk]: auto-fund after funded
+[follow-e2e]   standby[orsb]: follow-ignored `accept` for another machine's swap — a follower advances by chain onl
+[takeover-e2e] both funded (A 66bff9fa8d6ac776) — hard-killing the owner
+[follow-e2e]   finish[orsb]: recv funded
+[follow-e2e]   finish[orsb]: auto-redeem c510afa1daca11162822ec1fb54fd9cc6ec28938f7c729900cd34ecd877ab36d
+[follow-e2e]   finish[ortk]: auto-redeem c81a5344bc888a02ff2c61b65ce559e236e0dc8ef13e47380bed70eb8ce97a8c
+[follow-e2e]   finish[orsb]: completed c510afa1daca11162822ec1fb54fd9cc6ec28938f7c729900cd34ecd877ab36d
+[follow-e2e]   finish[ortk]: settled c81a5344bc888a02ff2c61b65ce559e236e0dc8ef13e47380bed70eb8ce97a8c 1 dee
+[takeover-e2e] swap 1f90320ba3efa78a completed by the standby — restarting the owner's pactd on its old datadir
+[e2e] pactd up for ormk on :19737
+[follow-e2e]   owner-return[ormk]: reconciled chain truth → Completed: both legs settled on-chain (A Redeem, B Redee
+[takeover-e2e] owner-returns v1 OK: stale record reconciled to completed from chain truth, zero broadcasts, no re-fund
+----- OwnerReturnsAfterTakeoverV1 PASSED (42s)
+
+===== OwnerReturnsAfterTakeoverV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-OwnerReturnsAfterTakeoverV2-wvavatd7
+[harness] pocx node up (rpc :18443)
+[harness] btc node up (rpc :18332)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[follow-e2e] both electrs synced
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for o2mk on :19737
+[e2e] pactd up for o2tk on :19738
+[e2e] pactd up for o2sb on :19739
+[follow-e2e]   standby[o2sb]: take-ignored take for an offer this machine does not own — ignored
+[follow-e2e]   drive[o2mk]: take->init offer 5339476ae6b5eb03
+[follow-e2e]   drive[o2tk]: init->accept offer 5339476ae6b5eb03
+[follow-e2e]   drive[o2mk]: adaptor-fund broadcast leg A + funding_ready
+[follow-e2e]   standby[o2sb]: relay-retry attempt 1: unknown swap e39914d4c6ab0864: Query returned no rows
+[follow-e2e]   standby[o2sb]: follow-ignored `accept` for another machine's swap — a follower advances by chain onl
+[follow-e2e]   drive[o2tk]: adaptor-fund built leg B (unbroadcast) + funding_ready
+[follow-e2e]   drive[o2mk]: adaptor-nonces sent public nonces
+[follow-e2e]   standby[o2sb]: follow-ignored `funding_ready` for another machine's swap — a follower advances by ch
+[follow-e2e]   drive[o2tk]: adaptor-nonces sent public nonces
+[follow-e2e]   standby[o2sb]: follow-ignored `nonces` for another machine's swap — a follower advances by chain onl
+[follow-e2e]   drive[o2mk]: adaptor-signed partial adaptor sig sent
+[follow-e2e]   drive[o2tk]: adaptor-assembled state Signed
+[follow-e2e]   drive[o2tk]: adaptor-fund-b broadcast leg B 8843b93081984da257a14607b82e83742d445df5158257d80186ad
+[follow-e2e]   standby[o2sb]: follow-ignored `partial_sigs` for another machine's swap — a follower advances by cha
+[follow-e2e]   drive[o2mk]: adaptor-assembled state Signed
+[takeover-e2e] maker Signed (leg A 6664eaf64f1e5630) — killing the owner
+[follow-e2e]   finish[o2sb]: adaptor-redeem-b revealed t; state RedeemedB
+[follow-e2e]   finish[o2tk]: adaptor-redeem-a extracted t; state Completed
+[follow-e2e]   finish[o2tk]: settled 846718d458b7da9a1848edb26377c2d5bbc15a4986ad2720408fe4ca338d9a8b 1 dee
+[follow-e2e]   finish[o2sb]: adaptor-completed 7fec17bcc5e29b36ddb592cf7dbaccd6337b1f8e963e019a56e307f530db3a8c
+[takeover-e2e] v2 swap e39914d4c6ab0864 completed by the standby — restarting the owner's pactd on its old datadir
+[e2e] pactd up for o2mk on :19737
+[follow-e2e]   owner-return[o2mk]: reconciled chain truth → Completed: both legs settled on-chain (A Redeem, B Redee
+[takeover-e2e] owner-returns v2 OK: stale record reconciled to completed from chain truth, zero broadcasts, no re-fund
+----- OwnerReturnsAfterTakeoverV2 PASSED (59s)
+
+GREEN: all 10 scenario(s) pass.
+
+================ upgrade.py ================
+
+===== UpgradeMidSwapV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-UpgradeMidSwapV1-dtj3ji4a
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for upmk1 on :19737
+[e2e] pactd up for uptk1 on :19738
+[upgrade-e2e]   rc19[upmk1]: take->init offer aa2f4d89f301dbc7
+[upgrade-e2e]   rc19[uptk1]: init->accept offer aa2f4d89f301dbc7
+[upgrade-e2e]   rc19[upmk1]: auto-fund after accept
+[upgrade-e2e]   rc19[uptk1]: auto-fund after funded
+[upgrade-e2e] both funded on rc19 (a8e496ed5e18d769) — upgrading
+[e2e] pactd up for upmk1 on :19737
+[e2e] pactd up for uptk1 on :19738
+[upgrade-e2e]   finish[upmk1]: recv funded
+[upgrade-e2e]   finish[upmk1]: auto-redeem a946f8b6a672ffa9e095a19bc9ab4a70ce159c63d2943ae51425872a203dc623
+[upgrade-e2e]   finish[uptk1]: auto-redeem e1be33f7e97f92f79cda285f85e2401c44cdd56b3ac68395c4916ab67806a521
+[upgrade-e2e]   finish[upmk1]: completed a946f8b6a672ffa9e095a19bc9ab4a70ce159c63d2943ae51425872a203dc623
+[upgrade-e2e]   finish[uptk1]: settled e1be33f7e97f92f79cda285f85e2401c44cdd56b3ac68395c4916ab67806a521 1 dee
+[upgrade-e2e] v1 upgrade OK: rc19-started swap completed on the current build, original fundings intact
+----- UpgradeMidSwapV1 PASSED (33s)
+
+===== UpgradeMidSwapV2 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-UpgradeMidSwapV2-4golcorg
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for upmk2 on :19737
+[e2e] pactd up for uptk2 on :19738
+[upgrade-e2e]   rc19[upmk2]: take->init offer 57ef9a65ce83b177
+[upgrade-e2e]   rc19[uptk2]: init->accept offer 57ef9a65ce83b177
+[upgrade-e2e]   rc19[upmk2]: adaptor-fund broadcast leg A + funding_ready
+[upgrade-e2e]   rc19[uptk2]: adaptor-fund built leg B (unbroadcast) + funding_ready
+[upgrade-e2e]   rc19[upmk2]: adaptor-nonces sent public nonces
+[upgrade-e2e]   rc19[uptk2]: adaptor-nonces sent public nonces
+[upgrade-e2e]   rc19[upmk2]: adaptor-signed partial adaptor sig sent
+[upgrade-e2e]   rc19[uptk2]: adaptor-assembled state Signed
+[upgrade-e2e]   rc19[uptk2]: adaptor-fund-b broadcast leg B 1d836c091da285b625257dec304e47f40d0e327e539056f2c27495
+[upgrade-e2e]   rc19[upmk2]: adaptor-assembled state Signed
+[upgrade-e2e] v2 committed on rc19 (edc8850ff69b18c7) — upgrading
+[e2e] pactd up for upmk2 on :19737
+[e2e] pactd up for uptk2 on :19738
+[upgrade-e2e]   finish[upmk2]: adaptor-redeem-b revealed t; state RedeemedB
+[upgrade-e2e]   finish[uptk2]: adaptor-redeem-a extracted t; state Completed
+[upgrade-e2e]   finish[uptk2]: settled a933cb6da8bc8e5cb471373cd11367c99bc8acff9c5be83b95e7e5d1875a664a 1 dee
+[upgrade-e2e]   finish[upmk2]: adaptor-completed 6d4dd6cdc4f3bca499a6ffbc5446bc11f8f46ca97f38392b4df4e4f359ec9446
+[upgrade-e2e] v2 upgrade OK: completed via the rc19-written adaptor state, original fundings intact
+----- UpgradeMidSwapV2 PASSED (47s)
+
+===== MixedVersionSwapV1 =====
+[harness] workdir: C:\Users\Johnny\AppData\Local\Temp\pact-MixedVersionSwapV1-s7wqihdw
+[harness] pocx node up (rpc :19443)
+[harness] btc node up (rpc :19543)
+[harness] wallets funded (alice_btcx: 220.0 POCX, bob_btc: 1100.0 BTC)
+[relay] nostr relay up on :19791 (ws://127.0.0.1:19791)
+[e2e] pactd up for mxmk on :19737
+[e2e] pactd up for mxtk on :19738
+[upgrade-e2e]   mixed[mxmk]: take->init offer cb57132673467e82
+[upgrade-e2e]   mixed[mxtk]: init->accept offer cb57132673467e82
+[upgrade-e2e]   mixed[mxmk]: auto-fund after accept
+[upgrade-e2e]   mixed[mxtk]: auto-fund chain-A confirmed; funded chain B
+[upgrade-e2e]   mixed[mxmk]: funded-b chain-B HTLC confirmed (chain-watched)
+[upgrade-e2e]   mixed[mxtk]: recv funded
+[upgrade-e2e]   mixed[mxmk]: recv funded
+[upgrade-e2e]   mixed[mxmk]: auto-redeem 68833606639aff02a52e40b5d4970e8797515288cd5e55bc0117f40862e0fe1f
+[upgrade-e2e]   mixed[mxtk]: auto-redeem 8550a20c14cebfe882a4569c75e77a764f4b9427ae18211e73649b8842e709c7
+[upgrade-e2e]   mixed[mxmk]: completed 68833606639aff02a52e40b5d4970e8797515288cd5e55bc0117f40862e0fe1f
+[upgrade-e2e]   mixed[mxtk]: settled 8550a20c14cebfe882a4569c75e77a764f4b9427ae18211e73649b8842e709c7 1 dee
+[upgrade-e2e] mixed-version OK: rc19 maker <-> current taker completed a v1 swap over the wire
+----- MixedVersionSwapV1 PASSED (27s)
+
+GREEN: all 3 scenario(s) pass.
+
+================ summary ================
+  framework_selftest.py        PASS                   6s
+  multimachine.py              PASS                   1s
+  swap_v1.py                   PASS                 502s
+  swap_v1_rescue.py            PASS                 197s
+  swap_v2_adaptor.py           PASS                 302s
+  nodeless.py                  PASS                 150s
+  follow.py                    PASS                  88s
+  takeover.py                  PASS                 361s
+  upgrade.py                   PASS                 107s
+
+GREEN: all 9 test file(s) pass.

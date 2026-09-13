@@ -1,0 +1,114 @@
+[
+  {
+    "probe": "accepted-then-lost",
+    "v2": false,
+    "state": "completed",
+    "settled": false,
+    "settlement_loss": false,
+    "actions": [
+      {
+        "action": "settlement-conflict",
+        "detail": "HTLC 015c9f4cd95fada2d5a8cb439a093bc9b88c85e8e93be5b2db9dbf762904b60b:1 spent by foreign tx 7b46d670837174b95b2e8c4234e5ae2063730a2c0c251125f93405c4bcc82b24 \u2014 reconciling from chain",
+        "swap_id": "16f26dff153b8c4e"
+      },
+      {
+        "action": "settlement-conflict",
+        "detail": "HTLC 015c9f4cd95fada2d5a8cb439a093bc9b88c85e8e93be5b2db9dbf762904b60b:1 spent by foreign tx 7b46d670837174b95b2e8c4234e5ae2063730a2c0c251125f93405c4bcc82b24 \u2014 reconciling from chain",
+        "swap_id": "16f26dff153b8c4e"
+      },
+      {
+        "action": "settlement-conflict",
+        "detail": "HTLC 015c9f4cd95fada2d5a8cb439a093bc9b88c85e8e93be5b2db9dbf762904b60b:1 spent by foreign tx 7b46d670837174b95b2e8c4234e5ae2063730a2c0c251125f93405c4bcc82b24 \u2014 reconciling from chain",
+        "swap_id": "16f26dff153b8c4e"
+      }
+    ],
+    "retains_dead_claim": true
+  },
+  {
+    "probe": "accepted-then-lost",
+    "v2": true,
+    "state": "completed",
+    "settled": false,
+    "settlement_loss": false,
+    "actions": [
+      {
+        "action": "error",
+        "detail": "RPC error -25: bad-txns-inputs-missingorspent",
+        "swap_id": "98d790ce758c3ec5"
+      },
+      {
+        "action": "error",
+        "detail": "RPC error -25: bad-txns-inputs-missingorspent",
+        "swap_id": "98d790ce758c3ec5"
+      },
+      {
+        "action": "error",
+        "detail": "RPC error -25: bad-txns-inputs-missingorspent",
+        "swap_id": "98d790ce758c3ec5"
+      }
+    ],
+    "retains_dead_claim": true
+  },
+  {
+    "probe": "initiator-refund-starved",
+    "v2": false,
+    "state": "redeemed_b",
+    "leg_a_still_unspent": true,
+    "mtp_a": 1789268725,
+    "t1": 1789253459,
+    "actions": [
+      {
+        "action": "settlement-conflict",
+        "detail": "HTLC cda19f0ef5e61c38584213afddc5342f54b13bd39eb990a8db7a1da14e3b81c6:0 spent by foreign tx d531631cd9db7f8a93c72614dfcced2e8d573b56e71a43e6d56f3d8a04ba0ef2 \u2014 reconciling from chain",
+        "swap_id": "805c3754e9f4fd62"
+      },
+      {
+        "action": "settlement-conflict",
+        "detail": "HTLC cda19f0ef5e61c38584213afddc5342f54b13bd39eb990a8db7a1da14e3b81c6:0 spent by foreign tx d531631cd9db7f8a93c72614dfcced2e8d573b56e71a43e6d56f3d8a04ba0ef2 \u2014 reconciling from chain",
+        "swap_id": "805c3754e9f4fd62"
+      },
+      {
+        "action": "settlement-conflict",
+        "detail": "HTLC cda19f0ef5e61c38584213afddc5342f54b13bd39eb990a8db7a1da14e3b81c6:0 spent by foreign tx d531631cd9db7f8a93c72614dfcced2e8d573b56e71a43e6d56f3d8a04ba0ef2 \u2014 reconciling from chain",
+        "swap_id": "805c3754e9f4fd62"
+      }
+    ]
+  },
+  {
+    "probe": "manual-refund-succeeded",
+    "v2": false
+  },
+  {
+    "probe": "initiator-refund-starved",
+    "v2": true,
+    "state": "redeemed_b",
+    "leg_a_still_unspent": true,
+    "mtp_a": 1789268740,
+    "t1": 1789253474,
+    "actions": [
+      {
+        "action": "error",
+        "detail": "RPC error -25: bad-txns-inputs-missingorspent",
+        "swap_id": "46c7c95c8f5fc77a"
+      },
+      {
+        "action": "error",
+        "detail": "RPC error -25: bad-txns-inputs-missingorspent",
+        "swap_id": "46c7c95c8f5fc77a"
+      },
+      {
+        "action": "error",
+        "detail": "RPC error -25: bad-txns-inputs-missingorspent",
+        "swap_id": "46c7c95c8f5fc77a"
+      }
+    ]
+  },
+  {
+    "probe": "manual-refund-succeeded",
+    "v2": true
+  },
+  {
+    "probe": "revoked-offer-replay",
+    "revived": true
+  }
+]

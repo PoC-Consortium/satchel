@@ -40,6 +40,27 @@ use std::sync::{Arc, Mutex};
 /// envelopes, not file transfer.
 const MAX_BLOB_BYTES: usize = 64 * 1024;
 const DEFAULT_OFFER_TTL_SECS: u64 = 24 * 3600;
+const MAX_OFFER_TTL_SECS: u64 = 7 * 24 * 3600;
+
+/// Expiry is signed, never renewed by replaying a publication to the server.
+fn offer_window(envelope: &Envelope, clock: u64) -> Result<(u64, u64)> {
+    let created = envelope.body["created"]
+        .as_u64()
+        .context("offer requires signed created time")?;
+    anyhow::ensure!(
+        created > 0 && created <= clock.saturating_add(300),
+        "invalid offer creation time"
+    );
+    let ttl = match envelope.body.get("ttl_secs") {
+        None | Some(Value::Null) => DEFAULT_OFFER_TTL_SECS,
+        Some(value) => value.as_u64().context("invalid offer TTL")?,
+    }
+    .min(MAX_OFFER_TTL_SECS);
+    anyhow::ensure!(ttl > 0, "offer TTL must be positive");
+    let expires = created.checked_add(ttl).context("offer expiry overflow")?;
+    anyhow::ensure!(expires > clock, "offer expired");
+    Ok((created, expires))
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "corkboard", version)]
@@ -116,14 +137,35 @@ fn open_db(path: &PathBuf) -> Result<Connection> {
         "CREATE INDEX IF NOT EXISTS relay_sender ON relay(sender)",
         [],
     )?;
+    // Migrate receipt-time lifetimes from older boards, including surviving
+    // revocation rows. Already-deleted historical revocations cannot be recovered.
+    let rows = conn
+        .prepare("SELECT offer_id, envelope FROM offers")?
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    for (id, raw) in rows {
+        let window = serde_json::from_str::<Envelope>(&raw)
+            .map_err(anyhow::Error::from)
+            .and_then(|envelope| offer_window(&envelope, now()));
+        match window {
+            Ok((created, expires)) => {
+                conn.execute(
+                    "UPDATE offers SET created=?2, expires=?3 WHERE offer_id=?1",
+                    params![id, created, expires],
+                )?;
+            }
+            Err(_) => {
+                conn.execute("DELETE FROM offers WHERE offer_id=?1", params![id])?;
+            }
+        }
+    }
     Ok(conn)
 }
 
 fn prune(db: &Connection) -> Result<()> {
-    db.execute(
-        "DELETE FROM offers WHERE expires <= ?1 OR revoked != 0",
-        params![now()],
-    )?;
+    db.execute("DELETE FROM offers WHERE expires <= ?1", params![now()])?;
     db.execute(
         "DELETE FROM relay WHERE created < ?1",
         params![now().saturating_sub(7 * 86400)],
@@ -150,13 +192,27 @@ async fn post_offer(
     Json(envelope): Json<Envelope>,
 ) -> Result<Json<Value>, ApiError> {
     verified(&envelope, "offer")?;
-    let ttl = envelope.body["ttl_secs"]
-        .as_u64()
-        .unwrap_or(DEFAULT_OFFER_TTL_SECS);
-    let ttl = ttl.min(7 * 24 * 3600); // a week, tops — offers are not archives
-    let created = now();
+    let (created, expires) = offer_window(&envelope, now())?;
     let db = app.db.lock().expect("db mutex");
     prune(&db)?;
+    // A revoked row is a tombstone for the entire signed validity window.
+    // Check before quotas so a live byte-identical retry still succeeds at quota.
+    let existing: Option<(String, String, bool)> = db
+        .query_row(
+            "SELECT identity, envelope, revoked FROM offers WHERE offer_id=?1",
+            params![envelope.swap_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .optional()?;
+    if let Some((identity, raw, revoked)) = existing {
+        if revoked {
+            return Err(anyhow::anyhow!("offer revoked").into());
+        }
+        if identity != envelope.from || serde_json::from_str::<Envelope>(&raw)? != envelope {
+            return Err(anyhow::anyhow!("conflicting offer identity").into());
+        }
+        return Ok(Json(json!({ "offer_id": envelope.swap_id })));
+    }
     let total: i64 = db.query_row("SELECT COUNT(*) FROM offers", [], |r| r.get(0))?;
     let own: i64 = db.query_row(
         "SELECT COUNT(*) FROM offers WHERE identity = ?1",
@@ -175,7 +231,7 @@ async fn post_offer(
             envelope.from,
             serde_json::to_string(&envelope)?,
             created,
-            created + ttl
+            expires
         ],
     )?;
     Ok(Json(json!({ "offer_id": envelope.swap_id })))
@@ -395,6 +451,143 @@ mod tests {
         };
         pact_proto::envelope::sign(&mut envelope, &key).unwrap();
         envelope
+    }
+
+    fn offer(id: &str, created: u64, ttl: u64) -> Envelope {
+        let key =
+            Keypair::from_secret_key(&Secp256k1::new(), &SecretKey::from_slice(&[7; 32]).unwrap());
+        let mut envelope = message("", created);
+        envelope.msg_type = "offer".into();
+        envelope.swap_id = id.into();
+        envelope.body = json!({"created": created, "ttl_secs": ttl});
+        pact_proto::envelope::sign(&mut envelope, &key).unwrap();
+        envelope
+    }
+
+    #[test]
+    fn signed_offer_validity_is_bounded_and_cannot_be_renewed() {
+        let clock = 1_000_000;
+        assert_eq!(
+            offer_window(&offer("a", clock - 100, 200), clock).unwrap(),
+            (clock - 100, clock + 100)
+        );
+        assert!(offer_window(&offer("a", clock - 200, 200), clock).is_err());
+        assert!(offer_window(&offer("a", clock + 301, 200), clock).is_err());
+        assert!(offer_window(&offer("a", clock, 0), clock).is_err());
+        assert!(offer_window(&offer("a", u64::MAX, 1), u64::MAX).is_err());
+        assert_eq!(
+            offer_window(&offer("a", clock, u64::MAX), clock).unwrap().1,
+            clock + MAX_OFFER_TTL_SECS
+        );
+        let mut envelope = offer("a", clock, 1);
+        envelope.body = json!({"created": clock});
+        assert_eq!(
+            offer_window(&envelope, clock).unwrap().1,
+            clock + DEFAULT_OFFER_TTL_SECS
+        );
+        envelope.body = json!({});
+        assert!(offer_window(&envelope, clock).is_err());
+    }
+
+    #[tokio::test]
+    async fn live_offer_retry_succeeds_at_quota_without_renewing_expiry() {
+        let app = app();
+        let created = now() - 100;
+        let original = offer("original", created, 3600);
+        assert!(post_offer(State(app.clone()), Json(original.clone()))
+            .await
+            .is_ok());
+        for i in 0..127 {
+            assert!(post_offer(
+                State(app.clone()),
+                Json(offer(&format!("filler-{i}"), created, 3600))
+            )
+            .await
+            .is_ok());
+        }
+        assert!(
+            post_offer(State(app.clone()), Json(offer("overflow", created, 3600)))
+                .await
+                .is_err()
+        );
+        assert!(post_offer(State(app.clone()), Json(original)).await.is_ok());
+        let expires: u64 = app
+            .db
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT expires FROM offers WHERE offer_id='original'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(expires, created + 3600);
+        assert!(
+            post_offer(State(app), Json(offer("original", created + 1, 3600)))
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn revocation_survives_prune_restart_and_receipt_time_migration() {
+        let path = std::env::temp_dir().join(format!(
+            "corkboard-revoke-{}-{}.sqlite",
+            std::process::id(),
+            now()
+        ));
+        let app = App {
+            db: Arc::new(Mutex::new(open_db(&path).unwrap())),
+        };
+        let created = now() - 100;
+        let original = offer("revoked", created, 3600);
+        assert!(post_offer(State(app.clone()), Json(original.clone()))
+            .await
+            .is_ok());
+        let mut revocation = original.clone();
+        revocation.msg_type = "revoke".into();
+        revocation.body = json!({});
+        let key =
+            Keypair::from_secret_key(&Secp256k1::new(), &SecretKey::from_slice(&[7; 32]).unwrap());
+        pact_proto::envelope::sign(&mut revocation, &key).unwrap();
+        assert!(revoke_offer(State(app.clone()), Json(revocation))
+            .await
+            .is_ok());
+        {
+            let db = app.db.lock().unwrap();
+            prune(&db).unwrap();
+            db.execute(
+                "UPDATE offers SET created=?1, expires=?2",
+                params![now(), now() + 3600],
+            )
+            .unwrap();
+        }
+        drop(app);
+        let app = App {
+            db: Arc::new(Mutex::new(open_db(&path).unwrap())),
+        };
+        let row: (u64, u64, bool) = app
+            .db
+            .lock()
+            .unwrap()
+            .query_row("SELECT created, expires, revoked FROM offers", [], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            })
+            .unwrap();
+        assert_eq!(row, (created, created + 3600, true));
+        let rejected = post_offer(State(app.clone()), Json(original))
+            .await
+            .err()
+            .unwrap();
+        assert!(rejected.0.to_string().contains("revoked"));
+        assert!(post_offer(
+            State(app.clone()),
+            Json(offer("expired", now() - 3600, 3600))
+        )
+        .await
+        .is_err());
+        drop(app);
+        std::fs::remove_file(path).unwrap();
     }
 
     #[tokio::test]

@@ -3605,6 +3605,28 @@ impl Engine {
                     .into(),
             }));
         }
+        // A spent own leg needs winner reconciliation, not another refund.
+        // Accept exact-value replacement funding only for this refund path.
+        let secp = bitcoin::secp256k1::Secp256k1::new();
+        let p = self.adaptor_params(rec)?;
+        let (leg, vout, amount) = match rec.role {
+            Role::Initiator => (p.leg_a(&secp)?, rec.funding_a_vout, rec.amount_a),
+            Role::Participant => (p.leg_b(&secp)?, rec.funding_b_vout, rec.amount_b),
+        };
+        let op = OutPoint {
+            txid: bitcoin::Txid::from_str(txid_o.as_deref().context("no funding txid")?)?,
+            vout: vout.context("no funding vout")?,
+        };
+        let backend = self.backend(chain)?;
+        let spk = leg.script_pubkey(&secp)?;
+        if backend.get_txout(&op, &spk)?.is_none()
+            && backend
+                .find_funding(&spk)?
+                .is_none_or(|(_, info)| info.value_sat != amount)
+        {
+            self.request_reconcile(&rec.swap_id);
+            return Ok(None);
+        }
         let r = self.adaptor_refund(&rec.swap_id)?;
         Ok(Some(TickEvent {
             swap_id: rec.swap_id.clone(),
@@ -3629,6 +3651,29 @@ impl Engine {
     ///   be RBF'd — is CPFP-bumped with a self-funded child (v2+; see
     ///   [`Self::adaptor_keep_moving`]).
     fn adaptor_tick_one(&self, rec: &AdaptorSwapRecord) -> Result<Option<TickEvent>> {
+        let result = self.adaptor_tick_one_inner(rec);
+        if let Err(error) = &result {
+            if crate::chain::is_inputs_spent(error) {
+                self.request_reconcile(&rec.swap_id);
+                if self.reject_v2_claim(rec, error)? {
+                    return Ok(None);
+                }
+            }
+        }
+        // A failed/stalled first reveal must not disarm our independent T1
+        // refund. Reload: nursing may have finalized the reveal this tick.
+        if rec.role == Role::Initiator && rec.state == AdaptorState::RedeemedB && !rec.settled {
+            let latest = self.store.get_adaptor(&rec.swap_id)?;
+            if latest.state == AdaptorState::RedeemedB && !latest.settled {
+                if let Some(refund) = self.adaptor_refund_if_due(&latest)? {
+                    return Ok(Some(refund));
+                }
+            }
+        }
+        result
+    }
+
+    fn adaptor_tick_one_inner(&self, rec: &AdaptorSwapRecord) -> Result<Option<TickEvent>> {
         if rec.settled {
             self.store
                 .meta_del(&format!("claim_pending:{}", rec.swap_id))?;
@@ -5446,6 +5491,14 @@ impl Engine {
             "cannot refund a followed swap"
         );
         let txid = tx.compute_txid();
+        // Keep proof of the published secret when the single v1 settlement
+        // slot changes from a losing reveal to our refund (v2 has two slots).
+        if rec.role == Role::Initiator && rec.state == State::RedeemedB {
+            if let Some(reveal) = &rec.final_tx_hex {
+                self.store
+                    .meta_set(&format!("reveal_tx:{}:b", rec.swap_id), reveal)?;
+            }
+        }
         rec.final_txid = Some(txid.to_string());
         rec.final_tx_hex = Some(bitcoin::consensus::encode::serialize_hex(&tx));
         rec.state = State::Refunded;
@@ -8224,7 +8277,7 @@ impl Engine {
     }
 
     /// Adopt our settlement spend into a v2 record's per-leg `final_*` fields
-    /// (never clobbering local data) — shared by fast-forward and reconcile.
+    /// replacing a losing local candidate — shared by fast-forward and reconcile.
     fn v2_adopt_final(
         rec: &mut AdaptorSwapRecord,
         ours_is_a: bool,
@@ -8240,11 +8293,9 @@ impl Engine {
             return;
         };
         if ours_is_a {
-            if rec.final_txid_a.is_none() {
-                rec.final_txid_a = Some(ours.spend_txid.clone());
-                rec.final_tx_a_hex = Some(ours.spend_tx_hex.clone());
-            }
-        } else if rec.final_txid_b.is_none() {
+            rec.final_txid_a = Some(ours.spend_txid.clone());
+            rec.final_tx_a_hex = Some(ours.spend_tx_hex.clone());
+        } else {
             rec.final_txid_b = Some(ours.spend_txid.clone());
             rec.final_tx_b_hex = Some(ours.spend_tx_hex.clone());
         }
@@ -8264,10 +8315,7 @@ impl Engine {
     /// demands before ITS terminal decision, so no second read is needed.
     fn reconcile_driven_v1(&self, rec: &SwapRecord) -> Result<Option<TickEvent>> {
         use crate::reconstruct::{LegClass, SpendKind};
-        if matches!(
-            rec.state,
-            State::Completed | State::Refunded | State::Aborted
-        ) {
+        if rec.settled || rec.state == State::Aborted {
             self.mark_reconciled(&rec.swap_id);
             return Ok(None);
         }
@@ -8367,8 +8415,7 @@ impl Engine {
             &mut updated.htlc_b_height,
         );
         // Our settlement spend (a same-seed machine's redeem/refund IS ours)
-        // becomes `final_tx` so the existing confirmation nurse converges on
-        // it; never clobber local data.
+        // replaces a losing local candidate in `final_tx`.
         updated.settlement_loss = ours.is_none();
         updated.final_txid = ours.map(|s| s.spend_txid.clone());
         updated.final_tx_hex = ours.map(|s| s.spend_tx_hex.clone());
@@ -8392,10 +8439,7 @@ impl Engine {
     /// gate, same one-matrix terminal mapping, per-leg `final_*` adoption.
     fn reconcile_driven_v2(&self, rec: &AdaptorSwapRecord) -> Result<Option<TickEvent>> {
         use crate::reconstruct::{LegClass, SpendKind};
-        if matches!(
-            rec.state,
-            AdaptorState::Completed | AdaptorState::Refunded | AdaptorState::Aborted
-        ) {
+        if rec.settled || rec.state == AdaptorState::Aborted {
             self.mark_reconciled(&rec.swap_id);
             return Ok(None);
         }
@@ -8932,6 +8976,27 @@ impl Engine {
     }
 
     fn tick_one(&self, rec: &SwapRecord) -> Result<Option<TickEvent>> {
+        let result = self.tick_one_inner(rec);
+        if let Err(error) = &result {
+            if crate::chain::is_inputs_spent(error) {
+                self.request_reconcile(&rec.swap_id);
+                if self.reject_v1_claim(rec, error)? {
+                    return Ok(None);
+                }
+            }
+        }
+        if rec.role == Role::Initiator && rec.state == State::RedeemedB && !rec.settled {
+            let latest = self.store.get(&rec.swap_id)?;
+            if latest.state == State::RedeemedB && !latest.settled {
+                if let Some(refund) = self.try_refund_due(&latest, "a")? {
+                    return Ok(Some(refund));
+                }
+            }
+        }
+        result
+    }
+
+    fn tick_one_inner(&self, rec: &SwapRecord) -> Result<Option<TickEvent>> {
         if rec.settled {
             self.store
                 .meta_del(&format!("claim_pending:{}", rec.swap_id))?;
@@ -15662,8 +15727,15 @@ mod tests {
             engine.reconcile_pending(&rec.swap_id),
             "inconclusive must retry, not mark"
         );
-        // A terminal record reconciles trivially (no chain I/O) and marks.
+        // Unsettled terminal records still owe chain truth; only the settled
+        // latch authorizes skipping classification.
         rec.state = State::Completed;
+        engine.reconcile_driven_v1(&rec).unwrap();
+        assert!(engine.reconcile_pending(&rec.swap_id));
+        rec.state = State::Refunded;
+        engine.reconcile_driven_v1(&rec).unwrap();
+        assert!(engine.reconcile_pending(&rec.swap_id));
+        rec.settled = true;
         engine.store.put(&rec).unwrap();
         assert!(engine.reconcile_driven_v1(&rec).unwrap().is_none());
         assert!(
