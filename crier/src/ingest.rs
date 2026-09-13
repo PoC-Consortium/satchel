@@ -50,7 +50,12 @@ impl Ingest {
     }
 
     async fn fetch(&self, filter: Filter) -> Vec<Event> {
-        match self.client.fetch_events(filter, FETCH_TIMEOUT).await {
+        match self
+            .client
+            .fetch_events(filter)
+            .timeout(FETCH_TIMEOUT)
+            .await
+        {
             Ok(events) => events.into_iter().collect(),
             Err(err) => {
                 tracing::warn!("nostr: fetch failed: {err:#}");

@@ -16,6 +16,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
+use nostr_sdk::prelude::FinalizeEvent;
 use nostr_sdk::prelude::*;
 use serde::Deserialize;
 
@@ -64,7 +65,9 @@ impl Verdict {
 
 /// NIP-11: fetch the relay info doc over HTTPS and judge its write policy.
 async fn probe_nip11(http: &reqwest::Client, relay: &str) -> (bool, String) {
-    let url = relay.replacen("wss://", "https://", 1).replacen("ws://", "http://", 1);
+    let url = relay
+        .replacen("wss://", "https://", 1)
+        .replacen("ws://", "http://", 1);
     let resp = http
         .get(&url)
         .header("Accept", "application/nostr+json")
@@ -111,27 +114,49 @@ async fn probe_roundtrip(relay: &str, keys: &Keys) -> Result<(bool, bool)> {
     let offer = EventBuilder::new(Kind::Custom(OFFER_KIND), "{\"probe\":true}")
         .tag(Tag::identifier(d.clone()))
         .tag(Tag::expiration(Timestamp::from(stamp + 3600)))
-        .sign_with_keys(keys)?;
+        .finalize(keys)?;
     let ephemeral = Keys::generate();
     let giftwrap = EventBuilder::new(Kind::Custom(GIFTWRAP_KIND), "probe")
         .tag(Tag::public_key(keys.public_key()))
-        .sign_with_keys(&ephemeral)?;
+        .finalize(&ephemeral)?;
 
     // Accepted? send_event reports per-relay success; an empty success set means
     // the relay rejected it.
-    let offer_sent = client.send_event(&offer).await.map(|o| !o.success.is_empty()).unwrap_or(false);
-    let gw_sent = client.send_event(&giftwrap).await.map(|o| !o.success.is_empty()).unwrap_or(false);
+    let offer_sent = client
+        .send_event(&offer)
+        .await
+        .map(|o| !o.success.is_empty())
+        .unwrap_or(false);
+    let gw_sent = client
+        .send_event(&giftwrap)
+        .await
+        .map(|o| !o.success.is_empty())
+        .unwrap_or(false);
 
     // Retained? read them back by id (offer by author, gift-wrap by #p to us).
     let offer_back = if offer_sent {
-        let f = Filter::new().kind(Kind::Custom(OFFER_KIND)).author(keys.public_key());
-        client.fetch_events(f, FETCH_TIMEOUT).await.map(|ev| ev.iter().any(|e| e.id == offer.id)).unwrap_or(false)
+        let f = Filter::new()
+            .kind(Kind::Custom(OFFER_KIND))
+            .author(keys.public_key());
+        client
+            .fetch_events(f)
+            .timeout(FETCH_TIMEOUT)
+            .await
+            .map(|ev| ev.iter().any(|e| e.id == offer.id))
+            .unwrap_or(false)
     } else {
         false
     };
     let gw_back = if gw_sent {
-        let f = Filter::new().kind(Kind::Custom(GIFTWRAP_KIND)).pubkey(keys.public_key());
-        client.fetch_events(f, FETCH_TIMEOUT).await.map(|ev| ev.iter().any(|e| e.id == giftwrap.id)).unwrap_or(false)
+        let f = Filter::new()
+            .kind(Kind::Custom(GIFTWRAP_KIND))
+            .pubkey(keys.public_key());
+        client
+            .fetch_events(f)
+            .timeout(FETCH_TIMEOUT)
+            .await
+            .map(|ev| ev.iter().any(|e| e.id == giftwrap.id))
+            .unwrap_or(false)
     } else {
         false
     };
@@ -149,9 +174,14 @@ async fn main() -> Result<()> {
         args
     };
 
-    let http = reqwest::Client::builder().user_agent("pact-relay-prober").build()?;
+    let http = reqwest::Client::builder()
+        .user_agent("pact-relay-prober")
+        .build()?;
     let keys = Keys::generate();
-    println!("Probing {} relay(s) — offer kind {OFFER_KIND}, gift-wrap kind {GIFTWRAP_KIND}\n", relays.len());
+    println!(
+        "Probing {} relay(s) — offer kind {OFFER_KIND}, gift-wrap kind {GIFTWRAP_KIND}\n",
+        relays.len()
+    );
 
     let mut verdicts = Vec::new();
     for relay in &relays {
@@ -161,11 +191,23 @@ async fn main() -> Result<()> {
             Ok(v) => v,
             Err(e) => {
                 println!("connect failed: {e}");
-                verdicts.push(Verdict { relay: relay.clone(), nip11_ok, nip11_note, offer_ok: false, giftwrap_ok: false });
+                verdicts.push(Verdict {
+                    relay: relay.clone(),
+                    nip11_ok,
+                    nip11_note,
+                    offer_ok: false,
+                    giftwrap_ok: false,
+                });
                 continue;
             }
         };
-        let v = Verdict { relay: relay.clone(), nip11_ok, nip11_note, offer_ok, giftwrap_ok };
+        let v = Verdict {
+            relay: relay.clone(),
+            nip11_ok,
+            nip11_note,
+            offer_ok,
+            giftwrap_ok,
+        };
         println!(
             "nip11={} offer={} giftwrap={} => {}",
             if v.nip11_ok { "ok" } else { &v.nip11_note },
@@ -177,7 +219,11 @@ async fn main() -> Result<()> {
     }
 
     let eligible: Vec<&Verdict> = verdicts.iter().filter(|v| v.eligible()).collect();
-    println!("\n=== Eligible default relays ({}/{}) ===", eligible.len(), verdicts.len());
+    println!(
+        "\n=== Eligible default relays ({}/{}) ===",
+        eligible.len(),
+        verdicts.len()
+    );
     for v in &eligible {
         println!("{}", v.relay);
     }

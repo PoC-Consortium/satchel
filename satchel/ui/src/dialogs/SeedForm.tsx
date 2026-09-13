@@ -301,7 +301,7 @@ export default function SeedForm({
                       label={t("seed.verifyWord", { n: idx + 1 })}
                       error={wrong}
                       helperText={wrong ? t("seed.verifyMismatch") : " "}
-                      slotProps={{ htmlInput: { ...params.inputProps, style: { fontFamily: C.mono } } }}
+                      slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps.htmlInput, style: { fontFamily: C.mono } } }}
                     />
                   )}
                 />
@@ -547,8 +547,9 @@ function WordEntryGrid({
                   }
                 }}
                 slotProps={{
+                  ...params.slotProps,
                   input: {
-                    ...params.InputProps,
+                    ...params.slotProps.input,
                     startAdornment: (
                       <Box
                         component="span"
@@ -567,7 +568,7 @@ function WordEntryGrid({
                     ),
                   },
                   htmlInput: {
-                    ...params.inputProps,
+                    ...params.slotProps.htmlInput,
                     "aria-label": t("seed.wordAria", { n: i + 1 }),
                     autoCapitalize: "none",
                     autoCorrect: "off",

@@ -17,7 +17,7 @@ pub struct Data {
     pub book: Arc<RwLock<Book>>,
     pub cfg: Arc<Config>,
     pub cash: CashRate,
-    pub ingest_client: nostr_sdk::Client,
+    pub ingest_client: nostr_sdk::client::Client,
     pub started: u64,
 }
 
@@ -71,7 +71,7 @@ pub async fn run(
     cfg: Arc<Config>,
     book_state: Arc<RwLock<Book>>,
     cash: CashRate,
-    ingest_client: nostr_sdk::Client,
+    ingest_client: nostr_sdk::client::Client,
 ) -> Result<()> {
     let token = cfg
         .discord

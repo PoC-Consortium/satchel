@@ -71,21 +71,15 @@ pub fn open_envelope(identity: &Keypair, blob: &str) -> Result<Envelope> {
     let key = tagged_hash("pact/relay/ecdh/v1", &shared.secret_bytes());
     let cipher = ChaCha20Poly1305::new((&key).into());
     let nonce_bytes = hex::decode(nonce)?;
-    // Fixed-size field: the `&[u8] -> &Nonce` conversion below is a
-    // `GenericArray::from_slice`, which PANICS on a length mismatch. A relay
-    // (or anyone who can post to it) controls this string, so a malformed
-    // length must be a recoverable parse error, never an unwind.
-    if nonce_bytes.len() != 12 {
-        bail!(
+    // Validate the untrusted field before constructing the fixed-size nonce.
+    let nonce: &[u8; 12] = nonce_bytes.as_slice().try_into().map_err(|_| {
+        anyhow::anyhow!(
             "malformed sealed blob: nonce is {} bytes, expected 12",
             nonce_bytes.len()
-        );
-    }
-    let plaintext = cipher
-        .decrypt(
-            nonce_bytes.as_slice().into(),
-            hex::decode(ciphertext)?.as_slice(),
         )
+    })?;
+    let plaintext = cipher
+        .decrypt(nonce.into(), hex::decode(ciphertext)?.as_slice())
         .map_err(|_| anyhow::anyhow!("relay decryption failed — not addressed to us?"))?;
     Ok(serde_json::from_str(&String::from_utf8(plaintext)?)?)
 }

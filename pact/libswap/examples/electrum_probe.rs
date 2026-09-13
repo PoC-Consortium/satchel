@@ -45,7 +45,7 @@ fn probe(params: &'static ChainParams, url: &str) -> bool {
 /// the raw coins.toml (the `connection` table is Satchel's — the engine's
 /// `coins_file` parser deliberately ignores it, so read it raw here).
 fn shipped_fleets(toml_str: &str) -> Vec<(String, Vec<String>)> {
-    let value: toml::Value = toml_str.parse().expect("coins.toml parses");
+    let value: toml::Value = toml::from_str(toml_str).expect("coins.toml parses");
     let mut fleets = Vec::new();
     let Some(coins) = value.get("coin").and_then(|c| c.as_array()) else {
         return fleets;

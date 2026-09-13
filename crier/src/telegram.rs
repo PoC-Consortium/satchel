@@ -109,7 +109,7 @@ impl Telegram {
         book: Arc<RwLock<Book>>,
         cfg: Arc<Config>,
         cash: CashRate,
-        nostr_client: nostr_sdk::Client,
+        nostr_client: nostr_sdk::client::Client,
         started: u64,
     ) {
         let mut offset: i64 = 0;
@@ -180,7 +180,7 @@ impl Telegram {
         book: &Arc<RwLock<Book>>,
         cfg: &Config,
         cash: &CashRate,
-        nostr_client: &nostr_sdk::Client,
+        nostr_client: &nostr_sdk::client::Client,
         started: u64,
     ) -> Option<String> {
         let mut words = text.split_whitespace();

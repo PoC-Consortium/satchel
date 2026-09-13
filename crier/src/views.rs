@@ -87,12 +87,12 @@ pub async fn status_view(
     book: &Arc<RwLock<Book>>,
     cfg: &Config,
     cash: &CashRate,
-    nostr_client: &nostr_sdk::Client,
+    nostr_client: &nostr_sdk::client::Client,
     started: u64,
 ) -> String {
     let mut relays = Vec::new();
     for (url, relay) in nostr_client.relays().await {
-        let up = matches!(relay.status(), nostr_sdk::RelayStatus::Connected);
+        let up = matches!(relay.status(), nostr_sdk::relay::RelayStatus::Connected);
         relays.push(format!("{} {url}", if up { "🟢" } else { "🔴" }));
     }
     let (offers, last_poll) = match book.read() {

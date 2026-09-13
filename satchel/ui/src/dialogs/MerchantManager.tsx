@@ -66,7 +66,7 @@ export default function MerchantManager({
 
   if (switching) {
     return (
-      <Dialog open maxWidth="sm" fullWidth disableEscapeKeyDown>
+      <Dialog open maxWidth="sm" fullWidth>
         <DialogTitle>{t("merchants.switching")}</DialogTitle>
         <DialogContent>
           <DialogContentText>{t("merchants.switchingBody")}</DialogContentText>
@@ -83,7 +83,6 @@ export default function MerchantManager({
       onClose={firstRun ? undefined : onClose}
       maxWidth="sm"
       fullWidth
-      disableEscapeKeyDown={firstRun}
       slotProps={{ paper: { sx: { position: "relative" } } }}
     >
       {/* First-run only: a language switcher in the welcome dialog's corner, so

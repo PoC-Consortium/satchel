@@ -40,7 +40,7 @@ export default function Unlock({
   }
 
   return (
-    <Dialog open maxWidth="sm" fullWidth disableEscapeKeyDown>
+    <Dialog open maxWidth="sm" fullWidth>
       <DialogTitle>{t("unlock.title")}</DialogTitle>
       <DialogContent>
         <DialogContentText sx={{ mb: 2 }}>{t("unlock.body")}</DialogContentText>

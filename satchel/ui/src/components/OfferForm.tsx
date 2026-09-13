@@ -388,7 +388,7 @@ export default function OfferForm({
         onChange={(e) => setBaseAmt(sanitizeAmountInput(e.target.value))}
         inputMode="decimal"
         autoComplete="off"
-        InputProps={{ endAdornment: <Typography sx={{ color: "text.secondary", fontSize: 13 }}>{symOf(base)}</Typography> }}
+        slotProps={{ input: { endAdornment: <Typography sx={{ color: "text.secondary", fontSize: 13 }}>{symOf(base)}</Typography> } }}
         helperText={
           base
             ? balances[base] !== undefined
@@ -521,7 +521,7 @@ export default function OfferForm({
             type="number"
             value={validMin}
             onChange={(e) => onTtlCustom(e.target.value)}
-            inputProps={{ min: 1 }}
+            slotProps={{ htmlInput: { min: 1 } }}
             helperText={t("makeOffer.validForHint")}
             sx={{ mt: 1 }}
           />

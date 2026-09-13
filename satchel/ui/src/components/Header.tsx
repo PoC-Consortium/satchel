@@ -176,7 +176,7 @@ export default function Header({
                 </ListItemIcon>
                 <ListItemText
                   primary={m.label}
-                  slotProps={{ primary: { noWrap: true, fontWeight: isActive ? 600 : 500 } }}
+                  slotProps={{ primary: { noWrap: true, sx: { fontWeight: isActive ? 600 : 500 } } }}
                 />
                 {showLock && (
                   <Tooltip title={t("merchants.lockedTip")}>

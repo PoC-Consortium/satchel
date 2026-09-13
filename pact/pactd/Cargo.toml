@@ -8,17 +8,17 @@ description = "Pact daemon: local JSON-RPC over libswap, SQLite persistence, aut
 [dependencies]
 libswap = { workspace = true }
 pact-nostr = { path = "../../pact-nostr" }
-nostr-sdk = "0.44"
+nostr-sdk = "0.45.3"
 # Only to install a process-wide rustls CryptoProvider at startup (see main()):
 # nostr-sdk → tokio-rustls pulls rustls 0.23, which refuses to auto-pick a
 # provider when both aws-lc-rs and ring are linked, breaking all wss:// relays.
-rustls = "0.23"
+rustls = "0.23.44"
 bitcoin = { workspace = true }
 # Exclusive advisory lock on <data-dir>/.lock so only one pactd runs per data
 # dir (§0 of docs/design/MULTI_MACHINE_122.md — the guard the seed-scope partition
 # rests on). Pure-Rust flock/LockFileEx wrapper, no C dep beyond libc/winapi
 # already in the tree; the OS releases the lock on process exit (no stale PID).
-fs2 = "0.4"
+fs2 = "0.4.3"
 hex = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }

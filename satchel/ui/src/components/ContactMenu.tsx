@@ -9,7 +9,7 @@ import {
 import PersonAddAlt1OutlinedIcon from "@mui/icons-material/PersonAddAlt1Outlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import VerifiedUserOutlinedIcon from "@mui/icons-material/VerifiedUserOutlined";
-import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
+import PersonOutlineIcon from "@mui/icons-material/PersonOutlined";
 import BlockIcon from "@mui/icons-material/Block";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import LaunchOutlinedIcon from "@mui/icons-material/LaunchOutlined";

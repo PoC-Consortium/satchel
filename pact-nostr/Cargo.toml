@@ -7,11 +7,11 @@ description = "Map Pact wire envelopes <-> Nostr events: public offer adverts (k
 
 [dependencies]
 pact-proto = { path = "../pact-proto" }
-nostr = "0.44.8"
-serde_json = "1"
-anyhow = "1"
-hex = "0.4"
+nostr = { version = "0.45.5", features = ["os-rng"] }
+serde_json = "1.0.151"
+anyhow = "1.0.104"
+hex = "0.4.3"
 
 [dev-dependencies]
 # For building/signing Pact envelopes and sealing relay blobs in tests.
-bitcoin = { version = "0.32", features = ["rand-std"] }
+bitcoin = { version = "0.32.102", features = ["rand-std"] }

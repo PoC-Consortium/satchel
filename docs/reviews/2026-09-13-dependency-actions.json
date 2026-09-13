@@ -1,0 +1,30 @@
+{
+  "actions/checkout": {
+    "tag": "v7.0.1",
+    "sha": "3d3c42e5aac5ba805825da76410c181273ba90b1"
+  },
+  "actions/setup-node": {
+    "tag": "v7.0.0",
+    "sha": "820762786026740c76f36085b0efc47a31fe5020"
+  },
+  "actions/cache": {
+    "tag": "v6.1.0",
+    "sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+  },
+  "actions/upload-artifact": {
+    "tag": "v7.0.1",
+    "sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+  },
+  "Swatinem/rust-cache": {
+    "tag": "v2.9.2",
+    "sha": "6323deb102c322ba6fcbdcafc7e3dddab59af2b6"
+  },
+  "tauri-apps/tauri-action": {
+    "tag": "action-v1.0.0",
+    "sha": "1deb371b0cd8bd54025b384f1cd735e725c4060f"
+  },
+  "dtolnay/rust-toolchain": {
+    "tag": "stable",
+    "sha": "6bed0761d98439e5a578e2877258200ad565ba87"
+  }
+}

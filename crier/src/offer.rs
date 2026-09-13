@@ -108,7 +108,7 @@ mod tests {
     use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
     use pact_proto::envelope::Envelope;
 
-    pub(crate) fn identity(seed: u8) -> (Keypair, nostr::Keys) {
+    pub(crate) fn identity(seed: u8) -> (Keypair, nostr::key::Keys) {
         let sk = SecretKey::from_slice(&[seed; 32]).unwrap();
         let kp = Keypair::from_secret_key(&Secp256k1::new(), &sk);
         let keys = pact_nostr::keys_from_secret_hex(&hex_of(&sk.secret_bytes())).unwrap();

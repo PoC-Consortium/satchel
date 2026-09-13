@@ -76,7 +76,7 @@ export default function CashrateWidget() {
             size="small"
             checked={enabled}
             onChange={(_, on) => setEnabled(on)}
-            inputProps={{ "aria-label": t("fx.cashrate", { sym: symOf(coin) }) }}
+            slotProps={{ input: { "aria-label": t("fx.cashrate", { sym: symOf(coin) }) } }}
           />
           <Typography noWrap sx={{ fontSize: 12, fontWeight: 600, color: enabled ? "text.primary" : "text.secondary" }}>
             {t("fx.cashrate", { sym: symOf(coin) })}
