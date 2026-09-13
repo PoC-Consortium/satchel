@@ -10,7 +10,7 @@ description = "Probe candidate Nostr relays for Pact eligibility: NIP-11 policy 
 [workspace]
 
 [dependencies]
-nostr-sdk = "0.44"
+nostr-sdk = "0.45"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 anyhow = "1"
