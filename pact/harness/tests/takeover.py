@@ -259,6 +259,17 @@ def scenario_hot_standby_takeover_v1(h, ep, eb):
 
         # While the owner drove, the standby must have FOLLOWED read-only and
         # never committed funds (the §2 ownership + #164 double-fund guards).
+        # The standby learns of the swap only through the shared mailbox, and
+        # the relay may hand it the taker's `accept` before the record-creating
+        # message (it keeps its cursor and retries on later ticks) — when the
+        # owner and taker fund both legs within a few rounds, the standby has
+        # not caught up yet. Give it its own bounded ticks before judging; the
+        # owner is NOT ticked here, so nothing about the live swap advances.
+        for _ in range(40):
+            if swap_of(standby, sid) is not None:
+                break
+            standby_events += tick_all("standby", standby)
+            time.sleep(0.5)
         srec = swap_of(standby, sid)
         assert srec is not None and srec.get("source") == "foreign", \
             f"standby must hold the live swap as FOLLOWED, not drive it: {srec}"
@@ -484,7 +495,9 @@ def scenario_taker_committed_takeover_v2(h, ep, eb):
         # delivered + refreshed). The taker stays ALIVE (its relay service
         # drains the outbox on its own) but is never ticked, and nothing is
         # mined — leg B stays shallow under the maker's btc=3 gate, so the
-        # committed window this cell exists to test stays open.
+        # committed window this cell exists to test stays open. Time-bounded
+        # (not tick-bounded): the taker's flush is asynchronous, and on a fast
+        # runner 60 back-to-back ticks finish before it has published.
         settled = False
         for _ in range(60):
             tick_all("settle", maker)
@@ -496,6 +509,7 @@ def scenario_taker_committed_takeover_v2(h, ep, eb):
                     and s is not None and s.get("adaptor_sig_a")):
                 settled = True
                 break
+            time.sleep(0.5)
         assert settled, (f"relay artifacts never landed: maker={swap_of(maker, sid)} "
                          f"standby={swap_of(standby, sid)}")
         print(f"[takeover-e2e] taker committed leg B ({pre_b[:16]}) — killing it")
@@ -856,7 +870,8 @@ def scenario_taker_post_reveal_takeover_v2(h, ep, eb):
         # and its Signed snapshot reached the standby (adaptor material
         # present) — the taker's relay service drains its outbox without
         # ticks, and NO mining here keeps leg B shallow so the maker cannot
-        # reveal while we wait.
+        # reveal while we wait. Time-bounded, not tick-bounded (see the
+        # committed cell).
         settled = False
         for _ in range(60):
             tick_all("settle", maker)
@@ -868,6 +883,7 @@ def scenario_taker_post_reveal_takeover_v2(h, ep, eb):
                     and s is not None and s.get("adaptor_sig_a")):
                 settled = True
                 break
+            time.sleep(0.5)
         assert settled, (f"relay artifacts never landed: maker={swap_of(maker, sid)} "
                          f"standby={swap_of(standby, sid)}")
 
@@ -1090,9 +1106,23 @@ def scenario_owner_returns_after_takeover_v2(h, ep, eb):
                 mine_and_sync(h, ep, eb)
         assert sid, "maker never reached Signed with both legs committed"
         pre_a = swap_of(maker, sid)["funding_a_txid"]
-        for _ in range(2):
+        # Artifact gate (twin of the committed-taker cell): hold the kill until
+        # the maker's Signed snapshot provably reached the standby — its
+        # followed record carries the assembled adaptor material. A fixed
+        # two-tick grace lost this race on a fast runner (standby adopted a
+        # material-less record and looped on "no adaptor sig for leg B").
+        # Time-bounded; nothing is mined, so the Signed window stays open.
+        landed = False
+        for _ in range(60):
             maker.rpc("tick")
-            time.sleep(1)
+            tick_all("standby", standby)
+            s = swap_of(standby, sid)
+            if s is not None and s.get("adaptor_sig_a"):
+                landed = True
+                break
+            time.sleep(0.5)
+        assert landed, (f"maker's Signed snapshot never reached the standby: "
+                        f"standby={swap_of(standby, sid)}")
         print(f"[takeover-e2e] maker Signed (leg A {pre_a[:16]}) — killing the owner")
         _kill(maker)
 
