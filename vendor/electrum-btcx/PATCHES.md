@@ -1,6 +1,6 @@
 # Local security patch
 
-Source: PoC-Consortium/btcx revision `7a6ec87fdd6c2aae5bb7db9f773d6ff7ca961247`, electrum-btcx crate. It is a member of the pact workspace so its security tests, lint and lockfile audit run in the normal gate.
+Source: PoC-Consortium/btcx revision `6907bacb132324e460cbe55d3765b4350bb56e61`, electrum-btcx crate. It is a member of the pact workspace so its security tests, lint and lockfile audit run in the normal gate.
 
 TLS validates public CA certificates against webpki-roots, including hostname and validity. A valid CA certificate can rotate without a pin reset. Once CA trust has been recorded, an endpoint cannot downgrade to a self-signed identity without an explicit reset.
 

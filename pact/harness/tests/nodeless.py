@@ -235,6 +235,78 @@ def test_v1_nodeless_both_sides(h, electrs, board):
         bob.stop()
 
 
+def test_send_to_legacy_addresses(h, electrs, board):
+    """Field case: an exchange hands the user a base58 deposit address
+    (`3...` P2SH / `1...` P2PKH on BTC mainnet) and the nodeless wallet must
+    pay it — the destination is whatever the counterparty gives us, only our
+    OWN handout/sweep addresses are bech32(m). Before btcx v0.1.1 the parser
+    refused anything non-bech32 ("not a bech32 segwit address"). Regtest
+    twin: P2PKH (`m`/`n`, 0x6f) and P2SH (`2`, 0xc4) addresses issued by the
+    Core node wallet, paid from Alice's bdk wallet, confirmed, and seen by
+    the node wallet. A mainnet base58 address must still be REJECTED on
+    regtest with a version-byte reason (never a silent cross-chain send)."""
+    alice = Party("nl-alice5", h, h.workdir, "alice_btcx", "alice_btc",
+                  board_url=board.url, auto_fund=False,
+                  pocx_url=NODELESS_URL).start()
+    try:
+        bal_before = fund_bdk_wallet(h, electrs, alice)
+
+        # Legacy destinations from the node wallet — bob_btcx so the receiver
+        # is a DIFFERENT wallet than the faucet (alice_btcx).
+        p2pkh = h.pocx.rpc("getnewaddress", "", "legacy", wallet="bob_btcx")
+        p2sh = h.pocx.rpc("getnewaddress", "", "p2sh-segwit", wallet="bob_btcx")
+        assert p2pkh[0] in "mn", f"expected a regtest P2PKH address: {p2pkh}"
+        assert p2sh[0] == "2", f"expected a regtest P2SH address: {p2sh}"
+
+        sends = {}
+        for label, addr in (("p2pkh", p2pkh), ("p2sh", p2sh)):
+            txid = alice.rpc("sendtoaddress", "btcx", addr, "1.0", 1)
+            txid = txid["txid"] if isinstance(txid, dict) else txid
+            sends[label] = (addr, txid)
+            print(f"[nodeless] bdk -> {label} {addr}: {txid}")
+
+        # Both in the node mempool, then mined and credited to the receiver.
+        mempool = set(h.pocx.rpc("getrawmempool"))
+        for label, (_addr, txid) in sends.items():
+            assert txid in mempool, f"{label} send {txid} not in mempool: {mempool}"
+        [block_hash] = h.pocx.generate(1, "alice_btcx")
+        electrs.wait_synced(h.pocx.rpc("getblockcount"))
+        for label, (addr, txid) in sends.items():
+            got = h.pocx.rpc("getreceivedbyaddress", addr, 1, wallet="bob_btcx")
+            assert float(got) == 1.0, f"{label} {addr} received {got}, expected 1.0"
+            # The paid output really is the legacy script type we asked for
+            # (no -txindex on the harness node: look the tx up by its block).
+            tx = h.pocx.rpc("getrawtransaction", txid, True, block_hash)
+            spk_types = {o["scriptPubKey"]["type"] for o in tx["vout"]}
+            want = "pubkeyhash" if label == "p2pkh" else "scripthash"
+            assert want in spk_types, f"{label}: output types {spk_types} lack {want}"
+        print("[nodeless] legacy P2PKH + P2SH sends confirmed and credited")
+
+        # Alice paid 2 x 1.0 btcx + fees.
+        bal_after = alice.rpc("getbalance", "btcx")["balance_sat"]
+        assert bal_before - 2 * 100_000_000 - 50_000 < bal_after < bal_before - 2 * 100_000_000, (
+            f"unexpected balance after two 1.0 sends: {bal_before} -> {bal_after}")
+
+        # Cross-chain guard: a BTC MAINNET P2SH address (version 0x05) is not a
+        # regtest destination — refused with the version-byte reason.
+        try:
+            alice.rpc("sendtoaddress", "btcx", "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy", "1.0", 1)
+        except RuntimeError as e:
+            assert "version byte 0x05" in str(e), f"wrong rejection reason: {e}"
+            print(f"[nodeless] mainnet address refused on regtest: {str(e)[:90]}")
+        else:
+            raise AssertionError("mainnet base58 address was accepted on regtest")
+        # And junk names both decoders' reasons (no more bare bech32 error).
+        try:
+            alice.rpc("sendtoaddress", "btcx", "not-an-address", "1.0", 1)
+        except RuntimeError as e:
+            assert "bech32:" in str(e) and "base58:" in str(e), f"wrong rejection: {e}"
+        else:
+            raise AssertionError("junk address was accepted")
+    finally:
+        alice.stop()
+
+
 class _NodelessScenario(PactTestFramework):
     """Fresh electrs + Corkboard per scenario, PoCX node on :18443 (+REST)."""
 
@@ -271,11 +343,16 @@ class V1NodelessBothSides(_NodelessScenario):
     scenario = staticmethod(test_v1_nodeless_both_sides)
 
 
+class SendToLegacyAddresses(_NodelessScenario):
+    scenario = staticmethod(test_send_to_legacy_addresses)
+
+
 SCENARIOS = [
     V1NodelessMaker,
     V2NodelessTaker,
     V2CancelReleasesBdkInputs,
     V1NodelessBothSides,
+    SendToLegacyAddresses,
 ]
 
 

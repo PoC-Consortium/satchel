@@ -1411,8 +1411,8 @@ dependencies = [
 
 [[package]]
 name = "keys-btcx"
-version = "0.1.0"
-source = "git+https://github.com/PoC-Consortium/btcx?rev=7a6ec87fdd6c2aae5bb7db9f773d6ff7ca961247#7a6ec87fdd6c2aae5bb7db9f773d6ff7ca961247"
+version = "0.1.1"
+source = "git+https://github.com/PoC-Consortium/btcx?rev=6907bacb132324e460cbe55d3765b4350bb56e61#6907bacb132324e460cbe55d3765b4350bb56e61"
 dependencies = [
  "anyhow",
  "bip39",
@@ -1781,8 +1781,8 @@ dependencies = [
 
 [[package]]
 name = "params-btcx"
-version = "0.1.0"
-source = "git+https://github.com/PoC-Consortium/btcx?rev=7a6ec87fdd6c2aae5bb7db9f773d6ff7ca961247#7a6ec87fdd6c2aae5bb7db9f773d6ff7ca961247"
+version = "0.1.1"
+source = "git+https://github.com/PoC-Consortium/btcx?rev=6907bacb132324e460cbe55d3765b4350bb56e61#6907bacb132324e460cbe55d3765b4350bb56e61"
 dependencies = [
  "anyhow",
  "bech32 0.11.1",
@@ -2051,9 +2051,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.44"
+version = "0.23.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6725596c3f2c3a0aef021139e145d4eafe314a6623e4680ca83852b2c67ab2ba"
+checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
 dependencies = [
  "aws-lc-rs",
  "log",
@@ -2220,8 +2220,8 @@ dependencies = [
 
 [[package]]
 name = "seedstore"
-version = "0.1.0"
-source = "git+https://github.com/PoC-Consortium/btcx?rev=7a6ec87fdd6c2aae5bb7db9f773d6ff7ca961247#7a6ec87fdd6c2aae5bb7db9f773d6ff7ca961247"
+version = "0.1.1"
+source = "git+https://github.com/PoC-Consortium/btcx?rev=6907bacb132324e460cbe55d3765b4350bb56e61#6907bacb132324e460cbe55d3765b4350bb56e61"
 dependencies = [
  "anyhow",
  "bip39",
@@ -2958,8 +2958,8 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "wallet-btcx"
-version = "0.1.0"
-source = "git+https://github.com/PoC-Consortium/btcx?rev=7a6ec87fdd6c2aae5bb7db9f773d6ff7ca961247#7a6ec87fdd6c2aae5bb7db9f773d6ff7ca961247"
+version = "0.1.1"
+source = "git+https://github.com/PoC-Consortium/btcx?rev=6907bacb132324e460cbe55d3765b4350bb56e61#6907bacb132324e460cbe55d3765b4350bb56e61"
 dependencies = [
  "anyhow",
  "bdk_wallet",
