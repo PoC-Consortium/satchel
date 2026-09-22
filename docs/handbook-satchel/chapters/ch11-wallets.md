@@ -39,9 +39,12 @@ fee market, or a **Custom** sat/vB rate. When the market has no estimates
 (a quiet or brand-new chain), the presets grey out and the form falls back to
 a custom rate at the coin's minimum. A **Review** step shows recipient,
 amount, estimated fee and total before anything is broadcast — transactions
-are irreversible, so check the address there. For a node-backed coin these
-drive the node's own wallet; for an Electrum coin they drive your pact-seed
-wallet directly.
+are irreversible, so check the address there. Any address of the coin's
+network is accepted as a destination: bech32 / bech32m (`bc1q…`, `bc1p…`,
+`pocx1…`) as well as legacy base58 (`1…` and `3…` on Bitcoin) — exchanges
+still hand those out for deposits. An address from another network is
+refused rather than paid. For a node-backed coin these drive the node's own
+wallet; for an Electrum coin they drive your pact-seed wallet directly.
 
 ![The Send dialog: recipient, amount with the Max button, and the network-fee presets.](images/processed/ch11-send-dialog.png){width=70%}
 

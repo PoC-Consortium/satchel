@@ -7,7 +7,7 @@ license = "MIT"
 repository = "https://github.com/PoC-Consortium/btcx"
 
 [dependencies]
-params-btcx = { git = "https://github.com/PoC-Consortium/btcx", rev = "7a6ec87fdd6c2aae5bb7db9f773d6ff7ca961247" }
+params-btcx = { git = "https://github.com/PoC-Consortium/btcx", rev = "6907bacb132324e460cbe55d3765b4350bb56e61" }
 anyhow = "1.0.104"
 bitcoin = { version = "0.32.102", features = ["serde", "rand-std"] }
 bdk_wallet = { version = "2", features = ["rusqlite"] }
