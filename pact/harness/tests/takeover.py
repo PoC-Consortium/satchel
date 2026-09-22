@@ -1106,9 +1106,23 @@ def scenario_owner_returns_after_takeover_v2(h, ep, eb):
                 mine_and_sync(h, ep, eb)
         assert sid, "maker never reached Signed with both legs committed"
         pre_a = swap_of(maker, sid)["funding_a_txid"]
-        for _ in range(2):
+        # Artifact gate (twin of the committed-taker cell): hold the kill until
+        # the maker's Signed snapshot provably reached the standby — its
+        # followed record carries the assembled adaptor material. A fixed
+        # two-tick grace lost this race on a fast runner (standby adopted a
+        # material-less record and looped on "no adaptor sig for leg B").
+        # Time-bounded; nothing is mined, so the Signed window stays open.
+        landed = False
+        for _ in range(60):
             maker.rpc("tick")
-            time.sleep(1)
+            tick_all("standby", standby)
+            s = swap_of(standby, sid)
+            if s is not None and s.get("adaptor_sig_a"):
+                landed = True
+                break
+            time.sleep(0.5)
+        assert landed, (f"maker's Signed snapshot never reached the standby: "
+                        f"standby={swap_of(standby, sid)}")
         print(f"[takeover-e2e] maker Signed (leg A {pre_a[:16]}) — killing the owner")
         _kill(maker)
 
