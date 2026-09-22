@@ -259,6 +259,17 @@ def scenario_hot_standby_takeover_v1(h, ep, eb):
 
         # While the owner drove, the standby must have FOLLOWED read-only and
         # never committed funds (the §2 ownership + #164 double-fund guards).
+        # The standby learns of the swap only through the shared mailbox, and
+        # the relay may hand it the taker's `accept` before the record-creating
+        # message (it keeps its cursor and retries on later ticks) — when the
+        # owner and taker fund both legs within a few rounds, the standby has
+        # not caught up yet. Give it its own bounded ticks before judging; the
+        # owner is NOT ticked here, so nothing about the live swap advances.
+        for _ in range(40):
+            if swap_of(standby, sid) is not None:
+                break
+            standby_events += tick_all("standby", standby)
+            time.sleep(0.5)
         srec = swap_of(standby, sid)
         assert srec is not None and srec.get("source") == "foreign", \
             f"standby must hold the live swap as FOLLOWED, not drive it: {srec}"
