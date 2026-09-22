@@ -495,7 +495,9 @@ def scenario_taker_committed_takeover_v2(h, ep, eb):
         # delivered + refreshed). The taker stays ALIVE (its relay service
         # drains the outbox on its own) but is never ticked, and nothing is
         # mined — leg B stays shallow under the maker's btc=3 gate, so the
-        # committed window this cell exists to test stays open.
+        # committed window this cell exists to test stays open. Time-bounded
+        # (not tick-bounded): the taker's flush is asynchronous, and on a fast
+        # runner 60 back-to-back ticks finish before it has published.
         settled = False
         for _ in range(60):
             tick_all("settle", maker)
@@ -507,6 +509,7 @@ def scenario_taker_committed_takeover_v2(h, ep, eb):
                     and s is not None and s.get("adaptor_sig_a")):
                 settled = True
                 break
+            time.sleep(0.5)
         assert settled, (f"relay artifacts never landed: maker={swap_of(maker, sid)} "
                          f"standby={swap_of(standby, sid)}")
         print(f"[takeover-e2e] taker committed leg B ({pre_b[:16]}) — killing it")
@@ -867,7 +870,8 @@ def scenario_taker_post_reveal_takeover_v2(h, ep, eb):
         # and its Signed snapshot reached the standby (adaptor material
         # present) — the taker's relay service drains its outbox without
         # ticks, and NO mining here keeps leg B shallow so the maker cannot
-        # reveal while we wait.
+        # reveal while we wait. Time-bounded, not tick-bounded (see the
+        # committed cell).
         settled = False
         for _ in range(60):
             tick_all("settle", maker)
@@ -879,6 +883,7 @@ def scenario_taker_post_reveal_takeover_v2(h, ep, eb):
                     and s is not None and s.get("adaptor_sig_a")):
                 settled = True
                 break
+            time.sleep(0.5)
         assert settled, (f"relay artifacts never landed: maker={swap_of(maker, sid)} "
                          f"standby={swap_of(standby, sid)}")
 
